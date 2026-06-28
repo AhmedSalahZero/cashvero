@@ -1,0 +1,1 @@
+import{c as o}from"./runtime-dom.esm-bundler-DWM9hgPS.js";function s(r){return{yearsFromDates:o(()=>{let e={};return r.value&&Object.keys(r.value).forEach(t=>{e[t]=r.value[t].split("'").pop()}),e})}}export{s as u};

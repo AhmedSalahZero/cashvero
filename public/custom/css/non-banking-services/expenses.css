@@ -1,0 +1,93 @@
+
+.max-w-checkbox{
+	min-width:25px !important;
+	width:25px !important;
+}
+.customize-elements .bootstrap-select{
+	min-width:100px !important;
+	text-align:center !important;
+}
+.customize-elements input.only-percentage-allowed{
+	min-width:100px !important;
+	max-width:100px !important;
+	text-align:center !important;
+}
+    [data-repeater-create] span {
+        white-space: nowrap !important;
+    }
+
+    .type-btn {
+        max-width: 150px;
+        height: 70px;
+        margin-right: 10px;
+        margin-bottom: 5px !important;
+    }
+
+    .type-btn:hover {}
+
+   
+
+    input.only-month-year-picker {
+        min-width: 100px;
+    }
+
+    input.only-greater-than-or-equal-zero-allowed {
+        min-width: 120px;
+    }
+
+    input.only-percentage-allowed {
+        min-width: 80px;
+    }
+
+    i {
+        text-align: left
+    }
+
+    .kt-portlet .kt-portlet__body:not(.exclude) {
+        overflow-x: scroll;
+    }
+	.hight-200{
+		height:80px !important;
+	}
+
+    .repeat-to-r {
+        flex-basis: 100%;
+        cursor: pointer
+    }
+
+    .icon-for-selector {
+        background-color: white;
+        color: #0742A8;
+        font-size: 1.5rem;
+        cursor: pointer;
+        margin-left: 3px;
+        transition: all 0.5s;
+    }
+
+    .icon-for-selector:hover {
+        transform: scale(1.2);
+
+    }
+
+    .filter-option {
+        text-align: center !important;
+    }
+
+
+    td input,
+    td select,
+    .filter-option {
+        border: 1px solid #CCE2FD !important;
+       
+        color: black;
+        font-weight: 400;
+    }
+
+    th {
+        border-bottom: 1px solid #CCE2FD !important;
+    }
+
+    .table tbody+tbody {
+        border-top: 1px solid #CCE2FD;
+    }
+	

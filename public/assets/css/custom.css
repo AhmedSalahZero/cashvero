@@ -1,0 +1,109 @@
+.active-style   {
+    background-color: #086691 !important; color: white !important;}
+.active-style:hover  {
+      background-color: #087a7a !important;  color: white}
+/* .active-text   {
+      color: #086691 !important;}
+.active-text:hover  {
+     color: #086691 !important;
+	} */
+	
+	.active-style   {
+		background-color: #112240 !important; color: white !important;}
+	.active-style:hover  {
+		  background-color: #112240 !important;  color: white}
+		  
+		  
+		  .table-active,
+.table-active > th,
+.table-active > td {
+  background-color: #112240 !important;  }
+
+.table-hover .table-active:hover {
+  background-color: #112240 !important;  
+}
+
+
+
+table.dataTable thead tr > .dtfc-fixed-left, table.dataTable thead tr > .dtfc-fixed-right{
+	  background-color: #112240 !important;  
+	
+  }
+ 
+  
+.active-text-color   {
+      color: #086691 !important;}
+.active-text-color:hover  {
+     color: #086691 !important;}
+.group-color{
+    font-family: 'Lobster', cursive;
+    font-family: 'Ubuntu', sans-serif;
+    background-color: #087383c4 !important;
+}
+.white-text{
+    color: white !important;
+}
+.hidden{display: none !important;}
+/* .dataTables_wrapper{max-width: 100%;  padding-bottom: 50px !important;overflow-x: overlay;} */
+.chartdashboard {
+    width: 100%;
+    height: 500px;
+}
+.footer-logo
+{
+    width: 60%;
+}
+
+#kt_footer .kt-footer__wrapper {
+    justify-content: flex-start !important;
+}
+
+#kt_footer .cashvero-footer__copyright {
+    width: 100%;
+    text-align: left !important;
+    font-size: 0.8125rem;
+}
+.secondary-row-color ,
+.secondary-row-color th ,
+.secondary-row-color td 
+{
+    background-color: antiquewhite;
+    pointer-events: none;
+}
+.wording-nowrap{
+    white-space: nowrap;
+}
+.title-spacing{
+    line-height: 2 !important;
+}
+.active-button {
+    color: white !important;
+    background-color: #23448b;
+    /* background-color: #1b3d8796; */
+    box-shadow: rgb(50 50 93 / 51%) 0px 30px 60px -12px inset, rgb(0 0 0 / 62%) 0px 18px 36px -18px inset;
+}
+.active-text {
+    color: white !important;
+
+}
+.chartDiv{
+    width: 100%;
+    height: 660px;
+}
+.pop-up-font{
+    font-size: 16px;
+}
+.not_allowed_curser{
+    cursor: not-allowed !important;
+}
+.input-note{
+    display: block !important;
+    margin-top: 1.25rem !important;
+    font-size: 1.1rem !important;
+}
+.note-icon{
+    font-size: 1.5rem !important;
+}
+.light-gray-bg{
+    background-color: lightgray;
+}

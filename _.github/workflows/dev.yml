@@ -1,0 +1,35 @@
+name: Laravel Deploy
+
+on:
+  push:
+    branches:
+      - salah    # الفرع اللي تشتغل عليه (انت كنت على "salah")
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: 22
+          script: |
+            cd /home/veroanalysis/public_html/system.veroanalysis.com
+            git status
+            git stash
+            git pull origin salah
+            /usr/local/bin/ea-php74 /opt/cpanel/composer/bin/composer install --no-interaction --prefer-dist --optimize-autoloader
+            /usr/local/bin/ea-php74 artisan view:clear
+            chmod -R 775 storage
+            chmod -R 775 bootstrap/cache
+            chmod 777 -R storage/*
+            /usr/local/bin/ea-php74 artisan migrate --force
+            /usr/local/bin/ea-php74 artisan storage:link
+            npm install
+            npm run production
+            supervisord -c /etc/supervisord.conf
+            supervisorctl restart vero-worker:*
+            /usr/local/bin/ea-php74 artisan run:sql

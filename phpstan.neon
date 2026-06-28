@@ -1,0 +1,15 @@
+includes:
+    - ./vendor/larastan/larastan/extension.neon
+    - vendor/nesbot/carbon/extension.neon
+
+parameters:
+    paths:
+        - app/
+        - config/
+        - routes/
+
+    level: 4
+
+    excludePaths:
+        - app/dompdf/*
+        - app/Traits/HasIndexedDates.php

@@ -1,0 +1,1 @@
+import{p as a,d as s,e as l,s as r}from"./runtime-dom.esm-bundler-DWM9hgPS.js";const o={class:"label"},p={__name:"Label",props:{required:{required:!1,type:[Boolean],default:!1}},setup(t){return(e,n)=>(a(),s("div",null,[l("label",o,[r(e.$slots,"default")])]))}};export{p as _};

@@ -1,0 +1,1 @@
+ <label class="{{ $class?? '' }}" id="{{ $id ?? '' }}">{{ $slot }}</label>
