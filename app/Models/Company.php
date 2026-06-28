@@ -904,6 +904,11 @@ class Company extends Model implements HasMedia
     {
         return $this->hasMany(FactoringContract::class, 'company_id', 'id');
     }
+
+    public function factoringTransactions()
+    {
+        return $this->hasMany(FactoringTransaction::class, 'company_id', 'id');
+    }
     public function systems()
     {
         return $this->hasMany(CompanySystem::class, 'company_id', 'id');

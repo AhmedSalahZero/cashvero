@@ -793,6 +793,17 @@ Route::middleware([])->group(function () {
                     // money payments
                     
                     Route::get('money-payment', 'MoneyPaymentController@index')->name('view.money.payment');
+
+                    Route::get('factoring/without-recourse', 'FactoringWithoutRecourseController@index')->name('factoring.without-recourse.index');
+                    Route::get('factoring/without-recourse/create', 'FactoringWithoutRecourseController@create')->name('factoring.without-recourse.create');
+                    Route::post('factoring/without-recourse/store', 'FactoringWithoutRecourseController@store')->name('factoring.without-recourse.store');
+                    Route::get('factoring/without-recourse/{factoringTransaction}/edit', 'FactoringWithoutRecourseController@edit')->name('factoring.without-recourse.edit');
+                    Route::put('factoring/without-recourse/{factoringTransaction}/update', 'FactoringWithoutRecourseController@update')->name('factoring.without-recourse.update');
+                    Route::delete('factoring/without-recourse/{factoringTransaction}', 'FactoringWithoutRecourseController@destroy')->name('factoring.without-recourse.destroy');
+                    Route::get('factoring/without-recourse/contracts/{factoringCompany}', 'FactoringWithoutRecourseController@getContracts');
+                    Route::get('factoring/without-recourse/currencies/{customerId}', 'FactoringWithoutRecourseController@getInvoiceCurrencies');
+                    Route::get('factoring/without-recourse/invoices/{customerId}/{currency?}', 'FactoringWithoutRecourseController@getInvoices');
+                    Route::post('factoring/without-recourse/calculate', 'FactoringWithoutRecourseController@calculate')->name('factoring.without-recourse.calculate');
                     Route::get('money-payment/create/{model?}', 'MoneyPaymentController@create')->name('create.money.payment');
                     Route::post('money-payment/create', 'MoneyPaymentController@store')->name('store.money.payment');
                     Route::get('money-payment/edit/{moneyPayment}', 'MoneyPaymentController@edit')->name('edit.money.payment');

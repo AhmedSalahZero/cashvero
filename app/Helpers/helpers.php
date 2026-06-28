@@ -925,6 +925,25 @@ function formatDateForDatePicker(?string $date)
 
     return Carbon::make($date)->format('m/d/Y');
 }
+
+function parseDatePickerValue(?string $date): ?string
+{
+    if (!$date) {
+        return null;
+    }
+
+    foreach (['m-d-y', 'm/d/Y', 'm-d-Y', 'Y-m-d'] as $format) {
+        if (isValidDateFormat($date, $format)) {
+            return Carbon::createFromFormat($format, $date)->format('Y-m-d');
+        }
+    }
+
+    try {
+        return Carbon::make($date)->format('Y-m-d');
+    } catch (\Exception $e) {
+        return null;
+    }
+}
 function stdToArray($items)
 {
     return json_decode(json_encode($items)) ;
@@ -1523,6 +1542,23 @@ function getHeaderMenu($currentCompany = null)
                     'link'=>route('view.money.payment', ['company'=>$companyId]),
                     'show'=>$user->can('view supplier payment'),
                     'submenu'=>[]
+                ],
+                [
+                    'title'=>__('Factoring'),
+                    'link'=>'#',
+                    'show'=>$user->can('view supplier payment'),
+                    'submenu'=>[
+                        [
+                            'title'=>__('With Recourse'),
+                            'link'=>'#',
+                            'show'=>$user->can('view supplier payment'),
+                        ],
+                        [
+                            'title'=>__('Without Recourse'),
+                            'link'=>route('factoring.without-recourse.index', ['company'=>$companyId]),
+                            'show'=>$user->can('view supplier payment'),
+                        ],
+                    ],
                 ],
                 [
                     'title'=>__('Cash Expenses'),

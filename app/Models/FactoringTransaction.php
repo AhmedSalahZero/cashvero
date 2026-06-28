@@ -1,0 +1,130 @@
+<?php
+
+namespace App\Models;
+
+use App\Traits\Models\HandlesFactoringBankDebit;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+/**
+ * @property int $id
+ * @property int $company_id
+ * @property string $recourse_type
+ * @property string $factoring_date
+ * @property int $factoring_company_id
+ * @property int $factoring_contract_id
+ * @property int $customer_id
+ * @property int $customer_invoice_id
+ * @property string $invoice_currency
+ * @property string $invoice_amount
+ * @property string $factoring_percentage
+ * @property string $factoring_amount
+ * @property string $contract_interest_rate
+ * @property int $diff_in_days
+ * @property string $factoring_interest_amount
+ * @property string $other_charges
+ * @property string $received_amount
+ * @property int $financial_institution_id
+ * @property int $account_type_id
+ * @property string $account_number
+ * @property int|null $settlement_id
+ */
+class FactoringTransaction extends Model
+{
+    use HandlesFactoringBankDebit;
+
+    public const WITHOUT_RECOURSE = 'without_recourse';
+
+    public const WITH_RECOURSE = 'with_recourse';
+
+    protected $guarded = ['id'];
+
+    public static function calculateAmounts(
+        float $invoiceAmount,
+        float $factoringPercentage,
+        float $borrowingRate,
+        float $marginRate,
+        float $otherCharges,
+        string $factoringDate,
+        string $invoiceDueDate
+    ): array {
+        $factoringAmount = ($invoiceAmount * $factoringPercentage) / 100;
+        $contractInterestRate = $borrowingRate + $marginRate;
+        $dueDate = Carbon::parse($invoiceDueDate)->startOfDay();
+        $factorDate = Carbon::parse($factoringDate)->startOfDay();
+        $diffInDays = $dueDate->diffInDays($factorDate);
+        $factoringInterestAmount = (($factoringAmount * $contractInterestRate / 100) / 360) * $diffInDays;
+        $receivedAmount = $factoringAmount - $factoringInterestAmount - $otherCharges;
+
+        return [
+            'factoring_amount' => round($factoringAmount, 2),
+            'contract_interest_rate' => round($contractInterestRate, 4),
+            'diff_in_days' => $diffInDays,
+            'factoring_interest_amount' => round($factoringInterestAmount, 2),
+            'received_amount' => round($receivedAmount, 2),
+        ];
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    public function factoringCompany(): BelongsTo
+    {
+        return $this->belongsTo(FactoringCompany::class);
+    }
+
+    public function factoringContract(): BelongsTo
+    {
+        return $this->belongsTo(FactoringContract::class);
+    }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Partner::class, 'customer_id');
+    }
+
+    public function customerInvoice(): BelongsTo
+    {
+        return $this->belongsTo(CustomerInvoice::class);
+    }
+
+    public function financialInstitution(): BelongsTo
+    {
+        return $this->belongsTo(FinancialInstitution::class);
+    }
+
+    public function accountType(): BelongsTo
+    {
+        return $this->belongsTo(AccountType::class);
+    }
+
+    public function settlement(): BelongsTo
+    {
+        return $this->belongsTo(Settlement::class);
+    }
+
+    public function getFactoringDateFormatted(): string
+    {
+        return $this->factoring_date
+            ? Carbon::make($this->factoring_date)->format('m-d-Y')
+            : '';
+    }
+
+    public static function getStatementComment(string $factoringCompanyName): string
+    {
+        return __('Settled Through Factoring Without Recourse [:company]', [
+            'company' => $factoringCompanyName,
+        ]);
+    }
+
+    public function deleteRelations(): void
+    {
+        $this->deleteBankDebitStatements();
+        if ($this->settlement) {
+            $this->settlement->delete();
+        }
+    }
+}

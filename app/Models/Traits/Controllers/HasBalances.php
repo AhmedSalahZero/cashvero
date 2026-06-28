@@ -3,6 +3,7 @@ namespace App\Models\Traits\Controllers;
 
 use App\Helpers\HArr;
 use App\Models\Company;
+use App\Models\FactoringTransaction;
 use App\Models\InvoiceDeduction;
 use App\Models\LetterOfCreditIssuance;
 use Carbon\Carbon;
@@ -255,6 +256,54 @@ trait HasBalances
 					
 					
 				}
+		}
+
+		if ($isCustomer) {
+			$factoringTransactions = FactoringTransaction::query()
+				->where('company_id', getCurrentCompanyId())
+				->where('customer_id', $partnerId)
+				->where('recourse_type', FactoringTransaction::WITHOUT_RECOURSE)
+				->whereBetween('factoring_date', [$startDate, $endDate])
+				->with(['factoringCompany', 'customerInvoice'])
+				->get();
+
+			foreach ($factoringTransactions as $factoringTransaction) {
+				$invoice = $factoringTransaction->customerInvoice;
+				if (!$invoice) {
+					continue;
+				}
+
+				$invoiceCurrency = $factoringTransaction->invoice_currency;
+				if (!$isMainCurrency && $invoiceCurrency !== $currency) {
+					continue;
+				}
+
+				$currentAmount = $isMainCurrency
+					? (float) $factoringTransaction->invoice_amount * (float) $invoice->getExchangeRate()
+					: (float) $factoringTransaction->invoice_amount;
+
+				if (!$currentAmount) {
+					continue;
+				}
+
+				$currentData = [];
+				$currentData['date'] = Carbon::make($factoringTransaction->factoring_date)->format('d-m-Y');
+				$currentData['document_type'] = __('Factoring');
+				$currentData['document_no'] = $invoice->getInvoiceNumber();
+				$currentData['debit'] = 0;
+				$currentData['credit'] = $currentAmount;
+				$currentData['comment'] = FactoringTransaction::getStatementComment(
+					$factoringTransaction->factoringCompany?->getName() ?? ''
+				);
+
+				if ($isNotBegBalance) {
+					$index++;
+					$formattedData[] = $currentData;
+				} else {
+					$index++;
+					$tempArr[] = $currentData;
+				}
+			}
 		}
 		
 		if(!$isNotBegBalance){

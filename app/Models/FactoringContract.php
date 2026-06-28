@@ -142,4 +142,18 @@ class FactoringContract extends Model
     {
         return number_format((float) $this->interest_rate, 2);
     }
+
+    public function scopeActiveOnDate($query, ?string $date = null)
+    {
+        $date = $date ?? now()->format('Y-m-d');
+
+        return $query
+            ->where('contract_start_date', '<=', $date)
+            ->where('contract_end_date', '>=', $date);
+    }
+
+    public function getContractInterestRate(): float
+    {
+        return (float) $this->borrowing_rate + (float) $this->margin_rate;
+    }
 }

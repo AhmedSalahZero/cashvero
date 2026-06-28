@@ -68,6 +68,11 @@ class Settlement extends Model
 	{
 		return $this->belongsTo(MoneyReceived::class , 'money_received_id','id');
 	}
+
+	public function factoringTransaction(): BelongsTo
+	{
+		return $this->belongsTo(FactoringTransaction::class, 'factoring_transaction_id');
+	}
 	
 	public function customerInvoice()
 	{
