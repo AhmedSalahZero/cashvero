@@ -7,6 +7,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\FactoringStatement;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -64,6 +65,50 @@ class FactoringContract extends Model
             ->where('model_type', self::class);
     }
 
+    public function factoringStatements(): HasMany
+    {
+        return $this->hasMany(FactoringStatement::class);
+    }
+
+    public function storeLimitStatement(int $companyId): void
+    {
+        if (!$this->contract_start_date || $this->getLimit() <= 0) {
+            return;
+        }
+
+        FactoringStatement::create([
+            'company_id' => $companyId,
+            'factoring_company_id' => $this->factoring_company_id,
+            'factoring_contract_id' => $this->id,
+            'factoring_transaction_id' => null,
+            'entry_type' => FactoringStatement::TYPE_CONTRACT_LIMIT,
+            'date' => $this->contract_start_date,
+            'debit' => $this->getLimit(),
+            'credit' => 0,
+            'currency' => $this->getCurrency(),
+            'comment_en' => __('Contract Limit'),
+            'comment_ar' => __('Contract Limit', [], 'ar'),
+            'created_by' => auth()->id(),
+        ]);
+    }
+
+    public function getRemainingLimit(?int $exceptTransactionId = null): float
+    {
+        $debits = (float) $this->factoringStatements()->sum('debit');
+        $credits = (float) $this->factoringStatements()->sum('credit');
+        $remaining = round($debits - $credits, 2);
+
+        if ($exceptTransactionId) {
+            $currentCredit = (float) FactoringStatement::query()
+                ->where('factoring_transaction_id', $exceptTransactionId)
+                ->where('entry_type', FactoringStatement::TYPE_FACTORING_DISBURSEMENT)
+                ->sum('credit');
+            $remaining = round($remaining + $currentCredit, 2);
+        }
+
+        return max(0, $remaining);
+    }
+
     public function storeOutstandingBreakdown(Request $request, Company $company): void
     {
         $outstandingBalance = $request->get('outstanding_balance', 0);
@@ -87,6 +132,7 @@ class FactoringContract extends Model
     public function deleteRelations(): void
     {
         $this->outstandingBreakdowns()->delete();
+        $this->factoringStatements()->delete();
     }
 
     public function getContractStartDateFormatted(): string

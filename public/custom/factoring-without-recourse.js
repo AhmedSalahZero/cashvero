@@ -2,6 +2,10 @@
     const root = $('#factoring-without-recourse-form');
     if (!root.length) return;
 
+    const isEdit = root.data('mode') === 'edit';
+    const exceptTxId = root.data('except-factoring-transaction-id') || null;
+    const initialValues = root.data('initial-values') || null;
+
     const contractsBaseUrl = root.data('contracts-url');
     const currenciesBaseUrl = root.data('currencies-url');
     const invoicesBaseUrl = root.data('invoices-url');
@@ -25,7 +29,29 @@
     let serverAmounts = null;
     let skipLinkedRecalculation = false;
 
-    function rebuildSelect($select, items, valueKey, labelKey, placeholder) {
+    function ajaxParams(extra) {
+        const params = extra || {};
+        if (exceptTxId) {
+            params.except_factoring_transaction_id = exceptTxId;
+        }
+        return params;
+    }
+
+    function getCustomerInvoiceId() {
+        if ($customerInvoice.length) {
+            return $customerInvoice.val();
+        }
+        return $('input[name="customer_invoice_id"]').val();
+    }
+
+    function getInvoiceCurrency() {
+        if ($invoiceCurrency.length) {
+            return $invoiceCurrency.val();
+        }
+        return $('input[name="invoice_currency"]').val();
+    }
+
+    function rebuildSelect($select, items, valueKey, labelKey, placeholder, selectedValue) {
         const wasPicker = $select.hasClass('kt_bootstrap_select');
         if (wasPicker) {
             $select.selectpicker('destroy');
@@ -41,8 +67,16 @@
             }));
         });
 
+        if (selectedValue) {
+            $select.val(String(selectedValue));
+        }
+
         $select.addClass('kt_bootstrap_select');
         $select.selectpicker({ liveSearch: true });
+
+        if (selectedValue) {
+            $select.selectpicker('val', String(selectedValue));
+        }
     }
 
     function formatNumber(value) {
@@ -65,17 +99,31 @@
         skipLinkedRecalculation = false;
     }
 
-    function loadContracts() {
+    function updateRemainingLimit(value) {
+        $('#remaining-limit-display').val(formatNumber(value));
+    }
+
+    function loadContracts(selectedContractId) {
         const company = $factoringCompany.val();
         if (!company) {
             rebuildSelect($factoringContract, [], 'id', 'label', 'Select');
             return;
         }
 
-        $.get(contractsBaseUrl + '/' + company, { factoring_date: $factoringDate.val() })
+        const selectedValue = selectedContractId || $factoringContract.val();
+
+        $.get(contractsBaseUrl + '/' + company, ajaxParams({ factoring_date: $factoringDate.val() }))
             .done(function (response) {
-                rebuildSelect($factoringContract, response.contracts || [], 'id', 'label', 'Select');
-                recalculate();
+                rebuildSelect($factoringContract, response.contracts || [], 'id', 'label', 'Select', selectedValue);
+                const selectedContract = (response.contracts || []).find(function (item) {
+                    return String(item.id) === String($factoringContract.val());
+                });
+                if (selectedContract && selectedContract.remaining_limit !== undefined) {
+                    updateRemainingLimit(selectedContract.remaining_limit);
+                }
+                if (!isEdit || selectedContractId === undefined) {
+                    recalculate();
+                }
             })
             .fail(function () {
                 rebuildSelect($factoringContract, [], 'id', 'label', 'Select');
@@ -83,7 +131,7 @@
     }
 
     function loadCurrencies() {
-        const customerId = $customer.val();
+        const customerId = $customer.val() || $('input[name="customer_id"]').val();
         if (!customerId) {
             rebuildSelect($invoiceCurrency, [], 'id', 'name', 'Select');
             rebuildSelect($customerInvoice, [], 'id', 'invoice_number', 'Select');
@@ -91,22 +139,15 @@
             return;
         }
 
-        $.get(currenciesBaseUrl + '/' + customerId)
+        $.get(currenciesBaseUrl + '/' + customerId, ajaxParams())
             .done(function (response) {
                 const currencies = response.currencies || {};
-                const items = Array.isArray(currencies)
-                    ? currencies.map(function (currency) {
-                        return { id: currency, name: currency };
-                    })
-                    : Object.keys(currencies).map(function (key) {
-                        return { id: key, name: currencies[key] };
-                    });
+                const items = Object.keys(currencies).map(function (key) {
+                    return { id: key, name: currencies[key] };
+                });
                 rebuildSelect($invoiceCurrency, items, 'id', 'name', 'Select');
                 rebuildSelect($customerInvoice, [], 'id', 'invoice_number', 'Select');
                 clearInvoiceFields();
-            })
-            .fail(function () {
-                rebuildSelect($invoiceCurrency, [], 'id', 'name', 'Select');
             });
     }
 
@@ -119,7 +160,7 @@
             return;
         }
 
-        $.get(invoicesBaseUrl + '/' + customerId + '/' + currency)
+        $.get(invoicesBaseUrl + '/' + customerId + '/' + currency, ajaxParams())
             .done(function (response) {
                 const invoices = (response.invoices || []).map(function (invoice) {
                     return {
@@ -134,6 +175,10 @@
     }
 
     function clearInvoiceFields() {
+        if (isEdit) {
+            return;
+        }
+
         $('#invoice-amount-display').val('');
         $('#invoice-due-date').val('');
         $('#invoice-due-date-display').val('');
@@ -142,14 +187,19 @@
     }
 
     function clearCalculatedFields() {
-        $('#invoice-amount-display, #invoice-due-date, #invoice-due-date-display, #factoring-amount-display, #contract-interest-rate-display, #diff-in-days-display, #factoring-interest-amount-display, #received-amount-display').val('');
+        if (isEdit) {
+            return;
+        }
+
+        $('#invoice-amount-display, #invoice-due-date, #invoice-due-date-display, #factoring-amount-display, #contract-interest-rate-display, #diff-in-days-display, #factoring-interest-amount-display, #received-amount-display, #remaining-limit-display').val('');
         serverAmounts = null;
     }
 
-    function loadAccountNumbers() {
+    function loadAccountNumbers(selectedAccountNumber) {
         const accountType = $accountType.val();
         const bankId = $financialInstitution.val();
-        const currency = $invoiceCurrency.val() || 'EGP';
+        const currency = getInvoiceCurrency() || 'EGP';
+        const selectedValue = selectedAccountNumber || $accountNumber.val();
 
         if (!accountType || !bankId) {
             rebuildSelect($accountNumber, [], 'id', 'name', 'Select');
@@ -161,7 +211,7 @@
                 const items = Object.keys(response.data || {}).map(function (accountNumber) {
                     return { id: accountNumber, name: response.data[accountNumber] };
                 });
-                rebuildSelect($accountNumber, items, 'id', 'name', 'Select');
+                rebuildSelect($accountNumber, items, 'id', 'name', 'Select', selectedValue);
             });
     }
 
@@ -188,21 +238,22 @@
     }
 
     function recalculate() {
-        const invoiceId = $customerInvoice.val();
+        const invoiceId = getCustomerInvoiceId();
         const contractId = $factoringContract.val();
         if (!invoiceId || !contractId) {
-            clearCalculatedFields();
+            if (!isEdit) {
+                clearCalculatedFields();
+            }
             return;
         }
 
-        $.post(calculateUrl, {
-            _token: $('input[name="_token"]').val(),
+        $.post(calculateUrl, ajaxParams({
             customer_invoice_id: invoiceId,
             factoring_contract_id: contractId,
             factoring_percentage: $factoringPercentage.val() || 0,
             other_charges: $otherCharges.val() || 0,
             factoring_date: $factoringDate.val(),
-        }).done(function (response) {
+        })).done(function (response) {
             serverAmounts = {
                 factoring_amount: parseFloat(response.factoring_amount) || 0,
             };
@@ -213,21 +264,29 @@
             $('#factoring-amount-display').val(formatNumber(response.factoring_amount));
             $('#contract-interest-rate-display').val(formatNumber(response.contract_interest_rate));
             $('#diff-in-days-display').val(response.diff_in_days);
+            updateRemainingLimit(response.remaining_limit);
             setAmountField($factoringInterestAmount, response.factoring_interest_amount);
             setAmountField($receivedAmount, response.received_amount);
         });
     }
 
     $factoringDate.on('change', loadContracts);
-
     $factoringCompany.on('change changed.bs.select', loadContracts);
-    $customer.on('change changed.bs.select', loadCurrencies);
-    $invoiceCurrency.on('change changed.bs.select', function () {
-        loadInvoices();
-        loadAccountNumbers();
-    });
 
-    $customerInvoice.on('change changed.bs.select', recalculate);
+    if ($customer.length) {
+        $customer.on('change changed.bs.select', loadCurrencies);
+    }
+
+    if ($invoiceCurrency.length) {
+        $invoiceCurrency.on('change changed.bs.select', function () {
+            loadInvoices();
+            loadAccountNumbers();
+        });
+    }
+
+    if ($customerInvoice.length) {
+        $customerInvoice.on('change changed.bs.select', recalculate);
+    }
 
     $factoringContract.on('change changed.bs.select', recalculate);
     $factoringPercentage.on('change keyup', recalculate);
@@ -244,6 +303,13 @@
     });
 
     $('.kt_bootstrap_select').selectpicker();
+
+    if (isEdit && initialValues) {
+        serverAmounts = {
+            factoring_amount: parseFloat(initialValues.factoring_amount) || 0,
+        };
+        loadAccountNumbers(initialValues.account_number);
+    }
 
     $(document).on('change', 'input:not([placeholder])[type="text"]:not(.exclude-text)', function () {
         if (!$(this).hasClass('exclude-text')) {

@@ -17,6 +17,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class FactoringWithoutRecourseController
 {
@@ -74,7 +75,13 @@ class FactoringWithoutRecourseController
             'received_amount' => __('Received Amount'),
         ];
 
-        return view('factoring.without-recourse.index', compact('company', 'transactions', 'searchFields'));
+        return view('factoring.without-recourse.index', [
+            'company' => $company,
+            'transactions' => $transactions,
+            'searchFields' => $searchFields,
+            'financialInstitutionBanks' => FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->get(),
+            'accountTypes' => AccountType::onlyCashAccounts()->get(),
+        ]);
     }
 
     public function create(Company $company)
@@ -174,6 +181,8 @@ class FactoringWithoutRecourseController
 
             $transaction->update(['settlement_id' => $settlement->id]);
 
+            $this->syncFactoringDisbursementStatement($transaction, $company, $factoringDate, $receivedAmount, $invoice);
+
             return $transaction;
         });
 
@@ -185,6 +194,7 @@ class FactoringWithoutRecourseController
     public function update(Company $company, FactoringTransaction $factoringTransaction, StoreFactoringWithoutRecourseRequest $request)
     {
         $this->ensureWithoutRecourseTransaction($company, $factoringTransaction);
+        abort_if($factoringTransaction->isSettled(), 422, __('Settled factoring transactions cannot be edited.'));
 
         $invoice = CustomerInvoice::findOrFail($request->input('customer_invoice_id'));
         $contract = FactoringContract::findOrFail($request->input('factoring_contract_id'));
@@ -249,6 +259,8 @@ class FactoringWithoutRecourseController
                     'partner_id' => $request->input('customer_id'),
                 ]);
             }
+
+            $this->syncFactoringDisbursementStatement($factoringTransaction, $company, $factoringDate, $receivedAmount, $invoice);
         });
 
         return response()->json([
@@ -264,6 +276,158 @@ class FactoringWithoutRecourseController
         $factoringTransaction->delete();
 
         return redirect()->back()->with('success', __('Item Has Been Delete Successfully'));
+    }
+
+    public function markAsSettled(Company $company, FactoringTransaction $factoringTransaction, Request $request)
+    {
+        $this->ensureWithoutRecourseTransaction($company, $factoringTransaction);
+
+        if ($factoringTransaction->isSettled()) {
+            return redirect()->back()->with('fail', __('This transaction is already settled.'));
+        }
+
+        $request->validate([
+            'settlement_date' => 'required|date|before_or_equal:today',
+        ]);
+
+        $settledDate = Carbon::make(
+            parseDatePickerValue($request->input('settlement_date')) ?? $request->input('settlement_date')
+        )->format('Y-m-d');
+
+        $invoice = $factoringTransaction->customerInvoice;
+        $commentEn = __('Mark As Settled For Invoice #:invoiceNumber', ['invoiceNumber' => $invoice?->invoice_number ?? '']);
+        $commentAr = __('Mark As Settled For Invoice #:invoiceNumber', ['invoiceNumber' => $invoice?->invoice_number ?? ''], 'ar');
+
+        DB::transaction(function () use ($company, $factoringTransaction, $settledDate, $commentEn, $commentAr) {
+            $factoringTransaction->storeFactoringSettlementStatement(
+                $company->id,
+                (int) $factoringTransaction->factoring_company_id,
+                (int) $factoringTransaction->factoring_contract_id,
+                $settledDate,
+                (float) $factoringTransaction->received_amount,
+                (string) $factoringTransaction->invoice_currency,
+                $commentEn,
+                $commentAr
+            );
+
+            $factoringTransaction->update([
+                'is_settled' => true,
+                'settled_at' => $settledDate,
+                'updated_by' => auth()->id(),
+            ]);
+        });
+
+        return redirect()->back()->with('success', __('Item Has Been Updated Successfully'));
+    }
+
+    public function revertSettlement(Company $company, FactoringTransaction $factoringTransaction)
+    {
+        $this->ensureWithoutRecourseTransaction($company, $factoringTransaction);
+
+        if (!$factoringTransaction->isSettled()) {
+            return redirect()->back()->with('fail', __('This transaction is not settled.'));
+        }
+
+        DB::transaction(function () use ($factoringTransaction) {
+            $factoringTransaction->deleteFactoringSettlementStatements();
+            $factoringTransaction->update([
+                'is_settled' => false,
+                'settled_at' => null,
+                'updated_by' => auth()->id(),
+            ]);
+        });
+
+        return redirect()->back()->with('success', __('Item Has Been Updated Successfully'));
+    }
+
+    public function markDifferenceReceived(Company $company, FactoringTransaction $factoringTransaction, Request $request)
+    {
+        $this->ensureWithoutRecourseTransaction($company, $factoringTransaction);
+
+        if ($factoringTransaction->isDifferenceReceived()) {
+            return redirect()->back()->with('fail', __('The difference amount has already been recorded.'));
+        }
+
+        $differenceAmount = $factoringTransaction->getDifferenceAmount();
+        if ($differenceAmount <= 0) {
+            return redirect()->back()->with('fail', __('There is no difference amount to record.'));
+        }
+
+        $request->validate([
+            'difference_received_date' => 'required|date|before_or_equal:today',
+            'financial_institution_id' => [
+                'required',
+                Rule::exists('financial_institutions', 'id')->where('company_id', $company->id),
+            ],
+            'account_type_id' => 'required|exists:account_types,id',
+            'account_number' => 'required|string',
+        ]);
+
+        $receivedDate = Carbon::make(
+            parseDatePickerValue($request->input('difference_received_date')) ?? $request->input('difference_received_date')
+        )->format('Y-m-d');
+
+        $accountType = AccountType::findOrFail($request->input('account_type_id'));
+        $invoice = $factoringTransaction->customerInvoice;
+        $factoringCompanyName = $factoringTransaction->factoringCompany?->getName() ?? '';
+        $invoiceNumber = $invoice?->invoice_number ?? '';
+        $commentEn = __('Due From Factoring Company [:companyName] On [Invoice #:invoiceNumber]', [
+            'companyName' => $factoringCompanyName,
+            'invoiceNumber' => $invoiceNumber,
+        ]);
+        $commentAr = __('Due From Factoring Company [:companyName] On [Invoice #:invoiceNumber]', [
+            'companyName' => $factoringCompanyName,
+            'invoiceNumber' => $invoiceNumber,
+        ], 'ar');
+
+        DB::transaction(function () use ($company, $factoringTransaction, $request, $receivedDate, $accountType, $differenceAmount, $commentEn, $commentAr) {
+            $factoringTransaction->storeBankCreditStatementForDifference(
+                $company->id,
+                (int) $request->input('financial_institution_id'),
+                $accountType,
+                $request->input('account_number'),
+                $receivedDate,
+                $differenceAmount,
+                $commentEn,
+                $commentAr
+            );
+
+            $factoringTransaction->update([
+                'is_difference_received' => true,
+                'difference_received_date' => $receivedDate,
+                'difference_received_amount' => $differenceAmount,
+                'difference_financial_institution_id' => $request->input('financial_institution_id'),
+                'difference_account_type_id' => $accountType->id,
+                'difference_account_number' => $request->input('account_number'),
+                'updated_by' => auth()->id(),
+            ]);
+        });
+
+        return redirect()->back()->with('success', __('Item Has Been Updated Successfully'));
+    }
+
+    public function revertDifferenceReceived(Company $company, FactoringTransaction $factoringTransaction)
+    {
+        $this->ensureWithoutRecourseTransaction($company, $factoringTransaction);
+
+        if (!$factoringTransaction->isDifferenceReceived()) {
+            return redirect()->back()->with('fail', __('The difference amount has not been recorded.'));
+        }
+
+        DB::transaction(function () use ($factoringTransaction) {
+            $factoringTransaction->deleteDifferenceReceivedBankStatements();
+            $factoringTransaction->update([
+                'is_difference_received' => false,
+                'difference_received_date' => null,
+                'difference_received_amount' => null,
+                'difference_financial_institution_id' => null,
+                'difference_account_type_id' => null,
+                'difference_account_number' => null,
+                'updated_by' => auth()->id(),
+            ]);
+        });
+
+        return redirect()->back()->with('success', __('Item Has Been Updated Successfully'));
     }
 
     public function getContracts(Company $company, FactoringCompany $factoringCompany, Request $request)
@@ -285,6 +449,7 @@ class FactoringWithoutRecourseController
                 'margin_rate' => (float) $contract->margin_rate,
                 'contract_interest_rate' => $contract->getContractInterestRate(),
                 'currency' => $contract->getCurrency(),
+                'remaining_limit' => $contract->getRemainingLimit($request->integer('except_factoring_transaction_id') ?: null),
             ]);
 
         return response()->json(['status' => true, 'contracts' => $contracts]);
@@ -364,12 +529,41 @@ class FactoringWithoutRecourseController
             ? Carbon::make($invoice->getInvoiceDueDate())->format('Y-m-d')
             : '';
 
+        $exceptTransactionId = $request->integer('except_factoring_transaction_id') ?: null;
+        $remainingLimit = $contract->getRemainingLimit($exceptTransactionId);
+
         return response()->json([
             'status' => true,
             'invoice_amount' => (float) $invoice->getNetInvoiceAmount(),
             'invoice_due_date' => $invoiceDueDate,
+            'remaining_limit' => $remainingLimit,
+            'remaining_limit_formatted' => number_format($remainingLimit, 2),
             ...$amounts,
         ]);
+    }
+
+    protected function syncFactoringDisbursementStatement(
+        FactoringTransaction $transaction,
+        Company $company,
+        string $date,
+        float $creditAmount,
+        CustomerInvoice $invoice
+    ): void {
+        $transaction->deleteFactoringStatements();
+
+        $commentEn = __('Factoring Disbursement For Invoice #:invoiceNumber', ['invoiceNumber' => $invoice->getInvoiceNumber()]);
+        $commentAr = __('Factoring Disbursement For Invoice #:invoiceNumber', ['invoiceNumber' => $invoice->getInvoiceNumber()], 'ar');
+
+        $transaction->storeFactoringDisbursementStatement(
+            $company->id,
+            (int) $transaction->factoring_company_id,
+            (int) $transaction->factoring_contract_id,
+            $date,
+            $creditAmount,
+            (string) $transaction->invoice_currency,
+            $commentEn,
+            $commentAr
+        );
     }
 
     protected function availableInvoicesQuery(Company $company, int $customerId, ?string $currency = null, ?int $exceptFactoringTransactionId = null)

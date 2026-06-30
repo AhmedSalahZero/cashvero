@@ -94,6 +94,7 @@ class FactoringContractController
         /** @var FactoringContract $contract */
         $contract = FactoringContract::create($data);
         $contract->storeOutstandingBreakdown($request, $company);
+        $contract->storeLimitStatement($company->id);
 
         return response()->json([
             'redirectTo' => route('factoring.contracts.index', [

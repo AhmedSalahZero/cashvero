@@ -1330,6 +1330,12 @@ function getHeaderMenu($currentCompany = null)
                     'submenu'=>[]
                 ],
                 [
+                    'title'=>__('Factoring Statement'),
+                    'link'=>route('view.factoring.statement', ['company'=>$company->id]),
+                    'show'=>$canViewBankStatement,
+                    'submenu'=>[]
+                ],
+                [
                     'title'=>__('LG By Beneficiary Name Report'),
                     'link'=>route('view.lg.by.beneficiary.name.report', ['company'=>$company->id]),
                     'show'=>$canViewLgByBeneficiaryNameReport,

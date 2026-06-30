@@ -1,7 +1,10 @@
 @extends('layouts.dashboard')
+@php
+    $usesMoneyFlowDark = in_array($modelName, ['LoanSchedule', 'ContractLoanSchedule', 'CustomerInvoice', 'SupplierInvoice'], true);
+@endphp
 @section('css')
 <x-styles.commons></x-styles.commons>
-@if(in_array($modelName, ['LoanSchedule', 'ContractLoanSchedule']))
+@if($usesMoneyFlowDark)
 <style>
     .money-flow-dark .kt-portlet .kt-portlet__head {
         border-bottom-color: #1490a833 !important;
@@ -40,11 +43,20 @@
     .money-flow-dark .table tbody+tbody {
         border-top-color: #1490a833;
     }
+
+    .money-flow-dark .table thead th,
+    .money-flow-dark .table tbody td {
+        color: #e2e8f0 !important;
+    }
+
+    .money-flow-dark .kt-portlet .kt-portlet__body {
+        background: transparent !important;
+    }
 </style>
 @endIf
 @endsection
 @section('sub-header')
-@if(!in_array($modelName, ['LoanSchedule', 'ContractLoanSchedule']))
+@if(!$usesMoneyFlowDark)
 <style>
     .table {
         margin-bottom: 0 !important;
@@ -189,7 +201,7 @@
 @endIf
 @endsection
 @section('content')
-@if(in_array($modelName, ['LoanSchedule', 'ContractLoanSchedule']))
+@if($usesMoneyFlowDark)
 <div class="money-flow-dark">
 @endIf
 
@@ -434,7 +446,7 @@
 </form>
 
 </div>
-@if(in_array($modelName, ['LoanSchedule', 'ContractLoanSchedule']))
+@if($usesMoneyFlowDark)
 </div>
 @endIf
 @endsection

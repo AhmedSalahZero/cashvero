@@ -149,6 +149,11 @@
                                 value="{{ $isEdit ? number_format((float) $factoringTransaction->factoring_amount, 2) : '' }}">
                         </div>
                         <div class="col-md-2">
+                            <label>{{ __('Remaining Limit') }}</label>
+                            <input type="text" id="remaining-limit-display" class="form-control exclude-text" readonly
+                                value="{{ $isEdit && isset($factoringTransaction) ? number_format($factoringTransaction->factoringContract?->getRemainingLimit($factoringTransaction->id) ?? 0, 2) : '' }}">
+                        </div>
+                        <div class="col-md-2">
                             <label>{{ __('Contract Interest Rate (%)') }}</label>
                             <input type="text" id="contract-interest-rate-display" class="form-control exclude-text" readonly
                                 value="{{ $isEdit ? number_format((float) $factoringTransaction->contract_interest_rate, 2) : '' }}">

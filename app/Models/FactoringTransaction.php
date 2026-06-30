@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Traits\Models\HandlesFactoringBankDebit;
+use App\Traits\Models\HandlesFactoringStatement;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -32,7 +33,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class FactoringTransaction extends Model
 {
-    use HandlesFactoringBankDebit;
+    use HandlesFactoringBankDebit, HandlesFactoringStatement;
 
     public const WITHOUT_RECOURSE = 'without_recourse';
 
@@ -123,8 +124,25 @@ class FactoringTransaction extends Model
     public function deleteRelations(): void
     {
         $this->deleteBankDebitStatements();
+        $this->deleteDifferenceReceivedBankStatements();
+        $this->deleteFactoringStatements();
         if ($this->settlement) {
             $this->settlement->delete();
         }
+    }
+
+    public function isSettled(): bool
+    {
+        return (bool) $this->is_settled;
+    }
+
+    public function isDifferenceReceived(): bool
+    {
+        return (bool) $this->is_difference_received;
+    }
+
+    public function getDifferenceAmount(): float
+    {
+        return round((float) $this->factoring_amount - (float) $this->received_amount, 2);
     }
 }

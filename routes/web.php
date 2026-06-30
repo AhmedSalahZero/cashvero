@@ -700,6 +700,11 @@ Route::middleware([])->group(function () {
                     
                     Route::get('show-bank-statement', 'BankStatementController@index')->name('view.bank.statement');
                     Route::get('bank-statement', 'BankStatementController@result')->name('result.bank.statement');
+
+                    Route::get('factoring-statement', 'FactoringStatementController@index')->name('view.factoring.statement');
+                    Route::get('factoring-statement/result', 'FactoringStatementController@result')->name('result.factoring.statement');
+                    Route::get('factoring-statement/currencies/{factoringCompany}', 'FactoringStatementController@getCurrencies');
+                    Route::get('factoring-statement/contracts/{factoringCompany}/{currency}', 'FactoringStatementController@getContracts');
                     
                     Route::post('update-commission-fees', 'BankStatementController@updateCommissionFees')->name('update.commission.fees');
                     Route::post('update-bank-statement-row-fees', 'BankStatementController@updateBankStatementRow')->name('update.bank.statement.debit.or.credit');
@@ -799,6 +804,10 @@ Route::middleware([])->group(function () {
                     Route::post('factoring/without-recourse/store', 'FactoringWithoutRecourseController@store')->name('factoring.without-recourse.store');
                     Route::get('factoring/without-recourse/{factoringTransaction}/edit', 'FactoringWithoutRecourseController@edit')->name('factoring.without-recourse.edit');
                     Route::put('factoring/without-recourse/{factoringTransaction}/update', 'FactoringWithoutRecourseController@update')->name('factoring.without-recourse.update');
+                    Route::post('factoring/without-recourse/{factoringTransaction}/mark-as-settled', 'FactoringWithoutRecourseController@markAsSettled')->name('factoring.without-recourse.mark-as-settled');
+                    Route::post('factoring/without-recourse/{factoringTransaction}/revert-settlement', 'FactoringWithoutRecourseController@revertSettlement')->name('factoring.without-recourse.revert-settlement');
+                    Route::post('factoring/without-recourse/{factoringTransaction}/mark-difference-received', 'FactoringWithoutRecourseController@markDifferenceReceived')->name('factoring.without-recourse.mark-difference-received');
+                    Route::post('factoring/without-recourse/{factoringTransaction}/revert-difference-received', 'FactoringWithoutRecourseController@revertDifferenceReceived')->name('factoring.without-recourse.revert-difference-received');
                     Route::delete('factoring/without-recourse/{factoringTransaction}', 'FactoringWithoutRecourseController@destroy')->name('factoring.without-recourse.destroy');
                     Route::get('factoring/without-recourse/contracts/{factoringCompany}', 'FactoringWithoutRecourseController@getContracts');
                     Route::get('factoring/without-recourse/currencies/{customerId}', 'FactoringWithoutRecourseController@getInvoiceCurrencies');
