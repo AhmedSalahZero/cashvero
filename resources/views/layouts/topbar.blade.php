@@ -214,8 +214,18 @@
             <div class="kt-notification">
                 <div class="kt-notification__custom kt-space-between">
                     <a class="btn btn-label btn-label-brand btn-sm btn-bold" href="{{ route('profile.edit') }}">{{ __('My Profile') }}</a>
+                    <button type="submit" form="toggle-theme-form" class="btn btn-label btn-label-brand btn-sm btn-bold">
+                        @if($user->dark_mode)
+                            <i class="fa fa-sun"></i> {{ __('Light Mode') }}
+                        @else
+                            <i class="fa fa-moon"></i> {{ __('Dark Mode') }}
+                        @endif
+                    </button>
                     <a class="btn btn-label btn-label-brand btn-sm btn-bold" href="{{ route('logout') }}" onclick="event.preventDefault();
                                               document.getElementById('logout-form').submit();">{{ __('Sign Out') }}</a>
+                    <form id="toggle-theme-form" action="{{ route('theme.toggle') }}" method="POST" class="d-none">
+                        @csrf
+                    </form>
                     <form id="logout-form" action="{{ route('logout') }}" method="POST" class="d-none">
                         @csrf
                     </form>

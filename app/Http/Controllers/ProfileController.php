@@ -64,6 +64,18 @@ class ProfileController extends Controller
 		return redirect()->back();
 	}
 
+	public function toggleTheme()
+	{
+		$user = auth()->user();
+		/**
+		 * @var User $user
+		 */
+		$user->dark_mode = ! $user->dark_mode;
+		$user->save();
+
+		return redirect()->back();
+	}
+
 	private function refreshOdooId(User $user): void
 	{
 		$odooCompany = $user->companies->first(fn (Company $company) => $company->hasOdooCredentials());

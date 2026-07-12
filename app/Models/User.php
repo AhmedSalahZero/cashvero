@@ -98,13 +98,14 @@ class User extends Authenticatable implements HasMedia
 	protected $connection = 'mysql';
     protected $fillable = [
         'name', 'email', 'password','max_users',
-		'created_by','odoo_username','odoo_db_password','odoo_id'
+		'created_by','odoo_username','odoo_db_password','odoo_id','dark_mode'
     ];
     protected $hidden = [
         'password', 'remember_token',
     ];
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'dark_mode' => 'boolean',
     ];
     public function companies():BelongsToMany
     {

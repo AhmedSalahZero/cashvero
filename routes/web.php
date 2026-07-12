@@ -80,6 +80,7 @@ Route::middleware([])->group(function () {
 
             Route::get('profile', 'ProfileController@edit')->name('profile.edit');
             Route::put('profile', 'ProfileController@update')->name('profile.update');
+            Route::post('toggle-theme', 'ProfileController@toggleTheme')->name('theme.toggle');
 
             Route::get('update-users-based-on-company-and-role', 'UserController@getUsersBasedOnCompanyAndRole')->name('update.users.based.on.company.and.role');
             Route::get('render-permission-html-for-user', 'UserController@renderPermissionForUser')->name('render.permissions.html.for.user');

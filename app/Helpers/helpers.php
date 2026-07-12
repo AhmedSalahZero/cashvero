@@ -1032,6 +1032,11 @@ function isMoneyFlowDarkPage(): bool
         return $resolved;
     }
 
+    $user = auth()->user();
+    if (! $user || ! $user->dark_mode) {
+        return $resolved = false;
+    }
+
     $routeName = request()->route()?->getName();
     $darkRouteNames = [
         'view.uploading',
