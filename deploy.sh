@@ -4,6 +4,9 @@ set -e
 echo ">>> Maintenance mode ON"
 /usr/local/bin/ea-php84 artisan down
 
+echo ">>> Fix Permissions"
+chown -R cfostools:cfostools storage bootstrap/cache
+
 echo ">>> Pulling latest code"
 git status
 git stash
