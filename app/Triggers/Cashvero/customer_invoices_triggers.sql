@@ -16,9 +16,12 @@ CREATE TRIGGER `insert_net_invoice_amount_for_customers` BEFORE INSERT
 	set new.discount_amount_in_main_currency = new.discount_amount * new.exchange_rate;	
 	set new.collected_amount_in_main_currency = new.collected_amount * new.exchange_rate;
 	
+	set new.excel_collected_amount = ifnull(new.excel_collected_amount,0);
+	set new.excel_collected_amount_in_main_currency = new.excel_collected_amount * new.exchange_rate;
+	
 	-- set new.odoo_collected_amount = new.odoo_collected_amount -  new.collected_amount ;
-	  set new.total_collected_amount = new.collected_amount + new.odoo_collected_amount;
-	 set new.total_collected_amount_in_main_currency = new.collected_amount_in_main_currency + new.odoo_collected_amount_in_main_currency;
+	  set new.total_collected_amount = new.collected_amount + new.odoo_collected_amount + new.excel_collected_amount;
+	 set new.total_collected_amount_in_main_currency = new.collected_amount_in_main_currency + new.odoo_collected_amount_in_main_currency + new.excel_collected_amount_in_main_currency;
 
 	
 	
@@ -76,8 +79,11 @@ UPDATE
 	set new.discount_amount_in_main_currency = new.discount_amount * new.exchange_rate;	
 	set new.collected_amount_in_main_currency = new.collected_amount * new.exchange_rate;
 	
-	 set new.total_collected_amount = new.collected_amount + new.odoo_collected_amount;
-	 set new.total_collected_amount_in_main_currency = new.collected_amount_in_main_currency + new.odoo_collected_amount_in_main_currency;
+	set new.excel_collected_amount = ifnull(new.excel_collected_amount,0);
+	set new.excel_collected_amount_in_main_currency = new.excel_collected_amount * new.exchange_rate;
+	
+	 set new.total_collected_amount = new.collected_amount + new.odoo_collected_amount + new.excel_collected_amount;
+	 set new.total_collected_amount_in_main_currency = new.collected_amount_in_main_currency + new.odoo_collected_amount_in_main_currency + new.excel_collected_amount_in_main_currency;
 	
 	set new.total_deductions_in_main_currency = new.total_deductions * new.exchange_rate;
 	set new.net_invoice_amount_in_main_currency = new.net_invoice_amount * new.exchange_rate;

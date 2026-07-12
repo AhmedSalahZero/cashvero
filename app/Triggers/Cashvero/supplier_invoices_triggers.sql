@@ -19,8 +19,11 @@ CREATE TRIGGER `insert_net_invoice_amount_for_suppliers` BEFORE INSERT
 	set new.invoice_amount_in_main_currency = (new.invoice_amount * new.exchange_rate);	
 	set new.paid_amount_in_main_currency = new.paid_amount * new.exchange_rate;
 	
-	set new.total_paid_amount = new.paid_amount + new.odoo_paid_amount;
-	 set new.total_paid_amount_in_main_currency = new.paid_amount_in_main_currency + new.odoo_paid_amount_in_main_currency;
+	set new.excel_paid_amount = ifnull(new.excel_paid_amount,0);
+	set new.excel_paid_amount_in_main_currency = new.excel_paid_amount * new.exchange_rate;
+	
+	set new.total_paid_amount = new.paid_amount + new.odoo_paid_amount + new.excel_paid_amount;
+	 set new.total_paid_amount_in_main_currency = new.paid_amount_in_main_currency + new.odoo_paid_amount_in_main_currency + new.excel_paid_amount_in_main_currency;
 	
 	
 	set new.discount_amount_in_main_currency = (new.discount_amount * new.exchange_rate);	
@@ -75,9 +78,11 @@ UPDATE
 	set new.invoice_amount_in_main_currency = (new.invoice_amount * new.exchange_rate);
 	set new.paid_amount_in_main_currency = new.paid_amount * new.exchange_rate;
 	
+	set new.excel_paid_amount = ifnull(new.excel_paid_amount,0);
+	set new.excel_paid_amount_in_main_currency = new.excel_paid_amount * new.exchange_rate;
 	
-	 set new.total_paid_amount = new.paid_amount + new.odoo_paid_amount;
-	 set new.total_paid_amount_in_main_currency = new.paid_amount_in_main_currency + new.odoo_paid_amount_in_main_currency;
+	 set new.total_paid_amount = new.paid_amount + new.odoo_paid_amount + new.excel_paid_amount;
+	 set new.total_paid_amount_in_main_currency = new.paid_amount_in_main_currency + new.odoo_paid_amount_in_main_currency + new.excel_paid_amount_in_main_currency;
 
 	
 	

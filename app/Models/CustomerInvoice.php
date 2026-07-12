@@ -49,6 +49,8 @@ use Illuminate\Support\Facades\DB;
  * @property string|null $invoice_status
  * @property numeric $odoo_collected_amount
  * @property numeric $odoo_collected_amount_in_main_currency
+ * @property numeric $excel_collected_amount
+ * @property numeric $excel_collected_amount_in_main_currency
  * @property string|null $collected_amount
  * @property float|null $collected_amount_in_main_currency
  * @property numeric $total_collected_amount
@@ -164,6 +166,8 @@ class CustomerInvoice extends Model implements IInvoice
 	const COLLETED_OR_PAID_AMOUNT = 'collected_amount';
 	const ODOO_COLLETED_OR_PAID_AMOUNT = 'odoo_collected_amount';
 	const ODOO_COLLETED_OR_PAID_AMOUNT_IN_MAIN_CURRENCY = 'odoo_collected_amount_in_main_currency';
+	const EXCEL_COLLETED_OR_PAID_AMOUNT = 'excel_collected_amount';
+	const EXCEL_COLLETED_OR_PAID_AMOUNT_IN_MAIN_CURRENCY = 'excel_collected_amount_in_main_currency';
 	const COLLETED_OR_PAID_AMOUNT_IN_MAIN_CURRENCY = 'collected_amount_in_main_currency';
 	const PARTIALLY_COLLECTED_OR_PAID_AND_PAST_DUE = 'partially_collected_and_past_due';
 	const MONEY_MODEL_NAME = 'MoneyReceived';

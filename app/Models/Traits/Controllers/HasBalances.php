@@ -89,6 +89,22 @@ trait HasBalances
 					
 					
 			}
+			if($customerInvoice->excel_collected_amount>0){
+					$currentData['date'] = $invoiceDate;
+					$currentData['document_type'] = 'Collection';
+					$currentData['document_no'] = $invoiceNumber;
+					$currentData['debit'] = 0  ;
+					$currentData['credit'] = $isMainCurrency ? $customerInvoice->excel_collected_amount_in_main_currency : $customerInvoice->excel_collected_amount;
+					$currentData['comment'] =__('Collected Amount');
+					$index++ ;
+						if($isNotBegBalance){
+				$formattedData[$index]=$currentData;
+					}else{
+						$tempArr[$index] = $currentData ;
+					}
+					
+					
+			}
 			/**
 			 * * for supplier
 			 */
@@ -97,6 +113,21 @@ trait HasBalances
 					$currentData['document_type'] = 'Paid';
 					$currentData['document_no'] = $invoiceNumber;
 					$currentData['debit'] = $isMainCurrency  ? $customerInvoice->odoo_paid_amount_in_main_currency : $customerInvoice->odoo_paid_amount  ;
+					$currentData['credit'] =0;
+					$currentData['comment'] =__('Paid Amount');
+					$index++ ;
+					
+						if($isNotBegBalance){
+				$formattedData[$index]=$currentData;
+					}else{
+						$tempArr[$index] = $currentData ;
+					}
+			}
+			if($customerInvoice->excel_paid_amount>0){
+					$currentData['date'] = $invoiceDate;
+					$currentData['document_type'] = 'Paid';
+					$currentData['document_no'] = $invoiceNumber;
+					$currentData['debit'] = $isMainCurrency  ? $customerInvoice->excel_paid_amount_in_main_currency : $customerInvoice->excel_paid_amount  ;
 					$currentData['credit'] =0;
 					$currentData['comment'] =__('Paid Amount');
 					$index++ ;

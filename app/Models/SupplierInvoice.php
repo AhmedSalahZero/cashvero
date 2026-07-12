@@ -45,6 +45,8 @@ use Illuminate\Support\Facades\DB;
  * @property string|null $invoice_status
  * @property numeric $odoo_paid_amount
  * @property numeric $odoo_paid_amount_in_main_currency
+ * @property numeric $excel_paid_amount
+ * @property numeric $excel_paid_amount_in_main_currency
  * @property string|null $paid_amount
  * @property float|null $paid_amount_in_main_currency
  * @property numeric $total_paid_amount
@@ -166,6 +168,8 @@ class SupplierInvoice extends Model implements IInvoice
 	const COLLETED_OR_PAID_AMOUNT = 'paid_amount';
 	const ODOO_COLLETED_OR_PAID_AMOUNT = 'odoo_paid_amount';
 	const ODOO_COLLETED_OR_PAID_AMOUNT_IN_MAIN_CURRENCY = 'odoo_paid_amount_in_main_currency';
+	const EXCEL_COLLETED_OR_PAID_AMOUNT = 'excel_paid_amount';
+	const EXCEL_COLLETED_OR_PAID_AMOUNT_IN_MAIN_CURRENCY = 'excel_paid_amount_in_main_currency';
 	const COLLETED_OR_PAID_AMOUNT_IN_MAIN_CURRENCY = 'paid_amount_in_main_currency';
 	const PARTIALLY_COLLECTED_OR_PAID_AND_PAST_DUE = 'partially_paid_and_past_due';
 	const MONEY_MODEL_NAME = 'MoneyPayment';
