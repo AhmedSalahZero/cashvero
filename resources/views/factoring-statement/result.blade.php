@@ -13,6 +13,9 @@
 @endsection
 @section('content')
 <div class="money-flow-dark">
+<div class="row">
+    <div class="col-md-12">
+        <x-factoring-statement-tabs :company="$company" active="statement" />
 <div class="kt-portlet">
     <div class="kt-portlet__head">
         <div class="kt-portlet__head-label">
@@ -46,6 +49,8 @@
                 @endforeach
             </tbody>
         </table>
+    </div>
+</div>
     </div>
 </div>
 </div>

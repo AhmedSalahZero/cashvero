@@ -6,10 +6,12 @@ use App\Enums\LgTypes;
 use App\Helpers\HArr;
 use App\Models\AccountInterest;
 use App\OdooSetting;
+use App\Support\LockableAccountSelector;
 use App\Traits\HasBankStatement;
 use App\Traits\HasCompany;
 use App\Traits\HasLastStatementAmount;
 use App\Traits\HasOdooPaymentMethod;
+use App\Traits\IsLockableBankAccount;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -76,7 +78,7 @@ use Illuminate\Support\Str;
 class FinancialInstitutionAccount extends Model
 {
 	const NUMBER_OF_YEARS_FOR_INTEREST_IN_CURRENT_STATEMENT = 1 ;
-	use HasLastStatementAmount ,HasCompany,HasOdooPaymentMethod,HasBankStatement;
+	use HasLastStatementAmount ,HasCompany,HasOdooPaymentMethod,HasBankStatement,IsLockableBankAccount;
 		protected $casts = [
 			'synced_end_of_month_years'=>'array'
 		];
@@ -213,23 +215,34 @@ class FinancialInstitutionAccount extends Model
 	{
 		return __('Current');
 	}
-	public function isActive():bool
-	{
-		return (bool)$this->is_active;
-	}
 	public static function getAllCurrentAccountCurrenciesForCompany(int $companyId,array $exceptCurrenciesNames = []){
 		$currencies = getCurrenciesForSuppliersAndCustomers($companyId);
 		return HArr::removeKeyFromArrayByValue($currencies,$exceptCurrenciesNames);
 	}
 	public static function getAllAccountNumberForCurrency($companyId , $currencyName,$financialInstitutionId , string $keyName = 'account_number' , $onlyActiveAccounts = true ):array
 	{
-		$allAccounts = Request()->has('allAccounts') &&  Request()->get('allAccounts') === 'true' ;
-		return self::where('company_id',$companyId)
-		->when(!$allAccounts,function(Builder $builder) use ($onlyActiveAccounts){
-			$builder->where('financial_institution_accounts.is_active',$onlyActiveAccounts);
-		})
-		->where('financial_institution_id',$financialInstitutionId)
-		->where('currency',$currencyName)->pluck('account_number',$keyName)->toArray();		
+		$query = self::where('company_id', $companyId)
+			->where('financial_institution_id', $financialInstitutionId)
+			->where('currency', $currencyName);
+
+		if ($onlyActiveAccounts) {
+			$query->where('financial_institution_accounts.is_active', 1);
+		}
+
+		$accounts = $query->pluck('account_number', $keyName)->toArray();
+
+		if ($onlyActiveAccounts) {
+			$accounts = LockableAccountSelector::mergeSelectedLockedAccount(
+				$accounts,
+				static::class,
+				$companyId,
+				$currencyName,
+				$financialInstitutionId,
+				$keyName
+			);
+		}
+
+		return $accounts;
 	}
 	
 	public static function findByAccountNumber($accountNumber,int $companyId,int $financialInstitutionId)

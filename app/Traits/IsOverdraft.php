@@ -3,6 +3,7 @@ namespace App\Traits;
 
 use App\Models\FinancialInstitution;
 use App\Models\LendingInformation;
+use App\Support\LockableAccountSelector;
 use Carbon\Carbon;
 
 
@@ -97,9 +98,19 @@ trait IsOverdraft
 	}
 	public static function getAllAccountNumberForCurrency($companyId , $currencyName,$financialInstitutionId,$keyName='account_number'):array
 	{
-		return self::where('company_id',$companyId)->where('currency',$currencyName)
-		->where('financial_institution_id',$financialInstitutionId)
-		->pluck('account_number',$keyName)->toArray();		
+		$query = self::where('company_id', $companyId)
+			->where('currency', $currencyName)
+			->where('financial_institution_id', $financialInstitutionId);
+
+		return LockableAccountSelector::getAccountNumbers(
+			$query,
+			$companyId,
+			$currencyName,
+			$financialInstitutionId,
+			$keyName,
+			true,
+			static::class
+		);
 	}
 	
 	public static function getAllAccountIdForCurrency($companyId , $currencyName,$financialInstitutionId):array

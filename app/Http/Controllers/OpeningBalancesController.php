@@ -32,7 +32,12 @@ class OpeningBalancesController
     }
 	protected function getViewVars(Company $company, Request $request):array 
 	{
-		$financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->get();
+		$financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)
+            ->onlyBanks()
+            ->join('banks', 'banks.id', '=', 'financial_institutions.bank_id')
+            ->orderBy('banks.view_name')
+            ->select('financial_institutions.*')
+            ->get();
         $accountTypes = AccountType::onlyCashAccounts()->get();
         $selectedBanks = MoneyReceived::getDrawlBanksForCurrentCompany($company->id) ;
         $customers = Partner::where('company_id', $company->id)->where('is_customer', 1)->orderBy('name', 'asc')->get()->formattedForSelect(true, 'getId', 'getName');

@@ -15,6 +15,7 @@ use App\Models\Company;
 use App\Models\Contract;
 use App\Models\Currency;
 use App\Models\CustomerInvoice;
+use App\Models\FactoringTransaction;
 use App\Models\FinancialInstitution;
 use App\Models\ForeignExchangeRate;
 use App\Models\MoneyReceived;
@@ -350,6 +351,11 @@ class MoneyReceivedController
 
         if ($selectedCurrency) {
             $invoices = $invoices->where('currency', '=', $selectedCurrency);
+        }
+
+        $blockedByWithRecourse = FactoringTransaction::blockedInvoiceIdsForMoneyReceived($company->id);
+        if ($blockedByWithRecourse->isNotEmpty()) {
+            $invoices->whereNotIn('id', $blockedByWithRecourse);
         }
 
         $invoices = $invoices->orderBy('invoice_date', 'asc')

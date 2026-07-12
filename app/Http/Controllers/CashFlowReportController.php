@@ -22,6 +22,8 @@ use App\Models\PoAllocation;
 use App\Models\SettlementAllocation;
 use App\Models\SupplierInvoice;
 use App\Models\TimeOfDeposit;
+use App\Services\Reports\CashFlowCompanyPeriodBatchLoader;
+use App\Services\Reports\CashFlowContractDetailPeriodBatchLoader;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -244,6 +246,8 @@ class CashFlowReportController
 			unset($result['customers']['Cash & Banks Balance']);
 			unset($result['customers']['Time Of Deposits']);
 		}
+		$result['suppliers'] = [];
+		$result['cash_expenses'] = [];
 		$noRowHeaders =  $reportInterval == 'weekly' ? 3 : 1 ;
 		if ($sharedTimelineContext === null) {
 			$months = generateDatesBetweenTwoDates(Carbon::make($formStartDate),Carbon::make($formEndDate)); 
@@ -269,11 +273,9 @@ class CashFlowReportController
 			$dates = [];
 		}
 		$currency = $request->get('currency');
-		
-		if(is_null($currency) && $contract){
-			$currency = $contract->getCurrency();
-		}else{
-			$currency = $company->getMainFunctionalCurrency();
+
+		if (is_null($currency)) {
+			$currency = $contract ? $contract->getCurrency() : $company->getMainFunctionalCurrency();
 		}
 		$redirectRouteName = $this->getRedirectRoute($isContract);
 		$rangedWeeks = [];
@@ -298,80 +300,50 @@ class CashFlowReportController
 		  CustomerInvoice::getCustomerInvoicesUnderCollectionAtDatesForContracts($result,$company->id,$contractCode,$datesWithWeekNumber,$endDate);
 		
 		  $isContract ? SupplierInvoice::getSupplierInvoicesForPoUnderCollectionAtDates($result,$company->id,$datesWithWeekNumber,$startDate,$endDate,$poAllocations,$pastDueSupplierInvoicesForContracts) : SupplierInvoice::getSupplierInvoicesUnderCollectionAtDates($result,$company->id,$datesWithWeekNumber,$startDate,$endDate);
-	
-		foreach($weeks as $currentWeekYear=>$week){
-			if ($sharedTimelineContext === null) {
-				$currentYear = explode('-',$currentWeekYear)[1];
-				if($currentWeekYear == $firstIndex){
-					$startDate = $startDate ;
-					$endDate = HDate::getMinDateOfWeek($datesWithWeeks,$week,$currentYear)['end_date'];
-				}
-				elseif($currentWeekYear == $lastIndex){
-					$startDate = HDate::getMinDateOfWeek($datesWithWeeks,$week,$currentYear)['start_date'];
-					$endDate = $request->get('end_date',$defaultEndDate);  
-				}
-				else
-				{
-					$rangedWeeks = HDate::getMinDateOfWeek($datesWithWeeks,$week,$currentYear);
-					$startDate = $rangedWeeks['start_date'];
-					$endDate = $rangedWeeks['end_date'];
-				}
+
+		if ($sharedTimelineContext === null && $dates === []) {
+			$dates = $this->buildPeriodDatesMap(
+				$weeks,
+				$datesWithWeeks,
+				$startDate,
+				$endDate,
+				$request->get('end_date', $defaultEndDate),
+			);
+		}
+
+		$periodStart = $startDate;
+		$periodEnd = $endDate;
+
+		ForeignExchangeRate::beginRequestMemo();
+
+		try {
+			if (! $contractId) {
+				CashFlowCompanyPeriodBatchLoader::apply(
+					$result,
+					$foreignExchangeRates,
+					$mainFunctionalCurrency,
+					$company->id,
+					$periodStart,
+					$periodEnd,
+					$dates,
+				);
 			} else {
-				$startDate = $dates[$currentWeekYear]['start_date'];
-				$endDate = $dates[$currentWeekYear]['end_date'];
+				CashFlowContractDetailPeriodBatchLoader::apply(
+					$result,
+					$letterOfGuaranteeModelData,
+					$foreignExchangeRates,
+					$mainFunctionalCurrency,
+					$company->id,
+					(string) $contractCode,
+					(int) $contractId,
+					(int) $customerId,
+					$periodStart,
+					$periodEnd,
+					$dates,
+				);
 			}
-			CustomerInvoice::getSettlementAmountUnderDateForSpecificType($result,$foreignExchangeRates,$mainFunctionalCurrency ,MoneyReceived::CHEQUE,'expected_collection_date',$startDate , $endDate,$contractCode,$currentWeekYear,Cheque::UNDER_COLLECTION,$company->id) ;
-
-			CustomerInvoice::getSettlementAmountUnderDateForSpecificType($result,$foreignExchangeRates,$mainFunctionalCurrency,MoneyReceived::CHEQUE,'actual_collection_date',$startDate , $endDate,$contractCode,$currentWeekYear,Cheque::COLLECTED,$company->id);
-
-			CustomerInvoice::getSettlementAmountUnderDateForSpecificType($result,$foreignExchangeRates,$mainFunctionalCurrency ,MoneyReceived::INCOMING_TRANSFER,'receiving_date',$startDate , $endDate,$contractCode,$currentWeekYear,null,$company->id);
-
-			CustomerInvoice::getSettlementAmountUnderDateForSpecificType($result,$foreignExchangeRates,$mainFunctionalCurrency , MoneyReceived::CASH_IN_BANK,'receiving_date',$startDate , $endDate,$contractCode,$currentWeekYear,null,$company->id);
-
-			CustomerInvoice::getSettlementAmountUnderDateForSpecificType($result,$foreignExchangeRates,$mainFunctionalCurrency , MoneyReceived::CASH_IN_SAFE,'receiving_date',$startDate , $endDate,$contractCode,$currentWeekYear,null,$company->id);
-			
-			if($contractId){
-				CustomerInvoice::getDownPaymentsOverContracts($result,$foreignExchangeRates,$mainFunctionalCurrency ,MoneyReceived::CHEQUE,'expected_collection_date',$startDate , $endDate,$contractId,$currentWeekYear,Cheque::UNDER_COLLECTION,$company->id) ;
-				CustomerInvoice::getDownPaymentsOverContracts($result,$foreignExchangeRates,$mainFunctionalCurrency,MoneyReceived::CHEQUE,'actual_collection_date',$startDate , $endDate,$contractId,$currentWeekYear,Cheque::COLLECTED,$company->id);
-				CustomerInvoice::getDownPaymentsOverContracts($result,$foreignExchangeRates,$mainFunctionalCurrency ,MoneyReceived::INCOMING_TRANSFER,'receiving_date',$startDate , $endDate,$contractId,$currentWeekYear,null,$company->id);
-				CustomerInvoice::getDownPaymentsOverContracts($result,$foreignExchangeRates,$mainFunctionalCurrency , MoneyReceived::CASH_IN_BANK,'receiving_date',$startDate , $endDate,$contractId,$currentWeekYear,null,$company->id);
-				CustomerInvoice::getDownPaymentsOverContracts($result,$foreignExchangeRates,$mainFunctionalCurrency , MoneyReceived::CASH_IN_SAFE,'receiving_date',$startDate , $endDate,$contractId,$currentWeekYear,null,$company->id);
-			}
-			
-		if($contractId){
-			SettlementAllocation::getSettlementAllocationPerContractAndLetterOfCreditIssuance($result ,$foreignExchangeRates,$mainFunctionalCurrency ,'due_date',$contractId,$customerId,$startDate,$endDate,$currentWeekYear,$company->id);
-		}		
-			
-			$result['customers']['Customers Past Due Invoices'] = [];
-			CustomerInvoice::getSettlementAmountUnderDateForSpecificType($result,$foreignExchangeRates,$mainFunctionalCurrency,MoneyReceived::CHEQUE,'due_date',$startDate , $endDate,$contractCode,$currentWeekYear,Cheque::IN_SAFE,$company->id);
-			
-			 MoneyPayment::getCashOutForMoneyTypeAtDates($result,$foreignExchangeRates,$mainFunctionalCurrency,MoneyPayment::OUTGOING_TRANSFER,'delivery_date',$company->id,$startDate,$endDate,$currentWeekYear,$contractId);
-			 MoneyPayment::getCashOutForMoneyTypeAtDates($result,$foreignExchangeRates,$mainFunctionalCurrency,MoneyPayment::CASH_PAYMENT,'delivery_date',$company->id,$startDate,$endDate,$currentWeekYear,$contractId);
-			 MoneyPayment::getCashOutForMoneyTypeAtDates($result,$foreignExchangeRates,$mainFunctionalCurrency,MoneyPayment::PAYABLE_CHEQUE,'actual_payment_date',$company->id,$startDate,$endDate,$currentWeekYear,$contractId,PayableCheque::PAID);
-			 MoneyPayment::getCashOutForMoneyTypeAtDates($result,$foreignExchangeRates,$mainFunctionalCurrency,MoneyPayment::PAYABLE_CHEQUE,'due_date',$company->id,$startDate,$endDate,$currentWeekYear,$contractId,PayableCheque::PENDING);
-
-			if(!$contractId){
-				TimeOfDeposit::getAmountAndInterestAtDates($result,$foreignExchangeRates,$mainFunctionalCurrency,$company->id,$startDate,$endDate,$currentWeekYear);
-			}
-			 LetterOfGuaranteeIssuance::getCommissionAndFeesAtDates($result,$foreignExchangeRates , $mainFunctionalCurrency,'date',$company->id,$startDate,$endDate,$currentWeekYear,$contractId);
-			 LetterOfGuaranteeIssuance::getCashCovers($letterOfGuaranteeModelData,$result,$foreignExchangeRates , $mainFunctionalCurrency,'renewal_date',$company->id,$startDate,$endDate,$currentWeekYear,$contractId);
-			 LetterOfCreditIssuance::getCommissionAndFeesAtDates($result,$foreignExchangeRates , $mainFunctionalCurrency,'date',$company->id,$startDate,$endDate,$currentWeekYear);
-			 LetterOfCreditIssuance::getRemainingLcAmountAtDates($result,$foreignExchangeRates , $mainFunctionalCurrency,$company->id,$startDate,$endDate,$currentWeekYear);
-			CashExpense::getCashOutForExpenseCategoriesAtDates($result,$foreignExchangeRates,$mainFunctionalCurrency,CashExpense::OUTGOING_TRANSFER,'payment_date',$company->id,$startDate,$endDate,$currentWeekYear,$contractId,null);
-			CashExpense::getCashOutForExpenseCategoriesAtDates($result,$foreignExchangeRates,$mainFunctionalCurrency,CashExpense::CASH_PAYMENT,'payment_date',$company->id,$startDate,$endDate,$currentWeekYear,$contractId,null);
-			CashExpense::getCashOutForExpenseCategoriesAtDates($result,$foreignExchangeRates,$mainFunctionalCurrency,CashExpense::PAYABLE_CHEQUE,'actual_payment_date',$company->id,$startDate,$endDate,$currentWeekYear,$contractId,PayableCheque::PAID);
-			CashExpense::getCashOutForExpenseCategoriesAtDates($result,$foreignExchangeRates,$mainFunctionalCurrency,CashExpense::PAYABLE_CHEQUE,'due_date',$company->id,$startDate,$endDate,$currentWeekYear,$contractId,PayableCheque::PENDING);
-			$result['suppliers']['Suppliers Past Due Invoices'] = [];
-			if(!$contractId){
-				$result['suppliers']['Loan Past Due Installments'] = [];
-			}
-
-			if ($sharedTimelineContext === null) {
-				$dates[$currentWeekYear] = [
-					'start_date' => $startDate,
-					'end_date'=>$endDate 
-				];
-			}
+		} finally {
+			ForeignExchangeRate::endRequestMemo();
 		}
 		$pastDueCustomerInvoices = $this->getPastDueCustomerInvoices('CustomerInvoice',$currency,$company->id,$contractCode);
 		$pastDueSupplierInvoices = $isContract ? $pastDueSupplierInvoicesForContracts->toArray() : $this->getPastDueCustomerInvoices('SupplierInvoice', $currency, $company->id, $contractCode);
@@ -555,6 +527,44 @@ class CashFlowReportController
 		}
 		return $totals;
 	}
+	/**
+	 * @param  array<string, string|int>  $weeks
+	 * @return array<string, array{start_date: string, end_date: string}>
+	 */
+	protected function buildPeriodDatesMap(
+		array $weeks,
+		array $datesWithWeeks,
+		string $reportStartDate,
+		string $reportEndDate,
+		?string $requestEndDate = null,
+	): array {
+		$dates = [];
+		$firstIndex = array_key_first($weeks);
+		$lastIndex = array_key_last($weeks);
+
+		foreach ($weeks as $currentWeekYear => $week) {
+			$currentYear = explode('-', $currentWeekYear)[1];
+			if ($currentWeekYear === $firstIndex) {
+				$periodStart = $reportStartDate;
+				$periodEnd = HDate::getMinDateOfWeek($datesWithWeeks, $week, $currentYear)['end_date'];
+			} elseif ($currentWeekYear === $lastIndex) {
+				$periodStart = HDate::getMinDateOfWeek($datesWithWeeks, $week, $currentYear)['start_date'];
+				$periodEnd = $requestEndDate ?? $reportEndDate;
+			} else {
+				$rangedWeeks = HDate::getMinDateOfWeek($datesWithWeeks, $week, $currentYear);
+				$periodStart = $rangedWeeks['start_date'];
+				$periodEnd = $rangedWeeks['end_date'];
+			}
+
+			$dates[$currentWeekYear] = [
+				'start_date' => $periodStart,
+				'end_date' => $periodEnd,
+			];
+		}
+
+		return $dates;
+	}
+
 	protected function mergeYearWithWeek(array $weeks , Carbon $startDate ):array{
 		$newWeeks = [];
 		if(!count($weeks)){

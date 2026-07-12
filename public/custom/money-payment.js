@@ -453,12 +453,13 @@ $(document).on('change', '.js-update-account-number-based-on-account-type', func
 		return
 	}
 	const url = '/' + lang + '/' + companyId + '/money-payment/get-account-numbers-based-on-account-type/' + val + '/' + currency + '/' + financialInstitutionBankId
+	var selectToAppendInto = $(parent).find('.js-account-number')
+	const selectedAccountNumber = selectToAppendInto.attr('data-current-selected') || selectToAppendInto.val() || ''
 	$.ajax({
 		url,
-		data,
+		data: selectedAccountNumber ? { selected_account_number: selectedAccountNumber } : {},
 		success: function (res) {
 			options = ''
-			var selectToAppendInto = $(parent).find('.js-account-number')
 
 			for (key in res.data) {
 				var val = res.data[key]

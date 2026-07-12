@@ -4,10 +4,12 @@ namespace App\Models;
 
 use App\Interfaces\Models\IHasDebitCurrentAccountStatement;
 use App\Models\FinancialInstitutionAccount;
+use App\Support\LockableAccountSelector;
 use App\Traits\HasCompany;
 use App\Traits\HasDepositAccount;
 use App\Traits\HasLastStatementAmount;
 use App\Traits\HasPeriodicInterest;
+use App\Traits\IsLockableBankAccount;
 use App\Traits\Models\HasBlockedAgainst;
 use App\Traits\Models\HasCreditStatements;
 use App\Traits\Models\HasDebitCurrentAccountStatement;
@@ -135,7 +137,7 @@ use Illuminate\Support\Str;
  */
 class TimeOfDeposit extends Model implements IHasDebitCurrentAccountStatement
 {
-    use HasDebitStatements,HasDebitCurrentAccountStatement,HasCreditStatements,HasBlockedAgainst,HasLastStatementAmount,HasDepositAccount,HasDeleteOdoo,HasCompany,HasPeriodicInterest ;
+    use HasDebitStatements,HasDebitCurrentAccountStatement,HasCreditStatements,HasBlockedAgainst,HasLastStatementAmount,HasDepositAccount,HasDeleteOdoo,HasCompany,HasPeriodicInterest,IsLockableBankAccount ;
     protected $guarded = ['id'];
     const RUNNING = 'running';
     const MATURED = 'matured';
@@ -350,10 +352,19 @@ class TimeOfDeposit extends Model implements IHasDebitCurrentAccountStatement
     }
     public static function getAllAccountNumberForCurrency($companyId, $currencyName, $financialInstitutionId, $keyName='account_number'):array
     {
-        return self::where('company_id', $companyId)->where('currency', $currencyName)
+        $query = self::where('company_id', $companyId)->where('currency', $currencyName)
         ->where('financial_institution_id', $financialInstitutionId)
-        ->where('status', TimeOfDeposit::RUNNING)
-        ->pluck('account_number', $keyName)->toArray();
+        ->where('status', TimeOfDeposit::RUNNING);
+
+        return LockableAccountSelector::getAccountNumbers(
+            $query,
+            $companyId,
+            $currencyName,
+            $financialInstitutionId,
+            $keyName,
+            true,
+            static::class
+        );
     }
     
     public static function findByAccountNumber(string $accountNumber, int $companyId)

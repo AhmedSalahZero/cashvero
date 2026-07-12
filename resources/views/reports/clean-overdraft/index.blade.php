@@ -88,6 +88,7 @@
                                         @if(auth()->user()->can('update clean overdraft'))
                                         <a type="button" class="btn btn-secondary btn-outline-hover-brand btn-icon" title="Edit" href="{{ route('edit.clean.overdraft',['company'=>$company->id,'financialInstitution'=>$financialInstitution->id,'cleanOverdraft'=>$cleanOverdraft->id]) }}"><i class="fa fa-pen-alt"></i></a>
                                         @endif
+                                        @include('components.bank-account-lock-button', ['bankAccount' => $cleanOverdraft, 'company' => $company])
                                         @if(auth()->user()->can('delete clean overdraft'))
                                         <a data-toggle="modal" data-target="#delete-financial-institution-bank-id-{{ $cleanOverdraft->id }}" type="button" class="btn btn-secondary btn-outline-hover-danger btn-icon" title="Delete" href="#"><i class="fa fa-trash-alt"></i></a>
                                         <div class="modal fade" id="delete-financial-institution-bank-id-{{ $cleanOverdraft->id }}" tabindex="-1" role="dialog" aria-labelledby="exampleModalCenterTitle" aria-hidden="true">

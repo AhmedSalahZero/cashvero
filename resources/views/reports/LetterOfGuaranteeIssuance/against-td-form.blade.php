@@ -78,6 +78,7 @@ use App\Models\LetterOfGuaranteeIssuance;
                             </div>
                         </div>
                     </div>
+                    @include('reports.LetterOfGuaranteeIssuance.import-section')
                     <!--begin::Form-->
                     <form class="kt-form kt-form--label-right">
                         <div class="kt-portlet">
@@ -672,6 +673,71 @@ use App\Models\LetterOfGuaranteeIssuance;
 
             </script>
 			@include('reports.LetterOfGuaranteeIssuance.commonJs')
+
+            <script>
+                let lgImportPolling = null;
+                $(document).on('click', '#lg-import-upload-btn', function () {
+                    const fileInput = document.getElementById('lg-import-file');
+                    if (!fileInput || !fileInput.files.length) {
+                        Swal.fire({icon:'error', title:"{{ __('Please select an Excel file first.') }}"});
+                        return;
+                    }
+
+                    const formData = new FormData();
+                    formData.append('file', fileInput.files[0]);
+
+                    $('#lg-import-status-wrapper').removeClass('d-none');
+                    $('#lg-import-status-text').text("{{ __('Uploading...') }}");
+                    $('#lg-import-errors').empty();
+
+                    $.ajax({
+                        url: "{{ route('import.letter.of.guarantee.issuance',['company'=>$company->id,'source'=>$source]) }}",
+                        method: 'POST',
+                        processData: false,
+                        contentType: false,
+                        data: formData,
+                        success: function (response) {
+                            if (!response.status) {
+                                Swal.fire({icon:'error', title: response.message || "{{ __('Upload failed') }}"});
+                                return;
+                            }
+                            const importId = response.import_id;
+                            $('#lg-import-status-text').text("{{ __('Processing rows...') }}");
+                            if (lgImportPolling) {
+                                clearInterval(lgImportPolling);
+                            }
+                            lgImportPolling = setInterval(function () {
+                                $.get("{{ route('status.letter.of.guarantee.issuance.import',['company'=>$company->id,'importRun'=>'__ID__']) }}".replace('__ID__', importId), function (statusResponse) {
+                                    const imp = statusResponse.import;
+                                    $('#lg-import-status-text').text(imp.state + ' | ' + "{{ __('Rows') }}" + ': ' + imp.total_rows + ' | ' + "{{ __('Failed') }}" + ': ' + imp.failed_rows);
+
+                                    if (imp.completed) {
+                                        clearInterval(lgImportPolling);
+                                        lgImportPolling = null;
+
+                                        if (imp.state === 'completed') {
+                                            Swal.fire({icon:'success', title:"{{ __('Import completed successfully') }}"}).then(() => window.location.reload());
+                                        } else {
+                                            $.get("{{ route('errors.letter.of.guarantee.issuance.import',['company'=>$company->id,'importRun'=>'__ID__']) }}".replace('__ID__', importId), function (errResponse) {
+                                                const errors = errResponse.errors || [];
+                                                const html = errors.slice(0, 20).map(function (error) {
+                                                    return '<div>Row ' + error.row_number + ' | ' + error.column + ' : ' + error.message + '</div>';
+                                                }).join('');
+                                                $('#lg-import-errors').html(html || "{{ __('Import failed. Please review file content.') }}");
+                                            });
+                                        }
+                                    }
+                                });
+                            }, 2000);
+                        },
+                        error: function (xhr) {
+                            const message = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : "{{ __('Upload failed') }}";
+                            Swal.fire({icon:'error', title: message});
+                        }
+                    });
+                });
+            </script>
+
             <script>
                 $(document).on('change', '[js-update-outstanding-balance-and-limits]', function(e) {
                     e.preventDefault()

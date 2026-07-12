@@ -239,6 +239,7 @@ Route::middleware([])->group(function () {
                     Route::put('financial-institution-accounts/update/{financialInstitution}/{financialInstitutionAccount}', 'FinancialInstitutionAccountController@update')->name('update.financial.institutions.account');
                     Route::delete('financial-institution-accounts/delete/{financialInstitutionAccount}', 'FinancialInstitutionAccountController@destroy')->name('delete.financial.institutions.account');
                     Route::put('financial-institution-accounts/lock-or-unlock/{financialInstitutionAccount}', 'FinancialInstitutionAccountController@lockOrUnlock')->name('lock.or.unlock.financial.institutions.account');
+                    Route::put('bank-accounts/lock-or-unlock/{accountType}/{accountId}', 'LockBankAccountController@lockOrUnlock')->name('lock.or.unlock.bank.account');
 
                     /**
                      * * Bank Accounts
@@ -511,6 +512,7 @@ Route::middleware([])->group(function () {
                     Route::patch('loan-schedule-settlements/{loanScheduleSettlement}', 'MediumTermLoanController@updateLoanScheduleSettlement')->name('update.loan.schedule.settlements');
                     Route::delete('delete-loan-schedule-settlement/{loanScheduleSettlement}', 'MediumTermLoanController@deleteLoanScheduleSettlement')->name('delete.loan.schedule.settlements');
 
+                    Route::get('contract-loan-schedule/account-numbers', 'ContractLoanScheduleController@getAccountNumbersForDraweeBank')->name('contract.loan.schedule.account.numbers');
                     Route::get('contract-loan-schedule-settlement/{contractLoanSchedule}', 'ContractLoanScheduleController@viewSettlement')->name('view.contract.loan.schedule.settlements');
                     Route::post('contract-loan-schedule-settlements/{contractLoanSchedule}', 'ContractLoanScheduleController@storeSettlement')->name('store.contract.loan.schedule.settlements');
                     Route::get('edit-contract-loan-schedule-settlement/{contractLoanScheduleSettlement}', 'ContractLoanScheduleController@editSettlement')->name('edit.contract.loan.schedule.settlements');
@@ -634,6 +636,10 @@ Route::middleware([])->group(function () {
                     Route::post('letter-of-guarantee-issuance/edit-amount-to-be-decreased/{lgAdvancedPaymentHistory}/{source}', 'LetterOfGuaranteeIssuanceController@editAmountToBeDecreased')->name('advanced.lg.payment.edit.amount.to.be.decreased');
                     Route::get('letter-of-guarantee-issuance/delete-advanced-payment/{lgAdvancedPaymentHistory}', 'LetterOfGuaranteeIssuanceController@deleteAdvancedPayment')->name('delete.lg.advanced.payment');
                     Route::post('letter-of-guarantee-issuance/back-to-running/{letterOfGuaranteeIssuance}/{source}', 'LetterOfGuaranteeIssuanceController@backToRunningStatus')->name('back.to.running.letter.of.guarantee.issuance');
+                    Route::get('letter-of-guarantee-issuance/template/{source}', 'LgIssuanceImportController@downloadTemplate')->name('download.letter.of.guarantee.issuance.template');
+                    Route::post('letter-of-guarantee-issuance/import/{source}', 'LgIssuanceImportController@upload')->name('import.letter.of.guarantee.issuance');
+                    Route::get('letter-of-guarantee-issuance/import-status/{importRun}', 'LgIssuanceImportController@status')->name('status.letter.of.guarantee.issuance.import');
+                    Route::get('letter-of-guarantee-issuance/import-errors/{importRun}', 'LgIssuanceImportController@errors')->name('errors.letter.of.guarantee.issuance.import');
                     
                                      
                     Route::get('letter-of-guarantee-issuance-renewal-date/{letterOfGuaranteeIssuance}', 'LetterOfGuaranteeIssuanceRenewalDateController@index')->name('letter.of.issuance.renewal.date');
@@ -705,6 +711,11 @@ Route::middleware([])->group(function () {
                     Route::get('factoring-statement/result', 'FactoringStatementController@result')->name('result.factoring.statement');
                     Route::get('factoring-statement/currencies/{factoringCompany}', 'FactoringStatementController@getCurrencies');
                     Route::get('factoring-statement/contracts/{factoringCompany}/{currency}', 'FactoringStatementController@getContracts');
+
+                    Route::get('factoring-charges-statement', 'FactoringChargesStatementController@index')->name('view.factoring.charges.statement');
+                    Route::get('factoring-charges-statement/result', 'FactoringChargesStatementController@result')->name('result.factoring.charges.statement');
+                    Route::get('factoring-charges-statement/currencies/{factoringCompany}', 'FactoringChargesStatementController@getCurrencies');
+                    Route::get('factoring-charges-statement/contracts/{factoringCompany}/{currency}', 'FactoringChargesStatementController@getContracts');
                     
                     Route::post('update-commission-fees', 'BankStatementController@updateCommissionFees')->name('update.commission.fees');
                     Route::post('update-bank-statement-row-fees', 'BankStatementController@updateBankStatementRow')->name('update.bank.statement.debit.or.credit');
@@ -813,6 +824,20 @@ Route::middleware([])->group(function () {
                     Route::get('factoring/without-recourse/currencies/{customerId}', 'FactoringWithoutRecourseController@getInvoiceCurrencies');
                     Route::get('factoring/without-recourse/invoices/{customerId}/{currency?}', 'FactoringWithoutRecourseController@getInvoices');
                     Route::post('factoring/without-recourse/calculate', 'FactoringWithoutRecourseController@calculate')->name('factoring.without-recourse.calculate');
+                    Route::get('factoring/with-recourse', 'FactoringWithRecourseController@index')->name('factoring.with-recourse.index');
+                    Route::get('factoring/with-recourse/create', 'FactoringWithRecourseController@create')->name('factoring.with-recourse.create');
+                    Route::post('factoring/with-recourse/store', 'FactoringWithRecourseController@store')->name('factoring.with-recourse.store');
+                    Route::get('factoring/with-recourse/{factoringTransaction}/edit', 'FactoringWithRecourseController@edit')->name('factoring.with-recourse.edit');
+                    Route::put('factoring/with-recourse/{factoringTransaction}/update', 'FactoringWithRecourseController@update')->name('factoring.with-recourse.update');
+                    Route::post('factoring/with-recourse/{factoringTransaction}/mark-collected', 'FactoringWithRecourseController@markCollected')->name('factoring.with-recourse.mark-collected');
+                    Route::post('factoring/with-recourse/{factoringTransaction}/revert-collected', 'FactoringWithRecourseController@revertCollected')->name('factoring.with-recourse.revert-collected');
+                    Route::post('factoring/with-recourse/{factoringTransaction}/mark-rejected', 'FactoringWithRecourseController@markRejected')->name('factoring.with-recourse.mark-rejected');
+                    Route::post('factoring/with-recourse/{factoringTransaction}/revert-rejected', 'FactoringWithRecourseController@revertRejected')->name('factoring.with-recourse.revert-rejected');
+                    Route::delete('factoring/with-recourse/{factoringTransaction}', 'FactoringWithRecourseController@destroy')->name('factoring.with-recourse.destroy');
+                    Route::get('factoring/with-recourse/contracts/{factoringCompany}', 'FactoringWithRecourseController@getContracts');
+                    Route::get('factoring/with-recourse/currencies/{customerId}', 'FactoringWithRecourseController@getInvoiceCurrencies');
+                    Route::get('factoring/with-recourse/invoices/{customerId}/{currency?}', 'FactoringWithRecourseController@getInvoices');
+                    Route::post('factoring/with-recourse/calculate', 'FactoringWithRecourseController@calculate')->name('factoring.with-recourse.calculate');
                     Route::get('money-payment/create/{model?}', 'MoneyPaymentController@create')->name('create.money.payment');
                     Route::post('money-payment/create', 'MoneyPaymentController@store')->name('store.money.payment');
                     Route::get('money-payment/edit/{moneyPayment}', 'MoneyPaymentController@edit')->name('edit.money.payment');

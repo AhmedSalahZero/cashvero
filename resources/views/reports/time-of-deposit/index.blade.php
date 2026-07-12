@@ -275,8 +275,8 @@ use \App\Models\TimeOfDeposit;
 
 	@if(hasAuthFor('update time of deposit'))
                                             <a type="button" class="btn btn-secondary btn-outline-hover-brand btn-icon" title="Edit" href="{{ route('edit.time.of.deposit',['company'=>$company->id,'financialInstitution'=>$financialInstitution->id,'timeOfDeposit'=>$model->id]) }}"><i class="fa fa-pen-alt"></i></a>
-											@endif 
-											
+											@endif
+                                            @include('components.bank-account-lock-button', ['bankAccount' => $model, 'company' => $company])
 												@if(hasAuthFor('delete time of deposit'))
                                             <a data-toggle="modal" data-target="#delete-time-of-deposits-id-{{ $model->id }}" type="button" class="btn btn-secondary btn-outline-hover-danger btn-icon" title="Delete" href="#"><i class="fa fa-trash-alt"></i></a>
 									

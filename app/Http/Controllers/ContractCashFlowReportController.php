@@ -41,7 +41,7 @@ class ContractCashFlowReportController
 		$request->merge([
 			'title'=>$title,
 		]);
-		return  (new CashFlowReportController)->result($company,$request,false,null,$defaultCashFlowId);
+		return  (new CashFlowReportController)->result($company,$request,$returnResultAsArray,null,$defaultCashFlowId);
 	
 	}
 	public function formatAccumulatedNetCash(array $netCashes,array $weeks)

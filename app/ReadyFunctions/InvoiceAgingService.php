@@ -47,6 +47,7 @@ class InvoiceAgingService
         }
         $invoices = $invoices
 		->orderBy($clientNameColumnName)->get();
+
 		/**
          * @var CustomerInvoice[] $invoices
          */

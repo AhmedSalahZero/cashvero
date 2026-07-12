@@ -129,6 +129,7 @@ class FactoringContractController
 
         $factoringContract->update($data);
         $factoringContract->storeOutstandingBreakdown($request, $company);
+        $factoringContract->syncLimitStatement($company->id);
 
         return response()->json([
             'redirectTo' => route('factoring.contracts.index', [

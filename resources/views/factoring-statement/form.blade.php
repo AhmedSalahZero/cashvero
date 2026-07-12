@@ -14,6 +14,7 @@
     data-contracts-url="{{ url(app()->getLocale() . '/' . $company->id . '/factoring-statement/contracts') }}">
 <div class="row">
     <div class="col-md-12">
+        <x-factoring-statement-tabs :company="$company" active="statement" />
         <form class="kt-form kt-form--label-right" method="get" action="{{ route('result.factoring.statement', ['company' => $company->id]) }}">
             <div class="kt-portlet">
                 <div class="kt-portlet__body">

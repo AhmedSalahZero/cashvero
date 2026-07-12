@@ -158,9 +158,9 @@ class StoreFactoringWithoutRecourseRequest extends FormRequest
                 $validator->errors()->add('factoring_interest_amount', __('Factoring interest amount cannot be negative.'));
             }
 
-            if ($factoringAmount > $contract->getRemainingLimit($exceptTransactionId)) {
+            if ($receivedAmount > $contract->getRemainingLimit($exceptTransactionId)) {
                 $validator->errors()->add(
-                    'factoring_percentage',
+                    'received_amount',
                     __('Factoring amount cannot exceed the remaining contract limit.')
                 );
             }

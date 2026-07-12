@@ -7,6 +7,7 @@ use App\Interfaces\Models\Interfaces\IHaveStatement;
 use App\Traits\HasBankStatement;
 use App\Traits\HasLastStatementAmount;
 use App\Traits\HasOutstandingBreakdown;
+use App\Traits\IsLockableBankAccount;
 use App\Traits\IsOverdraft;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
@@ -90,7 +91,7 @@ class CleanOverdraft extends Model implements IHaveStatement
 {
     protected $guarded = ['id'];
 	
-	use HasOutstandingBreakdown , IsOverdraft  , HasBankStatement, HasLastStatementAmount  ;
+	use HasOutstandingBreakdown , IsOverdraft  , HasBankStatement, HasLastStatementAmount, IsLockableBankAccount ;
 	
 	public function cleanOverdraftBankStatements()
 	{

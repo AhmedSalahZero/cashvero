@@ -154,7 +154,7 @@
 </style>
 @endsection
 @section('sub-header')
-{{ camelToTitle($modelName) }} {{ __('Section') }}
+{{ $modelName === 'ContractLoanSchedule' ? __('Contract Leasing Schedule') : camelToTitle($modelName) }} {{ __('Section') }}
 <x-navigators-dropdown :navigators="$navigators ?? []"></x-navigators-dropdown>
 @endsection
 @section('content')
@@ -162,6 +162,7 @@
     @php
     $user = auth()->user();
     $isScheduleModel = in_array($modelName, ['LoanSchedule', 'ContractLoanSchedule'], true);
+    $modelDisplayName = $modelName === 'ContractLoanSchedule' ? __('Contract Leasing Schedule') : camelToTitle($modelName);
     $additionalTitle = '';
     if ($modelName == 'LoanSchedule' && isset($loan)) {
         $additionalTitle = ' [ ' . $loan->getName() . ' ]';
@@ -197,7 +198,7 @@
     @endif
     @csrf
     @method('delete')
-    <x-table :instructions-icon="1" :notPeriodClosedCustomerInvoices="$notPeriodClosedCustomerInvoices??[]" :tableTitle="camelToTitle($modelName).' '.__(' Table') . $additionalTitle " :tableClass="$uploadTableClass" href="#" :importHref="$user->can($uploadPermissionName) ? route('salesGatheringImport',['company'=>$company->id , 'model'=>$modelName]) : '#'" :exportHref="$user->can($exportPermissionName) ? route('salesGathering.export',['company'=>$company->id , 'model'=>$modelName]):'#' " :exportTableHref="$user->can($uploadPermissionName)?route('table.fields.selection.view',[$company,$modelName,'sales_gathering']) : '#'" :truncateHref="$user->can($deletePermissionName)?route('truncate',[$company,$modelName]):'#' ">
+    <x-table :instructions-icon="1" :notPeriodClosedCustomerInvoices="$notPeriodClosedCustomerInvoices??[]" :tableTitle="$modelDisplayName.' '.__(' Table') . $additionalTitle " :tableClass="$uploadTableClass" href="#" :importHref="$user->can($uploadPermissionName) ? route('salesGatheringImport',['company'=>$company->id , 'model'=>$modelName]) : '#'" :exportHref="$user->can($exportPermissionName) ? route('salesGathering.export',['company'=>$company->id , 'model'=>$modelName]):'#' " :exportTableHref="$user->can($uploadPermissionName)?route('table.fields.selection.view',[$company,$modelName,'sales_gathering']) : '#'" :truncateHref="$user->can($deletePermissionName)?route('truncate',[$company,$modelName]):'#' ">
         @slot('table_header')
 
         <tr class="table-active text-center">

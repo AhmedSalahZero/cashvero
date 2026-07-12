@@ -75,7 +75,7 @@ class OverdraftCashDashboardHelper
     }
 
     /**
-     * @return array<int, object{financial_institution_id:int}>
+     * @return array<int, object{financial_institution_id:int, limit:float}>
      */
     public static function overdraftMetaById(string $table, array $overdraftIds): array
     {
@@ -85,7 +85,7 @@ class OverdraftCashDashboardHelper
 
         return DB::table($table)
             ->whereIn('id', $overdraftIds)
-            ->get(['id', 'financial_institution_id'])
+            ->get(['id', 'financial_institution_id', 'limit'])
             ->keyBy('id')
             ->all();
     }
@@ -143,7 +143,11 @@ class OverdraftCashDashboardHelper
             $totalRoomForEachCurrency[$currencyName][] = [
                 'item' => $financialInstitutionName,
                 'available_room' => $room,
-                'limit' => $statement ? (float) $statement->limit : 0.0,
+                // NOTE: intentionally the overdraft's own contract limit (not the statement's
+                // point-in-time limit) so this stays consistent with the card total, which is
+                // always a sum of contract limits (see yearCardData()). Falls back to 0 when no
+                // statement exists yet for this overdraft, matching legacy behavior.
+                'limit' => $statement ? (float) $meta->limit : 0.0,
                 'end_balance' => $statement ? (float) $statement->end_balance : 0.0,
             ];
         }

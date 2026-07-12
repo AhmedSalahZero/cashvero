@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use App\Interfaces\Models\Interfaces\IHaveStatement;
+use App\Support\LockableAccountSelector;
 use App\Traits\HasBankStatement;
 use App\Traits\HasLastStatementAmount;
 use App\Traits\HasOutstandingBreakdown;
+use App\Traits\IsLockableBankAccount;
 use App\Traits\IsOverdraft;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -84,7 +86,7 @@ class OverdraftAgainstCommercialPaper extends Model implements IHaveStatement
 {
     protected $guarded = ['id'];
 	
-	use HasOutstandingBreakdown , IsOverdraft , HasBankStatement , HasLastStatementAmount;
+	use HasOutstandingBreakdown , IsOverdraft , HasBankStatement , HasLastStatementAmount, IsLockableBankAccount;
 	
 	public function overdraftAgainstCommercialPaperBankStatements()
 	{
@@ -214,12 +216,18 @@ public function overdraftAgainstCommercialPaperBankLimits()
 	{
 		$accounts = [];
 		$overdraftAgainstCommercialPapers = self::where('company_id',$companyId)->where('currency',$currencyName)
-		->where('financial_institution_id',$financialInstitutionId)->get();
+		->where('financial_institution_id',$financialInstitutionId)->where('is_active', 1)->get();
 		if(in_array('money-received',Request()->segments())){
-			/**
-			 * * هنا استثناء في حاله الماني ريسيفد
-			 */
-			return $overdraftAgainstCommercialPapers->pluck('account_number',$keyName)->toArray();
+			$accounts = $overdraftAgainstCommercialPapers->pluck('account_number',$keyName)->toArray();
+
+			return LockableAccountSelector::mergeSelectedLockedAccount(
+				$accounts,
+				static::class,
+				$companyId,
+				$currencyName,
+				$financialInstitutionId,
+				$keyName
+			);
 		}
 		foreach($overdraftAgainstCommercialPapers as $overdraftAgainstCommercialPaper){
 			$limitStatement = $overdraftAgainstCommercialPaper->overdraftAgainstCommercialPaperBankLimits->sortByDesc('full_date')->first() ;
@@ -227,8 +235,15 @@ public function overdraftAgainstCommercialPaperBankLimits()
 				$accounts[$overdraftAgainstCommercialPaper->{$keyName}] = $overdraftAgainstCommercialPaper->account_number;
 			}
 		}
-		
-		return  $accounts ;
+
+		return LockableAccountSelector::mergeSelectedLockedAccount(
+			$accounts,
+			static::class,
+			$companyId,
+			$currencyName,
+			$financialInstitutionId,
+			$keyName
+		);
 	}			
 	public function getType()
 	{

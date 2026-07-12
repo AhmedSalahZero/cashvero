@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\ActiveFinancialInstitutionAccountRule;
 use App\Rules\AmountCanNotBeGreaterThanEndBalanceAtPaymentDate;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -36,9 +37,12 @@ class StoreBuyOrSellCurrencyRequest extends FormRequest
 		$branchId =$this->get('from_branch_id') ;
 		$currency = $this->get('currency_to_sell');
 
+		$companyId = $this->route('company')->id;
         return [
 			'transaction_date'=>'required',
 			'currency_to_sell_amount'=>['required','gt:0'],
+			'from_account_number'=>[new ActiveFinancialInstitutionAccountRule($companyId, $accountType, $accountNumber, $financialInstitutionId)],
+			'to_account_number'=>[new ActiveFinancialInstitutionAccountRule($companyId, $this->get('to_account_type_id'), $this->get('to_account_number'), $this->get('to_bank_id'))],
 			'amount_can_not_be_greater_than_end_balance_at_payment_date'=>new AmountCanNotBeGreaterThanEndBalanceAtPaymentDate($type,$amount,$this->route('company'),$accountType,$accountNumber,$financialInstitutionId,$date,$branchId,$currency),
         ];
     }

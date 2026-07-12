@@ -1,10 +1,15 @@
 
+var _currentDraweeBankRow = null;
+
 $(document).on('click', '#js-drawee-bank', function (e) {
 	e.preventDefault()
+	_currentDraweeBankRow = null;
 	$('#js-choose-bank-id').modal('show')
 })
 $(document).on('click', '.js-drawee-bank-class', function (e) {
 	e.preventDefault()
+	_currentDraweeBankRow = $(this).closest('[data-repeater-item]');
+	if (!_currentDraweeBankRow.length) _currentDraweeBankRow = null;
 	$('#js-choose-bank-id').modal('show')
 })
 $(document).on('click', '#js-append-bank-name-if-not-exist', function () {
@@ -25,15 +30,26 @@ $(document).on('click', '#js-append-bank-name-if-not-exist', function () {
 $(document).on('click', '.js-append-bank-name-if-not-exist-in-repeater', function () {
 	const newBankId = $('#js-bank-names').val()
 	const newBankName = $('#js-bank-names option:selected').attr('data-name')
+
 	$('select.drawee-bank-class').each(function (index, selectElement) {
 		const isBankExist = $(selectElement).find('option[value="' + newBankId + '"]').length
 		if (!isBankExist) {
-			const option = '<option  value="' + newBankId + '">' + newBankName + '</option>'
-			$(selectElement).append(option).selectpicker("refresh")
+			const option = '<option value="' + newBankId + '">' + newBankName + '</option>'
+			$(selectElement).append(option)
 		}
 	})
 
+	if (_currentDraweeBankRow) {
+		const $targetSelect = _currentDraweeBankRow.find('select.drawee-bank-class')
+		$targetSelect.val(newBankId)
+		try { $targetSelect.selectpicker('refresh'); } catch(e) {}
+	} else {
+		$('select.drawee-bank-class').each(function (index, selectElement) {
+			try { $(selectElement).selectpicker('refresh'); } catch(e) {}
+		})
+	}
 
+	_currentDraweeBankRow = null;
 	$('#js-choose-bank-id').modal('hide')
 })
 
@@ -349,13 +365,14 @@ $(document).on('change', '.js-update-account-number-based-on-account-type', func
 		return
 	}
 	const url = '/' + lang + '/' + companyId + '/money-received/get-account-numbers-based-on-account-type/' + val + '/' + currency + '/' + financialInstitutionBankId
+	var selectToAppendInto = $(parent).find(appendTo)
+	const selectedAccountNumber = selectToAppendInto.attr('data-current-selected') || selectToAppendInto.val() || ''
 	$.ajax({
 		url,
-		data:{allAccounts:window.location.href.split('/').includes('bank-statement')},
+		data: selectedAccountNumber ? { selected_account_number: selectedAccountNumber } : {},
 		success: function (res) {
 			
 			options = ''
-			var selectToAppendInto = $(parent).find(appendTo)
 
 			for (key in res.data) {
 				var val = res.data[key]
@@ -395,13 +412,14 @@ $(document).on('change', '.js-update-account-id-based-on-account-type', function
 		return
 	}
 	const url = '/' + lang + '/' + companyId + '/money-received/get-account-ids-based-on-account-type/' + val + '/' + currency + '/' + financialInstitutionBankId
+	var selectToAppendInto = $(parent).find(appendTo)
+	const selectedAccountId = selectToAppendInto.attr('data-current-selected') || selectToAppendInto.val() || ''
 	$.ajax({
 		url,
-		data:{allAccounts:window.location.href.split('/').includes('bank-statement')},
+		data: selectedAccountId ? { selected_account_id: selectedAccountId } : {},
 		success: function (res) {
 			
 			options = ''
-			var selectToAppendInto = $(parent).find(appendTo)
 
 			for (id in res.data) {
 				var val = res.data[id]
@@ -419,13 +437,14 @@ $(document).on('change', '.js-update-account-id-based-on-account-type', function
 
 $(document).on('change', '[js-when-change-trigger-change-account-type]', function () {
 
+	const $repeaterRow = $(this).closest('[data-repeater-item]');
+	if ($repeaterRow.length) {
+		$repeaterRow.find('.js-update-account-number-based-on-account-type').trigger('change');
+		$repeaterRow.find('.js-update-account-id-based-on-account-type').trigger('change');
+		return;
+	}
+
 	let parent = $(this).closest('.kt-portlet__body').find('.js-update-account-number-based-on-account-type') ;
-	// if($(this).closest('.closest-parent-class').length){
-	// 	parent= $(this).closest('.closest-parent-class').length;
-	// 	$(parent).find('.js-update-account-number-based-on-account-type').trigger('change')
-	// 	return ;
-		
-	// }
 	
 	$('.js-update-account-number-based-on-account-type').trigger('change')
 	if(parseInt(parent)){

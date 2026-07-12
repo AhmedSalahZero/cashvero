@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\MoneyReceived;
+use App\Rules\ActiveFinancialInstitutionAccountRule;
 use App\Rules\AtLeaseOneSettlementMustBeExist;
 use App\Rules\ContractAmountWithUnappliedAmountRule;
 use App\Rules\ContractDownPaymentRule;
@@ -68,7 +69,9 @@ class StoreMoneyReceivedRequest extends FormRequest
 			'receiving_branch_id'=>$type == MoneyReceived::CASH_IN_SAFE  ? ['required','not_in:-1'] : [],
 			'received_amount.'.$type => ['required','gt:0'],
 			'account_type.'.$type => $accountTypeValidation =  $type == MoneyReceived::INCOMING_TRANSFER || $type == MoneyReceived::CASH_IN_BANK ? 'required' : 'sometimes',
-			'account_number.'.$type=>$accountTypeValidation,
+			'account_number.'.$type => $type == MoneyReceived::INCOMING_TRANSFER || $type == MoneyReceived::CASH_IN_BANK
+				? ['required', new ActiveFinancialInstitutionAccountRule($companyId, $accountTypeId, $accountNumber, $financialInstitutionId)]
+				: ['sometimes'],
 			'unapplied_amount'=>['sometimes','gte:0'],
 			'contract_id'=>$partnerType == 'is_customer'?[new ContractAmountWithUnappliedAmountRule($this->get('unapplied_amount',0),$this->get('contract_id',0))]:[],
 			'net_balance_rules'=>new SettlementPlusWithoutCanNotBeGreaterNetBalance($this->get('settlements',[])),

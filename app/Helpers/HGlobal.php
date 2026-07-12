@@ -16,10 +16,46 @@ class HGlobal
 
         return [
             'type' => 'select',
-            'class' => '',
+            'class' => 'js-contract-loan-drawee-bank',
             'default_value' => '',
             'name' => 'drawee_bank',
             'options' => ['' => __('Select')] + (array_combine($bankNames, $bankNames) ?: []),
+        ];
+    }
+
+    if ($modelName === 'ContractLoanSchedule' && (
+        Str::contains($title, 'Account Number')
+        || $title === __('Account Number')
+        || mb_strtolower(trim($title)) === 'account_number'
+        || $title === 'رقم الحساب'
+    )) {
+        return [
+            'type' => 'select',
+            'class' => 'js-contract-loan-account-number',
+            'default_value' => '',
+            'name' => 'account_number',
+            'options' => ['' => __('Select')],
+        ];
+    }
+
+    if ($modelName === 'ContractLoanSchedule' && (
+        Str::contains($title, [
+            'Beginning Balance',
+            'Cheque Amount',
+            'Interest Amount',
+            'Principle Amount',
+            'End Balance',
+            __('Beginning Balance'),
+            __('Cheque Amount'),
+            __('Interest Amount'),
+            __('Principle Amount'),
+            __('End Balance'),
+        ])
+    )) {
+        return [
+            'type' => 'numeric',
+            'class' => 'only-greater-than-or-equal-zero-allowed',
+            'default_value' => 0,
         ];
     }
 

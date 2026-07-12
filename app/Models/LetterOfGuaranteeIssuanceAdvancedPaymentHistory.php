@@ -114,6 +114,9 @@ class LetterOfGuaranteeIssuanceAdvancedPaymentHistory extends Model
     }
 	public function deleteOdooRelations()
 	{
+		if (!$this->company || !$this->company->hasOdooIntegrationCredentials()) {
+			return;
+		}
 		foreach (['journal_entry_id'] as $journalColumnName) {
             $currentJournalEntryId = $this->{$journalColumnName};
             if ($currentJournalEntryId) {

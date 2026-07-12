@@ -4,6 +4,11 @@
     'moneyReceivedType',
     'searchFields',
 ])
+@php
+    $factoringIndexRoute = $moneyReceivedType === 'factoring-with-recourse'
+        ? route('factoring.with-recourse.index', ['company' => $company->id])
+        : route('factoring.without-recourse.index', ['company' => $company->id]);
+@endphp
 <div class="kt-portlet__head-toolbar">
     <div class="kt-portlet__head-wrapper">
         <div class="kt-portlet__head-actions">
@@ -19,7 +24,7 @@
                             <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
                         </div>
                         <div class="modal-body">
-                            <form action="{{ route('factoring.without-recourse.index', ['company' => $company->id]) }}" class="row">
+                            <form action="{{ $factoringIndexRoute }}" class="row">
                                 <div class="form-group col-4">
                                     <label>{{ __('Field Name') }}</label>
                                     <select class="form-control" name="field">

@@ -512,6 +512,9 @@ class SupplierInvoice extends Model implements IInvoice
 			foreach($contractWithSos as $soId => $ContractWithSoArr){
 				$contract = $ContractWithSoArr['contract'];
 				$soArr = $ContractWithSoArr['purchase_orders'];
+				if (empty($soArr)) {
+					continue;
+				}
 				$soEndDate = $soArr['end_date'];
 				$soCollectionDays = $soArr['collection_days'];
 				$currentSoCollectionDays = Carbon::make($soEndDate)->addDays($soCollectionDays);
@@ -578,6 +581,9 @@ class SupplierInvoice extends Model implements IInvoice
 			foreach($contractWithSos as $soId => $ContractWithSoArr){
 				$contract = $ContractWithSoArr['contract'];
 				$soArr = $ContractWithSoArr['sales_orders'];
+				if (empty($soArr)) {
+					continue;
+				}
 				$soEndDate = $soArr['end_date'];
 				$soCollectionDays = $soArr['collection_days'];
 				$currentSoCollectionDays = Carbon::make($soEndDate)->addDays($soCollectionDays);

@@ -14,13 +14,13 @@ use App\Models\MoneyReceived ;
             @if($hasBatchCollection)
             <a data-money-type="{{ $moneyReceivedType }}" data-type="multi" data-toggle="modal" data-target="#send-to-under-collection-modal{{ $moneyReceivedType }}" id="js-send-to-under-collection-trigger{{ $moneyReceivedType }}" href="{{route('create.money.receive',['company'=>$company->id])}}" title="{{ __('Please Select More Than One Cheque') }}" class="btn  active-style btn-icon-sm js-can-trigger-cheque-under-collection-modal disabled">
                 <i class="fas fa-book"></i>
-                {{ __('Create Batch Send To Collection') }}
+                {{ __('Batch Send To Collection') }}
             </a>
             @endif
             @if($hasSearch)
             <a data-type="multi" data-toggle="modal" data-target="#search-money-modal-{{ $moneyReceivedType }}" id="js-search-money-received" href="#" title="{{ __('Search Money Received') }}" class="btn  active-style btn-icon-sm  ">
                 <i class="fas fa-search"></i>
-                {{ __('Advanced Filter') }}
+                {{ __('Filter') }}
             </a>
 
             <div class="modal fade" id="search-money-modal-{{ $moneyReceivedType }}" tabindex="-1" role="dialog" aria-hidden="true">

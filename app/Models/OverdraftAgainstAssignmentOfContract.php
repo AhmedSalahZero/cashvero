@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use App\Interfaces\Models\Interfaces\IHaveStatement;
+use App\Support\LockableAccountSelector;
 use App\Traits\HasBankStatement;
 use App\Traits\HasLastStatementAmount;
 use App\Traits\HasOutstandingBreakdown;
+use App\Traits\IsLockableBankAccount;
 use App\Traits\IsOverdraft;
 use App\Traits\Models\HasAccumulatedLimit;
 use Illuminate\Database\Eloquent\Model;
@@ -86,7 +88,7 @@ class OverdraftAgainstAssignmentOfContract extends Model implements IHaveStateme
 {
     protected $guarded = ['id'];
 	
-	use HasOutstandingBreakdown , IsOverdraft  , HasBankStatement, HasAccumulatedLimit,HasLastStatementAmount;
+	use HasOutstandingBreakdown , IsOverdraft  , HasBankStatement, HasAccumulatedLimit,HasLastStatementAmount, IsLockableBankAccount;
 	public function rates()
 	{
 		return $this->hasMany(OverdraftAgainstAssignmentOfContractRate::class,'overdraft_against_assignment_of_contract_id','id');
@@ -190,16 +192,23 @@ class OverdraftAgainstAssignmentOfContract extends Model implements IHaveStateme
 	{
 		$accounts = [];
 		$overdraftAgainstAssignmentOfContracts = self::where('company_id',$companyId)->where('currency',$currencyName)
-		->where('financial_institution_id',$financialInstitutionId)->get();	
+		->where('financial_institution_id',$financialInstitutionId)->where('is_active', 1)->get();
 		foreach($overdraftAgainstAssignmentOfContracts as $overdraftAgainstAssignmentOfContract){
 			$limitStatement = $overdraftAgainstAssignmentOfContract->overdraftAgainstAssignmentOfContractBankLimits->sortByDesc('full_date')->first() ;
-		
+
 			if(($limitStatement && $limitStatement->accumulated_limit >0) || in_array('bank-statement',Request()->segments())){
 				$accounts[$overdraftAgainstAssignmentOfContract->{$keyName}] = $overdraftAgainstAssignmentOfContract->account_number;
 			}
 		}
-		
-		return  $accounts ;
+
+		return LockableAccountSelector::mergeSelectedLockedAccount(
+			$accounts,
+			static::class,
+			$companyId,
+			$currencyName,
+			$financialInstitutionId,
+			$keyName
+		);
 	}	
 	public function getType()
 	{

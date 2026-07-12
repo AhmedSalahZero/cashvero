@@ -12,9 +12,9 @@ require_once(public_path('apis/ripcord.php'));
 trait AuthTrait 
 {
 	
-	protected string $url ;
-	protected String $db;
-	protected string $username;
+	protected ?string $url ;
+	protected ?String $db;
+	protected ?string $username;
 	protected ?string $password ; 
 	protected \Ripcord_Client $models;
 	protected int $company_id  ;
@@ -22,14 +22,27 @@ trait AuthTrait
 	protected ?int $uid;
 	public function __construct(Company $company ) 
 	{
-		$this->url = $company->getOdooDBUrl();
-		$this->db = $company->getOdooDBName();
+		$odooUrl = $company->getOdooDBUrl();
+		$odooDbName = $company->getOdooDBName();
+		if (!$odooUrl || !$odooDbName) {
+			throw new \RuntimeException(__('Missing company Odoo DB URL/Name.'));
+		}
+		$this->url = (string) $odooUrl;
+		$this->db = (string) $odooDbName;
 		$user =auth()->user();
 		/**
 		 * @var User $user
 		 */
-		$this->username =$user->getOdooDBUserName();
-		$this->password = $user->getOdooDBPassword();
+		if (!$user) {
+			throw new \RuntimeException(__('No authenticated user found for Odoo integration context.'));
+		}
+		$odooUsername = $user->getOdooDBUserName();
+		$odooPassword = $user->getOdooDBPassword();
+		if (!$odooUsername || !$odooPassword) {
+			throw new \RuntimeException(__('Missing Odoo username/password for current user.'));
+		}
+		$this->username = (string) $odooUsername;
+		$this->password = (string) $odooPassword;
 		$this->company_id = $company->id;
 		$this->company = $company;
 		$currentOdooId = $user->getOdooId() ;

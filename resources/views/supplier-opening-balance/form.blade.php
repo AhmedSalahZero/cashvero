@@ -120,6 +120,7 @@ use App\Models\MoneyPayment ;
 {{ __('Suppliers Opening Balance') }}
 @endsection
 @section('content')
+<div class="money-flow-dark">
 <div class="row">
     <div class="col-md-12">
         <!--begin::Portlet-->
@@ -644,6 +645,7 @@ use App\Models\MoneyPayment ;
             </div>
             <x-submitting-by-ajax :backTo="route('suppliers-opening-balance.index',['company'=>$company->id])" />
 
+            </div>{{-- end money-flow-dark --}}
             @endsection
             @section('js')
             <script>

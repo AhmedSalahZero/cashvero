@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\FinancialInstitution;
 use App\Models\MoneyPayment;
+use App\Rules\ActiveFinancialInstitutionAccountRule;
 use App\Rules\AmountCanNotBeGreaterThanEndBalanceAtPaymentDate;
 use App\Rules\AtLeaseOneSettlementMustBeExist;
 use App\Rules\ContractDownPaymentRule;
@@ -77,7 +78,9 @@ class StoreMoneyPaymentRequest extends FormRequest
 			'delivery_branch_id'=>$type == MoneyPayment::CASH_PAYMENT  ? ['required','not_in:-1'] : [],
 			'paid_amount.'.$type => ['required','gt:0'],
 			'account_type.'.$type => $accountTypeValidation = $type == MoneyPayment::OUTGOING_TRANSFER || $type == MoneyPayment::PAYABLE_CHEQUE ? 'required' : 'sometimes',
-			'account_number.'.$type=>$accountTypeValidation,
+			'account_number.'.$type => $type == MoneyPayment::OUTGOING_TRANSFER || $type == MoneyPayment::PAYABLE_CHEQUE
+				? ['required', new ActiveFinancialInstitutionAccountRule($companyId, $accountTypeId, $accountNumber, $financialInstitutionId)]
+				: ['sometimes'],
 			'delivery_date'=>['required',new ReceivingOrPaymentDateRule($companyId,$type,[MoneyPayment::OUTGOING_TRANSFER],[MoneyPayment::CASH_PAYMENT],$financialInstitutionId,$accountTypeId,$accountNumber)],
 			'unapplied_amount'=>'sometimes|gte:0',
 			'net_balance_rules'=>new SettlementPlusWithoutCanNotBeGreaterNetBalance($this->get('settlements',[])),

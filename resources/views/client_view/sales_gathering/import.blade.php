@@ -78,7 +78,8 @@ if ($modelName == 'ContractLoanSchedule' && ($loanId ?? request('leasing_contrac
 </style>
 @endsection
 @section('sub-header')
-{{ camelToTitle($modelName) }} {{ __('Import') }}
+@php $modelDisplayName = $modelName === 'ContractLoanSchedule' ? __('Contract Leasing Schedule') : camelToTitle($modelName); @endphp
+{{ $modelDisplayName }} {{ __('Import') }}
 @endsection
 @section('content')
 <div class="money-flow-dark">
@@ -89,7 +90,7 @@ if ($modelName == 'ContractLoanSchedule' && ($loanId ?? request('leasing_contrac
             <div class="kt-portlet__head">
                 <div class="kt-portlet__head-label">
                     <h3 class="kt-portlet__head-title head-title text-primary">
-                        {{ camelToTitle($modelName) }}
+                        {{ $modelDisplayName }}
                     </h3>
                 </div>
             </div>
@@ -108,7 +109,7 @@ if ($modelName == 'ContractLoanSchedule' && ($loanId ?? request('leasing_contrac
                 <div class="kt-portlet__head">
                     <div class="kt-portlet__head-label">
                         <h3 class="kt-portlet__head-title head-title text-primary">
-                            {{ camelToTitle($modelName) . ' ' . __('Import') }}
+                            {{ $modelDisplayName . ' ' . __('Import') }}
 							<span class="text-red">
 								(Maximum uploaded rows at a time 50,000 rows)
 							</span>

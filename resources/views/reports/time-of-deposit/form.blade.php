@@ -351,7 +351,9 @@
                         $.ajax({
                             url: "{{ route('update.current.account.based.on.currency',['company'=>$company->id,'financialInstitution'=>$financialInstitution->id ]) }}"
                             , data: {
-                                "currency": currency
+                                "currency": currency,
+                                "selected_account_id": $('select[name="deducted_from_account_id"]').attr('data-current-selected') || $('select[name="deducted_from_account_id"]').val() || '',
+                                "selected_maturity_account_id": $('select[name="maturity_amount_added_to_account_id"]').val() || ''
                             }
                             , success: function(res) {
                                 let options = '';

@@ -329,7 +329,7 @@ use App\Models\MoneyReceived;
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach($receivedChequesUnderCollection->sortByDesc('cheque.deposit_date') as $moneyReceived)
+                                @foreach($receivedChequesUnderCollection as $moneyReceived)
                                 <tr>
                                     <td class="text-wrap bank-max-width">{{ $moneyReceived->getMoneyTypeFormatted() }}</td>
                                     <td class="bank-max-width">{{ $moneyReceived->getCustomerName() }}</td>
@@ -507,7 +507,7 @@ use App\Models\MoneyReceived;
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach($collectedCheques->sortByDesc('cheque.deposit_date') as $moneyReceived)
+                                @foreach($collectedCheques as $moneyReceived)
                                 <tr>
                                     <td class="text-wrap bank-max-width">{{ $moneyReceived->getMoneyTypeFormatted() }}</td>
                                     <td class="bank-max-width">{{ $moneyReceived->getCustomerName() }}</td>

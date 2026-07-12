@@ -61,6 +61,11 @@
                             <tbody>
                                 @foreach($allBankAccounts as $index=>$bankAccounts)
                                 @foreach($bankAccounts as $bankAccount)
+                                @php
+                                    $accountModelName = class_basename($bankAccount);
+                                    $lockModalId = $accountModelName . '-' . $bankAccount->id;
+                                    $accountTypeId = $accountTypesByModel[$accountModelName] ?? null;
+                                @endphp
                                 <tr>
                                     <td>
                                         {{ $index+1 }}
@@ -79,31 +84,18 @@
                                             @if($bankAccount instanceof \App\Models\FinancialInstitutionAccount)
                                             <a type="button" class="btn btn-secondary btn-outline-hover-brand btn-icon" title="Edit" href="{{ route('edit.financial.institutions.account',['company'=>$company->id , 'financialInstitutionAccount'=>$bankAccount->id ]) }}"><i class="fa fa-pen-alt"></i></a>
 
-                                            <a data-toggle="modal" data-target="#lock-or-unlock-financial-institution-bank-id-{{ $bankAccount->id }}" type="button" class="btn btn-secondary @if(!$bankAccount->isActive()) btn-outline-danger @else btn-outline-success @endif btn-icon" title="{{ $bankAccount->isActive() ? __('Lock') : __('Unlock') }}" href="#"><i class="fa @if(!$bankAccount->isActive()) fa-lock @else fa-unlock @endif"></i></a>
                                             <a data-toggle="modal" data-target="#delete-financial-institution-bank-id-{{ $bankAccount->id }}" type="button" class="btn btn-secondary btn-outline-hover-danger btn-icon" title="Delete" href="#"><i class="fa fa-trash-alt"></i></a>
-                                            <div class="modal fade" id="lock-or-unlock-financial-institution-bank-id-{{ $bankAccount->id }}" tabindex="-1" role="dialog" aria-labelledby="exampleModalCenterTitle" aria-hidden="true">
-                                                <div class="modal-dialog modal-dialog-centered" role="document">
-                                                    <div class="modal-content">
-                                                        <form action="{{ route('lock.or.unlock.financial.institutions.account',['company'=>$company->id,'financialInstitutionAccount'=>$bankAccount->id]) }}" method="post">
-                                                            @csrf
-                                                            @method('put')
-                                                            <div class="modal-header">
-                                                                <h5 class="modal-title" id="exampleModalLongTitle">{{ $bankAccount->isActive() ? __('Do You Want To Lock This Account ?') : __('Do You Want To Unlock This Account ?') }}</h5>
-                                                                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                                                                    <span aria-hidden="true">&times;</span>
-                                                                </button>
-                                                            </div>
-                                                            <div class="modal-footer">
-                                                                <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('Close') }}</button>
-                                                                <button type="submit" class="btn {{ $bankAccount->isActive() ? 'btn-danger' : 'btn-info'  }}">{{ $bankAccount->isActive() ? __('Confirm Lock') : __('Confirm Unlock') }}</button>
-                                                            </div>
-
-                                                        </form>
-                                                    </div>
-                                                </div>
-                                            </div>
                                             @endif
 
+                                            @if(method_exists($bankAccount, 'isActive') && $accountTypeId)
+                                            @include('components.bank-account-lock-button', [
+                                                'bankAccount' => $bankAccount,
+                                                'company' => $company,
+                                                'accountTypeId' => $accountTypeId,
+                                            ])
+                                            @endif
+
+                                            @if($bankAccount instanceof \App\Models\FinancialInstitutionAccount)
                                             <div class="modal fade" id="delete-financial-institution-bank-id-{{ $bankAccount->id }}" tabindex="-1" role="dialog" aria-labelledby="exampleModalCenterTitle" aria-hidden="true">
                                                 <div class="modal-dialog modal-dialog-centered" role="document">
                                                     <div class="modal-content">
@@ -125,6 +117,7 @@
                                                     </div>
                                                 </div>
                                             </div>
+                                            @endif
                                         </span>
                                     </td>
                                 </tr>

@@ -146,10 +146,6 @@ class CustomerInvoiceDashboardController extends Controller
 		$allCurrencies = getCurrenciesForSuppliersAndCustomers($company->id) ;
 		// $financialInstitutionsThatHaveMediumTermLoans = FinancialInstitution::onlyCompany($company->id)->onlyHasMediumTermLoans()->get();
 		$dashboardResult = [];
-		$moneyReceivedOrPaymentModelNameMap = [
-			'CustomerInvoice'=>'MoneyReceived',
-			'SupplierInvoice'=>'MoneyPayment'
-		];
 		$cashFlowReportResult = null ;
 		$cashFlowReport = [];
 		$contractCode = null;
@@ -169,8 +165,10 @@ class CustomerInvoiceDashboardController extends Controller
 			$pastDueSupplierInvoices = $report['pastDueSupplierInvoices'];
 			$pastDueInstallments = $report['pastDueInstallments'];
 			$pastDueCustomerInvoices = $report['pastDueCustomerInvoices'];
-			$cashFlowReport['total_cash_in_out_flow']=$this->formatFlowCashInOutChartData($cashFlowReportResult['customers'][__('Total Cash Inflow')]['total'] ?? [],$cashFlowReportResult['cash_expenses'][__('Total Cash Outflow')]['total'] ?? [],$dates);
-			$cashFlowReport['accumulated_net_cash']= formatAccumulatedNetCash($cashFlowReportResult['cash_expenses'][__('Net Cash (+/-)')]['total'] ?? [] ,$dates );
+			// A contract only ever has a single currency, so key by it too for
+			// consistency with the per-currency lookup used in the Blade view.
+			$cashFlowReport[$reportCurrentName]['total_cash_in_out_flow']=$this->formatFlowCashInOutChartData($cashFlowReportResult['customers'][__('Total Cash Inflow')]['total'] ?? [],$cashFlowReportResult['cash_expenses'][__('Total Cash Outflow')]['total'] ?? [],$dates);
+			$cashFlowReport[$reportCurrentName]['accumulated_net_cash']= formatAccumulatedNetCash($cashFlowReportResult['cash_expenses'][__('Net Cash (+/-)')]['total'] ?? [] ,$dates );
 		}else{
 			$report =(new CashFlowReportController())->result($company,$request,true,null,-1);
 			if($report instanceof RedirectResponse){
@@ -186,8 +184,35 @@ class CustomerInvoiceDashboardController extends Controller
 				$pastDueSupplierInvoices = $report['pastDueSupplierInvoices'];
 				$pastDueInstallments = $report['pastDueInstallments'];
 				$pastDueCustomerInvoices = $report['pastDueCustomerInvoices'];
-			$cashFlowReport['total_cash_in_out_flow']=$this->formatFlowCashInOutChartData($cashFlowReportResult['customers'][__('Total Cash Inflow')]['total'] ?? [],$cashFlowReportResult['cash_expenses'][__('Total Cash Outflow')]['total'] ?? [],$dates);
-			$cashFlowReport['accumulated_net_cash']= formatAccumulatedNetCash($cashFlowReportResult['cash_expenses'][__('Net Cash (+/-)')]['total'] ?? [] ,$dates );
+			$cashFlowReport[$reportCurrentName]['total_cash_in_out_flow']=$this->formatFlowCashInOutChartData($cashFlowReportResult['customers'][__('Total Cash Inflow')]['total'] ?? [],$cashFlowReportResult['cash_expenses'][__('Total Cash Outflow')]['total'] ?? [],$dates);
+			$cashFlowReport[$reportCurrentName]['accumulated_net_cash']= formatAccumulatedNetCash($cashFlowReportResult['cash_expenses'][__('Net Cash (+/-)')]['total'] ?? [] ,$dates );
+
+			/**
+			 * * "Monthly Cash Flow" / "Accumulated Cash Flow" charts are shown once per
+			 * * currency tab, so they must be computed separately per currency (the
+			 * * company-wide report above only covers $reportCurrentName).
+			 */
+			$selectedCurrenciesForCashFlowChart = $request->get('currencies', $allCurrencies);
+			foreach ($selectedCurrenciesForCashFlowChart as $currencyNameForChart) {
+				if ($currencyNameForChart === $reportCurrentName || isset($cashFlowReport[$currencyNameForChart])) {
+					continue;
+				}
+				$currencyRequest = $request->duplicate();
+				$currencyRequest->query->set('currency', $currencyNameForChart);
+				$currencyReport = (new CashFlowReportController())->result($company, $currencyRequest, true, null, -1);
+				if ($currencyReport instanceof RedirectResponse) {
+					continue;
+				}
+				$cashFlowReport[$currencyNameForChart]['total_cash_in_out_flow'] = $this->formatFlowCashInOutChartData(
+					$currencyReport['result']['customers'][__('Total Cash Inflow')]['total'] ?? [],
+					$currencyReport['result']['cash_expenses'][__('Total Cash Outflow')]['total'] ?? [],
+					$currencyReport['dates']
+				);
+				$cashFlowReport[$currencyNameForChart]['accumulated_net_cash'] = formatAccumulatedNetCash(
+					$currencyReport['result']['cash_expenses'][__('Net Cash (+/-)')]['total'] ?? [],
+					$currencyReport['dates']
+				);
+			}
 		}
 		
 		$overdraftAccountTypes = AccountType::onlyOverdraftsAccounts()->get();
@@ -203,26 +228,29 @@ class CustomerInvoiceDashboardController extends Controller
 		$agingDate = $request->get('aging_date',now()->format('Y-m-d'))  ;
         $selectedCurrencies = $request->get('currencies', $allCurrencies) ;
 
+		$financialInstitutionsByCurrency = [];
+		foreach ($selectedCurrencies as $currencyName) {
+			$financialInstitutionsByCurrency[$currencyName] = FinancialInstitution::onlyCompany($company->id)
+				->onlyHasMediumTermLoans($currencyName)
+				->get();
+		}
+
 		
 		$allFinancialInstitutionIds = $company->financialInstitutions->pluck('id')->toArray(); 
 		foreach($selectedCurrencies as $currencyName)
 		{
 			foreach ($invoiceTypesModels as $modelType) {
-				$moneyReceivedOrPaymentModelName  = $moneyReceivedOrPaymentModelNameMap[$modelType];
-				$clientIdsForInvoices = ('\App\Models\\' . $modelType)::getAllUniquePartnerIds($company->id,$currencyName);
-				$clientIdsForCheques = ('\App\Models\\' . $moneyReceivedOrPaymentModelName)::getAllUniquePartnerIdsForCheques($company->id,$currencyName);
-
 				/**
 				 * * Customers Invoices Aging & Supplier Invoices Aging
 				 */
 				$invoiceAgingService = new InvoiceAgingService($company->id, $agingDate,$currencyName);
 				$chequeAgingService = new ChequeAgingService($company->id, $agingDate,$currencyName);
-				$agingsForInvoices = $invoiceAgingService->__execute($clientIdsForInvoices, $modelType) ;
+				$agingsForInvoices = $invoiceAgingService->__execute([], $modelType) ;
 				$agingsForInvoices = $invoiceAgingService->formatForDashboard($agingsForInvoices,$modelType);
 				/**
 				 * * Customers Cheques Aging & Supplier Cheques Aging
 				 */
-				$agingsForChequesWithChart = $chequeAgingService->__execute($clientIdsForCheques, $modelType) ;
+				$agingsForChequesWithChart = $chequeAgingService->__execute([], $modelType) ;
 				$agingsForCheques = $agingsForChequesWithChart['result_for_table'];
 				$agingsForChequesCharts = $agingsForChequesWithChart['result_for_chart'];
 				
@@ -261,6 +289,7 @@ class CustomerInvoiceDashboardController extends Controller
 			'selectedReportInterval'=>$request->get('report_interval','weekly'),
 			'selectedPartnerId'=>$request->get('partner_id'),
 			'selectedContractId'=>$request->get('contract_id'),
+			'financialInstitutionsByCurrency'=>$financialInstitutionsByCurrency,
 			// 'financialInstitutionsThatHaveMediumTermLoans'=>$financialInstitutionsThatHaveMediumTermLoans
 			
         ]);

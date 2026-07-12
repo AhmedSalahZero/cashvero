@@ -5,12 +5,11 @@ namespace App\Providers;
 use App\Helpers\HArr;
 use App\Helpers\HAuth;
 use App\Http\Controllers\ExportTable;
-
 use App\Models\Company;
-
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -43,6 +42,7 @@ class AppServiceProvider extends ServiceProvider
 	
 	public function boot()
 	{	
+		// dd(DB::connection('mysql_production')->table('users')->get());
 		if ($this->app->environment('production')) {
 			URL::forceScheme('https');
 		}

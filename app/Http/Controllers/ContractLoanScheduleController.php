@@ -12,6 +12,18 @@ use Illuminate\Http\Request;
 
 class ContractLoanScheduleController extends Controller
 {
+    public function getAccountNumbersForDraweeBank(Company $company, Request $request)
+    {
+        $draweeBankName = trim((string) $request->get('drawee_bank', ''));
+        $accountNumbers = $draweeBankName !== ''
+            ? getAccountNumbersForDraweeBankName($company->id, $draweeBankName)
+            : [];
+
+        return response()->json([
+            'data' => $accountNumbers,
+        ]);
+    }
+
     public function viewSettlement(Company $company, ContractLoanSchedule $contractLoanSchedule)
     {
         $contractLoanSchedule->load('leasingContract.contractLoanSchedules', 'draweeBank');

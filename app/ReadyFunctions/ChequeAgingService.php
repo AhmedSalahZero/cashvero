@@ -60,7 +60,7 @@ class ChequeAgingService
                 $q->whereIn('partner_id',$partnerIds);
             });
         }
-        $invoices = $invoices->get();
+        $invoices = $invoices->with([$modelModelName, $modelModelName.'.partner'])->get();
 
 
         foreach ($invoices as $index => $invoice) {

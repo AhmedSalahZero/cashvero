@@ -112,6 +112,18 @@ use App\Models\MoneyReceived ;
         font-weight: bold !important;
     }
 
+    .drawee-bank-add-icon-row {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 0.25rem;
+        min-height: 1rem;
+    }
+
+    .drawee-bank-add-icon-row .fa-plus {
+        color: #5867dd;
+        font-size: 0.95rem;
+    }
+
 </style>
 
 <style>
@@ -252,7 +264,7 @@ use App\Models\MoneyReceived ;
 
 
                                                 <div class="input-group">
-                                                    <select name="currency" class="form-control select-for-currency cash-in-safe-currency-select ajax-get-invoice-numbers readonly-style-select" js-when-change-trigger-change-account-type>
+                                                    <select name="currency" class="form-control select-for-currency cash-in-safe-currency-select readonly-style-select" js-when-change-trigger-change-account-type>
                                                         @foreach(getCurrencies() as $currencyName => $currencyValue )
                                                         <option value="{{ $currencyName }}" @if(isset($cashInSafeStatement) && $cashInSafeStatement->getCurrency() == $currencyName ) selected @elseif($currencyName == 'EGP' ) selected @endif > {{ $currencyValue }}</option>
                                                         @endforeach
@@ -468,7 +480,7 @@ use App\Models\MoneyReceived ;
                                             <td>
 
                                                 <div class="input-group">
-                                                    <select name="currency" class="form-control select-for-currency ajax-get-invoice-numbers width-8" js-when-change-trigger-change-account-type>
+                                                    <select name="currency" class="form-control select-for-currency width-8" js-when-change-trigger-change-account-type>
                                                         {{-- <option selected>{{__('Select')}}</option> --}}
                                                         @foreach(getCurrencies() as $currencyName => $currencyValue )
                                                         <option value="{{ $currencyName }}" @if(isset($chequeInSafe) && $chequeInSafe->getCurrency() == $currencyName ) selected @elseif($currencyName == 'EGP' ) selected @endif > {{ $currencyValue }}</option>
@@ -485,6 +497,9 @@ use App\Models\MoneyReceived ;
 
                                             <td>
                                                 <div class="kt-input-icon drawee-bank-width">
+                                                    <div class="drawee-bank-add-icon-row">
+                                                        <i title="{{ __('Add New Bank') }}" class="fa fa-plus cursor-pointer block ml-auto js-drawee-bank-class"></i>
+                                                    </div>
                                                     <div class="input-group date">
 
                                                         <select data-live-search="true" data-actions-box="true" name="drawee_bank_id" class="form-control repeater-select select2-select	drawee-bank-class">
@@ -492,7 +507,6 @@ use App\Models\MoneyReceived ;
                                                             <option value="{{ $bankId }}" {{ isset($chequeInSafe) && $chequeInSafe->cheque && $chequeInSafe->cheque->getDraweeBankId() == $bankId ? 'selected':'' }}>{{ $bankName }}</option>
                                                             @endforeach
                                                         </select>
-                                                        <button class="btn btn-sm btn-primary js-drawee-bank-class">{{ __('Add New Bank') }}</button>
 
 
 
@@ -710,7 +724,7 @@ use App\Models\MoneyReceived ;
                                             <td>
 
                                                 <div class="input-group">
-                                                    <select name="currency" class="form-control select-for-currency ajax-get-invoice-numbers" js-when-change-trigger-change-account-type>
+                                                    <select name="currency" class="form-control select-for-currency" js-when-change-trigger-change-account-type>
                                                         @foreach(getCurrencies() as $currencyName => $currencyValue )
                                                         <option value="{{ $currencyName }}" @if(isset($chequeUnderCollection) && $chequeUnderCollection->getCurrency() == $currencyName ) selected @elseif($currencyName == 'EGP' ) selected @endif > {{ $currencyValue }}</option>
                                                         @endforeach
@@ -724,6 +738,9 @@ use App\Models\MoneyReceived ;
                                             </td>
                                             <td>
                                                 <div class="kt-input-icon drawee-bank-width">
+                                                    <div class="drawee-bank-add-icon-row">
+                                                        <i title="{{ __('Add New Bank') }}" class="fa fa-plus cursor-pointer block ml-auto js-drawee-bank-class"></i>
+                                                    </div>
                                                     <div class="input-group date">
 
                                                         <select data-live-search="true" data-actions-box="true" name="drawee_bank_id" class="form-control repeater-select select2-select	drawee-bank-class">
@@ -732,7 +749,6 @@ use App\Models\MoneyReceived ;
                                                             <option data-current-id="{{ isset($chequeUnderCollection) ? $chequeUnderCollection->cheque->getDraweeBankId() : 0 }}" value="{{ $bankId }}" {{ isset($chequeUnderCollection) && $chequeUnderCollection->cheque && $chequeUnderCollection->cheque->getDraweeBankId() == $bankId ? 'selected':'' }}>{{ $bankName }}</option>
                                                             @endforeach
                                                         </select>
-                                                        <button class="btn btn-sm btn-primary js-drawee-bank-class">{{ __('Add New Bank') }}</button>
 
 
                                                     </div>
@@ -989,7 +1005,7 @@ use App\Models\MoneyReceived ;
                                             <td>
 
                                                 <div class="input-group">
-                                                    <select name="currency" class="form-control select-for-currency ajax-get-invoice-numbers" js-when-change-trigger-change-account-type>
+                                                    <select name="currency" class="form-control select-for-currency" js-when-change-trigger-change-account-type>
                                                         @foreach(getCurrencies() as $currencyName => $currencyValue )
                                                         <option value="{{ $currencyName }}" @if(isset($payableCheques) && $payableCheques->getCurrency() == $currencyName ) selected @elseif($currencyName == 'EGP' ) selected @endif > {{ $currencyValue }}</option>
                                                         @endforeach

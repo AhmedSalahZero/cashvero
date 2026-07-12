@@ -197,7 +197,7 @@
 </style>
 <x-main-form-title :id="'main-form-title'" :class="''">{{ $pageTitle  }}</x-main-form-title>
 @else
-{{ camelToTitle($modelName) }}
+{{ $modelName === 'ContractLoanSchedule' ? __('Contract Leasing Schedule') : camelToTitle($modelName) }}
 @endIf
 @endsection
 @section('content')
@@ -228,10 +228,17 @@
                 <div class="kt-portlet__body">
 
                     @php
-
-                    $groupedFields = collect($exportables)->chunk(4)->mapWithKeys(function ($chunk, $index) {
-                    return ["Group " . ($index + 1) => $chunk->toArray()];
-                    })->toArray();
+                    if ($modelName === 'ContractLoanSchedule') {
+                        $exportableCollection = collect($exportables);
+                        $groupedFields = [
+                            'Group 1' => $exportableCollection->take(6)->toArray(),
+                            'Group 2' => $exportableCollection->slice(6)->toArray(),
+                        ];
+                    } else {
+                        $groupedFields = collect($exportables)->chunk(4)->mapWithKeys(function ($chunk, $index) {
+                            return ["Group " . ($index + 1) => $chunk->toArray()];
+                        })->toArray();
+                    }
                     @endphp
 
                     @foreach($groupedFields as $currentExportables)
@@ -250,7 +257,9 @@
                         // $repeaterId = 'm_repeater_7';
 
                         @endphp
+                        @if($loop->first)
                         <input type="hidden" name="tableIds[]" value="{{ $tableId }}">
+                        @endif
                         <x-tables.repeater-table :removeActionBtn="true" :showAddBtnAndPlus="false" :repeater-with-select2="true" :parentClass="'js-toggle-visibility'" :tableName="$tableId" :repeaterId="''" :relationName="'food'" :isRepeater="false" :initialJs="false">
                             <x-slot name="ths">
                                 @foreach($currentExportables as $name=>$title)
@@ -273,7 +282,9 @@
                                 <tr>
 
 
-                                    <input type="hidden" name="id" value="{{ isset($subModel) ? $subModel->id : 0 }}">
+                                    @if($loop->parent->first)
+                                    <input type="hidden" name="id" value="{{ isset($model) ? $model->id : 0 }}">
+                                    @endif
                                     {{-- <input type="hidden"  value="{{ isset($subModel) ? $subModel->id : 0 }}"> --}}
 
 
@@ -286,21 +297,25 @@
                                     $defaultValue = $fieldTypeAndClassDefaultValue['default_value'];
                                     $options = $fieldTypeAndClassDefaultValue['options']??[];
                                     $oldColumnName = $fieldTypeAndClassDefaultValue['name']??'';
+                                    $selectedValue = isset($model) ? ($model->{$oldColumnName} ?? $model->{$name} ?? null) : null;
+                                    if ($fieldType === 'select' && $oldColumnName === 'drawee_bank' && isset($model)) {
+                                        $selectedValue = $model->drawee_bank;
+                                    }
 
                                     @endphp
 
                                     <td>
                                         @if($fieldType == 'select')
-                                        <select name="{{ $fieldTypeAndClassDefaultValue['name'] }}" class="form-control select2-select max-w-500" data-live-search="true" data-actions-box="true">
+                                        <select name="{{ $fieldTypeAndClassDefaultValue['name'] }}" class="form-control select2-select max-w-500 {{ $fieldClass }}" data-live-search="true" data-actions-box="true" @if($oldColumnName === 'account_number') data-current-selected="{{ $selectedValue }}" @endif>
                                             @foreach($options as $id => $value)
-                                            <option @if($id==@$model->{$oldColumnName}) selected @endif value="{{ $id }}">{{ $value }}</option>
+                                            <option @if((string)$id === (string)$selectedValue) selected @endif value="{{ $id }}">{{ $value }}</option>
                                             @endforeach
                                         </select>
                                         @else
 
 
                                         @php
-                                        $currentVal = isset($model) && $model->{$name} ? $model->{$name} : $defaultValue;
+                                        $currentVal = isset($model) && $model->{$name} !== null && $model->{$name} !== '' ? $model->{$name} : $defaultValue;
                                         if(is_object($currentVal)){
                                         $currentVal = \Carbon\Carbon::make($currentVal)->format('Y-m-d');
                                         }
@@ -323,81 +338,6 @@
 
                         </x-tables.repeater-table>
                         {{-- end of fixed monthly repeating amount --}}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -876,4 +816,50 @@
     })
 
 </script>
+@if($modelName === 'ContractLoanSchedule')
+<script>
+    function loadContractLoanAccountNumbers(selectedAccountNumber) {
+        const draweeBank = $('select.js-contract-loan-drawee-bank').val() || '';
+        const $accountSelect = $('select.js-contract-loan-account-number');
+        const currentSelected = selectedAccountNumber || $accountSelect.attr('data-current-selected') || $accountSelect.val() || '';
+
+        let options = `<option value="">{{ __('Select') }}</option>`;
+        if (!draweeBank) {
+            $accountSelect.empty().append(options);
+            if ($accountSelect.selectpicker) {
+                $accountSelect.selectpicker('refresh');
+            }
+            return;
+        }
+
+        $.ajax({
+            url: "{{ route('contract.loan.schedule.account.numbers', ['company' => $company->id]) }}",
+            data: { drawee_bank: draweeBank },
+            success: function(res) {
+                options = `<option value="">{{ __('Select') }}</option>`;
+                (res.data || []).forEach(function(accountNumber) {
+                    const selected = String(accountNumber) === String(currentSelected) ? 'selected' : '';
+                    options += `<option ${selected} value="${accountNumber}">${accountNumber}</option>`;
+                });
+                $accountSelect.empty().append(options);
+                if (currentSelected) {
+                    $accountSelect.val(currentSelected);
+                }
+                if ($accountSelect.selectpicker) {
+                    $accountSelect.selectpicker('refresh');
+                }
+            }
+        });
+    }
+
+    $(document).on('change', 'select.js-contract-loan-drawee-bank', function() {
+        $('select.js-contract-loan-account-number').attr('data-current-selected', '');
+        loadContractLoanAccountNumbers('');
+    });
+
+    $(function() {
+        loadContractLoanAccountNumbers($('select.js-contract-loan-account-number').attr('data-current-selected') || '');
+    });
+</script>
+@endif
 @endpush

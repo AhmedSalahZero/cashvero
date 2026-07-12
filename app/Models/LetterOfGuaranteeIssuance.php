@@ -779,7 +779,7 @@ class LetterOfGuaranteeIssuance extends Model
         $issuanceDate = $this->getIssuanceDate();
         $company=  $this->company;
         
-        if ($this->isOpeningBalance() || !$company->withinIntegrationDate($issuanceDate)) {
+        if (!$company->hasOdooIntegrationCredentials() || $this->isOpeningBalance() || !$company->withinIntegrationDate($issuanceDate)) {
             return ;
         }
         $odooSetting = $company->odooSetting;

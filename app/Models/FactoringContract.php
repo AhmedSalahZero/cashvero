@@ -94,19 +94,54 @@ class FactoringContract extends Model
 
     public function getRemainingLimit(?int $exceptTransactionId = null): float
     {
-        $debits = (float) $this->factoringStatements()->sum('debit');
-        $credits = (float) $this->factoringStatements()->sum('credit');
-        $remaining = round($debits - $credits, 2);
+        $disbursementQuery = $this->factoringStatements()
+            ->where('entry_type', FactoringStatement::TYPE_FACTORING_DISBURSEMENT);
+
+        $restoringQuery = $this->factoringStatements()
+            ->whereIn('entry_type', [
+                FactoringStatement::TYPE_FACTORING_SETTLEMENT,
+                FactoringStatement::TYPE_FACTORING_REJECTION,
+            ]);
 
         if ($exceptTransactionId) {
-            $currentCredit = (float) FactoringStatement::query()
-                ->where('factoring_transaction_id', $exceptTransactionId)
-                ->where('entry_type', FactoringStatement::TYPE_FACTORING_DISBURSEMENT)
-                ->sum('credit');
-            $remaining = round($remaining + $currentCredit, 2);
+            $disbursementQuery->where('factoring_transaction_id', '!=', $exceptTransactionId);
+            $restoringQuery->where('factoring_transaction_id', '!=', $exceptTransactionId);
         }
 
-        return max(0, $remaining);
+        $used = round(
+            (float) $disbursementQuery->sum('credit') - (float) $restoringQuery->sum('debit'),
+            2
+        );
+
+        return max(0, round($this->getLimit() - $used, 2));
+    }
+
+    public function syncLimitStatement(int $companyId): void
+    {
+        if (!$this->contract_start_date || $this->getLimit() <= 0) {
+            $this->factoringStatements()
+                ->where('entry_type', FactoringStatement::TYPE_CONTRACT_LIMIT)
+                ->delete();
+
+            return;
+        }
+
+        $statement = $this->factoringStatements()
+            ->where('entry_type', FactoringStatement::TYPE_CONTRACT_LIMIT)
+            ->first();
+
+        if ($statement) {
+            $statement->update([
+                'debit' => $this->getLimit(),
+                'credit' => 0,
+                'currency' => $this->getCurrency(),
+                'date' => $this->contract_start_date,
+            ]);
+
+            return;
+        }
+
+        $this->storeLimitStatement($companyId);
     }
 
     public function storeOutstandingBreakdown(Request $request, Company $company): void

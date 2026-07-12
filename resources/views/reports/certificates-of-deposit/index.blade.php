@@ -264,6 +264,7 @@ use \App\Models\CertificatesOfDeposit;
                     @if(hasAuthFor('update certificate of deposit'))
                     <a type="button" class="btn btn-secondary btn-outline-hover-brand btn-icon" title="Edit" href="{{ route('edit.certificates.of.deposit',['company'=>$company->id,'financialInstitution'=>$financialInstitution->id,'certificatesOfDeposit'=>$model->id]) }}"><i class="fa fa-pen-alt"></i></a>
                     @endif
+                    @include('components.bank-account-lock-button', ['bankAccount' => $model, 'company' => $company])
                     @if(hasAuthFor('delete certificate of deposit'))
                     <a data-toggle="modal" data-target="#delete-certificate-of-deposits-id-{{ $model->id }}" type="button" class="btn btn-secondary btn-outline-hover-danger btn-icon" title="Delete" href="#"><i class="fa fa-trash-alt"></i></a>
 

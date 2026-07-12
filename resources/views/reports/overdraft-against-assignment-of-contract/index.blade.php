@@ -175,6 +175,7 @@
                                         @if(hasAuthFor('update overdraft against assignment of contract'))
                                         <a type="button" class="btn btn-secondary btn-outline-hover-brand btn-icon" title="Edit" href="{{ route('edit.overdraft.against.assignment.of.contract',['company'=>$company->id,'financialInstitution'=>$financialInstitution->id,'odAgainstAssignmentOfContract'=>$odAgainstAssignmentOfContract->id]) }}"><i class="fa fa-pen-alt"></i></a>
                                         @endif
+                                        @include('components.bank-account-lock-button', ['bankAccount' => $odAgainstAssignmentOfContract, 'company' => $company])
                                         @if(hasAuthFor('delete overdraft against assignment of contract'))
                                         <a data-toggle="modal" data-target="#delete-financial-institution-bank-id-{{ $odAgainstAssignmentOfContract->id }}" type="button" class="btn btn-secondary btn-outline-hover-danger btn-icon" title="Delete" href="#"><i class="fa fa-trash-alt"></i></a>
                                         <div class="modal fade" id="delete-financial-institution-bank-id-{{ $odAgainstAssignmentOfContract->id }}" tabindex="-1" role="dialog" aria-labelledby="exampleModalCenterTitle" aria-hidden="true">

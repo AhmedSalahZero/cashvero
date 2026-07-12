@@ -6,6 +6,7 @@ use App\Interfaces\Models\Interfaces\IHaveStatement;
 use App\Traits\HasBankStatement;
 use App\Traits\HasLastStatementAmount;
 use App\Traits\HasOutstandingBreakdown;
+use App\Traits\IsLockableBankAccount;
 use App\Traits\IsOverdraft;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder;
@@ -95,7 +96,7 @@ use Illuminate\Support\Str;
 class FullySecuredOverdraft extends Model implements IHaveStatement
 {
     protected $guarded = ['id'];
-	use HasOutstandingBreakdown , IsOverdraft ,HasBankStatement, HasLastStatementAmount;
+	use HasOutstandingBreakdown , IsOverdraft ,HasBankStatement, HasLastStatementAmount, IsLockableBankAccount;
 	
 	public function fullySecuredOverdraftBankStatements()
 	{

@@ -125,10 +125,22 @@ class FactoringTransaction extends Model
     {
         $this->deleteBankDebitStatements();
         $this->deleteDifferenceReceivedBankStatements();
+        $this->deleteCollectionBankStatements();
+        $this->deleteRejectionBankStatements();
         $this->deleteFactoringStatements();
         if ($this->settlement) {
             $this->settlement->delete();
         }
+    }
+
+    public static function blockedInvoiceIdsForMoneyReceived(int $companyId)
+    {
+        return static::query()
+            ->where('company_id', $companyId)
+            ->where('recourse_type', self::WITH_RECOURSE)
+            ->where('is_collected', false)
+            ->where('is_rejected', false)
+            ->pluck('customer_invoice_id');
     }
 
     public function isSettled(): bool
@@ -144,5 +156,27 @@ class FactoringTransaction extends Model
     public function getDifferenceAmount(): float
     {
         return round((float) $this->factoring_amount - (float) $this->received_amount, 2);
+    }
+
+    public function getCollectionDifferenceAmount(): float
+    {
+        return $this->getDifferenceAmount();
+    }
+
+    public function isCollected(): bool
+    {
+        return (bool) $this->is_collected;
+    }
+
+    public function isRejected(): bool
+    {
+        return (bool) $this->is_rejected;
+    }
+
+    public function isPendingWithRecourse(): bool
+    {
+        return $this->recourse_type === self::WITH_RECOURSE
+            && !$this->isCollected()
+            && !$this->isRejected();
     }
 }

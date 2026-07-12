@@ -95,6 +95,9 @@ class LgRenewalDateHistory extends Model
     public function unlinkRenewalFeesForOddo()
     {
         $company = $this->company;
+        if (!$company->hasOdooIntegrationCredentials()) {
+            return;
+        }
         $odooLetterOfGuaranteeIssuance = new LetterOfGuaranteeService($company);
         if ($journalId = $this->renewal_fees_journal_entry_id) {
             $odooLetterOfGuaranteeIssuance->unlink($journalId);

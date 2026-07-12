@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\CashExpense;
 use App\Models\FinancialInstitution;
+use App\Rules\ActiveFinancialInstitutionAccountRule;
 use App\Rules\AmountCanNotBeGreaterThanEndBalanceAtPaymentDate;
 use App\Rules\DateMustBeGreaterThanOrEqualDate;
 use App\Rules\SettlementPlusWithoutCanNotBeGreaterNetBalance;
@@ -60,7 +61,9 @@ class StoreCashExpenseRequest extends FormRequest
 			'delivery_branch_id'=>$type == CashExpense::CASH_PAYMENT  ? ['required','not_in:-1'] : [],
 			'paid_amount.'.$type => ['required','gt:0'],
 			'account_type.'.$type => $accountTypeValidation =  $type == CashExpense::OUTGOING_TRANSFER || $type == CashExpense::PAYABLE_CHEQUE ? 'required' : 'sometimes',
-			'account_number.'.$type=>$accountTypeValidation,
+			'account_number.'.$type => $type == CashExpense::OUTGOING_TRANSFER || $type == CashExpense::PAYABLE_CHEQUE
+				? ['required', new ActiveFinancialInstitutionAccountRule(getCurrentCompanyId(), $accountTypeId, $accountNumber, $financialInstitutionId)]
+				: ['sometimes'],
 			'unapplied_amount'=>'sometimes|gte:0',
 			'net_balance_rules'=>new SettlementPlusWithoutCanNotBeGreaterNetBalance($this->get('settlements',[])),
 			

@@ -25,6 +25,8 @@ class FactoringStatement extends Model
 
     public const TYPE_FACTORING_SETTLEMENT = 'factoring_settlement';
 
+    public const TYPE_FACTORING_REJECTION = 'factoring_rejection';
+
     protected $guarded = ['id'];
 
     public function company(): BelongsTo

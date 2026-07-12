@@ -64,12 +64,12 @@ return [
 			
 		, 'mysql_production' => [
 			'driver' => 'mysql',
-			'url' => env('DATABASE_URL'),
-			'host' => 'veroanalysis.com',
-			'port' => env('DB_PORT', '3306'),
-			'database' => 'veroanalysis_db',
-			'username' => 'veroanalysis_production',
-			'password' => 'ho_OQYRjSqGB',
+			'url' => null,
+			'host' => env('DB_HOST_PRODUCTION', 'veroanalysis.com'),
+			'port' => env('DB_PORT_PRODUCTION', '3366'),
+			'database' => env('DB_DATABASE_PRODUCTION', ''),
+			'username' => env('DB_USERNAME_PRODUCTION', ''),
+			'password' => env('DB_PASSWORD_PRODUCTION', ''),
 			'unix_socket' => env('DB_SOCKET', ''),
 			'charset' => 'utf8mb4',
 			'collation' => 'utf8mb4_unicode_ci',

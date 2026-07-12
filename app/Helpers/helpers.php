@@ -792,13 +792,13 @@ function getUploadParamsFromType(?string $type = null):array
         'ContractLoanSchedule'=>[
             'fullModel'=>'\App\Models\ContractLoanSchedule',
             'dbName'=>'contract_loan_schedules',
-            'typePrefixName'=>__('Contract Loan Schedule'),
+            'typePrefixName'=>__('Contract Leasing Schedule'),
             'orderByDateField'=>'date',
             'viewPermissionName'=>viewLoanScheduleData,
             'uploadPermissionName'=>uploadLoanScheduleData,
             'exportPermissionName'=>exportLoanScheduleData,
             'deletePermissionName'=>deleteLoanScheduleData,
-            'importHeaderText'=>__('Contract Loan Schedule Import'),
+            'importHeaderText'=>__('Contract Leasing Schedule Import'),
         ]
 
     ] ;
@@ -1556,7 +1556,7 @@ function getHeaderMenu($currentCompany = null)
                     'submenu'=>[
                         [
                             'title'=>__('With Recourse'),
-                            'link'=>'#',
+                            'link'=>route('factoring.with-recourse.index', ['company'=>$companyId]),
                             'show'=>$user->can('view supplier payment'),
                         ],
                         [
@@ -2261,6 +2261,39 @@ function accountNumberExistsForFinancialInstitution(int $companyId, int $financi
     }
 
     return in_array($accountNumber, $financialInstitution->getAllAccountNumbers(), true);
+}
+
+function getAccountNumbersForDraweeBankName(int $companyId, string $draweeBankName): array
+{
+    $financialInstitutionId = resolveDraweeBankFinancialInstitutionId($companyId, $draweeBankName);
+
+    if (! $financialInstitutionId) {
+        return [];
+    }
+
+    $financialInstitution = FinancialInstitution::query()
+        ->with([
+            'accounts',
+            'cleanOverdrafts',
+            'fullySecuredOverdrafts',
+            'overdraftAgainstCommercialPapers',
+            'overdraftAgainstAssignmentOfContracts',
+            'certificatesOfDeposits',
+            'timeOfDeposits',
+        ])
+        ->where('company_id', $companyId)
+        ->find($financialInstitutionId);
+
+    if (! $financialInstitution) {
+        return [];
+    }
+
+    return collect($financialInstitution->getAllAccountNumbers())
+        ->filter(fn ($accountNumber) => normalizeImportCellValue((string) $accountNumber) !== '')
+        ->unique()
+        ->sort(SORT_NATURAL | SORT_FLAG_CASE)
+        ->values()
+        ->all();
 }
 
 function getContractLoanScheduleBankAccountValidationErrors(int $companyId, array $row): array

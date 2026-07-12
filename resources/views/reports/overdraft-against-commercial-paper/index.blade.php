@@ -85,7 +85,8 @@
                                         <span style="overflow: visible; position: relative; width: 110px;">
 										@if(hasAuthFor('update overdraft against commercial paper'))
                                             <a type="button" class="btn btn-secondary btn-outline-hover-brand btn-icon" title="Edit" href="{{ route('edit.overdraft.against.commercial.paper',['company'=>$company->id,'financialInstitution'=>$financialInstitution->id,'overdraftAgainstCommercialPaper'=>$overdraftAgainstCommercialPaper->id]) }}"><i class="fa fa-pen-alt"></i></a>
-											@endif 
+											@endif
+                                            @include('components.bank-account-lock-button', ['bankAccount' => $overdraftAgainstCommercialPaper, 'company' => $company])
 											@if(hasAuthFor('delete overdraft against commercial paper'))
                                             <a data-toggle="modal" data-target="#delete-financial-institution-bank-id-{{ $overdraftAgainstCommercialPaper->id }}" type="button" class="btn btn-secondary btn-outline-hover-danger btn-icon" title="Delete" href="#"><i class="fa fa-trash-alt"></i></a>
                                             <div class="modal fade" id="delete-financial-institution-bank-id-{{ $overdraftAgainstCommercialPaper->id }}" tabindex="-1" role="dialog" aria-labelledby="exampleModalCenterTitle" aria-hidden="true">

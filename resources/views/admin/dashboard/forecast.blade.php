@@ -522,7 +522,7 @@
  								<div class="col-md-8 mb-3">
                                     <select name="financial_institution_id" data-currency="{{ $currency }}" js-refresh-medium-term-loan-chart class="form-control financial-instutiton-js">
 									<option value="0"> {{ __('All') }} </option>
-                                        @foreach(\App\Models\FinancialInstitution::onlyCompany($company->id)->onlyHasMediumTermLoans($currency)->get() as $financialInstitutionsThatHaveMediumTermLoan)
+                                        @foreach(($financialInstitutionsByCurrency[$currency] ?? collect()) as $financialInstitutionsThatHaveMediumTermLoan)
                                         <option value="{{ $financialInstitutionsThatHaveMediumTermLoan->id }}">{{ $financialInstitutionsThatHaveMediumTermLoan->getName() }}</option>
                                         @endforeach
                                     </select>
@@ -575,10 +575,63 @@
 @section('js')
 <script src="{{ url('assets/js/demo1/pages/crud/datatables/basic/paginations.js') }}" type="text/javascript"></script>
 <script src="{{ url('assets/vendors/custom/datatables/datatables.bundle.js') }}" type="text/javascript"></script>
-<!-- Resources -->
-<script src="https://cdn.amcharts.com/lib/4/core.js"></script>
-<script src="https://cdn.amcharts.com/lib/4/charts.js"></script>
-<script src="https://cdn.amcharts.com/lib/4/themes/animated.js"></script>
+<!-- Resources: loaded asynchronously so amCharts never blocks HTML parsing/paint -->
+<script>
+    (function () {
+        window.__forecastChartQueue = [];
+        window.__amChartsReady = false;
+        // Chart data that arrives (via ajax) before its chart sprite has been
+        // created yet (since amCharts now loads/initializes asynchronously).
+        window.__forecastPendingChartData = window.__forecastPendingChartData || {};
+
+        // Chart-creation blocks below call this instead of am4core.ready() so
+        // (a) they never block on the CDN fetch and (b) creation is staggered
+        // across idle time-slices instead of all running on one tick.
+        window.queueForecastChart = function (fn) {
+            window.__forecastChartQueue.push(fn);
+            if (window.__amChartsReady) {
+                processForecastChartQueue();
+            }
+        };
+
+        function runOne(fn) {
+            try {
+                fn();
+            } catch (e) {
+                console.error('Forecast chart init failed', e);
+            }
+        }
+
+        function processForecastChartQueue() {
+            var queue = window.__forecastChartQueue;
+            window.__forecastChartQueue = [];
+            queue.forEach(function (fn, index) {
+                if (window.requestIdleCallback) {
+                    window.requestIdleCallback(function () { runOne(fn); }, { timeout: 2000 });
+                } else {
+                    setTimeout(function () { runOne(fn); }, index * 30);
+                }
+            });
+        }
+
+        function loadScript(src, cb) {
+            var s = document.createElement('script');
+            s.src = src;
+            s.onload = cb;
+            s.onerror = cb;
+            document.head.appendChild(s);
+        }
+
+        loadScript('https://cdn.amcharts.com/lib/4/core.js', function () {
+            loadScript('https://cdn.amcharts.com/lib/4/charts.js', function () {
+                loadScript('https://cdn.amcharts.com/lib/4/themes/animated.js', function () {
+                    window.__amChartsReady = true;
+                    processForecastChartQueue();
+                });
+            });
+        });
+    })();
+</script>
 
 <script>
     var ammount_array = [{
@@ -724,7 +777,7 @@
 @foreach($invoiceTypesModels as $modelType)
 <!-- Chart code -->
 <script>
-    am4core.ready(function() {
+    queueForecastChart(function() {
         am4core.useTheme(am4themes_animated);
         var chart = am4core.create("chartdiv__{{ $modelType.$currency }}", am4charts.XYChart);
 
@@ -840,7 +893,7 @@
 </script>
 
 <script>
-    am4core.ready(function() {
+    queueForecastChart(function() {
 
         // Themes begin
         am4core.useTheme(am4themes_animated);
@@ -918,7 +971,7 @@
 
 
 <script>
-    am4core.ready(function() {
+    queueForecastChart(function() {
 
         // Themes begin
         am4core.useTheme(am4themes_animated);
@@ -928,7 +981,7 @@
         var chart = am4core.create("chartdivline1{{ $currency }}", am4charts.XYChart);
 
         // Add data
-        chart.data =  @json($cashFlowReport['accumulated_net_cash'] ?? []);;
+        chart.data =  @json($cashFlowReport[$currency]['accumulated_net_cash'] ?? []);;
 
         // Set input format for the dates
         chart.dateFormatter.inputDateFormat = "yyyy-MM-dd";
@@ -991,7 +1044,7 @@
 
 
 <script>
-    am4core.ready(function() {
+    queueForecastChart(function() {
 
         // Themes begin
         am4core.useTheme(am4themes_animated);
@@ -1000,8 +1053,8 @@
         // Create chart instance
         var chart = am4core.create("withdrawal-dues-chart-{{ $currency }}", am4charts.XYChart);
 
-        // Add data
-        chart.data = [];
+        // Add data (may already have arrived via ajax before this chart existed)
+        chart.data = window.__forecastPendingChartData["withdrawal-dues-chart-{{ $currency }}"] || [];
 
         // Set input format for the dates
         chart.dateFormatter.inputDateFormat = "yyyy-MM-dd";
@@ -1063,7 +1116,7 @@
 
 
 <script>
-    am4core.ready(function() {
+    queueForecastChart(function() {
 
         // Themes begin
         am4core.useTheme(am4themes_animated);
@@ -1072,8 +1125,8 @@
         // Create chart instance
         var chart = am4core.create("loan-chart-{{ $currency }}", am4charts.XYChart);
 
-        // Add data
-        chart.data = [];
+        // Add data (may already have arrived via ajax before this chart existed)
+        chart.data = window.__forecastPendingChartData["loan-chart-{{ $currency }}"] || [];
 
         // Set input format for the dates
         chart.dateFormatter.inputDateFormat = "yyyy-MM-dd";
@@ -1138,7 +1191,7 @@
 									
 
 <script>
-    am4core.ready(function() {
+    queueForecastChart(function() {
 
         // Themes begin
         am4core.useTheme(am4themes_animated);
@@ -1152,7 +1205,7 @@
         // Increase contrast by taking evey second color
         chart.colors.step = 2;
         // Add data
-        chart.data = @json($cashFlowReport['total_cash_in_out_flow'] ?? []);
+        chart.data = @json($cashFlowReport[$currency]['total_cash_in_out_flow'] ?? []);
 		
 
         // Create axes
@@ -1267,9 +1320,12 @@
                     })
                 }
                 $('#append-withdrawal-due-' + currencyName).empty().append(trs)
-				if(chartData.length){
-                am4core.registry.baseSprites.find(c => c.htmlContainer.id === currentChartId).data = chartData
-					
+				window.__forecastPendingChartData[currentChartId] = chartData;
+				if (window.am4core) {
+					var sprite = am4core.registry.baseSprites.find(function (c) { return c.htmlContainer.id === currentChartId; });
+					if (sprite) {
+						sprite.data = chartData;
+					}
 				}
             }
         })
@@ -1310,9 +1366,12 @@
                     })
                 }
                 $('#append-loan-' + currencyName).empty().append(trs)
-                const chartSprite = am4core.registry.baseSprites.find(c => c.htmlContainer.id === currentChartId)
-                if (chartSprite) {
-                    chartSprite.data = chartData
+                window.__forecastPendingChartData[currentChartId] = chartData;
+                if (window.am4core) {
+                    const chartSprite = am4core.registry.baseSprites.find(c => c.htmlContainer.id === currentChartId)
+                    if (chartSprite) {
+                        chartSprite.data = chartData
+                    }
                 }
             }
         })

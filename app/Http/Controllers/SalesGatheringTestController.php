@@ -374,18 +374,21 @@ class SalesGatheringTestController extends Controller
 								$tableDataArr['supplier_name'] = $supplierName ; 
 							SupplierInvoice::create($tableDataArr);
 					}
-					
-					
-		foreach((array)$request->get('tableIds') as $tableId){
-			foreach((array)$request->get($tableId) as  $tableDataArr){
-					$tableDataArr['company_id']  = $companyId ;
-					$tableDataArr = $this->removeCommaFromNumbers($tableDataArr);
 
-					if ($modelName === 'ContractLoanSchedule') {
-						$tableDataArr = $this->prepareContractLoanScheduleRowForStorage($companyId, $tableDataArr, $request);
-					}
+		if ($modelName === 'ContractLoanSchedule') {
+			$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','company_id','leasing_contract_id','loanId']);
+			$tableDataArr['company_id'] = $companyId;
+			$tableDataArr = $this->removeCommaFromNumbers($tableDataArr);
+			$tableDataArr = $this->prepareContractLoanScheduleRowForStorage($companyId, $tableDataArr, $request);
+			$model->create($tableDataArr);
+		} else {
+			foreach((array)$request->get('tableIds') as $tableId){
+				foreach((array)$request->get($tableId) as  $tableDataArr){
+						$tableDataArr['company_id']  = $companyId ;
+						$tableDataArr = $this->removeCommaFromNumbers($tableDataArr);
 
-					$modelItem=$model->create($tableDataArr);
+						$modelItem=$model->create($tableDataArr);
+				}
 			}
 		}
 
@@ -474,16 +477,20 @@ class SalesGatheringTestController extends Controller
 					
 					
 					
-		foreach((array)$request->get('tableIds') as $tableId){
-		
-			foreach((array)$request->get($tableId) as  $tableDataArr){
-					$tableDataArr['company_id']  = $companyId ;
-
-					if ($modelName === 'ContractLoanSchedule') {
-						$tableDataArr = $this->prepareContractLoanScheduleRowForStorage($companyId, $tableDataArr, $request);
-					}
-					
-					$model->update($tableDataArr);
+		if ($modelName === 'ContractLoanSchedule') {
+			$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','company_id','leasing_contract_id','loanId']);
+			$tableDataArr['company_id'] = $companyId;
+			$tableDataArr = $this->removeCommaFromNumbers($tableDataArr);
+			$tableDataArr = $this->prepareContractLoanScheduleRowForStorage($companyId, $tableDataArr, $request);
+			$model->update($tableDataArr);
+		} else {
+			foreach((array)$request->get('tableIds') as $tableId){
+			
+				foreach((array)$request->get($tableId) as  $tableDataArr){
+						$tableDataArr['company_id']  = $companyId ;
+						
+						$model->update($tableDataArr);
+				}
 			}
 		}
 		if($partnerId = $request->get('customer_id')){

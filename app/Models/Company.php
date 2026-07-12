@@ -876,7 +876,11 @@ class Company extends Model implements HasMedia
 			// 'payableCheque.accountType',
 		])
 		// ->with(['payableCheque.deliveryBank', 'payableCheque.accountType', 'partner'])
-        ->orderByDesc('delivery_date');
+        ->orderBy(
+			PayableCheque::select('due_date')
+				->whereColumn('payable_cheques.money_payment_id', 'money_payments.id')
+				->limit(1)
+		);
 }
 
     
@@ -1063,7 +1067,11 @@ class Company extends Model implements HasMedia
 		})
 		
 		->filterByReceivingDate($startDate, $endDate)
-		->orderByDesc('receiving_date')
+		->orderBy(
+			Cheque::select('due_date')
+				->whereColumn('cheques.money_received_id', 'money_received.id')
+				->limit(1)
+		)
 		->with([
 			'partner:id,name',
 			'cheque.draweeBank:id,name_en,name_ar',
@@ -1138,7 +1146,11 @@ class Company extends Model implements HasMedia
 			});
 		})
 		->filterByReceivingDate($startDate, $endDate)
-		->orderByDesc('receiving_date')
+		->orderBy(
+			Cheque::select('due_date')
+				->whereColumn('cheques.money_received_id', 'money_received.id')
+				->limit(1)
+		)
 		->with(['partner:id,name', 'cheque.draweeBank:id,name_en,name_ar', 'cheque.accountType:id,name_en,name_ar', 'cheque.moneyReceived:id,receiving_date']);
     }
     
@@ -1193,7 +1205,11 @@ class Company extends Model implements HasMedia
 			});
 			
 		})
-		->orderByDesc('receiving_date')
+		->orderBy(
+			Cheque::select('due_date')
+				->whereColumn('cheques.money_received_id', 'money_received.id')
+				->limit(1)
+		)
 		->with(['partner:id,name', 'cheque.draweeBank:id,name_en,name_ar', 'cheque.accountType:id,name_en,name_ar', 'cheque.moneyReceived:id,receiving_date']);
     }
     
@@ -1243,7 +1259,11 @@ class Company extends Model implements HasMedia
 			});
 		})
 		->filterByReceivingDate($startDate, $endDate)
-		->orderByDesc('receiving_date')
+		->orderBy(
+			Cheque::select('due_date')
+				->whereColumn('cheques.money_received_id', 'money_received.id')
+				->limit(1)
+		)
             ->with(['partner:id,name', 'cheque.draweeBank:id,name_en,name_ar', 'cheque.accountType:id,name_en,name_ar', 'cheque.moneyReceived:id,receiving_date']);
 			
 			// ->filter(function (MoneyReceived $moneyReceived) {
@@ -1433,7 +1453,7 @@ class Company extends Model implements HasMedia
 		/**
 		 * @var User $user
 		 */
-        return $this->hasOdooCredentials() && $user->getOdooDBUserName() && $user->getOdooDBPassword();
+        return $this->hasOdooCredentials() && $user && $user->getOdooDBUserName() && $user->getOdooDBPassword();
     }
     
     public function lastUploadFileNames()

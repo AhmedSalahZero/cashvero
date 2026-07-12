@@ -7,6 +7,7 @@ use App\Http\Requests\StoreFinancialInstitutionRequest;
 use App\Models\Bank;
 use App\Models\Branch;
 use App\Models\CertificatesOfDeposit;
+use App\Models\AccountType;
 use App\Models\Company;
 use App\Models\FinancialInstitution;
 use App\Models\LetterOfCreditFacility;
@@ -261,6 +262,15 @@ class FinancialInstitutionController
 			'financialInstitution'=>$financialInstitution,
 			'company'=>$company,
 			'filterDate'=>now()->format('Y-m-d'),
+			'accountTypesByModel'=>AccountType::whereIn('model_name', [
+				'FinancialInstitutionAccount',
+				'CleanOverdraft',
+				'FullySecuredOverdraft',
+				'OverdraftAgainstCommercialPaper',
+				'OverdraftAgainstAssignmentOfContract',
+				'CertificatesOfDeposit',
+				'TimeOfDeposit',
+			])->pluck('id', 'model_name'),
 		]);
 	}
 

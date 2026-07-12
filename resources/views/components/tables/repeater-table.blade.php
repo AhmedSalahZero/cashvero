@@ -278,11 +278,7 @@ $canAddNewItem = true;
                 dateFormat: 'yy-mm-dd'
                 , autoclose: true
             })
-			if(!isNonBanking){
 				$(this).find('input:not(.exclude-from-trigger-change-when-repeat):not([type="hidden"])').trigger('change');
-			}else{
-			$(this).find('.input-hidden-parent input:not([type="hidden"])').val(0);
-			}
 			const triggerInputChangeWhenAddNew = +"{{ $triggerInputChangeWhenAddNew }}"
 			if(triggerInputChangeWhenAddNew){
 				$(this).find('input:not([type="hidden"])').trigger('change')
@@ -290,8 +286,26 @@ $canAddNewItem = true;
 			
 			
             //$('input.equity-funding-formatted-value-class').trigger('change');
+            // The repeater template is cloned from the first row *after* bootstrap-select
+            // already wrapped the <select> inside a generated ".bootstrap-select" element.
+            // jQuery.clone() copies that dead markup but not the plugin instance, so we must
+            // unwrap it back to a clean <select> before re-initializing, otherwise the new
+            // row renders a broken nested widget ("Nothing selected").
+            $(this).find('.bootstrap-select').each(function () {
+                var $wrapper = $(this);
+                var $select = $wrapper.find('select').first();
+                if ($select.length) {
+                    $select.removeClass('bs-select-hidden').removeData('selectpicker');
+                    $wrapper.replaceWith($select);
+                } else {
+                    $wrapper.remove();
+                }
+            });
             $(this).find('.dropdown-toggle').remove();
-            $(this).find('select.repeater-select').selectpicker("refresh");
+            $(this).find('select.repeater-select, select.select2-select').each(function () {
+                $(this).removeData('selectpicker');
+                $(this).selectpicker();
+            });
             appendNewOptionsToAllSelects(this)
             initMultiselect($(this));
 

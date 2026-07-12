@@ -21,7 +21,8 @@
     </style>
 @endsection
 @section('sub-header')
-    {{ camelToTitle($modelName) }} — {{ __('Edit Row') }}
+    @php $modelDisplayName = $modelName === 'ContractLoanSchedule' ? __('Contract Leasing Schedule') : camelToTitle($modelName); @endphp
+    {{ $modelDisplayName }} — {{ __('Edit Row') }}
 @endsection
 @section('content')
 <div class="money-flow-dark">
@@ -31,7 +32,7 @@
             <div class="kt-portlet__head">
                 <div class="kt-portlet__head-label">
                     <h3 class="kt-portlet__head-title head-title text-primary">
-                        {{ camelToTitle($modelName) }} — {{ __('Edit Row') }}
+                        {{ $modelDisplayName }} — {{ __('Edit Row') }}
                     </h3>
                 </div>
             </div>
