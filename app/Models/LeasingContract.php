@@ -179,4 +179,69 @@ class LeasingContract extends Model
     {
         return number_format($this->getLimit());
     }
+
+    public function getLoanOutstanding()
+    {
+        return $this->outstanding_amount ?: 0;
+    }
+
+    public function getLoanOutstandingFormatted()
+    {
+        return number_format($this->getLoanOutstanding());
+    }
+
+    public function getNextInstallmentDateAndAmount(string $date): array
+    {
+        $schedules = $this->relationLoaded('contractLoanSchedules')
+            ? $this->contractLoanSchedules
+            : $this->contractLoanSchedules()->get();
+
+        $nextInstallment = $schedules
+            ->filter(fn ($schedule) => $schedule->date >= $date)
+            ->sortBy('date')
+            ->first();
+
+        return [
+            'amount_formatted' => $nextInstallment ? $nextInstallment->getSchedulePaymentFormatted() : 0,
+            'date_formatted' => $nextInstallment ? $nextInstallment->getDateFormatted() : null,
+        ];
+    }
+
+    public function getTotalPastDueRemaining()
+    {
+        $pastDueItems = $this->getLoanPastDuesDetailsArray();
+
+        return array_sum(array_column($pastDueItems, 'remaining'));
+    }
+
+    public function getTotalPastDueRemainingFormatted()
+    {
+        return number_format($this->getTotalPastDueRemaining());
+    }
+
+    public function getLoanPastDuesDetailsArray(): array
+    {
+        $mapSchedule = function ($schedule) {
+            return [
+                'date' => $schedule->date,
+                'schedule_payment' => $schedule->cheque_amount,
+                'remaining' => $schedule->remaining,
+            ];
+        };
+
+        if ($this->relationLoaded('contractLoanSchedules')) {
+            return $this->contractLoanSchedules
+                ->whereIn('status', ['past_due', 'partially_paid_and_past_due'])
+                ->map($mapSchedule)
+                ->values()
+                ->all();
+        }
+
+        return $this->contractLoanSchedules()
+            ->whereIn('status', ['past_due', 'partially_paid_and_past_due'])
+            ->get(['date', 'cheque_amount', 'remaining'])
+            ->map($mapSchedule)
+            ->values()
+            ->all();
+    }
 }

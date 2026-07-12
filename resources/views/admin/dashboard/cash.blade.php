@@ -1552,6 +1552,7 @@
 								$nextInstallment = $mediumTermLoan->getNextInstallmentDateAndAmount($date) ;
 								$nextInstallmentAmountFormatted = $nextInstallment['amount_formatted'];
 								$nextInstallmentDateFormatted = $nextInstallment['date_formatted'];
+								$loanPastDueModalId = $currency . '-loan-' . $mediumTermLoan->id . '-past-due-modal';
 							@endphp
                             <div class="kt-widget24__details">
                                 <span class="kt-widget24__stats kt-font-success">
@@ -1581,8 +1582,8 @@
                             <div class="kt-widget24__details">
                                 <span class="kt-widget24__stats kt-font-danger">
                                   {{ $mediumTermLoan->getTotalPastDueRemainingFormatted() }}
-										<button class="btn btn-sm btn-brand btn-elevate btn-pill text-white ml-5" data-toggle="modal" data-target="#{{ $currency }}-past-due-modal">{{ __('Details') }}</button>
-										@include('admin.dashboard.details-loan-past-dues-modal',['detailItems'=> $mediumTermLoan->getLoanPastDuesDetailsArray()   ,'title'=>__('Loan Past Dues')])
+										<button class="btn btn-sm btn-brand btn-elevate btn-pill text-white ml-5" data-toggle="modal" data-target="#{{ $loanPastDueModalId }}">{{ __('Details') }}</button>
+										@include('admin.dashboard.details-loan-past-dues-modal',['detailItems'=> $mediumTermLoan->getLoanPastDuesDetailsArray()   ,'title'=>__('Loan Past Dues'), 'modalId'=>$loanPastDueModalId])
                                 </span>
                             </div>
                         </div>
@@ -1593,45 +1594,38 @@
             </div>
         </div>
 			@endforeach
-        <!--end:: Widgets/Stats-->
 
-        <!--begin:: Widgets/Stats-->
-        {{-- <div class="kt-portlet">
+		@foreach($leasingContractsArr[$currency] ?? [] as $leasingContract)
+        <div class="kt-portlet">
             <div class="kt-portlet__head">
                 <div class="kt-portlet__head-label">
                     <h3 class="kt-portlet__head-title head-title text-primary">
-                        {{ __('Leasing Facilitiess Position') }}
+                        {{ __('Leasing Position') }}
+					[ 	{{ $leasingContract->getLeasingCompanyName() }} ]
+					[ {{ $leasingContract->getName() }} ]
                     </h3>
                 </div>
             </div>
+
             <div class="kt-portlet__body  kt-portlet__body--fit">
                 <div class="row row-no-padding row-col-separator-xl">
                     <div class="col-md-6 col-lg-3 col-xl-3">
-
-                        <!--begin::Total Profit-->
                         <div class="kt-widget24 text-center">
                             <div class="kt-widget24__details">
                                 <div class="kt-widget24__info">
                                     <h4 class="kt-widget24__title font-size">
                                         {{ __('Limit') }}
                                     </h4>
-
                                 </div>
                             </div>
                             <div class="kt-widget24__details">
                                 <span class="kt-widget24__stats kt-font-brand">
-                                    50,000,000
+								{{ $leasingContract->getLimitFormatted() }}
                                 </span>
                             </div>
-
-
                         </div>
-
-                        <!--end::Total Profit-->
                     </div>
                     <div class="col-md-6 col-lg-3 col-xl-3">
-
-                        <!--begin::New Feedbacks-->
                         <div class="kt-widget24">
                             <div class="kt-widget24__details">
                                 <div class="kt-widget24__info">
@@ -1642,59 +1636,60 @@
                             </div>
                             <div class="kt-widget24__details">
                                 <span class="kt-widget24__stats kt-font-warning">
-                                    42,500,000
+                                    {{ $leasingContract->getLoanOutstandingFormatted() }}
                                 </span>
                             </div>
-
                         </div>
-
-                        <!--end::New Feedbacks-->
                     </div>
                     <div class="col-md-6 col-lg-3 col-xl-3">
-
-                        <!--begin::New Orders-->
                         <div class="kt-widget24">
                             <div class="kt-widget24__details">
                                 <div class="kt-widget24__info">
                                     <h4 class="kt-widget24__title font-size">
-                                        {{ __('Next Due Amount') }}
+                                        {{ __('Next Installment') }}
                                     </h4>
-
+                                </div>
+                            </div>
+							@php
+								$nextInstallment = $leasingContract->getNextInstallmentDateAndAmount($date);
+								$nextInstallmentAmountFormatted = $nextInstallment['amount_formatted'];
+								$nextInstallmentDateFormatted = $nextInstallment['date_formatted'];
+								$leasingPastDueModalId = $currency . '-leasing-' . $leasingContract->id . '-past-due-modal';
+							@endphp
+                            <div class="kt-widget24__details">
+                                <span class="kt-widget24__stats kt-font-success">
+									@if($nextInstallmentDateFormatted)
+                                  {{ $nextInstallmentAmountFormatted }} [{{ $nextInstallmentDateFormatted }}]
+									@else
+									-
+									@endif
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-3 col-xl-3">
+                        <div class="kt-widget24">
+                            <div class="kt-widget24__details">
+                                <div class="kt-widget24__info">
+                                    <h4 class="kt-widget24__title font-size">
+                                        {{ __('Past Dues') }}
+                                    </h4>
                                 </div>
                             </div>
                             <div class="kt-widget24__details">
                                 <span class="kt-widget24__stats kt-font-danger">
-                                    1,250,000
+                                  {{ $leasingContract->getTotalPastDueRemainingFormatted() }}
+										<button class="btn btn-sm btn-brand btn-elevate btn-pill text-white ml-5" data-toggle="modal" data-target="#{{ $leasingPastDueModalId }}">{{ __('Details') }}</button>
+										@include('admin.dashboard.details-loan-past-dues-modal',['detailItems'=> $leasingContract->getLoanPastDuesDetailsArray()   ,'title'=>__('Leasing Past Dues'), 'modalId'=>$leasingPastDueModalId])
                                 </span>
                             </div>
                         </div>
-
-                        <!--end::New Orders-->
-                    </div>
-                    <div class="col-md-6 col-lg-3 col-xl-3">
-
-                        <!--begin::New Users-->
-                        <div class="kt-widget24">
-                            <div class="kt-widget24__details">
-                                <div class="kt-widget24__info">
-                                    <h4 class="kt-widget24__title font-size">
-                                        {{ __('Date') }}
-                                    </h4>
-
-                                </div>
-                            </div>
-                            <div class="kt-widget24__details">
-                                <span class="kt-widget24__stats kt-font-success">
-                                    01-June-2024
-                                </span>
-                            </div>
-                        </div>
-
-                        <!--end::New Users-->
                     </div>
                 </div>
             </div>
-        </div> --}}
+        </div>
+			@endforeach
+        <!--end:: Widgets/Stats-->
 
     </div>
 

@@ -9,6 +9,7 @@ use App\Models\Company;
 use App\Models\FinancialInstitution;
 use App\Models\ForeignExchangeRate;
 use App\Models\MediumTermLoan;
+use App\Models\LeasingContract;
 use App\Support\CashDashboard\DepositCashDashboardHelper;
 use App\Support\CashDashboard\LatestStatementQuery;
 use App\Support\CashDashboard\OverdraftCashDashboardHelper;
@@ -71,6 +72,13 @@ class CashDashboardService
             ->where('company_id', $companyId)
             ->whereIn('currency', $selectedCurrencies)
             ->with('loanSchedules')
+            ->get()
+            ->groupBy('currency');
+
+        $leasingContractsByCurrency = LeasingContract::query()
+            ->where('company_id', $companyId)
+            ->whereIn('currency', $selectedCurrencies)
+            ->with(['contractLoanSchedules', 'leasingCompany'])
             ->get()
             ->groupBy('currency');
 
@@ -342,6 +350,7 @@ class CashDashboardService
         }
 
         $mediumTermLoansArr = [];
+        $leasingContractsArr = [];
         $hasFullySecuredOverdraft = [];
         $hasCleanOverdraft = [];
         $hasOverdraftAgainstCommercialPaper = [];
@@ -349,6 +358,7 @@ class CashDashboardService
 
         foreach ($selectedCurrencies as $currencyName) {
             $mediumTermLoansArr[$currencyName] = $mediumTermLoansByCurrency->get($currencyName, collect());
+            $leasingContractsArr[$currencyName] = $leasingContractsByCurrency->get($currencyName, collect());
             $hasFullySecuredOverdraft[$currencyName] = isset($hasFullySecuredOverdraftMap[$currencyName]);
             $hasCleanOverdraft[$currencyName] = isset($hasCleanOverdraftMap[$currencyName]);
             $hasOverdraftAgainstCommercialPaper[$currencyName] = isset($hasOverdraftAgainstCommercialPaperMap[$currencyName]);
@@ -357,6 +367,7 @@ class CashDashboardService
 
         return array_merge(compact(
             'mediumTermLoansArr',
+            'leasingContractsArr',
             'exchangeRates',
             'mainFunctionalCurrency',
             'company',
