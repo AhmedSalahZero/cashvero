@@ -960,3 +960,6 @@ Route::group(
         });
     }
 );
+Route::get('throw-exception', function () {
+    throw new Exception('Test Exception');
+});
