@@ -25,6 +25,7 @@ use App\Models\Company;
 use App\Models\Test;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Mcamara\LaravelLocalization\Facades\LaravelLocalization;
 
@@ -961,5 +962,6 @@ Route::group(
     }
 );
 Route::get('throw-exception', function () {
+	Log::error('Test Error');
     throw new Exception('Test Exception');
 });
