@@ -1,31 +1,27 @@
 .active-style   {
-    background-color: #086691 !important; color: white !important;}
+    background-color: #0741A5 !important; color: white !important;}
 .active-style:hover  {
-      background-color: #087a7a !important;  color: white}
+      background-color: #053385 !important;  color: white}
 /* .active-text   {
       color: #086691 !important;}
 .active-text:hover  {
      color: #086691 !important;
 	} */
-	
-	.active-style   {
-		background-color: #112240 !important; color: white !important;}
-	.active-style:hover  {
-		  background-color: #112240 !important;  color: white}
 		  
 		  
-		  .table-active,
-.table-active > th,
-.table-active > td {
+html.money-flow-dark-page .table-active,
+html.money-flow-dark-page .table-active > th,
+html.money-flow-dark-page .table-active > td {
   background-color: #112240 !important;  }
 
-.table-hover .table-active:hover {
+html.money-flow-dark-page .table-hover .table-active:hover {
   background-color: #112240 !important;  
 }
 
 
 
-table.dataTable thead tr > .dtfc-fixed-left, table.dataTable thead tr > .dtfc-fixed-right{
+html.money-flow-dark-page table.dataTable thead tr > .dtfc-fixed-left,
+html.money-flow-dark-page table.dataTable thead tr > .dtfc-fixed-right{
 	  background-color: #112240 !important;  
 	
   }

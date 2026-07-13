@@ -37,9 +37,11 @@ return [
     'channels' => [
         'stack' => [
             'driver' => 'stack',
-            'channels' => ['single'],
+            'channels' => ['daily','sentry_logs'],
             'ignore_exceptions' => false,
         ],
+		
+		
 
         'single' => [
             'driver' => 'single',
@@ -99,6 +101,12 @@ return [
         'emergency' => [
             'path' => storage_path('logs/laravel.log'),
         ],
+		
+		'sentry_logs' => [
+        'driver' => 'sentry_logs',
+        'level' => env('LOG_LEVEL', 'warning'),
+    ],
+	
     ],
 
 ];

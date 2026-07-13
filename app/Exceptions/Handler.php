@@ -25,11 +25,14 @@ class Handler extends ExceptionHandler
 
 	public function report(Throwable $exception)
 	{
+		if ($this->shouldReport($exception) && app()->bound('sentry')) {
+			app('sentry')->captureException($exception);
+		}
 
 		
-		if ($this->shouldReport($exception) && config('app.env') != 'local') {
-			$this->sendEmail($exception);
-		}
+		// if ($this->shouldReport($exception) && config('app.env') != 'local') {
+		// 	$this->sendEmail($exception);
+		// }
 		parent::report($exception);
 	}
 
@@ -42,22 +45,23 @@ class Handler extends ExceptionHandler
 		return [
 			'ahmedconan17@yahoo.com',
 			// 'agaber@thetailorsdev.com',
-			'mahmoud.youssef@squadbcc.com', 'asalahdev5@gmail.com'
+			// 'mahmoud.youssef@squadbcc.com',
+			 'asalahdev5@gmail.com'
 		];
 	}
-	public function sendEmail(Throwable $exception)
-	{
+	// public function sendEmail(Throwable $exception)
+	// {
 
-		try {
+	// 	try {
 
-			$e = FlattenException::create($exception);
-			$handler = new HtmlErrorRenderer(true); // boolean, true raises debug flag...
-			$content = $handler->getBody($e);
-			foreach ($this->getAccountsToSentExceptionsFor() as $mail) {
-				Mail::to($mail)->send(new SendExceptionMail($content));
-			}
-		} catch (Throwable $exception) {
-			Log::error($exception);
-		}
-	}
+	// 		$e = FlattenException::create($exception);
+	// 		$handler = new HtmlErrorRenderer(true); // boolean, true raises debug flag...
+	// 		$content = $handler->getBody($e);
+	// 		foreach ($this->getAccountsToSentExceptionsFor() as $mail) {
+	// 			Mail::to($mail)->send(new SendExceptionMail($content));
+	// 		}
+	// 	} catch (Throwable $exception) {
+	// 		Log::error($exception);
+	// 	}
+	// }
 }

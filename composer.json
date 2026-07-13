@@ -19,6 +19,7 @@
         "mcamara/laravel-localization": "^2.0",
         "php-ai/php-ml": "^0.10.0",
         "picqer/php-barcode-generator": "*",
+        "sentry/sentry-laravel": "^4.26",
         "simplesoftwareio/simple-qrcode": "*",
         "spatie/laravel-medialibrary": "^11.0",
         "spatie/laravel-permission": "^6.0",

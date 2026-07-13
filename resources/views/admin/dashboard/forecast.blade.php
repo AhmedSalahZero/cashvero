@@ -730,13 +730,16 @@
     }];
 
 </script>
-{{-- AmCharts 4: light axis/legend/tooltip text on dark dashboard --}}
+{{-- AmCharts: theme-aware axis/legend/tooltip colors --}}
 <script>
     window.applyForecastChartDarkTheme = function (chart, opts) {
         opts = opts || {};
-        var text = am4core.color(opts.labelColor || '#ffffff');
-        var grid = am4core.color(opts.gridColor || 'rgba(255, 255, 255, 0.12)');
+        var isDark = document.documentElement.classList.contains('money-flow-dark-page');
+        var text = am4core.color(opts.labelColor || (isDark ? '#ffffff' : '#475569'));
+        var grid = am4core.color(opts.gridColor || (isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(15, 23, 42, 0.12)'));
         var keepYLabelColors = opts.keepYAxisLabelColors === true;
+        var tooltipBg = am4core.color(isDark ? '#1e293b' : '#ffffff');
+        var tooltipStroke = am4core.color(isDark ? '#475569' : '#cbd5e1');
         chart.xAxes.each(function (axis) {
             axis.renderer.labels.template.fill = text;
             axis.renderer.grid.template.stroke = grid;
@@ -761,8 +764,8 @@
                 return;
             }
             series.tooltip.getFillFromObject = false;
-            series.tooltip.background.fill = am4core.color('#1e293b');
-            series.tooltip.background.stroke = am4core.color('#475569');
+            series.tooltip.background.fill = tooltipBg;
+            series.tooltip.background.stroke = tooltipStroke;
             series.tooltip.label.fill = text;
         });
         if (chart.cursor) {

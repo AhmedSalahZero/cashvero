@@ -996,10 +996,10 @@
         .btn.dropdown-toggle {
             height: 100%;
         }
-table.dataTable tbody tr>.dtfc-fixed-left, table.dataTable tbody tr>.dtfc-fixed-right{
+html.money-flow-dark-page table.dataTable tbody tr>.dtfc-fixed-left, html.money-flow-dark-page table.dataTable tbody tr>.dtfc-fixed-right{
 	background-color: #112240 !important;
 }
-.kt-header-menu .kt-menu__nav > .kt-menu__item .kt-menu__submenu{
+html.money-flow-dark-page .kt-header-menu .kt-menu__nav > .kt-menu__item .kt-menu__submenu{
 	background-color: #112240 !important;
 }
         #DataTables_Table_1_info,

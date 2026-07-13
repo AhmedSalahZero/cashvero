@@ -1,6 +1,5 @@
 #!/bin/bash
 set -e
-
 echo ">>> Maintenance mode ON"
 /usr/local/bin/ea-php84 artisan down
 
@@ -11,6 +10,9 @@ echo ">>> Pulling latest code"
 git status
 git stash
 git pull origin master
+
+echo ">>> Syncing env (excluding protected keys)"
+bash sync-env.sh
 
 echo ">>> Installing dependencies"
 /usr/local/bin/ea-php84 $(which composer) install --no-interaction --prefer-dist --optimize-autoloader

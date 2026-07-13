@@ -128,6 +128,18 @@
       0 => 'Flasher\\Toastr\\Laravel\\FlasherToastrServiceProvider',
     ),
   ),
+  'sentry/sentry-laravel' => 
+  array (
+    'aliases' => 
+    array (
+      'Sentry' => 'Sentry\\Laravel\\Facade',
+    ),
+    'providers' => 
+    array (
+      0 => 'Sentry\\Laravel\\ServiceProvider',
+      1 => 'Sentry\\Laravel\\Tracing\\ServiceProvider',
+    ),
+  ),
   'simplesoftwareio/simple-qrcode' => 
   array (
     'aliases' => 

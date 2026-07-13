@@ -24,8 +24,12 @@
         border-bottom: 1.5px solid #CCE2FD !important;
     }
 
-    .kt-widget24__title {
+    html.money-flow-dark-page .kt-widget24__title {
         color: white !important;
+    }
+
+    html.money-flow-dark-page .cash-facility-label {
+        color: #fff !important;
     }
 
 </style>
@@ -402,7 +406,7 @@
                                         <div class="kt-iconbox__body">
                                             <div class="kt-iconbox__desc">
                                                 <h3 class="kt-iconbox__title">
-                                                    <a class="kt-link text-white" onclick="return false" href="#">{{ __('Limit') }}</a>
+                                                    <a class="kt-link cash-facility-label" onclick="return false" href="#">{{ __('Limit') }}</a>
                                                 </h3>
                                                 <div class="kt-iconbox__content text-primary  ">
                                                     <h4>{{ number_format($totalCard[$currency]['limit'] ?? 0,0) }}</h4>
@@ -418,7 +422,7 @@
                                         <div class="kt-iconbox__body">
                                             <div class="kt-iconbox__desc">
                                                 <h3 class="kt-iconbox__title">
-                                                    <a class="kt-link text-white" onclick="return false" href="#">{{ __('Outstanding') }}</a>
+                                                    <a class="kt-link cash-facility-label" onclick="return false" href="#">{{ __('Outstanding') }}</a>
                                                 </h3>
                                                 <div class="kt-iconbox__content text-primary  ">
                                                     <h4> {{ number_format($totalCard[$currency]['outstanding']??0,0) }} </h4>
@@ -436,7 +440,7 @@
                                         <div class="kt-iconbox__body">
                                             <div class="kt-iconbox__desc">
                                                 <h3 class="kt-iconbox__title">
-                                                    <a class="kt-link text-white" onclick="return false" href="#">{{ __('Available') }}</a>
+                                                    <a class="kt-link cash-facility-label" onclick="return false" href="#">{{ __('Available') }}</a>
                                                 </h3>
                                                 <div class="kt-iconbox__content text-primary  ">
                                                     <h4>{{ number_format($totalCard[$currency]['room']??0,0) }}</h4>
@@ -454,7 +458,7 @@
                                         <div class="kt-iconbox__body">
                                             <div class="kt-iconbox__desc">
                                                 <h3 class="kt-iconbox__title">
-                                                    <a class="kt-link text-white" onclick="return false" href="#">{{ __('Interest') }}</a>
+                                                    <a class="kt-link cash-facility-label" onclick="return false" href="#">{{ __('Interest') }}</a>
                                                 </h3>
                                                 <div class="kt-iconbox__content text-primary  ">
                                                     <h4>{{ number_format($totalCard[$currency]['interest_amount']??0,0) }}</h4>
@@ -491,7 +495,7 @@
                                         <div class="kt-iconbox__body">
                                             <div class="kt-iconbox__desc">
                                                 <h3 class="kt-iconbox__title">
-                                                    <a class="kt-link text-white" onclick="return false" href="#">{{ __('Limit') }}</a>
+                                                    <a class="kt-link cash-facility-label" onclick="return false" href="#">{{ __('Limit') }}</a>
                                                 </h3>
                                                 <div class="kt-iconbox__content text-primary  ">
                                                     <h4>{{ number_format($fullySecuredOverdraftCardData[$currency]['limit'] ?? 0,0) }}</h4>
@@ -507,7 +511,7 @@
                                         <div class="kt-iconbox__body">
                                             <div class="kt-iconbox__desc">
                                                 <h3 class="kt-iconbox__title">
-                                                    <a class="kt-link text-white" onclick="return false" href="#">{{ __('Outstanding') }}</a>
+                                                    <a class="kt-link cash-facility-label" onclick="return false" href="#">{{ __('Outstanding') }}</a>
                                                 </h3>
                                                 <div class="kt-iconbox__content text-primary  ">
                                                     <h4> {{ number_format($fullySecuredOverdraftCardData[$currency]['outstanding']??0,0) }} </h4>
@@ -525,7 +529,7 @@
                                         <div class="kt-iconbox__body">
                                             <div class="kt-iconbox__desc">
                                                 <h3 class="kt-iconbox__title">
-                                                    <a class="kt-link text-white" onclick="return false" href="#">{{ __('Available') }}</a>
+                                                    <a class="kt-link cash-facility-label" onclick="return false" href="#">{{ __('Available') }}</a>
                                                 </h3>
                                                 <div class="kt-iconbox__content text-primary  ">
                                                     <h4>{{ number_format($fullySecuredOverdraftCardData[$currency]['room']??0,0) }}</h4>
@@ -541,7 +545,7 @@
                                         <div class="kt-iconbox__body">
                                             <div class="kt-iconbox__desc">
                                                 <h3 class="kt-iconbox__title">
-                                                    <a class="kt-link text-white" onclick="return false" href="#">{{ __('Interest') }}</a>
+                                                    <a class="kt-link cash-facility-label" onclick="return false" href="#">{{ __('Interest') }}</a>
                                                 </h3>
                                                 <div class="kt-iconbox__content text-primary  ">
                                                     <h4>{{ number_format($fullySecuredOverdraftCardData[$currency]['interest_amount']??0,0) }}</h4>
@@ -742,7 +746,7 @@
                                         <div class="kt-iconbox__body">
                                             <div class="kt-iconbox__desc">
                                                 <h3 class="kt-iconbox__title">
-                                                    <a class="kt-link text-white" onclick="return false" href="#">{{ __('Limit') }}</a>
+                                                    <a class="kt-link cash-facility-label" onclick="return false" href="#">{{ __('Limit') }}</a>
                                                 </h3>
                                                 <div class="kt-iconbox__content text-primary  ">
                                                     <h4>{{ number_format($cleanOverdraftCardData[$currency]['limit'] ?? 0,0) }}</h4>
@@ -758,7 +762,7 @@
                                         <div class="kt-iconbox__body">
                                             <div class="kt-iconbox__desc">
                                                 <h3 class="kt-iconbox__title">
-                                                    <a class="kt-link text-white" onclick="return false" href="#">{{ __('Outstanding') }}</a>
+                                                    <a class="kt-link cash-facility-label" onclick="return false" href="#">{{ __('Outstanding') }}</a>
                                                 </h3>
                                                 <div class="kt-iconbox__content text-primary  ">
                                                     <h4> {{ number_format($cleanOverdraftCardData[$currency]['outstanding']??0,0) }} </h4>
@@ -776,7 +780,7 @@
                                         <div class="kt-iconbox__body">
                                             <div class="kt-iconbox__desc">
                                                 <h3 class="kt-iconbox__title">
-                                                    <a class="kt-link text-white" onclick="return false" href="#">{{ __('Available') }}</a>
+                                                    <a class="kt-link cash-facility-label" onclick="return false" href="#">{{ __('Available') }}</a>
                                                 </h3>
                                                 <div class="kt-iconbox__content text-primary  ">
                                                     <h4>{{ number_format($cleanOverdraftCardData[$currency]['room']??0,0) }}</h4>
@@ -792,7 +796,7 @@
                                         <div class="kt-iconbox__body">
                                             <div class="kt-iconbox__desc">
                                                 <h3 class="kt-iconbox__title">
-                                                    <a class="kt-link text-white" onclick="return false" href="#">{{ __('Interest') }}</a>
+                                                    <a class="kt-link cash-facility-label" onclick="return false" href="#">{{ __('Interest') }}</a>
                                                 </h3>
                                                 <div class="kt-iconbox__content text-primary  ">
                                                     <h4>{{ number_format($cleanOverdraftCardData[$currency]['interest_amount']??0,0) }}</h4>
@@ -991,7 +995,7 @@
                                         <div class="kt-iconbox__body">
                                             <div class="kt-iconbox__desc">
                                                 <h3 class="kt-iconbox__title">
-                                                    <a class="kt-link text-white" onclick="return false" href="#">{{ __('Limit') }}</a>
+                                                    <a class="kt-link cash-facility-label" onclick="return false" href="#">{{ __('Limit') }}</a>
                                                 </h3>
                                                 <div class="kt-iconbox__content text-primary  ">
                                                     <h4>{{ number_format($overdraftAgainstCommercialPaperCardData[$currency]['limit'] ?? 0,0) }}</h4>
@@ -1007,7 +1011,7 @@
                                         <div class="kt-iconbox__body">
                                             <div class="kt-iconbox__desc">
                                                 <h3 class="kt-iconbox__title">
-                                                    <a class="kt-link text-white" onclick="return false" href="#">{{ __('Outstanding') }}</a>
+                                                    <a class="kt-link cash-facility-label" onclick="return false" href="#">{{ __('Outstanding') }}</a>
                                                 </h3>
                                                 <div class="kt-iconbox__content text-primary  ">
                                                     <h4> {{ number_format($overdraftAgainstCommercialPaperCardData[$currency]['outstanding']??0,0) }} </h4>
@@ -1025,7 +1029,7 @@
                                         <div class="kt-iconbox__body">
                                             <div class="kt-iconbox__desc">
                                                 <h3 class="kt-iconbox__title">
-                                                    <a class="kt-link text-white" onclick="return false" href="#">{{ __('Available') }}</a>
+                                                    <a class="kt-link cash-facility-label" onclick="return false" href="#">{{ __('Available') }}</a>
                                                 </h3>
                                                 <div class="kt-iconbox__content text-primary  ">
                                                     <h4>{{ number_format($overdraftAgainstCommercialPaperCardData[$currency]['room']??0,0) }}</h4>
@@ -1041,7 +1045,7 @@
                                         <div class="kt-iconbox__body">
                                             <div class="kt-iconbox__desc">
                                                 <h3 class="kt-iconbox__title">
-                                                    <a class="kt-link text-white" onclick="return false" href="#">{{ __('Interest') }}</a>
+                                                    <a class="kt-link cash-facility-label" onclick="return false" href="#">{{ __('Interest') }}</a>
                                                 </h3>
                                                 <div class="kt-iconbox__content text-primary  ">
                                                     <h4>{{ number_format($overdraftAgainstCommercialPaperCardData[$currency]['interest_amount']??0,0) }}</h4>
@@ -1235,7 +1239,7 @@
                                         <div class="kt-iconbox__body">
                                             <div class="kt-iconbox__desc">
                                                 <h3 class="kt-iconbox__title">
-                                                    <a class="kt-link text-white" onclick="return false" href="#">{{ __('Limit') }}</a>
+                                                    <a class="kt-link cash-facility-label" onclick="return false" href="#">{{ __('Limit') }}</a>
                                                 </h3>
                                                 <div class="kt-iconbox__content text-primary  ">
                                                     <h4>{{ number_format($overdraftAgainstAssignmentOfContractCardData[$currency]['limit'] ?? 0,0) }}</h4>
@@ -1251,7 +1255,7 @@
                                         <div class="kt-iconbox__body">
                                             <div class="kt-iconbox__desc">
                                                 <h3 class="kt-iconbox__title">
-                                                    <a class="kt-link text-white" onclick="return false" href="#">{{ __('Outstanding') }}</a>
+                                                    <a class="kt-link cash-facility-label" onclick="return false" href="#">{{ __('Outstanding') }}</a>
                                                 </h3>
                                                 <div class="kt-iconbox__content text-primary  ">
                                                     <h4> {{ number_format($overdraftAgainstAssignmentOfContractCardData[$currency]['outstanding']??0,0) }} </h4>
@@ -1269,7 +1273,7 @@
                                         <div class="kt-iconbox__body">
                                             <div class="kt-iconbox__desc">
                                                 <h3 class="kt-iconbox__title">
-                                                    <a class="kt-link text-white" onclick="return false" href="#">{{ __('Available') }}</a>
+                                                    <a class="kt-link cash-facility-label" onclick="return false" href="#">{{ __('Available') }}</a>
                                                 </h3>
                                                 <div class="kt-iconbox__content text-primary  ">
                                                     <h4>{{ number_format($overdraftAgainstAssignmentOfContractCardData[$currency]['room']??0,0) }}</h4>
@@ -1285,7 +1289,7 @@
                                         <div class="kt-iconbox__body">
                                             <div class="kt-iconbox__desc">
                                                 <h3 class="kt-iconbox__title">
-                                                    <a class="kt-link text-white" onclick="return false" href="#">{{ __('Interest') }}</a>
+                                                    <a class="kt-link cash-facility-label" onclick="return false" href="#">{{ __('Interest') }}</a>
                                                 </h3>
                                                 <div class="kt-iconbox__content text-primary  ">
                                                     <h4>{{ number_format($overdraftAgainstAssignmentOfContractCardData[$currency]['interest_amount']??0,0) }}</h4>
