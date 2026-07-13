@@ -115,7 +115,7 @@ Route::middleware([])->group(function () {
                 Route::post('calculate-fixed-at-end-and-beginning', 'Loans2Controller@calculateFixedAtEndAndBeginning')->name('calculate.fixed.at.end.and.beginning');
                 Route::post('calculate-variable-at-end-and-beginning', 'Loans2Controller@calculateVariableAtEndAndBeginning')->name('calculate.variable.at.end.and.beginning');
             //   Route::post('save-fixed-at-end', 'SaveFixedAtEndController@__invoke')->name('save.fixed.at.end');
-               Route::post('save-loan-dates', 'SaveLoanDatesController@__invoke')->name('save.loan.dates');
+            //    Route::post('save-loan-dates', 'SaveLoanDatesController@__invoke')->name('save.loan.dates');
                 Route::get('fixed-payments-at-end', 'Loans2Controller@create')->name('fixed.loan.fixed.at.end');
                 Route::get('calculate-loan-amount', 'Loans2Controller@create')->name('calc.loan.amount');
                 Route::get('calculate-interest-rate', 'Loans2Controller@create')->name('calc.interest.percentage');

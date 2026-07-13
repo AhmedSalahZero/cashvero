@@ -25,7 +25,7 @@ class Handler extends ExceptionHandler
 
 	public function report(Throwable $exception)
 	{
-		if ($this->shouldReport($exception) && app()->bound('sentry')) {
+		if ($this->shouldReport($exception) && app()->bound('sentry') && config('app.env') != 'local') {
 			app('sentry')->captureException($exception);
 		}
 
