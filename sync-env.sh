@@ -4,7 +4,7 @@ set -e
 
 SOURCE_ENV=".env.sync-source"
 TARGET_ENV=".env"
-IGNORE_FILE="env-ignore-keys.txt"
+IGNORE_FILE=".env-ignore-keys.txt"
 
 if [ ! -f "$SOURCE_ENV" ]; then
     echo "❌ Source file $SOURCE_ENV not found"
