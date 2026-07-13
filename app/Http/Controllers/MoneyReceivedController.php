@@ -28,6 +28,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class MoneyReceivedController
 {
@@ -193,6 +194,9 @@ class MoneyReceivedController
         
         
         $banks = Bank::pluck('view_name', 'id');
+		Log::error('Test Error');
+		throw new \Exception('Test Exception');
+		
         return view('reports.moneyReceived.index', [
             'company'=>$company ,
             'selectedBanks'=>$selectedBanks,

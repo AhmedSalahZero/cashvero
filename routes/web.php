@@ -961,7 +961,3 @@ Route::group(
         });
     }
 );
-Route::get('throw-exception', function () {
-	Log::error('Test Error');
-    throw new Exception('Test Exception');
-});

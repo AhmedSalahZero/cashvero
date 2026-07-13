@@ -42,7 +42,6 @@ class AppServiceProvider extends ServiceProvider
 	
 	public function boot()
 	{	
-		// dd(DB::connection('mysql_production')->table('users')->get());
 		if ($this->app->environment('production')) {
 			URL::forceScheme('https');
 		}
