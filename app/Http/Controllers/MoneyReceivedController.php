@@ -194,8 +194,8 @@ class MoneyReceivedController
         
         
         $banks = Bank::pluck('view_name', 'id');
-		Log::error('2Test Error');
-		throw new \Exception('2Test Exception');
+		// Log::error('2Test Error');
+		// throw new \Exception('2Test Exception');
 		
         return view('reports.moneyReceived.index', [
             'company'=>$company ,
