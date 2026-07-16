@@ -1749,9 +1749,10 @@
         // Themes end
 
         // Create chart instance
+        var isDark = document.documentElement.classList.contains('money-flow-dark-page');
         var chart = am4core.create("{{ $overdraftType }}" + "chartdiv_available_room_" + "{{$currency}}", am4charts.PieChart);
-        chart.background.fill = am4core.color("#112240");
-        chart.background.fillOpacity = 1;
+        chart.background.fill = am4core.color(isDark ? "#112240" : "#ffffff");
+        chart.background.fillOpacity = isDark ? 1 : 0;
 
         // Add data
         chart.data = $('#' + "{{ $overdraftType }}" + 'total_available_room_' + "{{$currency}}").data('total');
@@ -1790,9 +1791,10 @@
         // Themes end
 
         // Create chart instance
+        var isDark = document.documentElement.classList.contains('money-flow-dark-page');
         var chart = am4core.create("{{ $overdraftType }}chartdiv_two_lines_{{$currency  }}", am4charts.XYChart);
-        chart.background.fill = am4core.color("#112240");
-        chart.background.fillOpacity = 1;
+        chart.background.fill = am4core.color(isDark ? "#112240" : "#ffffff");
+        chart.background.fillOpacity = isDark ? 1 : 0;
 
         // Increase contrast by taking evey second color
         chart.colors.step = 2;
@@ -1803,8 +1805,8 @@
         // Create axes
         var dateAxis = chart.xAxes.push(new am4charts.DateAxis());
         dateAxis.renderer.minGridDistance = 50;
-        var chartTextColor = am4core.color("#ffffff");
-        var chartGridColor = am4core.color("#475569");
+        var chartTextColor = am4core.color(isDark ? "#ffffff" : "#475569");
+        var chartGridColor = am4core.color(isDark ? "#475569" : "#cbd5e1");
         dateAxis.renderer.labels.template.fill = chartTextColor;
         dateAxis.renderer.grid.template.stroke = chartGridColor;
         dateAxis.renderer.grid.template.strokeOpacity = 0.4;

@@ -6,16 +6,6 @@ use App\Helpers\HArr;
 use App\Helpers\HHelpers;
 use App\Helpers\HStr;
 use App\Helpers\HVero;
-use App\Http\Controllers\Analysis\SalesGathering\BranchesAgainstAnalysisReport;
-use App\Http\Controllers\Analysis\SalesGathering\BusinessSectorsAgainstAnalysisReport;
-use App\Http\Controllers\Analysis\SalesGathering\CategoriesAgainstAnalysisReport;
-use App\Http\Controllers\Analysis\SalesGathering\ExpenseAgainstAnalysisReport;
-use App\Http\Controllers\Analysis\SalesGathering\ExportAgainstAnalysisReport;
-use App\Http\Controllers\Analysis\SalesGathering\ProductsAgainstAnalysisReport;
-use App\Http\Controllers\Analysis\SalesGathering\SalesChannelsAgainstAnalysisReport;
-use App\Http\Controllers\Analysis\SalesGathering\SalesPersonsAgainstAnalysisReport;
-use App\Http\Controllers\Analysis\SalesGathering\SKUsAgainstAnalysisReport;
-use App\Http\Controllers\Analysis\SalesGathering\ZoneAgainstAnalysisReport;
 use App\Http\Controllers\ExportTable;
 use App\Models\Branch;
 use App\Models\Bank;
@@ -39,7 +29,6 @@ use App\Models\QuantityProductSeasonality;
 use App\Models\QuantitySalesForecast;
 use App\Models\QuantitySecondExistingProductAllocationBase;
 use App\Models\SalesForecast;
-use App\Models\SalesGathering;
 use App\Models\SecondAllocationSetting;
 use App\Models\SecondExistingProductAllocationBase;
 use App\Models\SecondNewProductAllocationBase;
@@ -2678,8 +2667,7 @@ function getCashVeroTableNames()
         ,'supplier_invoices' ,'clean_overdrafts','customer_invoices','financial_institutions','financial_institution_accounts','fully_secured_overdrafts'
         ,'clean_overdraft_bank_statements','clean_overdraft_withdrawals',
         'notifications',
-        'current_account_bank_statements','debugging','down_payment_money_payment_settlements','down_payment_settlements','due_date_histories','fully_secured_overdraft_bank_statements','fully_secured_overdraft_withdrawals','incoming_transfers','internal_money_transfers','lc_hundred_percentage_cash_cover_opening_balances'
-, "lc_hundred_percentage_cash_cover_opening_balances"
+        'current_account_bank_statements','down_payment_money_payment_settlements','down_payment_settlements','due_date_histories','fully_secured_overdraft_bank_statements','fully_secured_overdraft_withdrawals','incoming_transfers','internal_money_transfers'
 , "lending_information"
 , "lending_information_against_assignment_of_contracts"
 , "letter_of_credit_cash_cover_statements"
@@ -2693,11 +2681,9 @@ function getCashVeroTableNames()
 , "letter_of_guarantee_issuances"
 , "letter_of_guarantee_opening_balances"
 , "letter_of_guarantee_statements"
-, "lg_against_td_or_cd_opening_balances"
-, "lg_hundred_percentage_cash_cover_opening_balances"
 , "lg_issuance_advanced_payment_histories"
 , "lg_opening_balances"
-, "loans",'opening_balances','outgoing_transfers',
+, 'opening_balances','outgoing_transfers',
 'outstanding_breakdowns','overdraft_against_assignment_of_contract_bank_statements',
 'overdraft_against_assignment_of_contract_limits','overdraft_against_assignment_of_contract_withdrawals',
 'overdraft_against_commercial_paper_bank_statements','overdraft_against_commercial_paper_limits',

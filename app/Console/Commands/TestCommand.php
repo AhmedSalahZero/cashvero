@@ -267,26 +267,6 @@ class TestCommand extends Command
 		
 	// }
 	
-	public function insertCustomersIntoPartnerTable(int $companyId)
-	{
-		$salesGatherings = DB::table('sales_gathering')->where('customer_name','!=',null)->where('company_id',$companyId)->get();
-		foreach($salesGatherings as $salesGathering){
-			$customerName = $salesGathering->customer_name;
-			$isFound = Partner::where('company_id',$companyId)->where('name',$customerName)->where('is_customer',1)->first() ;
-			if($isFound){
-				continue ;
-			}
-			Partner::create([
-				'company_id'=>$companyId,
-				'name'=>$customerName,
-				'is_customer'=>1 
-			]);
-			
-		}
-		
-	}
-	
-	
 	public function refreshStatement($statementModelName,$dateColumnName = 'full_date'){
 		$fullModelName ='App\Models\\'.$statementModelName;
 		$fullModelName::orderBy($dateColumnName)->get()->each(function($statementRaw){
@@ -349,32 +329,6 @@ class TestCommand extends Command
 	$values = collect($values)->filter(function($val){return is_numeric($val);})->values()->toArray();
 	return $values ;
 	}
-	public function calculateSalesForecast()
-	{
-		$salesGathering = DB::table('sales_gathering')->where('company_id','=','105')
-		->groupByRaw('year,month')
-		->selectRaw('LAST_DAY(concat(year,"-",month,"-","01")) as date,sum(net_sales_value) as net_sales_value')
-		->whereRaw("date between '2021-01-01' and '2024-11-30'")
-		->orderByRaw('year asc,month asc')
-		->get();
-		$salesGatherFormatted=[];
-		$dates =[]; 
-		$salesValues = [];
-		foreach($salesGathering as $salesItem){
-			$day = explode('-',$salesItem->date)[2] ;
-			$month = explode('-',$salesItem->date)[1] ;
-			$year  = explode('-',$salesItem->date)[0];
-			$salesGatherFormatted['"date"'][] ='"'. $year.'-'.$month.'-'.$day .'"';
-			$dates[] = '"'. $year.'-'.$month.'-'.$day .'"' ;
-			$salesGatherFormatted['"net_sales_value"'][] = $salesItem->net_sales_value ;
-		//	$salesValues[] = $salesItem->net_sales_value ; 
-		}
-		$pythonFilePath = resource_path('python/forecast/sales-forecast.py');
-		// $irr = json_encode([-1000, 200, 300, 400, 500]);
-		// $x = shell_exec('python3 '. $pythonFilePath .' '. $irr  );
-		$forecast = shell_exec('python3 '.$pythonFilePath .' ' . json_encode($salesGatherFormatted));
-	}
-	
 	public function getJsonColumns($table , $connectionName)
 {
     $columns = Schema::connection($connectionName)->getColumnListing($table);

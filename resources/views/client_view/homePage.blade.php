@@ -207,44 +207,6 @@
 										
 
 
-                                        @if(Auth()->user()->id ==1)
-                                        <div class="card">
-                                            <div class="card-header" id="loanCalculatorId">
-                                                <div class="card-title collapsed" data-toggle="collapse" data-target="#collapseLoanCalculatorId" aria-expanded="false" aria-controls="collapseThree4">
-                                                    <i class="flaticon2-bell-alarm-symbol"></i> {{ __("Loan Calculator") }}
-                                                </div>
-                                            </div>
-											
-                                            <div id="collapseLoanCalculatorId" class="collapse" aria-labelledby="headingThree1" data-parent="#loanCalculatorId">
-                                                <div class="card-body">
-                                                    <div class="card-body with-padding">
-                                                        <x-quick-nav :link="route('fixed.loan.fixed.at.end',$company->getIdentifier())">{{ __('Fixed Payments At The End') }}</x-quick-nav>
-                                                        <x-quick-nav :link="route('fixed.loan.fixed.at.beginning',$company->getIdentifier())">{{ __('Fixed Payments At The Begining') }}</x-quick-nav>
-                                                        <x-quick-nav :link="route('calc.loan.amount',$company->getIdentifier())">{{ __('Calculate Loan Amount') }}</x-quick-nav>
-                                                        <x-quick-nav :link="route('calc.interest.percentage',$company->getIdentifier())">{{ __('Calculate Interest Percentage') }}</x-quick-nav>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-
-                                        <div class="card">
-                                            <div class="card-header" id="collapseLoanCalculatorIdphp">
-                                                <div class="card-title collapsed" data-toggle="collapse" data-target="#collapseLoanCalculatorIdphp" aria-expanded="false" aria-controls="collapseThree4">
-                                                    <i class="flaticon2-bell-alarm-symbol"></i> {{ __("Loan Calculator[PHP]") }}
-                                                </div>
-                                            </div>
-                                            <div id="collapseLoanCalculatorIdphp" class="collapse" aria-labelledby="headingThree1" data-parent="#collapseLoanCalculatorIdphp">
-                                                <div class="card-body">
-                                                    <div class="card-body with-padding">
-                                                        <x-quick-nav :link="route('fixed.loan.fixed.at.end.and.beginning',$company->getIdentifier())">{{ __('Fixed Payments At The End / Beginning Loan Calculator') }}</x-quick-nav>
-                                                        <x-quick-nav :link="route('variable.loan',$company->getIdentifier())">{{ __('Variable Payment Loan Calculator') }}</x-quick-nav>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        @endif
-
                                     </div>
 
                                 </div>
@@ -421,7 +383,6 @@
 </h3>
 <br><br>
 
-<a class="btn btn-success" href="{{ route('fixed.loan.fixed.at.end.php',['company'=>$company->id]) }}">loan22222222222</a>
 
 
 <div class="kt-iconbox__content d-flex align-items-start flex-column">

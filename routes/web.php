@@ -1,25 +1,12 @@
 <?php
 
-use App\Http\Controllers\Analysis\SalesGathering\SalesBreakdownAgainstAnalysisReport;
-use App\Http\Controllers\BalanceSheetController;
-use App\Http\Controllers\CashFlowStatementController;
 use App\Http\Controllers\DeleteAllRowsFromCaching;
 use App\Http\Controllers\DeleteMultiRowsFromCaching;
-use App\Http\Controllers\ExpenseController;
-use App\Http\Controllers\FilterMainTypeBasedOnDatesController;
-use App\Http\Controllers\FinancialStatementController;
 use App\Http\Controllers\getUploadPercentage;
 use App\Http\Controllers\Helpers\DeleteSingleRecordController;
-use App\Http\Controllers\Helpers\EditTableCellsController;
-use App\Http\Controllers\Helpers\getEditFormController;
 use App\Http\Controllers\Helpers\HelpersController;
-use App\Http\Controllers\Helpers\UpdateBasedOnGlobalController;
-use App\Http\Controllers\Helpers\UpdateCitiesBasedOnCountryController;
-use App\Http\Controllers\IncomeStatementController;
 use App\Http\Controllers\RemoveCompanyController;
 use App\Http\Controllers\RemoveUsercontroller;
-use App\Http\Controllers\RevenueBusinessLineController;
-use App\Http\Controllers\RoutesDefinition;
 use App\Http\Controllers\SalesGatheringTestController;
 use App\Models\Company;
 use App\Models\Test;
@@ -100,29 +87,6 @@ Route::middleware([])->group(function () {
 
             Route::prefix('{company}')->group(function () {
                 
-            
-                Route::get('fixed-payments-at-end-and-beginning', 'Loans2Controller@viewFixedAntEndAndBeginning')->name('fixed.loan.fixed.at.end.and.beginning');
-                Route::get('variable-payment-loan', 'Loans2Controller@viewVariable')->name('variable.loan');
-                Route::resource('/loan2', 'Loans2Controller')->names([
-                    'index' => 'loans2.index',
-                    'create' => 'loan2.create',
-                    'store' => 'loan2.store',
-                    'show' => 'loan2.show',
-                    'edit' => 'loan2.edit',
-                    'update' => 'loan2.update',
-                    'destroy' => 'loan2.destroy',
-                ])->except('create');
-                Route::post('calculate-fixed-at-end-and-beginning', 'Loans2Controller@calculateFixedAtEndAndBeginning')->name('calculate.fixed.at.end.and.beginning');
-                Route::post('calculate-variable-at-end-and-beginning', 'Loans2Controller@calculateVariableAtEndAndBeginning')->name('calculate.variable.at.end.and.beginning');
-            //   Route::post('save-fixed-at-end', 'SaveFixedAtEndController@__invoke')->name('save.fixed.at.end');
-            //    Route::post('save-loan-dates', 'SaveLoanDatesController@__invoke')->name('save.loan.dates');
-                Route::get('fixed-payments-at-end', 'Loans2Controller@create')->name('fixed.loan.fixed.at.end');
-                Route::get('calculate-loan-amount', 'Loans2Controller@create')->name('calc.loan.amount');
-                Route::get('calculate-interest-rate', 'Loans2Controller@create')->name('calc.interest.percentage');
-                Route::get('fixed-payments-at-beginning', 'Loans2Controller@create')->name('fixed.loan.fixed.at.beginning');
-                Route::get('variable-payments', 'Loans2Controller@create')->name('variable.payments');
-                
-                
                 //cash vero roles and permissions
                 // Route::group(['prefix'=>'cash-vero-permissions'],function(){
                 // 	Route::get('create','CashVeroPermissionsController@create')->name('cashvero.permissions.create');
@@ -134,7 +98,6 @@ Route::middleware([])->group(function () {
 
 
                 Route::get('checkIfJobFinished/{modelName}', 'SalesGatheringTestController@activeJob')->name('active.job');
-                Route::get('filter-column-based-on-another', 'FilterColumnBasedOnAnotherColumnController@filter')->name('filter.column.based.on.another.column');
 
                 Route::get('/redirect', 'HomeController@redirectFun')->name('home.redirect');
                 //########### Dashboard ############

@@ -245,9 +245,6 @@ class Partner extends Model
         foreach ($tables as $tableName) {
             foreach ($columnNames as $columnName) {
                 if (Schema::hasColumn($tableName, $columnName)) {
-                    if ($tableName == 'sales_gathering') {
-                        continue;
-                    }
                     $query = DB::table($tableName)->where('company_id', $companyId)
                     ->where($columnName, $oldPartnerName);
             

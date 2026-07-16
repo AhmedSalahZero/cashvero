@@ -9,7 +9,6 @@ use App\Models\Deduction;
 use App\Models\LeasingContract;
 use App\Models\Log;
 use App\Models\MediumTermLoan;
-use App\Models\SalesGathering;
 use Illuminate\Http\Request;
 use Schema;
 
@@ -103,24 +102,19 @@ class SalesGatheringController extends Controller
  
     public function store(Request $request, Company $company)
     {
-        // $request['company_id'] = $company->id;
-        SalesGathering::create($request->all());
-        return redirect()->back();
+        abort(404);
     }
 
 
-    public function show(SalesGathering $salesGathering)
+    public function show($salesGathering)
     {
-        //
+        abort(404);
     }
 
 
-    public function edit(Company $company, SalesGathering $salesGathering)
+    public function edit(Company $company, $salesGathering)
     {
-
-        // $salesGathering  = new SalesGatheringViewModel($company, $salesGathering);
-
-        return view('client_view.sales_gathering.form', $salesGathering);
+        abort(404);
     }
 
  
