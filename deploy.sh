@@ -34,7 +34,7 @@ echo ">>> Linking storage"
 echo ">>> Restarting queue workers"
 sudo supervisorctl restart queue-worker:*
 
-echo ">>> Testing Odoo Connection
+echo ">>> Testing Odoo Connection"
 /usr/local/bin/ea-php84 artisan run:odoo-connection
 
 echo ">>> Maintenance mode OFF"

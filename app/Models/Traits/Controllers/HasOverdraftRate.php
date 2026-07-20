@@ -14,7 +14,7 @@ trait HasOverdraftRate
 	{
 		$modelFullName = (self::getModelName()); // App\Models\CleanOverdraft for example
 		$overdraftModel = $modelFullName::find($overdraftId);
-		$date = $request->get('date_create') ;
+		$date = $request->get('date_create') ?: now()->format('Y-m-d') ;
 		$marginRate = $request->get('margin_rate_create') ;
 		$minInterestRate = $request->get('min_interest_rate_create') ;
 		$borrowingRate = $request->get('borrowing_rate_create') ;

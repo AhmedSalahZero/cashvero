@@ -6,7 +6,7 @@
     <label>{{__('Date')}} </label>
     <div class="kt-input-icon">
         <div class="input-group date">
-            <input required name="date_{{ $mode }}" type="date" value="{{ isset($rate) ? $rate->getDate() : formatDateForDatePicker(now()->format('Y-m-d')) }}" class="form-control" />
+            <input required name="date_{{ $mode }}" type="date" value="{{ isset($rate) ? $rate->getDate() : now()->format('Y-m-d') }}" class="form-control" />
         </div>
     </div>
 </div>
