@@ -53,10 +53,10 @@ class ProfileController extends Controller
 				'odoo_db_password' => $request->odoo_db_password,
 			]);
 
-			if ($odooCredentialsChanged) {
+			// if ($odooCredentialsChanged) {
 				$user->update(['odoo_id' => null]);
 				$this->refreshOdooId($user);
-			}
+			// }
 		}
 
 		toastr()->success(__('Updated Successfully'));
