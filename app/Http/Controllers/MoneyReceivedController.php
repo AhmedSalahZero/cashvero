@@ -927,7 +927,7 @@ class MoneyReceivedController
         return response()->json([
             'status'=>true ,
             'amount'=>$accountNumberModel ? $accountNumberModel->getAmount($currencyName, $accountNumber, $financialInstitutionId, $company->id) : 0 ,
-       //     'interest_rate'=>$accountNumberModel ? $accountNumberModel->getInterestRate() : 0,
+            'interest_rate'=>($accountNumberModel && method_exists($accountNumberModel, 'getInterestRate')) ? $accountNumberModel->getInterestRate() : 0,
             'currencyName'=>$currencyName
         ]);
     }
