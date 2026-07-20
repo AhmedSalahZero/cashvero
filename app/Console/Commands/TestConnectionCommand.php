@@ -50,7 +50,7 @@ class TestConnectionCommand extends Command
 		$company = Company::find(92);
 		$user = $company->users()->where('odoo_id','>',0)->first();
 		if(!$user){
-			$this->error('❌ No Odoo user found for company: ' . $company->name);
+			$this->error('❌ No Odoo user found ' );
 			return Command::FAILURE;
 		}
 		/**
