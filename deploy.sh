@@ -37,7 +37,5 @@ sudo supervisorctl restart queue-worker:*
 
 echo ">>> Maintenance mode OFF"
 /usr/local/bin/ea-php84 artisan up
-echo ">>> Testing Odoo Connection"
-/usr/local/bin/ea-php84 artisan run:odoo-connection
 
 echo ">>> Deployment finished successfully!"
