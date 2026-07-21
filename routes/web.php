@@ -601,10 +601,6 @@ Route::middleware([])->group(function () {
                     Route::post('letter-of-guarantee-issuance/edit-amount-to-be-decreased/{lgAdvancedPaymentHistory}/{source}', 'LetterOfGuaranteeIssuanceController@editAmountToBeDecreased')->name('advanced.lg.payment.edit.amount.to.be.decreased');
                     Route::get('letter-of-guarantee-issuance/delete-advanced-payment/{lgAdvancedPaymentHistory}', 'LetterOfGuaranteeIssuanceController@deleteAdvancedPayment')->name('delete.lg.advanced.payment');
                     Route::post('letter-of-guarantee-issuance/back-to-running/{letterOfGuaranteeIssuance}/{source}', 'LetterOfGuaranteeIssuanceController@backToRunningStatus')->name('back.to.running.letter.of.guarantee.issuance');
-                    Route::get('letter-of-guarantee-issuance/template/{source}', 'LgIssuanceImportController@downloadTemplate')->name('download.letter.of.guarantee.issuance.template');
-                    Route::post('letter-of-guarantee-issuance/import/{source}', 'LgIssuanceImportController@upload')->name('import.letter.of.guarantee.issuance');
-                    Route::get('letter-of-guarantee-issuance/import-status/{importRun}', 'LgIssuanceImportController@status')->name('status.letter.of.guarantee.issuance.import');
-                    Route::get('letter-of-guarantee-issuance/import-errors/{importRun}', 'LgIssuanceImportController@errors')->name('errors.letter.of.guarantee.issuance.import');
                     
                                      
                     Route::get('letter-of-guarantee-issuance-renewal-date/{letterOfGuaranteeIssuance}', 'LetterOfGuaranteeIssuanceRenewalDateController@index')->name('letter.of.issuance.renewal.date');
