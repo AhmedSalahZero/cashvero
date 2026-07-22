@@ -334,7 +334,7 @@ function generateAllocationRow(settlementAllocations , clientsWithContracts,invo
 	var rows = '';
 	
 	for(var settlementIndex in settlementAllocations){
-		var partnersSelect = '<select name="settlements['+ invoiceId +']['+rowIndex+'][partner_id]" data-name="partner_id" class="suppliers-or-customers-js select3-select"> ';
+		var partnersSelect = '<select name="allocations['+ invoiceId +']['+settlementIndex+'][partner_id]" data-name="partner_id" class="suppliers-or-customers-js select3-select"> ';
 		var currentSettlementAllocation = settlementAllocations[settlementIndex];
 
 		for(var clientId in clientsWithContracts ){
@@ -357,7 +357,7 @@ function generateAllocationRow(settlementAllocations , clientsWithContracts,invo
 		</td>
 
 		<td>
-				<select data-name="contract_id" data-current-selected="${currentSettlementAllocation.contract_id}"  class="contracts-js select3-select" data-current-selected="" name="contract_id" >
+				<select data-name="contract_id" data-current-selected="${currentSettlementAllocation.contract_id}" class="contracts-js select3-select" name="allocations[${invoiceId}][${settlementIndex}][contract_id]" >
 					
 				</select>
 		</td>
@@ -381,7 +381,7 @@ function generateAllocationRow(settlementAllocations , clientsWithContracts,invo
 			  <td>
 			<div class="kt-input-icon ">
 				<div class="input-group">
-					<input  type="text" data-name="allocation_amount" name="settlements[${invoiceId}][${rowIndex}][allocation_amount]" class="form-control allocation-amount-class repeater-amount-class" value="${number_format(currentSettlementAllocation.allocation_amount,2)}">
+					<input  type="text" data-name="allocation_amount" name="allocations[${invoiceId}][${settlementIndex}][allocation_amount]" class="form-control allocation-amount-class repeater-amount-class" value="${number_format(currentSettlementAllocation.allocation_amount,2)}">
 				</div>
 			</div>
 		</td>
