@@ -32,9 +32,7 @@ use App\Models\SalesForecast;
 use App\Models\SecondAllocationSetting;
 use App\Models\SecondExistingProductAllocationBase;
 use App\Models\SecondNewProductAllocationBase;
-use App\Models\Section;
 use App\Models\User;
-use App\Services\IntervalSummationOperations;
 use App\Traits\Intervals;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
@@ -222,6 +220,19 @@ function generateIdForExcelRow(int $companyId)
 function getTotalUploadCacheKey($company_id, $jobId, string $modelName)
 {
     return 'total_uploaded_for_company_' . $company_id . 'for_job_' . $jobId .'for_model'. $modelName;
+}
+
+/**
+ * Tracks how many rows were silently skipped during a commit because
+ * they matched an already-existing invoice (same invoice_number +
+ * currency, same company) — see SalesGatheringTestJob::handle(). Read
+ * by the upload page after a save completes, so the person knows
+ * some rows were skipped rather than being left to wonder why the
+ * count doesn't match what they uploaded.
+ */
+function getSkippedDuplicatesCacheKey($company_id, string $modelName)
+{
+    return 'skipped_duplicates_for_company_' . $company_id . 'for_model' . $modelName;
 }
 
 function getShowCompletedTestMessageCacheKey($companyId, $modelName)
@@ -659,10 +670,6 @@ function getNextDate(?array $array, ?string $date, $datesExistsAsKeys = true)
     }
     return null;
 }
-function sumIntervals(array $dateValues, string $intervalName)
-{
-    return (new IntervalSummationOperations())->sumForInterval($dateValues, $intervalName);
-}
 
 
 
@@ -860,7 +867,17 @@ function getBanksCurrencies():array
 function getDiffBetweenTwoDatesInDays(?Carbon $firstDate, ?Carbon $secondDate)
 {
     if ($firstDate && $secondDate) {
-        return $firstDate->diffInDays($secondDate);
+        // Same Carbon 3 bug class as IsInvoice::getAging() — diffInDays()
+        // with no $absolute flag returns a signed, fractional value
+        // under Carbon 3 (this project's Laravel 12) instead of Carbon
+        // 2's always-positive whole-day count. This shared helper is
+        // used purely for "how many days between these two dates"
+        // displays (Cheque.php, PayableCheque.php,
+        // TimeOfDepositRenewalDateController, and 3 renewal/adjustment
+        // history tables) — every call site already passes dates in
+        // chronological order, so forcing absolute + int is a safe,
+        // root-cause fix for all of them at once, not just this page.
+        return (int) $firstDate->diffInDays($secondDate, true);
     }
     return 0 ;
 }
@@ -869,7 +886,7 @@ function getCurrenciesForSuppliersAndCustomers(int $companyId):array
 {
     $currencyFromBranch = Branch::where('company_id', $companyId)->pluck('currency', 'currency')->toArray();
     $currencyFromAccounts = FinancialInstitutionAccount::where('company_id', $companyId)->pluck('currency', 'currency')->toArray() ;
-    return array_merge($currencyFromBranch, $currencyFromAccounts);
+    return array_values(array_merge($currencyFromBranch, $currencyFromAccounts));
 
 }
 function getCurrencies()
@@ -946,29 +963,6 @@ function getColorFromIndex(int $index)
     return 'warning';
 }
 // success
-// danger
-// warning
-// brand
-function generateMenuItem(string $title, bool $show, string $link, array $submenu = [])
-{
-    return [
-        'title'=>$title,
-        'show'=>$show ,
-        'link'=>$link,
-        'submenu'=>$submenu
-    ];
-}
-function getIncomeStatementSubmenu($user, $company)
-{
-    $companyId = $company->id ;
-    return [
-        'forecast-dashboard'=>generateMenuItem(__('Forecast Dashboard'), $user->can('view forecast income statement dashboard'), route('dashboard.breakdown.incomeStatement', ['company'=>$companyId,'reportType'=>'forecast',]), []),
-        'actual-dashboard'=>generateMenuItem('view Actual dashboard', $user->can('view actual income statement dashboard'), route('dashboard.breakdown.incomeStatement', ['company'=>$companyId,'reportType'=>'actual']), []),
-        'adjusted-dashboard'=>generateMenuItem('view Adjusted dashboard', $user->can('view adjusted income statement dashboard'), route('dashboard.breakdown.incomeStatement', ['company'=>$companyId,'reportType'=>'adjusted']), []),
-        'modified-dashboard'=>generateMenuItem('view Modified dashboard', $user->can('view modified income statement dashboard'), route('dashboard.breakdown.incomeStatement', ['company'=>$companyId,'reportType'=>'modified']), []),
-        'comparing-dashboard'=>generateMenuItem('Comparing Dashboard', $user->can('view income statement comparing dashboard'), route('dashboard.intervalComparing.incomeStatement', ['company'=>$companyId,'subItemType'=>'comparing']), []),
-    ];
-}
 
 
 
@@ -1013,736 +1007,6 @@ function currentCompany(): ?Company
     return app('currentCompany');
 }
 
-function isMoneyFlowDarkPage(): bool
-{
-    static $resolved = null;
-
-    if ($resolved !== null) {
-        return $resolved;
-    }
-
-    $user = auth()->user();
-    if (! $user || ! $user->dark_mode) {
-        return $resolved = false;
-    }
-
-    $routeName = request()->route()?->getName();
-    $darkRouteNames = [
-        'view.uploading',
-        'view.loan.schedule.settlements',
-        'edit.loan.schedule.settlements',
-        'view.contract.loan.schedule.settlements',
-        'edit.contract.loan.schedule.settlements',
-        'salesGatheringImport',
-        'salesGatheringTest.editCachedRow',
-        'last.upload.failed',
-    ];
-
-    if ($routeName && in_array($routeName, $darkRouteNames, true)) {
-        $resolved = true;
-
-        return true;
-    }
-
-    $path = request()->path();
-    if (preg_match('#(^|/)uploading/LoanSchedule(/|$)#', $path)
-        || preg_match('#(^|/)uploading/ContractLoanSchedule(/|$)#', $path)
-        || preg_match('#(^|/)loan-schedule-settlement/#', $path)
-        || preg_match('#(^|/)edit-loan-schedule-settlement/#', $path)
-        || preg_match('#(^|/)contract-loan-schedule-settlement/#', $path)
-        || preg_match('#(^|/)edit-contract-loan-schedule-settlement/#', $path)
-        || preg_match('#(^|/)salesGatheringImport/LoanSchedule(/|$)#', $path)
-        || preg_match('#(^|/)salesGatheringImport/ContractLoanSchedule(/|$)#', $path)) {
-        $resolved = true;
-
-        return true;
-    }
-
-    $resolved = false;
-    $sections = \Illuminate\Support\Facades\View::getSections();
-
-    foreach (['content', 'css', 'sub-header', 'sub_header'] as $sectionName) {
-        $html = (string) ($sections[$sectionName] ?? '');
-
-        if ($html !== '' && str_contains($html, 'money-flow-dark')) {
-            $resolved = true;
-
-            return true;
-        }
-    }
-
-    return false;
-}
-
-function getHeaderMenu($currentCompany = null)
-{
-    
-
-    
-    /**
-     * @var Company|null $company
-     */
-    $company = currentCompany();
-
-    $company = $company ?: $currentCompany;
-    $user = auth()->user();
-    if (!$company) {
-        return [
-            'home'=>generateMenuItem(__('Home'), $user->can('view home'), route('home'), [])
-        ];
-    }
-
-    $companyId = $company->id ;
-    
-   
-    
-    $canViewSafeStatement = $user->can('view safe statement report');
-    $canViewCashExpenseStatement = $user->can('view cash expense report');
-    $canViewPartnersStatement = $user->can('view partners statement report');
-    $canViewBankStatement = $user->can('view bank statement report') ;
-    $canViewLgByBeneficiaryNameReport = $user->can('view lg by beneficiary name report') ;
-    $canViewLgByBankNameReport = $user->can('view lg by bank name report') ;
-    $canViewLgLcStatement = $user->can('view lc & lg statement report') ;
-    $canViewCashFlow = $user->can('view cash flow report');
-    $canViewContractCashFlow = $user->can('view contract cash flow report');
-    $canViewWithdrawalsSettlementReport = $user->can('view withdrawals settlement report');
-    $canViewNotificationSetting = $user->can('view notification settings');
-    $canViewCashExpenseCategories = $user->can('view cash expense categories');
-    $canViewCustomersSettings = $user->can('view customers');
-    $canViewSubsidiaryCompaniesSettings = $user->can('view subsidiary companies');
-    $canViewOtherPartnersSettings = $user->can('view other partners');
-    $canViewShareholdersSettings = $user->can('view shareholders');
-    $canViewDeductionsSettings = $user->can('view deductions');
-    $canViewEmployeesSettings = $user->can('view employees');
-    $canViewSuppliersSettings = $user->can('view suppliers');
-    $canViewBusinessSectorSettings = $user->can('view business sectors');
-    $canViewBusinessUnitSettings = $user->can('view business units');
-    $canViewSalesChannelsSettings = $user->can('view sales channels');
-    $canViewSalesPersonsSettings = $user->can('view sales persons');
-    $canViewBranchesSettings = $user->can('view branches');
-    $canViewGeneralSetting = $canViewCustomersSettings || $canViewSubsidiaryCompaniesSettings || $canViewOtherPartnersSettings || $canViewShareholdersSettings || $canViewDeductionsSettings || $canViewEmployeesSettings || $canViewSuppliersSettings || $canViewBusinessSectorSettings || $canViewBusinessUnitSettings || $canViewSalesChannelsSettings || $canViewSalesPersonsSettings ||$canViewBranchesSettings || $canViewCashExpenseCategories;
-    
-    $notificationsSubItems[] = [
-        'title'=>__('General Settings'),
-        'link'=>'#',
-        'show'=>$canViewGeneralSetting ,
-        'submenu'=> [
-            [
-                'title'=>__('Cash Expense'),
-            'link'=>route('cash.expense.category.index', ['company'=>$companyId]),
-            'show'=>$canViewCashExpenseCategories,
-            ],
-            [
-                'title'=>__('Partners'),
-                'link'=>route('partners.index', ['company'=>$companyId]),
-                'show'=>true ,
-                'submenu'=>[
-                    [
-                        'title'=>__('All Partners'),
-                        'link'=>route('partners.index', ['company'=>$companyId]),
-                        'show'=>true ,
-                    ],
-                    [
-                'title'=>__('Customers'),
-                'link'=>route('customers.index', ['company'=>$companyId]),
-                'show'=>$canViewCustomersSettings
-            ],
-                    [
-                'title'=>__('Suppliers'),
-                'link'=>route('suppliers.index', ['company'=>$companyId]),
-                'show'=>$canViewSuppliersSettings
-            ],
-            [
-                'title'=>__('Employees'),
-                'link'=>route('employees.index', ['company'=>$companyId]),
-                'show'=>$canViewEmployeesSettings
-            ],
-            [
-                'title'=>__('Shareholders'),
-                'link'=>route('shareholders.index', ['company'=>$companyId]),
-                'show'=>$canViewShareholdersSettings
-            ],
-            [
-                'title'=>__('Other Partners'),
-                'link'=>route('other.partners.index', ['company'=>$companyId]),
-                'show'=>$canViewOtherPartnersSettings
-            ],
-            
-            
-                ]
-                // 'show'=>$canViewCustomersSettings
-            ],
-            // [
-            // 	'title'=>__('Suppliers'),
-            // 	'link'=>route('suppliers.index',['company'=>$companyId]),
-            // 	'show'=>$canViewSuppliersSettings
-            // ],
-            
-            [
-                'title'=>__('Subsidiary Companies'),
-                'link'=>route('subsidiary.companies.index', ['company'=>$companyId]),
-                'show'=>$canViewSubsidiaryCompaniesSettings
-            ],
-            
-            
-            [
-                'title'=>__('Deductions'),
-                'link'=>route('deductions.index', ['company'=>$companyId]),
-                'show'=>$canViewDeductionsSettings
-            ],
-            
-            [
-                'title'=>__('Other Settings'),
-                'link'=>'#',
-                'show'=>true ,
-                'submenu'=>[
-                    [
-                'title'=>__('Business Sectors'),
-                'link'=>route('business.sectors.index', ['company'=>$companyId]),
-                'show'=>$canViewBusinessSectorSettings
-            ],
-            [
-                'title'=>__('Business Units'),
-                'link'=>route('business.units.index', ['company'=>$companyId]),
-                'show'=>$canViewBusinessUnitSettings
-            ]
-            ,[
-                'title'=>__('Sales Channels'),
-                'link'=>route('sales.channels.index', ['company'=>$companyId]),
-                'show'=>$canViewSalesChannelsSettings
-            ],
-            [
-                'title'=>__('Sales Persons'),
-                'link'=>route('sales.persons.index', ['company'=>$companyId]),
-                'show'=>$canViewSalesPersonsSettings
-            ],
-                ]
-            ],
-            
-            
-            
-        ]
-    ];
-    $notificationsSubItems2 = \App\Notification::formatForMenuItem($company);
-    $notificationsSubItems = array_merge($notificationsSubItems, $notificationsSubItems2);
-    
-    $notificationsSubItems[]	= [
-        'title'=>__('Notification Settings'),
-    'link'=>route('notifications-settings.index', ['company'=>$companyId]),
-    'show'=>$canViewNotificationSetting,
-    ];
-
-    $canViewNotificationsSettingAndGeneralSetting = $canViewNotificationSetting || $canViewGeneralSetting;
-    
-    
-    
-    
-    $notificationsSubItems[]	= [
-        'title'=>__('Permissions'),
-        'link'=>route('roles.permissions.edit', ['company'=>$companyId]),
-        'show'=>$user->can('update permissions') && ! $user->isSuperAdmin(),
-    ];
-    
-    $notificationsSubItems[]	= [
-        'title'=>__('Users'),
-        'link'=>route('user.index', ['company'=>$companyId]),
-        'show'=>$user->can('view users') && ! $user->isSuperAdmin(),
-    ];
-    
-    
-    
-    $canViewCashStatusDashboard = $user->can('view cash status dashboard');
-    $canViewCashForecastDashboard = $user->can('view cash Forecast dashboard');
-    $canViewLgAndLcDashboard = $user->can('view lg & lc dashboard');
-    $canViewCashDashboard = $canViewCashStatusDashboard || $canViewCashForecastDashboard ||$canViewLgAndLcDashboard;
-    
-    
-    $canUpdateCashAndChequesOpeningBalances  =$user->can('update cash & cheques opening balances');
-    // $canUpdateLgOpeningBalances  =$user->can('update lg opening balances');
-    // $canUpdateLcOpeningBalances  =$user->can('update lc opening balances');
-    $canViewOpeningBalances =$canUpdateCashAndChequesOpeningBalances
-    // || $canUpdateLgOpeningBalances || $canUpdateLcOpeningBalances
-    ;
-    $resortedNotificationsSubItems = [];
-    
-    $cashManagementSubItems = [
-
-        'home'=>generateMenuItem(__('Home'), $user->can('view home') && hasMiddleware('isCashManagement'), route('home'), []),
-        'notifications'=>[
-            'title'=>__('Notifications & Settings'),
-            'link'=>'#',
-            'show'=>$canViewNotificationsSettingAndGeneralSetting,
-            'submenu'=>$notificationsSubItems,
-            'is-notification'=>true
-        ],
-        'cash-dashboard'=>[
-            'title'=>__('Dashboard'),
-            'show'=>$canViewCashDashboard ,
-            'link'=>'#',
-            'submenu'=>[
-                [
-                    'title'=>__('Cash Status'),
-                    'link'=>route('view.customer.invoice.dashboard.cash', ['company'=>$companyId]),
-                    'show'=>$canViewCashStatusDashboard,
-                    'submenu'=>[]
-                ],
-                [
-                    'title'=>__('Cash Forecast'),
-                    'link'=>route('view.customer.invoice.dashboard.forecast', ['company'=>$companyId]),
-                    'show'=>$canViewCashForecastDashboard,
-                    'submenu'=>[]
-                ],
-                [
-                    'title'=>__('LG & LC Dashboard'),
-                    'link'=>route('view.lglc.dashboard', ['company'=>$companyId]),
-                    'show'=>$canViewLgAndLcDashboard,
-                    'submenu'=>[]
-                ],
-            ]
-
-        ]
-        ,
-        
-        'reports'=>[
-            'title'=>__('Reports'),
-            'show'=>$canViewCashFlow || $canViewContractCashFlow ||  $canViewSafeStatement || $canViewCashExpenseStatement || $canViewPartnersStatement || $canViewBankStatement|| $canViewLgByBeneficiaryNameReport || $canViewLgByBankNameReport || $canViewLgLcStatement || $canViewWithdrawalsSettlementReport ,
-            'link'=>'#',
-            'submenu'=>
-            [
-        
-                [
-                    'title'=>__('Safe Statement'),
-                    'link'=>route('view.safe.statement', ['company'=>$company->id]) ,
-                    'show'=>$canViewSafeStatement,
-                    'submenu'=>[]
-                ],
-                
-                [
-                    'title'=>__('Bank Statement'),
-                    'link'=>route('view.bank.statement', ['company'=>$company->id]),
-                    'show'=>$canViewBankStatement,
-                    'submenu'=>[]
-                ],
-                [
-                    'title'=>__('Factoring Statement'),
-                    'link'=>route('view.factoring.statement', ['company'=>$company->id]),
-                    'show'=>$canViewBankStatement,
-                    'submenu'=>[]
-                ],
-                [
-                    'title'=>__('LG By Beneficiary Name Report'),
-                    'link'=>route('view.lg.by.beneficiary.name.report', ['company'=>$company->id]),
-                    'show'=>$canViewLgByBeneficiaryNameReport,
-                    'submenu'=>[]
-                ],[
-                    'title'=>__('LG By Bank Name Report'),
-                    'link'=>route('view.lg.by.bank.name.report', ['company'=>$company->id]),
-                    'show'=>$canViewLgByBankNameReport,
-                    'submenu'=>[]
-                ]
-                ,[
-                    'title'=>__('LG & LC Statement'),
-                    'link'=>route('view.lg.lc.bank.statement', ['company'=>$company->id]),
-                    'show'=>$canViewBankStatement,
-                    'submenu'=>[]
-                ],
-                [
-                    'title'=>__('Cash Expense Statement'),
-                    'link'=>route('view.cash.expense.statement', ['company'=>$company->id]) ,
-                    'show'=>$canViewCashExpenseStatement,
-                    'submenu'=>[]
-                ],
-                [
-                    'title'=>__('Partners Statement'),
-                    'link'=>route('view.partners.statement', ['company'=>$company->id]) ,
-                    'show'=>$canViewPartnersStatement,
-                    'submenu'=>[]
-                ],
-                [
-                    'title'=>__('Company Cash Flow Report'),
-                    'link'=>route('view.cashflow.report', ['company'=>$companyId]),
-                    'show'=>$canViewCashFlow ,
-                    'submenu'=>[]
-                ],
-                [
-                    'title'=>__('Contract Cash Flow Report'),
-                    'link'=>route('view.contract.cashflow.report', ['company'=>$companyId]),
-                    'show'=>$canViewContractCashFlow ,
-                    'submenu'=>[]
-                ],
-                [
-                    'title'=>__('Consolidated Cash Flow'),
-                    'link'=>route('reports.consolidated-cash-flow.index', ['company'=>$companyId]),
-                    'show'=>$canViewCashFlow ,
-                    'submenu'=>[]
-                ],
-                [
-                    'title'=>__('Withdrawals Settlement Report'),
-                    'link'=>route('view.withdrawals.settlement.report', ['company'=>$companyId]),
-                    'show'=>$canViewWithdrawalsSettlementReport ,
-                    'submenu'=>[]
-                ]
-                
-                    ],
-        ],
-        'bank-and-cash-account'=>[
-            'title'=>__('Cash & Bank Accounts'),
-            'show'=>true ,
-            'submenu'=>[
-                [
-            'title'=>__('Financial Institutions'),
-            'link'=>route('view.financial.institutions', ['company'=>$companyId]),
-            'show'=>$user->can('view financial institutions')
-                ],
-                [
-                'title'=>__('Safe'),
-                'link'=>route('branches.index', ['company'=>$companyId]),
-                'show'=>$canViewBranchesSettings
-                ],
-                [
-                    'title'=>__('Opening Balances'),
-                    'link'=>'#',
-                    'show'=>$canViewOpeningBalances ,
-                    'submenu'=>[
-                        [
-                            'title'=>__('Cash & Cheques Opening Balance'),
-                            'link'=>route('opening-balance.index', ['company'=>$companyId]),
-                            'show'=>$canUpdateCashAndChequesOpeningBalances,
-                        ],
-                        [
-                            'title'=>__('Customers Opening Balance'),
-                            'link'=>route('customers-opening-balance.index', ['company'=>$companyId]),
-                            'show'=>$canUpdateCashAndChequesOpeningBalances,
-                        ],
-                        [
-                            'title'=>__('Suppliers Opening Balance'),
-                            'link'=>route('suppliers-opening-balance.index', ['company'=>$companyId]),
-                            'show'=>$canUpdateCashAndChequesOpeningBalances,
-                        ],
-        
-                    ],
-                    
-                    
-                        ],
-                        [
-                'title'=>__('Other Odoo Integration Settings'),
-                'link'=>route('odoo-settings.index', ['company'=>$companyId]),
-                'show'=>$company->hasOdooIntegrationCredentials(),
-            ],
-                ],
-                
-        ],
-        // 'financial-institution'=>[
-        // 	'title'=>__('Financial Institutions'),
-        // 	'link'=>route('view.financial.institutions',['company'=>$companyId]),
-        // 	'show'=>$user->can('view financial institutions')
-        // ],
-        'customer-sections'=>[
-            'title'=>__('Customer Sections'),
-            'link'=>'#',
-            'show'=>true,
-            'submenu'=>[
-
-                [
-                    'title'=>__('Customer Balances'),
-                    'link'=>route('view.balances', ['company'=>$companyId,'modelType'=>'CustomerInvoice']),
-                    'show'=>$user->can('view customer balances'),
-                    'submenu'=>[]
-                ],
-                [
-            'title'=>__('Customer Aging'),
-            'link'=>route('view.aging.analysis', ['company'=>$companyId,'modelType'=>'CustomerInvoice']),
-            'show'=>$user->can('view customer aging'),
-            'submenu'=>[]
-            ],
-            
-            [
-                'title'=>__('Collections Effectiveness Index'),
-                'link'=>route('view.collections.effectiveness.index', ['company'=>$company->id]) ,
-                'show'=>$user->can('view collections effectiveness index'),
-                'submenu'=>[]
-            ],
-            
-            
-            
-            [
-                'title'=>__('Customer Contracts'),
-            'link'=>route('contracts.index', ['company'=>$companyId,'type'=>'Customer']),
-            'show'=>$user->can('view customers contracts'),
-
-            ],
-            [
-                'title'=>__('Upload New Customer Invoice Data'),
-                'link'=>route('view.uploading', ['company'=>$company->id , 'model'=>'CustomerInvoice']),
-                'show'=>$user->can(uploadCustomerInvoiceData),
-                'submenu'=>[]
-            ]
-
-
-
-
-
-
-
-            ]
-        ],
-        'supplier-sections'=>[
-            'title'=>__('Supplier Sections'),
-            'link'=>'#',
-            'show'=>true,
-            'submenu'=>[
-
-                [
-                    'title'=>__('Supplier Balances'),
-                    'link'=>route('view.balances', ['company'=>$companyId,'modelType'=>'SupplierInvoice']),
-                    'show'=>$user->can('view supplier balances'),
-                    'submenu'=>[]
-                ],
-                [
-            'title'=>__('Supplier Aging'),
-            'link'=>route('view.aging.analysis', ['company'=>$companyId,'modelType'=>'SupplierInvoice']),
-            'show'=>$user->can('view supplier aging'),
-            'submenu'=>[]
-            ],
-            [
-                'title'=>__('Supplier Contracts'),
-            'link'=>route('contracts.index', ['company'=>$companyId,'type'=>'Supplier']),
-            'show'=>$user->can('view suppliers contracts'),
-
-            ],
-            [
-                'title'=>__('Upload New Supplier Invoice Data'),
-                'link'=>route('view.uploading', ['company'=>$company->id , 'model'=>'SupplierInvoice']),
-                'show'=>$user->can(uploadSupplierInvoiceData),
-                'submenu'=>[]
-            ]
-
-
-
-
-
-
-
-            ]
-        ],
-        
-        'money-transactions'=>[
-            'title'=>__('Money Transactions'),
-            'link'=>'#',
-            'show'=>true ,
-            'submenu'=>[
-                [
-                    'title'=>__('Money Received'),
-                    'link'=>route('view.money.receive', ['company'=>$companyId]),
-                    'show'=>$user->can('view money received'),
-                    'submenu'=>[]
-                ],
-                [
-                    'title'=>__('Money Payment'),
-                    'link'=>route('view.money.payment', ['company'=>$companyId]),
-                    'show'=>$user->can('view supplier payment'),
-                    'submenu'=>[]
-                ],
-                [
-                    'title'=>__('Factoring'),
-                    'link'=>'#',
-                    'show'=>$user->can('view supplier payment'),
-                    'submenu'=>[
-                        [
-                            'title'=>__('With Recourse'),
-                            'link'=>route('factoring.with-recourse.index', ['company'=>$companyId]),
-                            'show'=>$user->can('view supplier payment'),
-                        ],
-                        [
-                            'title'=>__('Without Recourse'),
-                            'link'=>route('factoring.without-recourse.index', ['company'=>$companyId]),
-                            'show'=>$user->can('view supplier payment'),
-                        ],
-                    ],
-                ],
-                [
-                    'title'=>__('Cash Expenses'),
-                    'link'=>route('view.cash.expense', ['company'=>$companyId]),
-                    'show'=>$user->can('view cash expenses'),
-                    'submenu'=>[]
-                ],
-                // [
-                // 	'title'=>__('Approved Expenses'),
-                // 	'link'=>route('odoo-expenses.index', ['company'=>$companyId]),
-                // 	'show'=>$company->hasOdooIntegrationCredentials(),
-                // 	'submenu'=>[]
-                // ],
-                
-                [
-                    'title'=>__('LC Settlement Internal Transfer'),
-                    'link'=>route('lc-settlement-internal-money-transfers.index', ['company'=>$companyId]),
-                    'show'=>$user->can('view lc settlement internal transfer'),
-                    'submenu'=>[]
-                        ],
-                [
-            'title'=>__('Internal Money Transfer'),
-            'link'=>route('internal-money-transfers.index', ['company'=>$companyId]),
-            'show'=>$user->can('view internal money transfer'),
-            'submenu'=>[]
-                ],
-                [
-                    'title'=>__('Sell Or Buy Currency'),
-                    'link'=>route('buy-or-sell-currencies.index', ['company'=>$company->id ]),
-                    'show'=>$user->can('view buy or sell currency'),
-                    'submenu'=>[]
-                ],
-                [
-                    'title'=>__('Foreign Exchange Rate'),
-                    'link'=>route('view.foreign.exchange.rate', ['company'=>$company->id]),
-                    'show'=>$user->can('view foreign exchange rate'),
-                    'submenu'=>[]
-                ],
-                
-                [
-                    'title'=>__('Odoo Integration'),
-                    'link'=>'#',
-                    'show'=>$company->hasOdooIntegrationCredentials(),
-                    'submenu'=>[
-                        [
-                            'title'=>__('Read Partners'),
-                        'link'=>'#',
-                        'show'=>true,
-                        'data-show-notification-modal'=>'read-partners-modal'
-                    ],
-                        [
-                            'title'=>__('Read Invoices'),
-                        'link'=>'#',
-                        'show'=>true,
-                        'data-show-notification-modal'=>'read-invoices-modal'
-                    ],
-                            [
-                            'title'=>__('Read Contracts'),
-                        'link'=>'#',
-                        'show'=>true,
-                        'data-show-notification-modal'=>'read-contracts-modal'
-                    ],
-                        
-                    // [
-                    // 	'title'=>__('Send Collections Or Payments'),
-                    // 	'link'=>'#',
-                    // 	'show'=>true,
-                    // 	'data-show-notification-modal'=>'send-invoices-modal',
-                    // ],
-                    // [
-                    // 	'title'=>__('Read Approved Expenses'),
-                    // 	'link'=>'#',
-                    // 	'show'=>true,
-                    // 	'data-show-notification-modal'=>'read-expenses-modal',
-                    // ],
-                    ],
-                    
-                ],
-                
-                        
-                        
-                        
-                        
-                    
-                        
-                        
-                        
-
-            ]
-        ]
-        ,
-        'view letter of guarantee issuance'=>[
-            'title'=>__('LG & LC Issuance'),
-            'show'=>true ,
-            'submenu'=>[
-                [
-            'title'=>__('Letter Of Guarantee (LG) Issuance'),
-            'link'=>route('view.letter.of.guarantee.issuance', ['company'=>$companyId]),
-            'show'=>$user->can('view letter of guarantee issuance'),
-            'submenu'=>[]
-            ],
-            [
-            'title'=>__('Letter Of Credit (LC) Issuance'),
-            'link'=>route('view.letter.of.credit.issuance', ['company'=>$companyId]),
-            'show'=>$user->can('view letter of credit issuance'),
-            'submenu'=>[]
-            ]
-            ]
-            
-            
-        ],
-        
-        ];
-    $isCustomerOrSupplierUploading = in_array('CustomerInvoice', Request()->segments()) || in_array('SupplierInvoice', Request()->segments());
-    if ($company->hasCashVero() && (hasMiddleware('isCashManagement') || $isCustomerOrSupplierUploading || in_array('LoanSchedule', Request()->segments()) || in_array('ContractLoanSchedule', Request()->segments()))) {
-        return $cashManagementSubItems ;
-    }
-        
-    // $canViewVeroAnalysisDashboard = $user->can('view sales dashboard') || $user->can('view breakdown dashboard') || ($user->can('view customer dashboard'))
-    // || ($user->can('view sales person dashboard')) || $user->can('view interval comparing dashboard') || $user->can('view expense analysis dashboard')
-    // || $user->can('view income statement dashboard');
-        
-        
-    $canViewUploadSalesData = $user->can('upload sales gathering data') ;
-    $canViewUploadExportData = $user->can(uploadExportAnalysisData) ;
-    $canViewUploadCustomerInvoiceData = $user->can(uploadCustomerInvoiceData) ;
-    $canViewUploadSupplierInvoiceData = $user->can(uploadSupplierInvoiceData) ;
-
-    $canViewDataGathering = $canViewUploadSalesData || $canViewUploadExportData || $canViewUploadCustomerInvoiceData || $canViewUploadSupplierInvoiceData ;
-        
-    $salesAnalysisSubItems = [] ;
-        
-    // $canViewSalesAnalysisReport = count($salesAnalysisSubItems) ;
-    // $canExportAnalysisReport = $user->can(viewExportAnalysisData) ;
-    // $canExpenseAnalysisReport = $user->can(viewExpenseAnalysisData) ;
-        
-        
-
-    // $user->can('view sales forecast value base');
-    // $salesForecastQuantityBaseSubItems= [];
-    // $canViewSalesForecastQuantityBase=count($salesForecastQuantityBaseSubItems);
-  
-        
-        
-        
-    return [
-        'home'=>generateMenuItem(__('Home'), $user->can('view home'), route('home'), []),
-       
-                'data-gathering'=>[
-                    'title'=>__('Data Gathering'),
-                    'show'=>$canViewDataGathering,
-                    'link'=>'#',
-                    'submenu'=>[
-                        
-                        'upload new customer invoice data'=>[
-                            'title'=>__('Upload New Customer Invoice Data'),
-                            'link'=>route('view.uploading', ['company'=>$company->id , 'model'=>'CustomerInvoice']),
-                            'show'=>$canViewUploadCustomerInvoiceData,
-                            'submenu'=>[]
-                        ],
-                        'upload new supplier invoice data'=>[
-                            'title'=>__('Upload New Supplier Invoice Data'),
-                            'link'=>route('view.uploading', ['company'=>$company->id , 'model'=>'SupplierInvoice']),
-                            'show'=>$canViewUploadSupplierInvoiceData,
-                            'submenu'=>[]
-                        ],
-                        
-                    ]
-                        ],
-                        
-                              
-                                        
-                                        'cash-management'=>[
-                                            'title'=>__('Cash Management'),
-                                            'link'=>'#',
-                                            'show'=>$company->hasCashVero()   ,
-                                            'submenu'=>$cashManagementSubItems
-                                                ],
-
-
-
-
-    ];
-}
 function getLgTypes():array
 {
     return LgTypes::getAll();
@@ -1874,105 +1138,6 @@ function partner_display_name_sql(string $tableAlias = 'partners', string $as = 
 function getAddNewFieldRule($fieldName)
 {
     return Rule::requiredIf(Request()->get($fieldName) == 'Add New');
-}
-
-// route('view.uploading',['company'=>$company->id , 'model'=>$elementModelName])
-function getTestBuildingArray()
-{
-    return [
-        [
-            'title'=>__('New Cataract'),
-            'value'=>__('New Cataract'),
-            'data-abb'=>'NECAT',
-            'data-code'=>'01'
-        ],
-        [
-            'title'=>__('Old Cataract'),
-            'value'=>__('Old Cataract'),
-            'data-abb'=>'ODCAT',
-            'data-code'=>'02'
-        ]
-    ];
-}
-function getTestFfeArray()
-{
-    return [
-        [
-            'title'=>__('Furniture'),
-            'value'=>'furniture',
-            'data-abb'=>'FURN',
-            'data-code'=>'01'
-        ],
-        [
-            'title'=>__('Equipment'),
-            'value'=>__('Equipment'),
-            'data-abb'=>'EQUIP',
-            'data-code'=>'02'
-        ]
-    ];
-}
-
-function getTestFloors()
-{
-    return [
-        [
-            'title'=>'Floor1',
-            'value'=>'floor1',
-            'data-abb'=>'FO1',
-            'data-code'=>'01'
-        ],
-        [
-            'title'=>'Floor2',
-            'value'=>'floor2',
-            'data-abb'=>'FO2',
-            'data-code'=>'02'
-        ],
-
-    ];
-}
-function getTestCategory()
-{
-    return [
-        [
-            'title'=>'Beds',
-            'value'=>'beds',
-            'data-abb'=>'BDs',
-            'data-code'=>'01'
-        ],
-        [
-            'title'=>'Chairs',
-            'value'=>'chairs',
-            'data-abb'=>'CHs',
-            'data-code'=>'02'
-        ],
-
-    ];
-}
-function getTestLabelForm()
-{
-    return [
-        [
-            'value'=>'Building',
-        'title'=>'Building'
-        ],
-        [
-            'value'=>'FF&E',
-        'title'=>'FF&E'
-        ]
-    ];
-}
-function getTestBuildNames()
-{
-    return [
-        [
-            'value'=>'New Cataract',
-        'title'=>'New Cataract'
-        ],
-        [
-            'value'=>'Old Cataract',
-        'title'=>'Old Cataract'
-        ]
-    ];
 }
 function filterByColumnName($filterByColumnName)
 {
@@ -2358,11 +1523,6 @@ function resolveLoanScheduleStatus(?float $remaining, ?float $schedulePayment, ?
 
     return null;
 }
-
-function getDefaultImage()
-{
-    return asset('custom/images/default-img.png');
-}
 function array_to_upper(array $items)
 {
     $result = [];
@@ -2407,15 +1567,6 @@ function isAll($percentageOf)
     $allItems  = is_array($percentageOf) ? $percentageOf : json_decode($percentageOf) ;
     return in_array('all', $allItems);
 
-}
-
-
-function hasMiddleware(string $middlewareName)
-{
-    if (is_null(Route::current())) {
-        return false;
-    }
-    return in_array($middlewareName, array_values(Route::current()->gatherMiddleware()));
 }
 function getModelNameWithoutNamespace($object)
 {
@@ -2870,10 +2021,6 @@ function convertIndexKeysToString(array $items, array $datesAsIndexAndString)
         $result[$dateAsString] = $value;
     }
     return $result ;
-}
-function sumIntervalsIndexes(array $dateValues, string $intervalName, string $financialYearStartMonth, array $dateIndexWithDate)
-{
-    return (new IntervalSummationOperations())->sumForInterval($dateValues, $intervalName, $financialYearStartMonth, $dateIndexWithDate, true);
 }
 function getIntervalFormatted():array
 {

@@ -155,6 +155,8 @@
 					
 					select `accumulated_limit`  into _accumulated_limit from overdraft_against_commercial_paper_limits where is_active = 1 and company_id = new.company_id and overdraft_against_commercial_paper_id = new.overdraft_against_commercial_paper_id and date(full_date) <=  date(new.full_date)  order by full_date desc limit 1 ;
 					set new.end_balance = ifnull(new.beginning_balance + new.debit - new.credit,0) ; 
+					set new.is_debit = if(new.debit > 0 , 1 , 0);
+					set new.is_credit = if(new.debit > 0 , 0 , 1);
 					set new.limit = _accumulated_limit;
 					set new.room = _accumulated_limit +  new.end_balance ;
 					

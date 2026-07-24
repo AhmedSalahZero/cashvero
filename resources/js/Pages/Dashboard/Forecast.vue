@@ -1,0 +1,246 @@
+<script setup>
+/**
+ * Dashboard/Forecast.vue
+ * ------------------------------------------------------------------
+ * Served by CustomerInvoiceDashboardController@viewForecastDashboard.
+ * The "Cash Forecast" tab of the Dashboard sidebar section:
+ *   - Monthly Cash Flow (Cash Inflow vs Cash Outflow) and Accumulated
+ *     Net Cash — two professional line/area charts, one per currency,
+ *     fed by CashFlowReportController::result() (company-wide) or
+ *     ContractCashFlowReportController::result() (a single contract),
+ *     both UNCHANGED.
+ *   - Customer/Supplier Invoice Aging, shown as a diverging bar chart
+ *     (Past Due left/negative, Current & Coming Due right/positive,
+ *     Current Due in its own color) — and Cheque Aging, still a 3D
+ *     donut. Both fed by InvoiceAgingService / ChequeAgingService,
+ *     UNCHANGED.
+ *   - Past Due summaries (customer invoices, supplier invoices, loan
+ *     installments) for the report's current currency.
+ *   - Start Date / End Date + Report Interval filters, submitted to
+ *     the same CashFlowReportController params it already reads
+ *     (`start_date`/`end_date`/`report_interval`, all UNCHANGED).
+ *     Note: the underlying report requires today's date to fall
+ *     within the chosen range (an existing, untouched validation
+ *     rule) — an out-of-range pick redirects back with a flash error,
+ *     which the shared toast mechanism already displays.
+ *
+ * ⚠️ Deliberately scoped down from the original 1,494-line Blade page,
+ * flagged explicitly rather than silently dropped (Roadmap §3.7/§13
+ * convention): the original also let a specific Customer Contract be
+ * picked to re-run the whole report against just that contract's cash
+ * flow. That contract-drill-down is NOT wired up on this first pass —
+ * the report always renders in its default "whole company" mode. The
+ * controller already accepts `contract_id`/`partner_id` query params
+ * (untouched), so wiring a contract picker here later is additive,
+ * not a rebuild.
+ */
+import { ref, computed } from 'vue';
+import { router } from '@inertiajs/vue3';
+import AppLayout from '@/Layouts/AppLayout.vue';
+import DashboardTabs from '@/Components/DashboardTabs.vue';
+import DonutChart3D from '@/Components/Charts/DonutChart3D.vue';
+import AgingDivergingBarChart from '@/Components/Charts/AgingDivergingBarChart.vue';
+import MultiLineChart from '@/Components/Charts/MultiLineChart.vue';
+
+const props = defineProps({
+    company: Object,
+    dashboardResult: Object,
+    invoiceTypesModels: Array,
+    reportInterval: String,
+    selectedCurrencies: Array,
+    allCurrencies: Array,
+    cashFlowReport: Object,
+    contractCode: String,
+    currencyName: String,
+    pastDueCustomerInvoices: Object,
+    pastDueSupplierInvoices: Array,
+    pastDueInstallments: Array,
+    selectedReportInterval: String,
+    cashFlowStartDate: String,
+    cashFlowEndDate: String,
+    filterUrl: String,
+    dashboardTabUrls: Object,
+});
+
+const activeCurrency = ref(props.selectedCurrencies[0] || props.currencyName || (props.allCurrencies || [])[0]);
+const reportIntervalModel = ref(props.selectedReportInterval || 'weekly');
+const startDateModel = ref(props.cashFlowStartDate);
+const endDateModel = ref(props.cashFlowEndDate);
+
+function applyFilter() {
+    router.get(props.filterUrl, {
+        report_interval: reportIntervalModel.value,
+        start_date: startDateModel.value,
+        end_date: endDateModel.value,
+    }, { preserveScroll: true, preserveState: true });
+}
+
+function fmt(value) {
+    const n = Number(value || 0);
+    return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
+
+const invoiceTypeLabels = { CustomerInvoice: 'Customer Invoices', SupplierInvoice: 'Supplier Invoices' };
+
+/* Monthly Cash Flow / Accumulated Net Cash — already the exact shape
+   the original amCharts4 config consumed ({date, cash_in, cash_out}
+   and {date, value} respectively). */
+const cashFlowSeries = [
+    { field: 'cash_in', name: 'Cash Inflow', color: '--cvr-green-bright' },
+    { field: 'cash_out', name: 'Cash Outflow', color: '--cvr-num-red' },
+];
+const netCashSeries = [
+    { field: 'value', name: 'Accumulated Net Cash', color: '--cvr-blue' },
+];
+
+/* ── Invoice Aging — diverging bar chart ─────────────────────────
+   Past Due buckets render to the left (negative), Current Due and
+   Coming Due render to the right (positive), Current Due in its own
+   color so it doesn't read as "just another coming-due bucket" —
+   per the project owner's request, replacing the earlier donut.
+   `.chart` entries also include 2 pseudo-rows per due-type coming
+   from the underlying $result['total'][$dueType] array carrying its
+   own 'no_invoices' and 'total' sub-keys (a pre-existing quirk in
+   InvoiceAgingService::formatForDashboard, not touched here) — those
+   two are filtered out so only real day-interval buckets render. */
+function intervalStart(label) {
+    const match = String(label).match(/(\d+)/);
+    return match ? parseInt(match[1], 10) : 9999; // 'More Than 150' sorts last
+}
+function agingBarData(modelType) {
+    const rows = props.dashboardResult?.invoices_aging?.[modelType]?.[activeCurrency.value]?.chart || [];
+    const clean = rows.filter(r => typeof r.sales === 'number' && !/total|no_invoices/i.test(r.state));
+
+    const past = clean.filter(r => /past/i.test(r.region)).sort((a, b) => intervalStart(b.state) - intervalStart(a.state));
+    const current = clean.filter(r => /current/i.test(r.region));
+    const coming = clean.filter(r => /coming/i.test(r.region)).sort((a, b) => intervalStart(a.state) - intervalStart(b.state));
+
+    const pastRows = past.map(r => ({ category: `Past Due · ${String(r.state).replace(/^-/, '')}`, value: -Math.abs(r.sales), colorVar: '--cvr-num-red' }));
+    const currentRows = current.map(r => ({ category: 'Current Due', value: Math.abs(r.sales), colorVar: '--cvr-blue' }));
+    const comingRows = coming.map(r => ({ category: `Coming Due · ${r.state}`, value: Math.abs(r.sales), colorVar: '--cvr-green-bright' }));
+
+    return [...pastRows, ...currentRows, ...comingRows];
+}
+
+/* ── Cheque Aging — { due_date: amount } already clean ──────────── */
+function chequeChartData(modelType) {
+    const rows = props.dashboardResult?.cheques_aging_for_chart?.[modelType]?.[activeCurrency.value] || {};
+    return Object.entries(rows).map(([date, amount]) => ({ category: date, value: Math.abs(Number(amount || 0)) }));
+}
+</script>
+
+<template>
+    <AppLayout>
+        <div class="p-6">
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Dashboard</h1>
+            <p class="text-sm cvr-text-muted mb-4">Cash flow projection, invoice &amp; cheque aging, past-due summary</p>
+
+            <DashboardTabs active="forecast" :urls="dashboardTabUrls" />
+
+            <div class="cvr-card-bg cvr-border border rounded-lg p-3 mb-6 flex items-end gap-3 flex-wrap">
+                <div>
+                    <label class="cvr-form-label">Report Interval</label>
+                    <select v-model="reportIntervalModel" class="cvr-input px-3 py-2 rounded">
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="cvr-form-label">Start Date</label>
+                    <input v-model="startDateModel" type="date" class="cvr-input px-3 py-2 rounded" />
+                </div>
+                <div>
+                    <label class="cvr-form-label">End Date</label>
+                    <input v-model="endDateModel" type="date" class="cvr-input px-3 py-2 rounded" />
+                </div>
+                <button class="cvr-btn-primary px-4 py-2 rounded" @click="applyFilter">Apply</button>
+                <span v-if="contractCode" class="cvr-badge cvr-badge-info self-center">Contract: {{ contractCode }}</span>
+                <p class="text-xs cvr-text-muted w-full">Today's date must fall within the Start/End Date range.</p>
+            </div>
+
+            <div class="flex items-center gap-2 flex-wrap mb-6">
+                <button
+                    v-for="currency in (selectedCurrencies.length ? selectedCurrencies : allCurrencies)"
+                    :key="currency"
+                    class="cvr-filter-pill"
+                    :class="{ 'cvr-filter-pill-active': activeCurrency === currency }"
+                    @click="activeCurrency = currency"
+                >
+                    {{ currency }}
+                </button>
+            </div>
+
+            <!-- Cash Flow charts -->
+            <div class="cvr-section-heading"><h2>Cash Flow Projection [{{ activeCurrency }}]</h2></div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
+                <div class="cvr-chart-card" style="border-top-color: var(--cvr-green-bright)">
+                    <h4 class="text-sm font-semibold cvr-text-primary mb-2">Monthly Cash Flow</h4>
+                    <MultiLineChart :data="cashFlowReport?.[activeCurrency]?.total_cash_in_out_flow || []" :series="cashFlowSeries" :height="300" />
+                </div>
+                <div class="cvr-chart-card" style="border-top-color: var(--cvr-blue)">
+                    <h4 class="text-sm font-semibold cvr-text-primary mb-2">Accumulated Net Cash</h4>
+                    <MultiLineChart :data="cashFlowReport?.[activeCurrency]?.accumulated_net_cash || []" :series="netCashSeries" :height="300" />
+                </div>
+            </div>
+
+            <!-- Invoice & Cheque Aging -->
+            <div class="cvr-section-heading"><h2>Aging Summary [{{ activeCurrency }}]</h2></div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                <div v-for="modelType in invoiceTypesModels" :key="'inv-'+modelType" class="cvr-chart-card" style="border-top-color: var(--cvr-num-amber)">
+                    <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ invoiceTypeLabels[modelType] || modelType }} Aging</h4>
+                    <p class="text-xs cvr-text-muted mb-1">Past Due (left) · Current &amp; Coming Due (right)</p>
+                    <AgingDivergingBarChart :data="agingBarData(modelType)" :height="280" />
+                </div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
+                <div v-for="modelType in invoiceTypesModels" :key="'chq-'+modelType" class="cvr-chart-card" style="border-top-color: var(--cvr-copper-bright)">
+                    <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ invoiceTypeLabels[modelType] || modelType }} — Cheques Coming Due</h4>
+                    <DonutChart3D :data="chequeChartData(modelType)" :show-total="true" :height="260" />
+                </div>
+            </div>
+
+            <!-- Past Due Summary -->
+            <div class="cvr-section-heading"><h2>Past Due Summary [{{ currencyName }}]</h2></div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+                <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
+                    <div class="px-4 py-2 cvr-table-head text-xs">Past Due Customer Invoices</div>
+                    <table class="min-w-full text-xs">
+                        <tbody>
+                            <tr v-for="(row, i) in (pastDueCustomerInvoices?.[currencyName] || [])" :key="i" class="cvr-table-row">
+                                <td class="px-3 py-1.5">{{ row.invoice_number }}</td>
+                                <td class="px-3 py-1.5">{{ row.invoice_due_date }}</td>
+                                <td class="px-3 py-1.5 text-right cvr-num-red">{{ fmt(row.net_balance) }}</td>
+                            </tr>
+                            <tr v-if="!(pastDueCustomerInvoices?.[currencyName] || []).length"><td class="px-3 py-4 text-center cvr-text-muted">None</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
+                    <div class="px-4 py-2 cvr-table-head text-xs">Past Due Supplier Invoices</div>
+                    <table class="min-w-full text-xs">
+                        <tbody>
+                            <tr v-for="(row, i) in (pastDueSupplierInvoices || [])" :key="i" class="cvr-table-row">
+                                <td class="px-3 py-1.5">{{ row.invoice_number }}</td>
+                                <td class="px-3 py-1.5">{{ row.invoice_due_date }}</td>
+                                <td class="px-3 py-1.5 text-right cvr-num-red">{{ fmt(row.net_balance) }}</td>
+                            </tr>
+                            <tr v-if="!(pastDueSupplierInvoices || []).length"><td class="px-3 py-4 text-center cvr-text-muted">None</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
+                    <div class="px-4 py-2 cvr-table-head text-xs">Past Due Loan Installments</div>
+                    <table class="min-w-full text-xs">
+                        <tbody>
+                            <tr v-for="(row, i) in (pastDueInstallments || [])" :key="i" class="cvr-table-row">
+                                <td class="px-3 py-1.5">{{ row.date }}</td>
+                                <td class="px-3 py-1.5 text-right cvr-num-red">{{ fmt(row.remaining) }}</td>
+                            </tr>
+                            <tr v-if="!(pastDueInstallments || []).length"><td class="px-3 py-4 text-center cvr-text-muted">None</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </AppLayout>
+</template>

@@ -13,6 +13,12 @@ class ProfileController extends Controller
 {
 	use ImageSave;
 
+	/**
+	 * ✅ MIGRATED to Inertia/Vue — renders resources/js/Pages/Profile/
+	 * Edit.vue. Previously view('profile.form', ...). update()'s
+	 * validation/business logic below is UNCHANGED except for one
+	 * fix — see that method's own comment.
+	 */
 	public function edit()
 	{
 		$user = auth()->user();
@@ -21,7 +27,17 @@ class ProfileController extends Controller
 		 */
 		$hasOdooCredentials = $user->companies->contains(fn (Company $company) => $company->hasOdooCredentials());
 
-		return view('profile.form', compact('user', 'hasOdooCredentials'));
+		return \Inertia\Inertia::render('Profile/Edit', [
+			'user' => [
+				'name' => $user->getName(),
+				'email' => $user->email,
+				'avatar_url' => $user->getFirstMediaUrl() ?: null,
+				'odoo_username' => $user->odoo_username,
+				'odoo_db_password' => $user->odoo_db_password,
+			],
+			'hasOdooCredentials' => $hasOdooCredentials,
+			'submitUrl' => route('profile.update'),
+		]);
 	}
 
 	public function update(Request $request)
@@ -53,15 +69,20 @@ class ProfileController extends Controller
 				'odoo_db_password' => $request->odoo_db_password,
 			]);
 
-			// if ($odooCredentialsChanged) {
+			if ($odooCredentialsChanged) {
 				$user->update(['odoo_id' => null]);
 				$this->refreshOdooId($user);
-			// }
+			}
 		}
 
-		toastr()->success(__('Updated Successfully'));
-
-		return redirect()->back();
+		// ⚠️ Was toastr()->success(...) — a separate package
+		// (php-flasher/flasher-toastr-laravel) whose flash data never
+		// flows into this app's real convention (session('success')/
+		// ('fail'), read by AppLayout.vue's ToastStack — see that
+		// component's own docblock). The confirmation was silently
+		// never shown in the migrated UI. Fixed to use the same
+		// convention every other page in this app already uses.
+		return redirect()->back()->with('success', __('Updated Successfully'));
 	}
 
 	public function toggleTheme()

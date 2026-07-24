@@ -19,6 +19,15 @@ class StoreOverdraftAgainstAssignmentOfContractRequest extends FormRequest
     }
 
 
+    /**
+     * ⚠️ REAL BUG FIXED HERE (same class of bug already found and
+     * fixed on the other 3 overdraft types): 'balance_date' was never
+     * actually validated here — only a browser-only `required` hint
+     * on the old Blade form. This facility's boot():created hook uses
+     * this exact field's raw value as the `date` for the very first
+     * rate-history row it creates, and that column is NOT NULL in the
+     * database. Fixed here before it could cause the same crash.
+     */
     public function rules(array $excludeAccountNumbers = [])
     {
         return [
@@ -26,6 +35,7 @@ class StoreOverdraftAgainstAssignmentOfContractRequest extends FormRequest
 			'contract_end_date'=>'required|date|after:contract_start_date',
             'account_number'=>['required',new UniqueAccountNumberRule($excludeAccountNumbers)],
 			'currency'=>'required',
+			'balance_date'=>'required|date',
 			'limit'=>['required','gt:0'],
 			'interest_rate'=>['sometimes','required','gt:0'],
 			'max_lending_limit_per_contract'=>'required|gt:0',

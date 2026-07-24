@@ -139,7 +139,19 @@ class CashDashboardService
 
             foreach ($branches as $branchId => $branchName) {
                 $statement = $cashInSafeByCurrency[$currencyName][$branchId] ?? null;
-                $amount = $statement ? (float) $statement->end_balance : 0.0;
+                // Only list this branch under this currency if it genuinely
+                // has a recorded Cash In Safe statement in that currency —
+                // previously every branch was listed under every currency
+                // (at a hardcoded 0 when no record existed), which made the
+                // "Cash & Banks" detail panel show every safe/branch on
+                // every currency tab instead of only the ones that actually
+                // hold that currency. The per-currency SUM below is
+                // unaffected either way, since a skipped row would only
+                // ever have contributed 0.
+                if (! $statement) {
+                    continue;
+                }
+                $amount = (float) $statement->end_balance;
                 $details[$currencyName]['cash_in_safe'][] = [
                     'amount' => $amount,
                     'branch_name' => $branchName,

@@ -161,7 +161,6 @@ class CustomerInvoice extends Model implements IInvoice
 	const MONEY_RECEIVED_OR_PAYMENT_TABLE_NAME = 'money_received';
 	const MONEY_RECEIVED_OR_PAYMENT_TABLE_FOREIGN_NAME = 'money_received_id';
 	const TABLE_NAME = 'customer_invoices';
-	const JS_FILE = 'money-receive.js';
 	const COLLETED_OR_PAID = 'collected';
 	const COLLETED_OR_PAID_AMOUNT = 'collected_amount';
 	const ODOO_COLLETED_OR_PAID_AMOUNT = 'odoo_collected_amount';
@@ -299,10 +298,29 @@ class CustomerInvoice extends Model implements IInvoice
 			$result[$index]['net_balance'] = $inEditMode ? $invoiceArr['net_balance'] +  $invoiceArr['settlement_amount']  + (double) $invoiceArr['withhold_amount'] : $invoiceArr['net_balance']  ;
 			$result[$index]['settlement_amount'] = $inEditMode ? $invoiceArr['settlement_amount'] : 0;
 			$result[$index]['withhold_amount'] = $inEditMode ? $invoiceArr['withhold_amount'] : 0;
-			$result[$index]['invoice_date'] = Carbon::make($invoiceArr['invoice_date'])->format('d-m-Y');
-			$result[$index]['invoice_due_date'] = Carbon::make($invoiceArr['invoice_due_date'])->format('d-m-Y');
+			// Null-guarded like the rest of the codebase already does
+			// (see IsInvoice::getInvoiceDateFormatted()/getDueDateFormatted()).
+			// This path skipped that guard, so any invoice with a null
+			// date (data-entry gap, e.g. INV/2025/00092) was a fatal
+			// "call to format() on null" that crashed the whole endpoint —
+			// most visible on edit, since edit mode's broader query (no
+			// net_balance > 0 filter) surfaces more such rows than create
+			// mode does.
+			$result[$index]['invoice_date'] = $invoiceArr['invoice_date'] ? Carbon::make($invoiceArr['invoice_date'])->format('d-m-Y') : null;
+			$result[$index]['invoice_due_date'] = $invoiceArr['invoice_due_date'] ? Carbon::make($invoiceArr['invoice_due_date'])->format('d-m-Y') : null;
 		}
-		return $result;
+		// $result is keyed by the original array's index ($index), which
+		// skips a number every time the `continue` above fires (e.g. an
+		// already-fully-settled invoice). That leaves gaps like
+		// [1 => ..., 2 => ...] instead of [0 => ..., 1 => ...] — and
+		// PHP's json_encode() turns any non-sequential-from-0 array into
+		// a JSON OBJECT ({"1":...,"2":...}) instead of a JSON ARRAY
+		// ([...]). The Vue form does `data.invoices.map(...)`, which only
+        // works on a real array — so on a JSON object it threw
+		// "data.invoices.map is not a function", which is exactly the
+		// "Couldn't load invoices" message. array_values() re-numbers
+		// the keys from 0 with no gaps, guaranteeing a JSON array.
+		return array_values($result);
 	}
 	public static function hasProjectNameColumn()
 	{

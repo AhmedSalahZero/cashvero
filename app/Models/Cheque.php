@@ -311,13 +311,34 @@ class Cheque extends Model
         return $this->clearance_days ?: 0;
     }
 
+    /**
+     * ⚠️ REAL BUG FIXED HERE (same Carbon 3 sign-bug class already
+     * found and fixed on TimeOfDeposit::calculateInterestAmount()).
+     *
+     * This line used to call diffInDays() without forcing an absolute
+     * value. Under Carbon 2 (what this code was written against),
+     * diffInDays() always returned a positive day-count by default,
+     * regardless of argument order. Carbon 3 — which ships with this
+     * project's Laravel 12 — changed that default to a SIGNED value,
+     * so this line returned a NEGATIVE day-count whenever depositing
+     * a cheque ahead of its due date (the only case this branch runs
+     * in — $chequeDueDate, the later date, was the base; $chequeDepositDate,
+     * the earlier date, was the argument). That negative count then
+     * got added to the deposit date, pushing the calculated
+     * "expected collection date" BACKWARD — potentially to before the
+     * deposit even happened. This field feeds cash-flow reporting and
+     * the notification system's due-date buckets, so the bug reached
+     * further than just this one field. Fixed by forcing
+     * $absolute = true, restoring the always-positive guarantee this
+     * code was written expecting, regardless of Carbon version.
+     */
     public function calculateChequeExpectedCollectionDate(string $chequeDepositDate, int $chequeClearanceDays): string
     {
         $chequeDueDate = $this->getDueDate();
         $chequeDueDate = Carbon::make($chequeDueDate);
         $chequeDepositDate = Carbon::make($chequeDepositDate);
         if ($chequeDepositDate->lessThan($chequeDueDate)) {
-            $diffInDays = $chequeDueDate->diffInDays($chequeDepositDate) + $chequeClearanceDays ;
+            $diffInDays = $chequeDueDate->diffInDays($chequeDepositDate, true) + $chequeClearanceDays ;
             return $chequeDepositDate->addDays($diffInDays)->format('Y-m-d');
         } else {
             return $chequeDepositDate->addDays($chequeClearanceDays)->format('Y-m-d');

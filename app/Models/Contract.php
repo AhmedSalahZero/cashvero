@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Helpers\HHelpers;
 use App\Helpers\HStr;
 use App\Models\Partner;
+use App\Models\SupplierInvoice;
 use App\Traits\HasBasicStoreRequest;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -527,6 +528,19 @@ class Contract extends Model
 	public function customerInvoices()
 	{
 		return $this->hasMany(CustomerInvoice::class,'contract_code','code')->where('company_id',$this->company_id);
+	}
+	/**
+	 * Supplier-side counterpart to customerInvoices() — this never
+	 * existed before. The original Blade's Contracts index only ever
+	 * wired up $contract->customerInvoices (and gated the whole
+	 * "Invoices" button behind a Customer-only $hasProjectNameColumn
+	 * check), so Supplier Contracts never had a working Invoices
+	 * button at all, even in the original app. Added to give Supplier
+	 * Contracts real parity with Customer Contracts.
+	 */
+	public function supplierInvoices()
+	{
+		return $this->hasMany(SupplierInvoice::class,'contract_code','code')->where('company_id',$this->company_id);
 	}
 	public static function deleteLimitUpdateRowFromStatement($overdraftAgainstAssignmentOfContractLimit)
 	{

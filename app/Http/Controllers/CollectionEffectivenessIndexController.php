@@ -8,19 +8,43 @@ use App\Models\Partner;
 use App\Traits\GeneralFunctions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
 
 /**
- * * هي اسمها اعمار الديون
- * * هو عباره عن الفواتير اللي لسه مفتوحة ( اعمار الديون) .. سواء الدين لسه جايه او المتاخر او حق اليوم
- * * وبالتالي بمجرد ما تندفع مش بتيجي هنا (لو النت بلانس اكبر من صفر يبقي لسه ما استدتش كاملا)
+ * CollectionEffectivenessIndexController
+ * ------------------------------------------------------------------
+ * How much of what SHOULD have been collected/paid in a period
+ * actually was, per customer/supplier — "Collection Effectiveness
+ * Index" for customers, "Payment Effectiveness Index" for suppliers.
+ *
+ * This controller was already written to support both — see the
+ * in_array('collection', $request->segments()) modelType check in
+ * index(), and SupplierInvoice::getEffectivenessTitle()/getEffectivenessText(),
+ * which already return "Payment Effectiveness Index Form"/"Payment
+ * Effectiveness Index". Only the Supplier-side ROUTE and sidebar
+ * entry were ever missing — added alongside this migration (see
+ * routes/web.php: view.payments.effectiveness.index /
+ * result.payments.effectiveness.index), not a new feature invented
+ * here, just completing what was already half-built.
+ *
+ * result() internally reuses AgingController::result() and
+ * CustomerInvoiceDashboardController::showInvoiceStatementReport()
+ * in their $returnResult=true internal-use mode — both UNCHANGED,
+ * both return their raw arrays before any Inertia-specific code in
+ * either of those methods runs.
+ *
+ * ── Frontend migration status (as of this file's last update) ──────
+ *   - index() / result() → ALREADY migrated. Return Inertia::render(),
+ *                           served by resources/js/Pages/CollectionEffectiveness/Form.vue
+ *                           and resources/js/Pages/CollectionEffectiveness/Result.vue
  */
 class CollectionEffectivenessIndexController
 {
     use GeneralFunctions;
     public function index(Company $company,Request $request)
 	{
-		$defaultStartDate = now()->subMonths(12);
-		$defaultEndDate = now();
+		$defaultStartDate = now()->subMonths(12)->format('Y-m-d');
+		$defaultEndDate = now()->format('Y-m-d');
 		$modelType = in_array('collection',$request->segments()) ? 'CustomerInvoice' : 'SupplierInvoice' ;
 		$fullClassName = ('\App\Models\\'.$modelType) ;
 		$customersOrSupplierText = (new $fullClassName)->getClientDisplayName();
@@ -40,10 +64,6 @@ class CollectionEffectivenessIndexController
 		if(isset($exportables['business_sector'])){
 			$businessSectors = DB::table('cash_vero_business_sectors')->where('company_id',$company->id)->pluck('name')->toArray();
 		}
-		// $currencies = DB::table($invoiceTableName)
-		
-		// ->where('company_id',$company->id)->where('currency','!=',null)->where('currency','!=','')
-		// ->selectRaw('currency')->get()->pluck('currency')->unique()->values()->toArray();
 		$currencies = DB::table($invoiceTableName)
 		->where('company_id', $company->id)       
 		->whereNotNull('currency')                
@@ -56,10 +76,13 @@ class CollectionEffectivenessIndexController
 		$invoices = ('\App\Models\\'.$modelType)::where($clientNameColumnName,'!=',null)->where($clientNameColumnName,'!=','')->onlyCompany($company->id)->get();
 		
 		$invoices = $invoices->unique('customer_name')->values() ;
-        return view('admin.reports.collection-effectiveness-index.form', [
+		// The results controller reads clients[] as NAME strings
+		// (Partner::getPartnerFromName), not IDs — unlike Aging's
+		// client_ids[]. Options are built by name accordingly.
+		$clientOptions = $invoices->map(fn ($invoice) => $invoice->getName())->unique()->values();
+
+        return Inertia::render('CollectionEffectiveness/Form', [
 			'businessUnits'=>$businessUnits,
-			'company'=>$company,
-			'invoices'=>$invoices ,
 			'salesPersons'=>$salesPersons,
 			'businessSectors'=>$businessSectors,
 			'currencies'=>$currencies,
@@ -67,9 +90,25 @@ class CollectionEffectivenessIndexController
 			'title'=>$title,
 			'modelType'=>$modelType,
 			'defaultStartDate'=>$defaultStartDate,
-			'defaultEndDate'=>$defaultEndDate
+			'defaultEndDate'=>$defaultEndDate,
+			'clientOptions'=>$clientOptions,
+			'resultUrl'=>route($modelType === 'CustomerInvoice' ? 'result.collections.effectiveness.index' : 'result.payments.effectiveness.index', ['company'=>$company->id]),
+			'ajaxCustomersUrl'=>route('get.customers.or.suppliers.from.business.units.currencies', ['company'=>$company->id,'modelType'=>$modelType]),
 		]);
     }
+	/**
+	 * Effectiveness Index results — one row per customer/supplier,
+	 * one column per date period (or a single "whole interval"
+	 * column), each cell a collection/payment effectiveness
+	 * percentage, plus an "All Company" summary row.
+	 * Renders resources/js/Pages/CollectionEffectiveness/Result.vue.
+	 *
+	 * ALL the math above this comment is UNCHANGED — including the
+	 * two internal reuses of AgingController::result() and
+	 * showInvoiceStatementReport() in their $returnResult=true mode.
+	 * Everything below just reshapes the already-computed values into
+	 * an explicit row/column structure for Vue.
+	 */
 	public function result(Company $company , Request $request){
 		$modelType = $request->get('model_type');
 		$fullClassName = ('\App\Models\\'.$modelType) ;
@@ -133,16 +172,34 @@ class CollectionEffectivenessIndexController
 		$collectionEffectivenessIndexForAllCustomersPerAll = $totalCurrentTotalToBeCollectedPerAll ? $totalCurrentTotalCollectedPerAll/$totalCurrentTotalToBeCollectedPerAll*100 :0;
 		
 		$tableHeaders =  $datesForHeader ;
+
+		// ── Reshape for Vue: one row per customer, each with its
+		// percentage per header column + (if monthly) an overall total.
+		$rows = [];
+		foreach ($collectionEffectivenessIndexPerCustomer as $partnerName => $effectivenessIndexArrs) {
+			$values = [];
+			foreach ($tableHeaders as $header) {
+				$values[$header] = $effectivenessIndexArrs[$header] ?? 0;
+			}
+			$rows[] = [
+				'name' => $partnerName,
+				'values' => $values,
+				'total' => $collectionEffectivenessIndexForAllCustomersPerCustomer[$partnerName] ?? 0,
+			];
+		}
+		$allCompanyRow = ['values' => [], 'total' => $collectionEffectivenessIndexForAllCustomersPerAll];
+		foreach ($tableHeaders as $header) {
+			$allCompanyRow['values'][$header] = $collectionEffectivenessIndexForAllCustomersPerDate[$header] ?? 0;
+		}
 		
-		return view('admin.reports.collection-effectiveness-index.result',[
-			'collectionEffectivenessIndexPerCustomer'=>$collectionEffectivenessIndexPerCustomer,
+		return Inertia::render('CollectionEffectiveness/Result', [
 			'reportName'=>$reportName,
 			'tableHeaders'=>$tableHeaders,
 			'customerOrSupplierNameText'=>$customerOrSupplierNameText,
-			'collectionEffectivenessIndexForAllCustomersPerDate'=>$collectionEffectivenessIndexForAllCustomersPerDate,
-			'collectionEffectivenessIndexForAllCustomersPerCustomer'=>$collectionEffectivenessIndexForAllCustomersPerCustomer,
+			'rows'=>$rows,
+			'allCompanyRow'=>$allCompanyRow,
 			'isMonthlyReport'=>$isMonthlyReport,
-			'collectionEffectivenessIndexForAllCustomersPerAll'=>$collectionEffectivenessIndexForAllCustomersPerAll
+			'backUrl'=>route($modelType === 'CustomerInvoice' ? 'view.collections.effectiveness.index' : 'view.payments.effectiveness.index', ['company'=>$company->id]),
 		]);
 	}
 

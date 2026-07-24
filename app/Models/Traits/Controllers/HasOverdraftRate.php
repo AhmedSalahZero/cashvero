@@ -14,7 +14,7 @@ trait HasOverdraftRate
 	{
 		$modelFullName = (self::getModelName()); // App\Models\CleanOverdraft for example
 		$overdraftModel = $modelFullName::find($overdraftId);
-		$date = $request->get('date_create') ?: now()->format('Y-m-d') ;
+		$date = $request->get('date_create') ;
 		$marginRate = $request->get('margin_rate_create') ;
 		$minInterestRate = $request->get('min_interest_rate_create') ;
 		$borrowingRate = $request->get('borrowing_rate_create') ;
@@ -61,10 +61,7 @@ trait HasOverdraftRate
 		}
 		$rate->update($data);
 		$rate->overdraftModal->updateBankStatementsFromDate($date);
-		return response()->json([
-			'status'=>true ,
-			'reloadCurrentPage'=>true 
-		]);
+		return redirect()->back()->with('success',__('Done'));
 	}
 	
 	public function deleteRate(Request $request , Company $company , FinancialInstitution $financialInstitution ,  $rateId)

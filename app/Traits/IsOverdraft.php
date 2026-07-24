@@ -13,6 +13,25 @@ use Carbon\Carbon;
 trait IsOverdraft
 {
 	/**
+	 * Odoo integration accessors — added when Odoo Code support was
+	 * introduced for overdraft facilities (previously only Time/
+	 * Certificates Of Deposit and Financial Institution Accounts had
+	 * this). Living in this shared trait means all 4 overdraft types
+	 * get it, including the 2 not yet migrated to Vue.
+	 */
+	public function getOdooCode()
+	{
+		return $this->odoo_code;
+	}
+	public function getOdooId()
+	{
+		return $this->odoo_id;
+	}
+	public function getJournalId()
+	{
+		return $this->journal_id;
+	}
+	/**
 	 * * هو تاريخ بداية التعاقد مع البنك علي هذا التسهيل (القرض)
 	 */
 	public function getContractStartDate()

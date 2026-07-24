@@ -134,6 +134,8 @@ begin
 					end if ;
 					
 					set new.end_balance = ifnull(new.beginning_balance + new.debit - new.credit,0) ; 
+					set new.is_debit = if(new.debit > 0 , 1 , 0);
+					set new.is_credit = if(new.debit > 0 , 0 , 1);
 					
 			-- نهاية حسبه فايدة نهايه كل شهر
 					

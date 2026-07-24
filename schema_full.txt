@@ -1,0 +1,2489 @@
+
+=== account_interests ===
+  id  |  bigint unsigned  |  NOT NULL
+  financial_institution_account_id  |  int  |  NOT NULL
+  start_date  |  date  |  NULL
+  interest_rate  |  decimal(5,2)  |  NULL DEFAULT '0.00'
+  min_balance  |  decimal(15,2)  |  NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== account_types ===
+  id  |  bigint unsigned  |  NOT NULL
+  name_en  |  varchar(255)  |  NOT NULL
+  name_ar  |  varchar(255)  |  NOT NULL
+  type  |  varchar(255)  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  slug  |  varchar(255)  |  NOT NULL
+  model_name  |  varchar(255)  |  NULL
+
+=== active_jobs ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  int  |  NULL
+  status  |  enum('test_table','save_to_table')  |  NOT NULL
+  model  |  varchar(255)  |  NOT NULL
+  model_name  |  varchar(255)  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== banks ===
+  id  |  int  |  NOT NULL
+  name_en  |  varchar(255)  |  NOT NULL
+  name_ar  |  varchar(255)  |  NOT NULL
+  view_name  |  varchar(255)  |  NULL
+  created_at  |  datetime  |  NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+
+=== branch ===
+  id  |  int  |  NOT NULL
+  journal_id  |  bigint unsigned  |  NULL
+  odoo_id  |  bigint unsigned  |  NULL
+  odoo_outbound_cheque_payment_method_id  |  varchar(255)  |  NULL
+  odoo_inbound_cheque_payment_method_id  |  varchar(255)  |  NULL
+  odoo_outbound_transfer_payment_method_id  |  varchar(255)  |  NULL
+  odoo_inbound_transfer_payment_method_id  |  varchar(255)  |  NULL
+  odoo_code  |  varchar(255)  |  NULL
+  name  |  varchar(255)  |  NULL
+  currency  |  varchar(255)  |  NULL
+  company_id  |  int  |  NULL
+  created_by  |  int  |  NULL
+  updated_by  |  int  |  NULL
+  created_at  |  datetime  |  NOT NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  int  |  NULL
+
+=== buy_or_sell_currencies ===
+  id  |  bigint unsigned  |  NOT NULL
+  outbound_odoo_reference  |  varchar(255)  |  NULL
+  inbound_odoo_reference  |  varchar(255)  |  NULL
+  synced_with_odoo  |  varchar(255)  |  NULL
+  odoo_error_message  |  varchar(255)  |  NULL
+  inbound_journal_entry_id  |  bigint unsigned  |  NULL
+  outbound_journal_entry_id  |  bigint unsigned  |  NULL
+  outbound_account_bank_statement_odoo_id  |  bigint unsigned  |  NULL
+  inbound_account_bank_statement_odoo_id  |  bigint unsigned  |  NULL
+  type  |  varchar(255)  |  NULL
+  transaction_date  |  date  |  NULL
+  currency_to_sell  |  varchar(255)  |  NULL
+  currency_to_buy  |  varchar(255)  |  NULL
+  currency_to_sell_amount  |  decimal(14,2)  |  NULL
+  exchange_rate  |  decimal(20,10)  |  NULL
+  currency_to_buy_amount  |  decimal(14,2)  |  NULL
+  from_bank_id  |  int  |  NULL
+  from_account_type_id  |  bigint unsigned  |  NULL
+  from_account_number  |  varchar(255)  |  NULL
+  to_bank_id  |  bigint unsigned  |  NOT NULL
+  to_account_type_id  |  bigint unsigned  |  NULL
+  to_account_number  |  varchar(255)  |  NULL
+  to_branch_id  |  bigint unsigned  |  NULL
+  from_branch_id  |  bigint unsigned  |  NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  buy_comment_ar  |  varchar(255)  |  NULL
+  buy_comment_en  |  varchar(255)  |  NULL
+  sell_comment_ar  |  varchar(255)  |  NULL
+  sell_comment_en  |  varchar(255)  |  NULL
+  created_by  |  bigint unsigned  |  NULL
+  updated_by  |  bigint unsigned  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  user_comment  |  text  |  NULL
+
+=== caching_company ===
+  id  |  int unsigned  |  NOT NULL
+  model  |  varchar(255)  |  NOT NULL
+  company_id  |  int  |  NOT NULL
+  job_id  |  int  |  NOT NULL
+  key_name  |  varchar(100)  |  NOT NULL
+
+=== cash_expense_categories ===
+  id  |  bigint unsigned  |  NOT NULL
+  name  |  varchar(255)  |  NULL
+  company_id  |  int  |  NOT NULL
+  created_by  |  int  |  NULL
+  updated_by  |  int  |  NULL
+  created_at  |  datetime  |  NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+
+=== cash_expense_category_names ===
+  id  |  bigint unsigned  |  NOT NULL
+  odoo_id  |  bigint unsigned  |  NULL
+  odoo_chart_of_account_number  |  varchar(255)  |  NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  cash_expense_category_id  |  bigint unsigned  |  NOT NULL
+  name  |  varchar(255)  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== cash_expense_contract ===
+  id  |  bigint unsigned  |  NOT NULL
+  cash_expense_id  |  int  |  NULL
+  contract_id  |  bigint unsigned  |  NULL
+  amount  |  decimal(14,2)  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== cash_expenses ===
+  id  |  int  |  NOT NULL
+  odoo_reference  |  varchar(255)  |  NULL
+  odoo_error_message  |  text  |  NULL
+  synced_with_odoo  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  journal_entry_id  |  bigint unsigned  |  NULL
+  account_bank_statement_line_id  |  bigint unsigned  |  NULL
+  odoo_id  |  bigint unsigned  |  NULL
+  is_reviewed  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  reviewed_by  |  bigint unsigned  |  NULL
+  cash_expense_category_name_id  |  bigint unsigned  |  NULL
+  opening_balance_id  |  bigint unsigned  |  NULL
+  type  |  varchar(255)  |  NULL
+  supplier_name  |  varchar(255)  |  NULL
+  payment_date  |  date  |  NULL
+  paid_amount  |  decimal(14,2)  |  NULL
+  total_withhold_amount  |  double  |  NOT NULL DEFAULT '0'
+  total_withhold_amount_in_main_currency  |  double  |  NULL DEFAULT '0'
+  amount_in_paying_currency  |  double  |  NULL DEFAULT '0'
+  currency  |  varchar(255)  |  NULL
+  exchange_rate  |  double  |  NULL DEFAULT '1'
+  user_id  |  int  |  NULL
+  company_id  |  int  |  NULL
+  comment_ar  |  varchar(255)  |  NULL
+  comment_en  |  varchar(255)  |  NULL
+  created_at  |  datetime  |  NOT NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+  user_comment  |  text  |  NULL
+
+=== cash_in_banks ===
+  id  |  bigint unsigned  |  NOT NULL
+  money_received_id  |  int  |  NOT NULL
+  receiving_bank_id  |  int  |  NULL
+  account_type  |  varchar(255)  |  NULL
+  account_number  |  varchar(255)  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  company_id  |  int  |  NULL
+
+=== cash_in_safe_statements ===
+  id  |  bigint unsigned  |  NOT NULL
+  type  |  varchar(255)  |  NULL
+  branch_id  |  bigint unsigned  |  NULL
+  currency  |  varchar(255)  |  NULL
+  exchange_rate  |  decimal(14,2)  |  NOT NULL DEFAULT '1.00'
+  is_debit  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_credit  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  company_id  |  bigint unsigned  |  NOT NULL
+  money_received_id  |  bigint unsigned  |  NOT NULL
+  money_payment_id  |  bigint unsigned  |  NULL
+  cash_expense_id  |  bigint unsigned  |  NULL
+  buy_or_sell_currency_id  |  bigint unsigned  |  NULL
+  internal_money_transfer_id  |  bigint unsigned  |  NULL
+  opening_balance_id  |  bigint unsigned  |  NULL
+  date  |  date  |  NULL
+  full_date  |  datetime  |  NULL
+  beginning_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  debit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  credit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  end_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== cash_in_safes ===
+  id  |  bigint unsigned  |  NOT NULL
+  money_received_id  |  int  |  NOT NULL
+  receiving_branch_id  |  int  |  NULL
+  receipt_number  |  varchar(255)  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  company_id  |  int  |  NULL
+
+=== cash_payments ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  varchar(255)  |  NOT NULL
+  money_payment_id  |  int  |  NULL
+  cash_expense_id  |  bigint unsigned  |  NULL
+  delivery_branch_id  |  int  |  NULL
+  receipt_number  |  varchar(255)  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== cash_projections ===
+  id  |  bigint unsigned  |  NOT NULL
+  is_contract  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  name  |  varchar(255)  |  NULL
+  type  |  varchar(255)  |  NOT NULL
+  amounts  |  longtext  |  NULL
+  cashflow_report_id  |  bigint unsigned  |  NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== cash_vero_business_sectors ===
+  id  |  bigint unsigned  |  NOT NULL
+  name  |  varchar(255)  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== cash_vero_business_units ===
+  id  |  bigint unsigned  |  NOT NULL
+  name  |  varchar(255)  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== cash_vero_sales_channels ===
+  id  |  bigint unsigned  |  NOT NULL
+  name  |  varchar(255)  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== cash_vero_sales_persons ===
+  id  |  bigint unsigned  |  NOT NULL
+  name  |  varchar(255)  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== cashflow_reports ===
+  id  |  bigint unsigned  |  NOT NULL
+  is_contract  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  report_name  |  varchar(255)  |  NULL
+  report_interval  |  varchar(255)  |  NOT NULL
+  start_date  |  varchar(255)  |  NOT NULL
+  end_date  |  varchar(255)  |  NOT NULL
+  report_data  |  longtext  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== certificates_of_deposits ===
+  id  |  int  |  NOT NULL
+  store_break_journal_entry_id  |  varchar(255)  |  NULL
+  inbound_break_odoo_reference  |  varchar(255)  |  NULL
+  is_at_maturity  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  inbound_break_journal_entry_id  |  bigint unsigned  |  NULL
+  outbound_break_journal_entry_id  |  bigint unsigned  |  NULL
+  break_account_bank_statement_line_id  |  bigint unsigned  |  NULL
+  break_journal_entry_id  |  bigint unsigned  |  NULL
+  renewal_account_bank_statement_line_id  |  bigint unsigned  |  NULL
+  renewal_journal_entry_id  |  bigint unsigned  |  NULL
+  interest_account_bank_statement_line_id  |  bigint unsigned  |  NULL
+  interest_journal_entry_id  |  bigint unsigned  |  NULL
+  maturity_account_bank_statement_line_id  |  bigint unsigned  |  NULL
+  maturity_journal_entry_id  |  bigint unsigned  |  NULL
+  store_account_bank_statement_line_id  |  bigint unsigned  |  NULL
+  store_journal_entry_id  |  bigint unsigned  |  NULL
+  inbound_journal_entry_id  |  bigint unsigned  |  NULL
+  outbound_journal_entry_id  |  bigint unsigned  |  NULL
+  deducted_from_account_id  |  bigint unsigned  |  NULL
+  odoo_id  |  bigint unsigned  |  NULL
+  odoo_code  |  varchar(255)  |  NULL
+  status  |  varchar(255)  |  NOT NULL DEFAULT 'running'
+  financial_institution_id  |  int  |  NOT NULL
+  account_number  |  varchar(255)  |  NULL
+  amount  |  decimal(12,2)  |  NULL
+  currency  |  varchar(255)  |  NULL
+  interest_rate  |  decimal(5,2)  |  NOT NULL DEFAULT '0.00'
+  interest_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  actual_interest_amount  |  decimal(14,2)  |  NULL
+  deposit_date  |  date  |  NULL
+  start_date  |  date  |  NULL
+  end_date  |  date  |  NULL
+  maturity_amount_added_to_account_id  |  varchar(255)  |  NULL
+  company_id  |  int  |  NULL
+  is_active  |  tinyint unsigned  |  NOT NULL DEFAULT '1'
+  created_by  |  int  |  NULL
+  update_by  |  int  |  NULL
+  created_at  |  datetime  |  NOT NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  decimal(10,0)  |  NULL
+  break_date  |  date  |  NULL
+  break_interest_amount  |  decimal(14,2)  |  NULL
+  break_charge_amount  |  decimal(14,2)  |  NULL
+  inbound_odoo_reference  |  varchar(255)  |  NULL
+
+=== cheques ===
+  id  |  bigint unsigned  |  NOT NULL
+  branch_id  |  bigint unsigned  |  NULL
+  cheque_number  |  varchar(255)  |  NULL
+  status  |  varchar(255)  |  NOT NULL DEFAULT 'in-safe'
+  money_received_id  |  int  |  NOT NULL
+  drawee_bank_id  |  int  |  NULL
+  drawl_bank_id  |  int  |  NULL
+  account_type  |  varchar(255)  |  NOT NULL
+  account_number  |  varchar(255)  |  NULL
+  due_date  |  date  |  NULL
+  deposit_date  |  date  |  NULL
+  days_count  |  bigint  |  NOT NULL DEFAULT '0'
+  expected_collection_date  |  date  |  NULL
+  actual_collection_date  |  date  |  NULL
+  clearance_days  |  int  |  NULL DEFAULT '0'
+  account_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  collection_fees  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  company_id  |  int  |  NULL
+
+=== clean_overdraft_bank_statements ===
+  id  |  bigint unsigned  |  NOT NULL
+  type  |  varchar(255)  |  NOT NULL
+  is_debit  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_credit  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  priority  |  int  |  NOT NULL DEFAULT '3'
+  clean_overdraft_id  |  int unsigned  |  NOT NULL
+  money_received_id  |  bigint unsigned  |  NOT NULL
+  buy_or_sell_currency_id  |  bigint unsigned  |  NULL
+  money_payment_id  |  bigint unsigned  |  NULL
+  cash_expense_id  |  bigint unsigned  |  NULL
+  internal_money_transfer_id  |  bigint unsigned  |  NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  date  |  date  |  NOT NULL
+  limit  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  beginning_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  debit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  credit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  end_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  room  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  interest_type  |  enum('normal','end_of_month')  |  NOT NULL DEFAULT 'normal'
+  interest_rate_annually  |  decimal(8,5)  |  NOT NULL DEFAULT '0.00000'
+  interest_rate_daily  |  decimal(8,5)  |  NOT NULL DEFAULT '0.00000'
+  days_count  |  int  |  NOT NULL DEFAULT '0'
+  interest_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  full_date  |  datetime  |  NULL
+  comment_en  |  varchar(255)  |  NULL
+  comment_ar  |  varchar(255)  |  NULL
+  outstanding_withdrawal_date  |  date  |  NULL
+  factoring_transaction_id  |  bigint unsigned  |  NULL
+  factoring_bank_movement_type  |  varchar(255)  |  NULL
+
+=== clean_overdraft_rates ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NULL
+  clean_overdraft_id  |  bigint unsigned  |  NOT NULL
+  date  |  date  |  NOT NULL
+  borrowing_rate  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  margin_rate  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  interest_rate  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  min_interest_rate  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== clean_overdraft_withdrawals ===
+  id  |  bigint unsigned  |  NOT NULL
+  clean_overdraft_bank_statement_id  |  bigint unsigned  |  NOT NULL
+  clean_overdraft_id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  max_settlement_days  |  int  |  NOT NULL DEFAULT '0'
+  due_date  |  date  |  NOT NULL
+  settlement_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  net_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== clean_overdrafts ===
+  id  |  int  |  NOT NULL
+  financial_institution_id  |  int  |  NULL
+  company_id  |  int  |  NOT NULL
+  is_active  |  tinyint unsigned  |  NOT NULL DEFAULT '1'
+  contract_start_date  |  date  |  NULL
+  contract_end_date  |  date  |  NULL
+  account_number  |  varchar(255)  |  NULL
+  odoo_code  |  varchar(255)  |  NULL
+  odoo_id  |  bigint unsigned  |  NULL
+  journal_id  |  bigint unsigned  |  NULL
+  currency  |  varchar(255)  |  NULL
+  limit  |  varchar(255)  |  NULL
+  outstanding_balance  |  varchar(255)  |  NULL
+  balance_date  |  date  |  NULL
+  highest_debt_balance_rate  |  float  |  NULL DEFAULT '0'
+  admin_fees_rate  |  float  |  NULL DEFAULT '0'
+  created_by  |  int  |  NULL
+  updated_by  |  int  |  NULL
+  created_at  |  datetime  |  NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+  to_be_setteled_max_within_days  |  int  |  NULL DEFAULT '0'
+  start_settlement_from_bank_statement_date  |  datetime  |  NULL
+  oldest_date  |  date  |  NULL
+  origin_update_row_is_debit  |  tinyint(1)  |  NULL DEFAULT '0'
+
+=== companies ===
+  id  |  bigint unsigned  |  NOT NULL
+  odoo_integration_start_date  |  date  |  NULL
+  labeling_logo  |  varchar(500)  |  NULL
+  labeling_report_title  |  varchar(255)  |  NULL
+  labeling_stamp  |  varchar(300)  |  NULL
+  labeling_logo_3  |  varchar(300)  |  NULL
+  labeling_logo_2  |  varchar(300)  |  NULL
+  labeling_logo_1  |  varchar(300)  |  NULL
+  labeling_print_headers  |  longtext  |  NULL
+  no_rows_for_each_page_labeling  |  varchar(255)  |  NULL
+  print_labeling_type  |  varchar(255)  |  NULL
+  generate_labeling_code_fields  |  longtext  |  NULL
+  labeling_use_client_logo  |  int  |  NULL DEFAULT '0'
+  labeling_client_logo  |  varchar(255)  |  NULL
+  labeling_pagination_per_page  |  varchar(255)  |  NULL DEFAULT '20'
+  labeling_type  |  varchar(255)  |  NULL
+  qrcode_height  |  varchar(255)  |  NULL
+  qrcode_width  |  varchar(255)  |  NULL
+  label_height  |  varchar(255)  |  NULL
+  label_width  |  varchar(255)  |  NULL
+  logo_width  |  varchar(255)  |  NULL
+  labeling_paper_size  |  varchar(255)  |  NULL
+  name  |  longtext  |  NOT NULL
+  sub_of  |  varchar(255)  |  NOT NULL DEFAULT '0'
+  is_caching_now  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  main_functional_currency  |  varchar(255)  |  NULL
+  updated_by  |  int  |  NULL
+  created_by  |  int  |  NULL
+  created_at  |  timestamp  |  NULL
+  odoo_db_url  |  varchar(255)  |  NULL
+  odoo_db_name  |  varchar(255)  |  NULL
+  updated_at  |  timestamp  |  NULL
+  deleted_at  |  timestamp  |  NULL
+
+=== companies_users ===
+  user_id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+
+=== company_systems ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  system_name  |  varchar(255)  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== contract_loan_schedule_settlements ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NULL
+  contract_loan_schedule_id  |  bigint unsigned  |  NOT NULL
+  current_account_number  |  varchar(255)  |  NOT NULL
+  date  |  date  |  NOT NULL
+  amount  |  decimal(20,2)  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== contract_loan_schedules ===
+  id  |  bigint unsigned  |  NOT NULL
+  leasing_contract_id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  date  |  date  |  NULL
+  beginning_balance  |  decimal(20,2)  |  NULL
+  cheque_amount  |  decimal(20,2)  |  NULL
+  interest_amount  |  decimal(20,2)  |  NULL
+  principle_amount  |  decimal(20,2)  |  NULL
+  end_balance  |  decimal(20,2)  |  NULL
+  remaining  |  decimal(20,2)  |  NOT NULL DEFAULT '0.00'
+  status  |  varchar(255)  |  NULL
+  cheque_number  |  varchar(255)  |  NULL
+  drawee_bank_id  |  bigint unsigned  |  NULL
+  account_number  |  varchar(255)  |  NULL
+  created_by  |  bigint unsigned  |  NULL
+  updated_by  |  bigint unsigned  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== contracts ===
+  id  |  bigint unsigned  |  NOT NULL
+  project_account_id  |  bigint unsigned  |  NULL
+  odoo_id  |  bigint unsigned  |  NULL
+  parent_id  |  bigint unsigned  |  NULL
+  overdraft_against_assignment_of_contract_id  |  bigint unsigned  |  NULL
+  status  |  varchar(255)  |  NOT NULL DEFAULT 'running'
+  model_type  |  varchar(255)  |  NULL
+  partner_id  |  bigint unsigned  |  NULL
+  name  |  varchar(255)  |  NULL
+  code  |  varchar(255)  |  NULL
+  company_id  |  int  |  NOT NULL
+  created_by  |  int  |  NULL
+  updated_by  |  int  |  NULL
+  created_at  |  datetime  |  NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+  start_date  |  date  |  NULL
+  end_date  |  date  |  NULL
+  amount  |  decimal(14,2)  |  NOT NULL
+  currency  |  varchar(255)  |  NULL
+  exchange_rate  |  decimal(8,3)  |  NULL DEFAULT '1.000'
+
+=== currencies ===
+  id  |  bigint unsigned  |  NOT NULL
+  odoo_id  |  bigint unsigned  |  NULL
+  name  |  varchar(255)  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== current_account_bank_statements ===
+  id  |  bigint unsigned  |  NOT NULL
+  lg_commission_fees_journal_entry_id  |  bigint unsigned  |  NULL
+  odoo_lg_commission_fees_reference  |  varchar(255)  |  NULL
+  is_break_interest  |  tinyint(1)  |  NULL
+  is_period_cd_or_td_interest  |  bigint unsigned  |  NOT NULL DEFAULT '0'
+  type  |  varchar(255)  |  NULL
+  is_beginning_balance  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_renewal_fees  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_commission_fees  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_issuance_fees  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_td_renewal  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_active  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  financial_institution_account_id  |  int  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  money_received_id  |  bigint unsigned  |  NOT NULL
+  money_payment_id  |  bigint unsigned  |  NOT NULL
+  cash_expense_id  |  bigint unsigned  |  NULL
+  buy_or_sell_currency_id  |  bigint unsigned  |  NULL
+  internal_money_transfer_id  |  bigint unsigned  |  NULL
+  lc_settlement_internal_money_transfer_id  |  bigint unsigned  |  NULL
+  time_of_deposit_id  |  bigint unsigned  |  NULL
+  letter_of_guarantee_issuance_id  |  bigint unsigned  |  NULL
+  lg_renewal_date_history_id  |  bigint unsigned  |  NULL
+  letter_of_credit_issuance_id  |  bigint unsigned  |  NULL
+  lg_advanced_payment_history_id  |  bigint unsigned  |  NULL
+  lc_advanced_payment_history_id  |  bigint unsigned  |  NULL
+  lc_issuance_expense_id  |  bigint unsigned  |  NULL
+  certificate_of_deposit_id  |  bigint unsigned  |  NULL
+  loan_schedule_settlement_id  |  bigint unsigned  |  NULL
+  contract_loan_schedule_settlement_id  |  bigint unsigned  |  NULL
+  is_debit  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_credit  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  date  |  date  |  NULL
+  full_date  |  datetime  |  NULL
+  beginning_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  debit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  credit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  end_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  interest_type  |  varchar(255)  |  NULL
+  interest_rate_annually  |  decimal(8,5)  |  NOT NULL DEFAULT '0.00000'
+  interest_rate_daily  |  decimal(8,5)  |  NOT NULL DEFAULT '0.00000'
+  days_count  |  int  |  NOT NULL DEFAULT '0'
+  interest_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  comment_en  |  varchar(255)  |  NULL
+  comment_ar  |  varchar(255)  |  NULL
+  interest_account_bank_statement_odoo_id  |  bigint unsigned  |  NULL
+  interest_journal_entry_id  |  bigint unsigned  |  NULL
+  interest_odoo_reference  |  varchar(255)  |  NULL
+  factoring_transaction_id  |  bigint unsigned  |  NULL
+  factoring_bank_movement_type  |  varchar(255)  |  NULL
+
+=== customer_invoices ===
+  id  |  int  |  NOT NULL
+  odoo_id  |  bigint unsigned  |  NULL
+  company_id  |  int  |  NOT NULL
+  opening_balance_id  |  bigint unsigned  |  NULL
+  customer_code  |  varchar(255)  |  NULL
+  sales_person  |  varchar(255)  |  NULL
+  business_unit  |  varchar(255)  |  NULL
+  customer_id  |  int  |  NOT NULL
+  customer_name  |  varchar(255)  |  NULL
+  business_sector  |  varchar(255)  |  NULL
+  project_name  |  varchar(255)  |  NULL
+  site_name  |  varchar(255)  |  NULL
+  invoice_date  |  date  |  NULL
+  sales_order_date  |  date  |  NULL
+  sales_order_number  |  varchar(255)  |  NULL
+  invoice_month  |  varchar(2)  |  NULL
+  invoice_year  |  mediumint  |  NULL
+  invoice_number  |  varchar(255)  |  NULL
+  invoice_amount  |  varchar(255)  |  NULL DEFAULT '0'
+  currency  |  varchar(10)  |  NOT NULL
+  exchange_rate  |  decimal(10,5)  |  NOT NULL DEFAULT '1.00000'
+  invoice_amount_in_main_currency  |  double  |  NULL DEFAULT '0'
+  vat_amount  |  varchar(255)  |  NULL DEFAULT '0'
+  vat_amount_in_main_currency  |  double  |  NULL DEFAULT '0'
+  odoo_withhold_amount  |  decimal(14,5)  |  NOT NULL DEFAULT '0.00000'
+  odoo_withhold_amount_in_main_currency  |  decimal(14,5)  |  NOT NULL DEFAULT '0.00000'
+  withhold_amount  |  varchar(255)  |  NULL DEFAULT '0'
+  withhold_amount_in_main_currency  |  double  |  NULL DEFAULT '0'
+  total_withhold_amount  |  decimal(14,5)  |  NOT NULL DEFAULT '0.00000'
+  total_withhold_amount_in_main_currency  |  decimal(14,5)  |  NOT NULL DEFAULT '0.00000'
+  net_invoice_amount  |  varchar(255)  |  NULL DEFAULT '0'
+  net_invoice_amount_in_main_currency  |  double  |  NULL DEFAULT '0'
+  contracted_collection_days  |  varchar(255)  |  NULL
+  expected_collection_days  |  varchar(255)  |  NULL
+  invoice_due_date  |  date  |  NULL
+  invoice_status  |  varchar(255)  |  NULL
+  odoo_collected_amount  |  decimal(14,5)  |  NOT NULL DEFAULT '0.00000'
+  odoo_collected_amount_in_main_currency  |  decimal(14,5)  |  NOT NULL DEFAULT '0.00000'
+  excel_collected_amount  |  decimal(14,5)  |  NULL DEFAULT '0.00000'
+  excel_collected_amount_in_main_currency  |  decimal(14,5)  |  NULL DEFAULT '0.00000'
+  collected_amount  |  varchar(255)  |  NULL DEFAULT '0'
+  collected_amount_in_main_currency  |  double  |  NULL DEFAULT '0'
+  total_collected_amount  |  decimal(14,5)  |  NOT NULL DEFAULT '0.00000'
+  total_collected_amount_in_main_currency  |  decimal(14,5)  |  NOT NULL DEFAULT '0.00000'
+  total_deductions  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  total_deductions_in_main_currency  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  net_balance  |  varchar(255)  |  NULL DEFAULT '0'
+  net_balance_in_main_currency  |  double  |  NULL DEFAULT '0'
+  is_period_closed  |  tinyint(1)  |  NULL DEFAULT '0'
+  is_canceled  |  tinyint(1)  |  NULL DEFAULT '0'
+  contract_date  |  date  |  NULL
+  contract_code  |  varchar(255)  |  NULL
+  contract_name  |  varchar(255)  |  NULL
+  contract_amount  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  created_at  |  datetime  |  NOT NULL DEFAULT 'CURRENT_TIMESTAMP'
+  created_by  |  int  |  NULL
+  updated_by  |  int  |  NULL
+  updated_at  |  datetime  |  NULL
+  discount_amount  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  discount_amount_in_main_currency  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+
+=== customer_opening_balances ===
+  id  |  bigint unsigned  |  NOT NULL
+  date  |  date  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== customized_fields_exportations ===
+  id  |  bigint unsigned  |  NOT NULL
+  fields  |  longtext  |  NOT NULL
+  model_name  |  varchar(255)  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== deductions ===
+  id  |  bigint unsigned  |  NOT NULL
+  name  |  varchar(255)  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== down_payment_money_payment_settlements ===
+  id  |  int  |  NOT NULL
+  contract_id  |  bigint unsigned  |  NULL
+  purchase_order_id  |  bigint unsigned  |  NULL
+  supplier_id  |  bigint unsigned  |  NULL
+  down_payment_amount  |  varchar(255)  |  NULL
+  total_down_payment_settlement  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  down_payment_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  currency  |  varchar(255)  |  NULL
+  money_payment_id  |  int  |  NULL
+  cash_expense_id  |  bigint unsigned  |  NULL
+  company_id  |  int  |  NULL
+  created_at  |  datetime  |  NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+
+=== down_payment_settlements ===
+  id  |  int  |  NOT NULL
+  contract_id  |  bigint unsigned  |  NULL
+  sales_order_id  |  bigint unsigned  |  NULL
+  customer_id  |  bigint unsigned  |  NULL
+  down_payment_amount  |  varchar(255)  |  NULL
+  total_down_payment_settlement  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  down_payment_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  currency  |  varchar(255)  |  NULL
+  money_received_id  |  int  |  NULL
+  company_id  |  int  |  NULL
+  created_at  |  datetime  |  NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+
+=== due_date_histories ===
+  id  |  bigint unsigned  |  NOT NULL
+  model_id  |  int  |  NOT NULL
+  due_date  |  varchar(255)  |  NOT NULL
+  amount  |  decimal(14,2)  |  NOT NULL
+  company_id  |  int  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  model_type  |  varchar(255)  |  NOT NULL
+
+=== employee_statements ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  currency_name  |  varchar(255)  |  NOT NULL
+  is_debit  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_credit  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  date  |  date  |  NULL
+  partner_id  |  bigint unsigned  |  NOT NULL
+  money_received_id  |  bigint unsigned  |  NULL
+  money_payment_id  |  bigint unsigned  |  NULL
+  full_date  |  datetime  |  NULL
+  beginning_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  debit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  credit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  end_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  comment_en  |  varchar(255)  |  NULL
+  comment_ar  |  varchar(255)  |  NULL
+
+=== factoring_companies ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  name  |  varchar(255)  |  NOT NULL
+  created_by  |  bigint unsigned  |  NULL
+  updated_by  |  bigint unsigned  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== factoring_contracts ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  factoring_company_id  |  bigint unsigned  |  NOT NULL
+  contract_start_date  |  date  |  NULL
+  contract_end_date  |  date  |  NULL
+  recourse_type  |  varchar(255)  |  NOT NULL
+  currency  |  varchar(255)  |  NULL
+  limit  |  decimal(20,2)  |  NOT NULL DEFAULT '0.00'
+  outstanding_balance  |  decimal(20,2)  |  NOT NULL DEFAULT '0.00'
+  balance_date  |  date  |  NULL
+  borrowing_rate  |  decimal(8,4)  |  NULL
+  margin_rate  |  decimal(8,4)  |  NULL
+  interest_rate  |  decimal(8,4)  |  NULL
+  min_interest_rate  |  decimal(8,4)  |  NULL
+  highest_debt_balance_rate  |  decimal(8,4)  |  NULL
+  admin_fees_rate  |  decimal(8,4)  |  NULL
+  to_be_setteled_max_within_days  |  int unsigned  |  NULL
+  created_by  |  bigint unsigned  |  NULL
+  updated_by  |  bigint unsigned  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== factoring_statements ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  factoring_company_id  |  bigint unsigned  |  NOT NULL
+  factoring_contract_id  |  bigint unsigned  |  NOT NULL
+  factoring_transaction_id  |  bigint unsigned  |  NULL
+  entry_type  |  varchar(255)  |  NOT NULL
+  date  |  date  |  NOT NULL
+  debit  |  decimal(20,2)  |  NOT NULL DEFAULT '0.00'
+  credit  |  decimal(20,2)  |  NOT NULL DEFAULT '0.00'
+  currency  |  varchar(255)  |  NULL
+  comment_en  |  text  |  NULL
+  comment_ar  |  text  |  NULL
+  created_by  |  bigint unsigned  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== factoring_transactions ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  recourse_type  |  varchar(255)  |  NOT NULL
+  factoring_date  |  date  |  NOT NULL
+  factoring_company_id  |  bigint unsigned  |  NOT NULL
+  factoring_contract_id  |  bigint unsigned  |  NOT NULL
+  customer_id  |  bigint unsigned  |  NOT NULL
+  customer_invoice_id  |  bigint unsigned  |  NOT NULL
+  invoice_currency  |  varchar(255)  |  NOT NULL
+  invoice_amount  |  decimal(20,2)  |  NOT NULL
+  factoring_percentage  |  decimal(8,4)  |  NOT NULL
+  factoring_amount  |  decimal(20,2)  |  NOT NULL
+  contract_interest_rate  |  decimal(8,4)  |  NOT NULL
+  diff_in_days  |  int unsigned  |  NOT NULL
+  factoring_interest_amount  |  decimal(20,2)  |  NOT NULL
+  other_charges  |  decimal(20,2)  |  NOT NULL DEFAULT '0.00'
+  received_amount  |  decimal(20,2)  |  NOT NULL
+  financial_institution_id  |  bigint unsigned  |  NOT NULL
+  account_type_id  |  bigint unsigned  |  NOT NULL
+  account_number  |  varchar(255)  |  NOT NULL
+  settlement_id  |  bigint unsigned  |  NULL
+  is_settled  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  settled_at  |  date  |  NULL
+  is_difference_received  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  difference_received_date  |  date  |  NULL
+  difference_received_amount  |  decimal(20,2)  |  NULL
+  difference_financial_institution_id  |  bigint unsigned  |  NULL
+  difference_account_type_id  |  bigint unsigned  |  NULL
+  difference_account_number  |  varchar(255)  |  NULL
+  is_collected  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  collected_at  |  date  |  NULL
+  collection_date  |  date  |  NULL
+  collection_financial_institution_id  |  bigint unsigned  |  NULL
+  collection_account_type_id  |  bigint unsigned  |  NULL
+  collection_account_number  |  varchar(255)  |  NULL
+  collection_difference_amount  |  decimal(20,2)  |  NULL
+  is_rejected  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  rejected_at  |  date  |  NULL
+  rejection_date  |  date  |  NULL
+  rejection_financial_institution_id  |  bigint unsigned  |  NULL
+  rejection_account_type_id  |  bigint unsigned  |  NULL
+  rejection_account_number  |  varchar(255)  |  NULL
+  uncollected_invoice_charges  |  decimal(20,2)  |  NOT NULL DEFAULT '0.00'
+  created_by  |  bigint unsigned  |  NULL
+  updated_by  |  bigint unsigned  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== failed_jobs ===
+  id  |  bigint unsigned  |  NOT NULL
+  connection  |  text  |  NOT NULL
+  queue  |  text  |  NOT NULL
+  payload  |  longtext  |  NOT NULL
+  exception  |  longtext  |  NOT NULL
+  failed_at  |  timestamp  |  NOT NULL DEFAULT 'CURRENT_TIMESTAMP'
+
+=== financial_institution_accounts ===
+  id  |  int  |  NOT NULL
+  journal_id  |  bigint unsigned  |  NULL
+  odoo_id  |  bigint unsigned  |  NULL
+  odoo_outbound_cheque_payment_method_id  |  varchar(255)  |  NULL
+  odoo_inbound_cheque_payment_method_id  |  varchar(255)  |  NULL
+  odoo_outbound_transfer_payment_method_id  |  varchar(255)  |  NULL
+  odoo_inbound_transfer_payment_method_id  |  varchar(255)  |  NULL
+  odoo_code  |  varchar(255)  |  NULL
+  is_active  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  financial_institution_id  |  int  |  NULL
+  balance_date  |  date  |  NULL
+  account_number  |  varchar(255)  |  NULL
+  currency  |  varchar(255)  |  NULL
+  balance_amount  |  double  |  NULL DEFAULT '0'
+  created_at  |  datetime  |  NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+  iban  |  varchar(255)  |  NULL
+  exchange_rate  |  decimal(5,2)  |  NULL DEFAULT '1.00'
+  company_id  |  int  |  NULL
+  synced_end_of_month_years  |  longtext  |  NULL
+
+=== financial_institutions ===
+  id  |  int  |  NOT NULL
+  type  |  varchar(255)  |  NULL
+  branch_name  |  varchar(255)  |  NULL
+  bank_id  |  int  |  NULL
+  name  |  varchar(255)  |  NULL
+  company_account_number  |  varchar(255)  |  NULL
+  company_id  |  int  |  NULL
+  created_by  |  int  |  NULL
+  updated_by  |  int  |  NOT NULL
+  created_at  |  datetime  |  NOT NULL
+  updated_at  |  datetime  |  NOT NULL
+
+=== foreign_exchange_rates ===
+  id  |  bigint unsigned  |  NOT NULL
+  from_currency  |  varchar(255)  |  NOT NULL
+  to_currency  |  varchar(255)  |  NOT NULL
+  date  |  date  |  NOT NULL
+  exchange_rate  |  decimal(10,4)  |  NOT NULL DEFAULT '1.0000'
+  company_id  |  bigint unsigned  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== fully_secured_overdraft_bank_statements ===
+  id  |  bigint unsigned  |  NOT NULL
+  type  |  varchar(255)  |  NOT NULL
+  is_debit  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_credit  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  priority  |  int  |  NOT NULL DEFAULT '3'
+  fully_secured_overdraft_id  |  int unsigned  |  NOT NULL
+  money_received_id  |  bigint unsigned  |  NOT NULL
+  money_payment_id  |  bigint unsigned  |  NULL
+  cash_expense_id  |  bigint unsigned  |  NULL
+  internal_money_transfer_id  |  bigint unsigned  |  NULL
+  buy_or_sell_currency_id  |  bigint unsigned  |  NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  date  |  date  |  NOT NULL
+  limit  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  beginning_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  debit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  credit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  end_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  room  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  interest_type  |  enum('normal','end_of_month')  |  NOT NULL DEFAULT 'normal'
+  interest_rate_annually  |  decimal(8,5)  |  NOT NULL DEFAULT '0.00000'
+  interest_rate_daily  |  decimal(8,5)  |  NOT NULL DEFAULT '0.00000'
+  days_count  |  int  |  NOT NULL DEFAULT '0'
+  interest_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  full_date  |  datetime  |  NULL
+  comment_en  |  varchar(255)  |  NULL
+  comment_ar  |  varchar(255)  |  NULL
+  outstanding_withdrawal_date  |  date  |  NULL
+  factoring_transaction_id  |  bigint unsigned  |  NULL
+  factoring_bank_movement_type  |  varchar(255)  |  NULL
+
+=== fully_secured_overdraft_rates ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NULL
+  fully_secured_overdraft_id  |  bigint unsigned  |  NOT NULL
+  date  |  date  |  NOT NULL
+  borrowing_rate  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  margin_rate  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  interest_rate  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  min_interest_rate  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== fully_secured_overdraft_withdrawals ===
+  id  |  bigint unsigned  |  NOT NULL
+  fully_secured_overdraft_bank_statement_id  |  bigint unsigned  |  NOT NULL
+  fully_secured_overdraft_id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  max_settlement_days  |  int  |  NOT NULL DEFAULT '0'
+  due_date  |  date  |  NOT NULL
+  settlement_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  net_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== fully_secured_overdrafts ===
+  id  |  int  |  NOT NULL
+  financial_institution_id  |  int  |  NULL
+  cd_or_td_account_type_id  |  bigint unsigned  |  NULL
+  cd_or_td_account_id  |  bigint unsigned  |  NOT NULL
+  cd_or_td_lending_percentage  |  decimal(14,5)  |  NULL DEFAULT '0.00000'
+  company_id  |  int  |  NOT NULL
+  is_active  |  tinyint unsigned  |  NOT NULL DEFAULT '1'
+  contract_start_date  |  date  |  NULL
+  contract_end_date  |  date  |  NULL
+  account_number  |  varchar(255)  |  NULL
+  odoo_code  |  varchar(255)  |  NULL
+  odoo_id  |  bigint unsigned  |  NULL
+  journal_id  |  bigint unsigned  |  NULL
+  currency  |  varchar(255)  |  NULL
+  limit  |  varchar(255)  |  NULL
+  outstanding_balance  |  varchar(255)  |  NULL
+  balance_date  |  date  |  NULL
+  highest_debt_balance_rate  |  double  |  NULL DEFAULT '0'
+  admin_fees_rate  |  double  |  NULL DEFAULT '0'
+  created_by  |  int  |  NULL
+  updated_by  |  int  |  NULL
+  created_at  |  datetime  |  NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+  to_be_setteled_max_within_days  |  int  |  NULL DEFAULT '0'
+  start_settlement_from_bank_statement_date  |  datetime  |  NULL
+  oldest_date  |  date  |  NULL
+  origin_update_row_is_debit  |  tinyint(1)  |  NULL DEFAULT '0'
+
+=== incoming_transfers ===
+  id  |  bigint unsigned  |  NOT NULL
+  money_received_id  |  int  |  NOT NULL
+  receiving_bank_id  |  int  |  NULL
+  account_type  |  varchar(255)  |  NULL
+  account_number  |  varchar(255)  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  company_id  |  int  |  NULL
+
+=== interest_revenue_accounts ===
+  id  |  bigint unsigned  |  NOT NULL
+  financial_institution_id  |  bigint unsigned  |  NULL
+  odoo_code  |  varchar(255)  |  NOT NULL
+  odoo_id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== internal_money_transfers ===
+  id  |  bigint unsigned  |  NOT NULL
+  odoo_error_message  |  varchar(255)  |  NULL
+  synced_with_odoo  |  tinyint(1)  |  NULL DEFAULT '0'
+  inbound_journal_entry_id  |  bigint unsigned  |  NULL
+  inbound_odoo_reference  |  varchar(255)  |  NULL
+  outbound_journal_entry_id  |  bigint unsigned  |  NULL
+  outbound_odoo_reference  |  varchar(255)  |  NULL
+  outbound_account_bank_statement_odoo_id  |  bigint unsigned  |  NULL
+  inbound_account_bank_statement_odoo_id  |  bigint unsigned  |  NULL
+  type  |  varchar(255)  |  NULL
+  transfer_date  |  date  |  NULL
+  transfer_days  |  int unsigned  |  NOT NULL
+  from_bank_id  |  int  |  NULL
+  to_bank_id  |  int  |  NULL
+  amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  from_account_type_id  |  bigint unsigned  |  NULL
+  from_account_number  |  varchar(255)  |  NULL
+  currency  |  varchar(255)  |  NULL
+  to_account_type_id  |  bigint unsigned  |  NULL
+  to_account_number  |  varchar(255)  |  NULL
+  cheque_number  |  varchar(255)  |  NULL
+  from_branch_id  |  bigint unsigned  |  NULL
+  to_branch_id  |  bigint unsigned  |  NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  from_comment_ar  |  varchar(255)  |  NULL
+  from_comment_en  |  varchar(255)  |  NULL
+  to_comment_ar  |  varchar(255)  |  NULL
+  to_comment_en  |  varchar(255)  |  NULL
+  created_by  |  bigint unsigned  |  NULL
+  updated_by  |  bigint unsigned  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  user_comment  |  text  |  NULL
+
+=== invoice_deductions ===
+  id  |  bigint unsigned  |  NOT NULL
+  invoice_id  |  bigint unsigned  |  NOT NULL
+  invoice_type  |  varchar(255)  |  NOT NULL
+  deduction_id  |  bigint unsigned  |  NOT NULL
+  amount  |  decimal(14,2)  |  NOT NULL
+  date  |  date  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== jobs ===
+  id  |  bigint unsigned  |  NOT NULL
+  queue  |  varchar(255)  |  NOT NULL
+  payload  |  longtext  |  NOT NULL
+  attempts  |  tinyint unsigned  |  NOT NULL
+  reserved_at  |  int unsigned  |  NULL
+  available_at  |  int unsigned  |  NOT NULL
+  created_at  |  int unsigned  |  NOT NULL
+
+=== last_upload_file_names ===
+  id  |  bigint unsigned  |  NOT NULL
+  name  |  varchar(255)  |  NOT NULL
+  model_name  |  varchar(255)  |  NOT NULL
+  status  |  varchar(255)  |  NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== lc_issuance_expenses ===
+  id  |  bigint unsigned  |  NOT NULL
+  expense_name  |  varchar(255)  |  NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  lc_issuance_id  |  bigint unsigned  |  NOT NULL
+  date  |  date  |  NOT NULL
+  amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  currency  |  varchar(255)  |  NOT NULL
+  exchange_rate  |  decimal(6,3)  |  NOT NULL DEFAULT '0.000'
+  amount_in_main_currency  |  decimal(8,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== lc_overdraft_bank_statements ===
+  id  |  bigint unsigned  |  NOT NULL
+  source  |  varchar(255)  |  NOT NULL
+  type  |  varchar(255)  |  NOT NULL
+  is_debit  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_credit  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  priority  |  int  |  NOT NULL DEFAULT '3'
+  lc_facility_id  |  bigint unsigned  |  NULL
+  lc_issuance_id  |  int unsigned  |  NOT NULL
+  lc_settlement_internal_money_transfer_id  |  bigint unsigned  |  NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  date  |  date  |  NOT NULL
+  limit  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  beginning_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  debit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  credit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  end_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  room  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  interest_type  |  enum('normal','end_of_month')  |  NOT NULL DEFAULT 'normal'
+  interest_rate_annually  |  decimal(8,5)  |  NOT NULL DEFAULT '0.00000'
+  interest_rate_daily  |  decimal(8,5)  |  NOT NULL DEFAULT '0.00000'
+  days_count  |  int  |  NOT NULL DEFAULT '0'
+  interest_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  full_date  |  datetime  |  NULL
+  outstanding_withdrawal_date  |  date  |  NULL
+  comment_en  |  varchar(255)  |  NULL
+  comment_ar  |  varchar(255)  |  NULL
+
+=== lc_overdraft_withdrawals ===
+  id  |  bigint unsigned  |  NOT NULL
+  lc_overdraft_bank_statement_id  |  bigint unsigned  |  NOT NULL
+  lc_facility_id  |  bigint unsigned  |  NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  max_settlement_days  |  int  |  NOT NULL DEFAULT '0'
+  due_date  |  date  |  NOT NULL
+  settlement_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  net_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== lc_settlement_internal_money_transfers ===
+  id  |  bigint unsigned  |  NOT NULL
+  type  |  varchar(255)  |  NULL
+  transfer_date  |  date  |  NULL
+  transfer_days  |  int unsigned  |  NOT NULL
+  from_bank_id  |  int  |  NULL
+  from_account_type_id  |  bigint unsigned  |  NULL
+  from_account_number  |  varchar(255)  |  NULL
+  currency  |  varchar(255)  |  NULL
+  to_letter_of_credit_issuance_id  |  bigint unsigned  |  NULL
+  amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  company_id  |  bigint unsigned  |  NOT NULL
+  from_comment_ar  |  varchar(255)  |  NULL
+  to_comment_ar  |  varchar(255)  |  NULL
+  from_comment_en  |  varchar(255)  |  NULL
+  to_comment_en  |  varchar(255)  |  NULL
+  created_by  |  bigint unsigned  |  NULL
+  updated_by  |  bigint unsigned  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  user_comment  |  text  |  NULL
+
+=== leasing_companies ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  name  |  varchar(255)  |  NOT NULL
+  branch_name  |  varchar(255)  |  NULL
+  created_by  |  bigint unsigned  |  NULL
+  updated_by  |  bigint unsigned  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== leasing_contracts ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  leasing_company_id  |  bigint unsigned  |  NOT NULL
+  status  |  varchar(255)  |  NOT NULL DEFAULT 'running'
+  name  |  varchar(255)  |  NULL
+  start_date  |  date  |  NULL
+  end_date  |  date  |  NULL
+  currency  |  varchar(255)  |  NOT NULL
+  limit  |  decimal(20,2)  |  NOT NULL DEFAULT '0.00'
+  paid_amount  |  decimal(20,2)  |  NOT NULL DEFAULT '0.00'
+  outstanding_amount  |  decimal(20,2)  |  NOT NULL DEFAULT '0.00'
+  borrowing_rate  |  decimal(8,4)  |  NOT NULL DEFAULT '0.0000'
+  margin_rate  |  decimal(8,4)  |  NOT NULL DEFAULT '0.0000'
+  duration  |  int unsigned  |  NULL
+  installment_payment_interval  |  varchar(255)  |  NULL
+  created_by  |  bigint unsigned  |  NULL
+  updated_by  |  bigint unsigned  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== lending_information ===
+  id  |  int  |  NOT NULL
+  overdraft_against_commercial_paper_id  |  int  |  NULL
+  lending_rate  |  float  |  NULL DEFAULT '0'
+  for_commercial_papers_due_within_days  |  int  |  NULL DEFAULT '0'
+  company_id  |  int  |  NULL
+  created_at  |  datetime  |  NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+
+=== lending_information_against_assignment_of_contracts ===
+  id  |  int  |  NOT NULL
+  assignment_date  |  date  |  NULL
+  overdraft_against_assignment_of_contract_id  |  int  |  NULL
+  customer_id  |  bigint unsigned  |  NULL
+  contract_id  |  bigint unsigned  |  NULL
+  lending_rate  |  double  |  NULL DEFAULT '0'
+  company_id  |  int  |  NULL
+  created_at  |  datetime  |  NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+
+=== letter_of_credit_cash_cover_statements ===
+  id  |  bigint unsigned  |  NOT NULL
+  type  |  varchar(255)  |  NULL
+  source  |  varchar(255)  |  NOT NULL
+  financial_institution_id  |  bigint unsigned  |  NOT NULL
+  letter_of_credit_issuance_id  |  bigint unsigned  |  NOT NULL
+  lc_facility_id  |  bigint unsigned  |  NULL
+  lc_type  |  varchar(255)  |  NOT NULL
+  currency  |  varchar(255)  |  NULL
+  is_debit  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_credit  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  company_id  |  bigint unsigned  |  NOT NULL
+  date  |  date  |  NULL
+  full_date  |  datetime  |  NULL
+  beginning_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  debit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  credit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  end_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== letter_of_credit_facilities ===
+  id  |  int  |  NOT NULL
+  type  |  varchar(255)  |  NULL DEFAULT 'unsecured'
+  name  |  varchar(255)  |  NULL
+  financial_institution_id  |  int  |  NULL
+  company_id  |  int  |  NOT NULL
+  contract_start_date  |  date  |  NULL
+  contract_end_date  |  date  |  NULL
+  currency  |  varchar(255)  |  NULL
+  cd_or_td_currency  |  varchar(255)  |  NULL
+  limit  |  varchar(255)  |  NULL
+  financing_duration  |  varchar(255)  |  NULL
+  cd_or_td_account_type_id  |  bigint unsigned  |  NULL
+  cd_or_td_id  |  bigint unsigned  |  NULL
+  cd_or_td_amount  |  decimal(14,2)  |  NULL
+  cd_or_td_interest  |  varchar(255)  |  NULL
+  cd_or_td_lending_percentage  |  varchar(255)  |  NULL
+  borrowing_rate  |  varchar(255)  |  NULL
+  bank_margin_rate  |  varchar(255)  |  NULL
+  interest_rate  |  varchar(255)  |  NULL
+  min_interest_rate  |  varchar(255)  |  NULL
+  highest_debt_balance_rate  |  varchar(255)  |  NULL
+  admin_fees_rate  |  varchar(255)  |  NULL
+  created_by  |  int  |  NULL
+  updated_by  |  int  |  NULL
+  created_at  |  datetime  |  NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+  oldest_date  |  date  |  NULL
+
+=== letter_of_credit_facility_term_and_conditions ===
+  id  |  int  |  NOT NULL
+  letter_of_credit_facility_id  |  int  |  NULL
+  company_id  |  int  |  NOT NULL
+  lc_type  |  varchar(255)  |  NULL
+  cash_cover_rate  |  varchar(255)  |  NULL
+  commission_rate  |  varchar(255)  |  NULL
+  commission_interval  |  varchar(255)  |  NULL
+  min_commission_fees  |  decimal(20,2)  |  NOT NULL DEFAULT '0.00'
+  issuance_fees  |  decimal(20,2)  |  NOT NULL DEFAULT '0.00'
+  created_by  |  int  |  NULL
+  updated_by  |  int  |  NULL
+  created_at  |  datetime  |  NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+
+=== letter_of_credit_issuances ===
+  id  |  bigint unsigned  |  NOT NULL
+  lc_facility_id  |  bigint unsigned  |  NULL
+  category_name  |  varchar(255)  |  NULL
+  source  |  varchar(255)  |  NULL
+  status  |  varchar(255)  |  NOT NULL DEFAULT 'running'
+  financed_by_bank_or_self  |  varchar(255)  |  NULL DEFAULT 'bank'
+  transaction_name  |  varchar(255)  |  NULL
+  transaction_reference  |  varchar(255)  |  NULL
+  transaction_date  |  date  |  NULL
+  financial_institution_id  |  int  |  NULL
+  cd_or_td_account_type_id  |  varchar(255)  |  NULL
+  cd_or_td_id  |  varchar(255)  |  NULL
+  total_lc_outstanding_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  lc_type  |  varchar(255)  |  NULL
+  lc_type_outstanding_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  lc_code  |  varchar(255)  |  NULL
+  partner_id  |  bigint unsigned  |  NULL
+  contract_type  |  varchar(255)  |  NULL
+  contract_id  |  bigint unsigned  |  NULL
+  purchase_order_id  |  bigint unsigned  |  NULL
+  purchase_order_date  |  date  |  NULL
+  issuance_date  |  date  |  NULL
+  lc_duration_days  |  int  |  NULL
+  due_date  |  date  |  NULL
+  payment_date  |  date  |  NULL
+  payment_account_number_id  |  bigint unsigned  |  NULL
+  payment_account_type_id  |  bigint unsigned  |  NULL
+  payment_currency  |  varchar(255)  |  NULL
+  supplier_invoice_id  |  bigint unsigned  |  NULL
+  lc_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  lc_currency  |  varchar(255)  |  NULL
+  issuance_fees  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  min_lc_commission_fees  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  cash_cover_rate  |  decimal(5,2)  |  NOT NULL DEFAULT '0.00'
+  cash_cover_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  cash_cover_deducted_from_account_type  |  varchar(255)  |  NULL
+  cash_cover_deducted_from_account_id  |  varchar(255)  |  NULL
+  lc_fees_and_commission_account_id  |  bigint unsigned  |  NULL
+  lc_commission_rate  |  decimal(5,2)  |  NOT NULL DEFAULT '0.00'
+  lc_commission_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  cash_cover_account_number  |  varchar(255)  |  NULL
+  financing_duration  |  int  |  NOT NULL DEFAULT '0'
+  company_id  |  int  |  NOT NULL
+  created_by  |  int  |  NULL
+  updated_by  |  int  |  NULL
+  created_at  |  datetime  |  NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+  lc_cash_cover_currency  |  varchar(255)  |  NULL
+  amount_in_main_currency  |  decimal(14,2)  |  NULL
+  exchange_rate  |  decimal(14,2)  |  NULL
+  user_comment  |  text  |  NULL
+  interest_amount  |  decimal(14,5)  |  NOT NULL DEFAULT '0.00000'
+  interest_currency  |  varchar(255)  |  NULL
+
+=== letter_of_credit_statements ===
+  id  |  bigint unsigned  |  NOT NULL
+  type  |  varchar(255)  |  NULL
+  source  |  varchar(255)  |  NOT NULL
+  cd_or_td_id  |  bigint unsigned  |  NOT NULL DEFAULT '0'
+  financial_institution_id  |  bigint unsigned  |  NOT NULL
+  letter_of_credit_issuance_id  |  bigint unsigned  |  NOT NULL
+  lc_facility_id  |  bigint unsigned  |  NULL
+  lc_type  |  varchar(255)  |  NOT NULL
+  currency  |  varchar(255)  |  NULL
+  is_debit  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_credit  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  company_id  |  bigint unsigned  |  NOT NULL
+  date  |  date  |  NULL
+  full_date  |  datetime  |  NULL
+  beginning_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  debit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  credit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  end_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  comment_ar  |  varchar(255)  |  NULL
+  comment_en  |  varchar(255)  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== letter_of_guarantee_cash_cover_statements ===
+  id  |  bigint unsigned  |  NOT NULL
+  type  |  varchar(255)  |  NULL
+  source  |  varchar(255)  |  NOT NULL
+  financial_institution_id  |  bigint unsigned  |  NOT NULL
+  letter_of_guarantee_issuance_id  |  bigint unsigned  |  NOT NULL
+  lg_facility_id  |  bigint unsigned  |  NULL
+  lg_type  |  varchar(255)  |  NOT NULL
+  lg_advanced_payment_history_id  |  bigint  |  NULL
+  currency  |  varchar(255)  |  NULL
+  is_debit  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_credit  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  company_id  |  bigint unsigned  |  NOT NULL
+  date  |  date  |  NULL
+  full_date  |  datetime  |  NULL
+  beginning_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  debit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  credit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  end_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== letter_of_guarantee_facilities ===
+  id  |  int  |  NOT NULL
+  name  |  varchar(255)  |  NULL
+  financial_institution_id  |  int  |  NULL
+  company_id  |  int  |  NOT NULL
+  contract_start_date  |  date  |  NULL
+  contract_end_date  |  date  |  NULL
+  currency  |  varchar(255)  |  NULL
+  limit  |  varchar(255)  |  NULL
+  outstanding_date  |  date  |  NULL
+  outstanding_amount  |  decimal(20,2)  |  NOT NULL DEFAULT '0.00'
+  created_by  |  int  |  NULL
+  updated_by  |  int  |  NULL
+  created_at  |  datetime  |  NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+
+=== letter_of_guarantee_facility_term_and_conditions ===
+  id  |  int  |  NOT NULL
+  letter_of_guarantee_facility_id  |  int  |  NULL
+  company_id  |  int  |  NOT NULL
+  outstanding_date  |  date  |  NULL
+  lg_type  |  varchar(255)  |  NULL
+  outstanding_balance  |  varchar(255)  |  NULL
+  cash_cover_rate  |  varchar(255)  |  NULL
+  commission_rate  |  varchar(255)  |  NULL
+  commission_interval  |  varchar(255)  |  NULL
+  min_commission_fees  |  decimal(20,2)  |  NOT NULL DEFAULT '0.00'
+  issuance_fees  |  decimal(20,2)  |  NOT NULL DEFAULT '0.00'
+  created_by  |  int  |  NULL
+  updated_by  |  int  |  NULL
+  created_at  |  datetime  |  NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+
+=== letter_of_guarantee_issuances ===
+  id  |  bigint unsigned  |  NOT NULL
+  cancel_journal_entry_id  |  bigint unsigned  |  NULL
+  cash_cover_fees_reference  |  varchar(255)  |  NULL
+  odoo_issuance_fees_reference  |  varchar(255)  |  NULL
+  odoo_commission_fees_reference  |  varchar(255)  |  NULL
+  issuance_fees_account_bank_statement_odoo_id  |  varchar(255)  |  NULL
+  issuance_fees_journal_entry_id  |  bigint unsigned  |  NULL
+  commission_fees_account_bank_statement_odoo_id  |  varchar(255)  |  NULL
+  commission_fees_journal_entry_id  |  bigint unsigned  |  NULL
+  odoo_error_message  |  text  |  NULL
+  synced_with_odoo  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  journal_entry_id  |  bigint unsigned  |  NULL
+  account_bank_statement_odoo_id  |  bigint unsigned  |  NULL
+  lg_facility_id  |  int  |  NULL
+  category_name  |  varchar(255)  |  NOT NULL DEFAULT 'new-issuance'
+  source  |  varchar(255)  |  NULL
+  status  |  varchar(255)  |  NOT NULL DEFAULT 'running'
+  transaction_name  |  varchar(255)  |  NULL
+  transaction_reference  |  varchar(255)  |  NULL
+  transaction_date  |  date  |  NULL
+  financial_institution_id  |  int  |  NULL
+  cd_or_td_account_type_id  |  varchar(255)  |  NULL
+  cd_or_td_id  |  varchar(255)  |  NULL
+  total_lg_outstanding_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  lg_type  |  varchar(255)  |  NULL
+  lg_type_outstanding_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  lg_code  |  varchar(255)  |  NULL
+  partner_id  |  bigint unsigned  |  NULL
+  contract_id  |  bigint unsigned  |  NULL
+  purchase_order_id  |  bigint unsigned  |  NULL
+  purchase_order_date  |  date  |  NULL
+  issuance_date  |  date  |  NULL
+  lg_duration_months  |  int  |  NULL
+  renewal_date  |  date  |  NULL
+  lg_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  lg_currency  |  varchar(255)  |  NULL
+  issuance_fees  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  min_lg_commission_fees  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  cash_cover_rate  |  decimal(5,2)  |  NOT NULL DEFAULT '0.00'
+  cash_cover_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  cash_cover_deducted_from_account_type  |  varchar(255)  |  NULL
+  lg_fees_and_commission_account_type  |  varchar(255)  |  NULL
+  cash_cover_deducted_from_account_id  |  varchar(255)  |  NULL
+  lg_fees_and_commission_account_id  |  varchar(255)  |  NULL
+  lg_commission_rate  |  decimal(5,2)  |  NOT NULL DEFAULT '0.00'
+  lg_commission_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  lg_commission_interval  |  varchar(255)  |  NULL
+  cash_cover_account_number  |  varchar(255)  |  NULL
+  company_id  |  int  |  NOT NULL
+  created_by  |  int  |  NULL
+  updated_by  |  int  |  NULL
+  created_at  |  datetime  |  NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+  user_comment  |  text  |  NULL
+
+=== letter_of_guarantee_statements ===
+  id  |  bigint unsigned  |  NOT NULL
+  type  |  varchar(255)  |  NULL
+  source  |  varchar(255)  |  NOT NULL
+  cd_or_td_id  |  bigint unsigned  |  NOT NULL DEFAULT '0'
+  financial_institution_id  |  bigint unsigned  |  NOT NULL
+  letter_of_guarantee_issuance_id  |  bigint unsigned  |  NOT NULL
+  lg_facility_id  |  bigint unsigned  |  NULL
+  lg_type  |  varchar(255)  |  NOT NULL
+  lg_advanced_payment_history_id  |  bigint unsigned  |  NULL
+  currency  |  varchar(255)  |  NULL
+  is_debit  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_credit  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  company_id  |  bigint unsigned  |  NOT NULL
+  date  |  date  |  NULL
+  full_date  |  datetime  |  NULL
+  beginning_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  debit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  credit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  end_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  comment_ar  |  varchar(255)  |  NULL
+  comment_en  |  varchar(255)  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== lg_issuance_advanced_payment_histories ===
+  id  |  bigint unsigned  |  NOT NULL
+  journal_entry_id  |  bigint unsigned  |  NULL
+  date  |  date  |  NULL
+  amount  |  decimal(14,2)  |  NOT NULL
+  letter_of_guarantee_issuance_id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== lg_issuance_import_runs ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  created_by  |  bigint unsigned  |  NULL
+  source  |  varchar(255)  |  NOT NULL
+  file_path  |  varchar(255)  |  NOT NULL
+  status  |  varchar(255)  |  NOT NULL DEFAULT 'pending'
+  total_rows  |  int unsigned  |  NOT NULL DEFAULT '0'
+  failed_rows  |  int unsigned  |  NOT NULL DEFAULT '0'
+  errors  |  json  |  NULL
+  valid_rows_json  |  longtext  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== lg_renewal_date_histories ===
+  id  |  bigint unsigned  |  NOT NULL
+  renewal_fees_account_bank_statement_odoo_id  |  varchar(255)  |  NULL
+  renewal_fees_journal_entry_id  |  bigint unsigned  |  NULL
+  letter_of_guarantee_issuance_id  |  bigint unsigned  |  NOT NULL
+  renewal_date  |  varchar(255)  |  NOT NULL
+  fees_amount  |  decimal(14,2)  |  NOT NULL
+  company_id  |  int  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== loan_schedule_settlements ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NULL
+  current_account_number  |  varchar(255)  |  NOT NULL
+  loan_schedule_id  |  bigint unsigned  |  NOT NULL
+  date  |  date  |  NOT NULL
+  amount  |  decimal(14,2)  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== loan_schedules ===
+  id  |  bigint unsigned  |  NOT NULL
+  medium_term_loan_id  |  bigint unsigned  |  NOT NULL
+  date  |  date  |  NULL
+  beginning_balance  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  schedule_payment  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  interest_amount  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  principle_amount  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  end_balance  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  remaining  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  status  |  varchar(255)  |  NULL
+  created_by  |  bigint unsigned  |  NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  updated_by  |  bigint unsigned  |  NULL
+
+=== loan_statements ===
+  id  |  bigint unsigned  |  NOT NULL
+  financial_institution_account_id  |  int  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  loan_schedule_settlement_id  |  bigint unsigned  |  NULL
+  contract_loan_schedule_settlement_id  |  bigint unsigned  |  NULL
+  is_debit  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_credit  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  date  |  date  |  NULL
+  full_date  |  datetime  |  NULL
+  beginning_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  debit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  credit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  end_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  comment_en  |  varchar(255)  |  NULL
+  comment_ar  |  varchar(255)  |  NULL
+
+=== logs ===
+  id  |  bigint unsigned  |  NOT NULL
+  activity  |  varchar(255)  |  NOT NULL
+  created_at  |  varchar(255)  |  NOT NULL
+  updated_at  |  int  |  NOT NULL
+  user_id  |  int  |  NULL
+  company_id  |  int  |  NULL
+
+=== media ===
+  id  |  bigint unsigned  |  NOT NULL
+  model_type  |  varchar(255)  |  NOT NULL
+  model_id  |  bigint unsigned  |  NOT NULL
+  uuid  |  char(36)  |  NULL
+  collection_name  |  varchar(255)  |  NOT NULL
+  name  |  varchar(255)  |  NOT NULL
+  file_name  |  varchar(255)  |  NOT NULL
+  mime_type  |  varchar(255)  |  NULL
+  disk  |  varchar(255)  |  NOT NULL
+  conversions_disk  |  varchar(255)  |  NULL
+  size  |  bigint unsigned  |  NOT NULL
+  manipulations  |  longtext  |  NOT NULL
+  custom_properties  |  longtext  |  NOT NULL
+  generated_conversions  |  longtext  |  NOT NULL
+  responsive_images  |  longtext  |  NOT NULL
+  order_column  |  int unsigned  |  NULL
+  updated_by  |  int  |  NULL
+  created_by  |  int  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  deleted_at  |  timestamp  |  NULL
+
+=== medium_term_loans ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  financial_institution_id  |  bigint unsigned  |  NOT NULL
+  status  |  varchar(255)  |  NOT NULL DEFAULT 'running'
+  name  |  varchar(255)  |  NULL
+  start_date  |  date  |  NULL
+  end_date  |  date  |  NULL
+  currency  |  varchar(255)  |  NOT NULL
+  limit  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  paid_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  outstanding_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  account_number  |  varchar(255)  |  NULL
+  borrowing_rate  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  margin_rate  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  duration  |  bigint unsigned  |  NULL
+  installment_payment_interval  |  varchar(255)  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== migrations ===
+  id  |  int unsigned  |  NOT NULL
+  migration  |  varchar(255)  |  NOT NULL
+  batch  |  int  |  NOT NULL
+
+=== model_has_permissions ===
+  permission_id  |  bigint unsigned  |  NOT NULL
+  model_type  |  varchar(255)  |  NOT NULL
+  model_id  |  bigint unsigned  |  NOT NULL
+
+=== model_has_roles ===
+  role_id  |  bigint unsigned  |  NOT NULL
+  model_type  |  varchar(255)  |  NOT NULL
+  model_id  |  bigint unsigned  |  NOT NULL
+
+=== money_payments ===
+  id  |  int  |  NOT NULL
+  odoo_reference  |  varchar(255)  |  NULL
+  journal_entry_id  |  bigint unsigned  |  NULL
+  account_bank_statement_line_id  |  bigint unsigned  |  NULL
+  transaction_type  |  varchar(255)  |  NULL
+  has_unapplied_or_down_payment  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  odoo_error_message  |  text  |  NULL
+  synced_with_odoo  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  advanced_opening_balance_id  |  bigint unsigned  |  NULL
+  odoo_id  |  bigint unsigned  |  NULL
+  odoo_move_id  |  bigint unsigned  |  NULL
+  partner_type  |  varchar(255)  |  NOT NULL DEFAULT 'is_supplier'
+  partner_id  |  bigint unsigned  |  NULL
+  is_reviewed  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  reviewed_by  |  bigint unsigned  |  NULL
+  money_type  |  varchar(255)  |  NOT NULL DEFAULT 'money-payment'
+  down_payment_type  |  varchar(255)  |  NULL
+  down_payment_settlement_date  |  date  |  NULL
+  contract_id  |  bigint unsigned  |  NULL
+  opening_balance_id  |  bigint unsigned  |  NULL
+  type  |  varchar(255)  |  NULL
+  delivery_date  |  date  |  NULL
+  paid_amount  |  decimal(14,2)  |  NULL
+  paid_amount_in_main_currency  |  decimal(8,2)  |  NOT NULL DEFAULT '0.00'
+  total_withhold_amount  |  double  |  NOT NULL DEFAULT '0'
+  total_withhold_amount_in_main_currency  |  double  |  NULL DEFAULT '0'
+  amount_in_invoice_currency  |  double  |  NULL DEFAULT '0'
+  currency  |  varchar(255)  |  NULL
+  payment_currency  |  varchar(255)  |  NULL
+  exchange_rate  |  double  |  NULL DEFAULT '1'
+  user_id  |  int  |  NULL
+  company_id  |  int  |  NULL
+  comment_ar  |  varchar(255)  |  NULL
+  comment_en  |  varchar(255)  |  NULL
+  created_at  |  datetime  |  NOT NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+  user_comment  |  text  |  NULL
+
+=== money_received ===
+  id  |  int  |  NOT NULL
+  odoo_reference  |  varchar(255)  |  NULL
+  journal_entry_id  |  bigint unsigned  |  NULL
+  account_bank_statement_line_id  |  bigint unsigned  |  NULL
+  transaction_type  |  varchar(255)  |  NULL
+  has_unapplied_or_down_payment  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  odoo_error_message  |  text  |  NULL
+  synced_with_odoo  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  advanced_opening_balance_id  |  bigint unsigned  |  NULL
+  odoo_id  |  bigint unsigned  |  NULL
+  odoo_move_id  |  bigint unsigned  |  NULL
+  partner_type  |  varchar(255)  |  NOT NULL DEFAULT 'is_customer'
+  partner_id  |  bigint unsigned  |  NULL
+  is_reviewed  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  reviewed_by  |  bigint unsigned  |  NULL
+  money_type  |  varchar(255)  |  NOT NULL DEFAULT 'money-received'
+  down_payment_type  |  varchar(255)  |  NULL
+  down_payment_settlement_date  |  date  |  NULL
+  contract_id  |  bigint unsigned  |  NULL
+  opening_balance_id  |  bigint unsigned  |  NULL
+  type  |  varchar(255)  |  NULL
+  receiving_date  |  date  |  NULL
+  received_amount  |  decimal(14,2)  |  NULL
+  received_amount_in_main_currency  |  decimal(8,2)  |  NOT NULL DEFAULT '0.00'
+  total_withhold_amount  |  double  |  NOT NULL DEFAULT '0'
+  total_withhold_amount_in_main_currency  |  double  |  NULL DEFAULT '0'
+  amount_in_invoice_currency  |  double  |  NULL DEFAULT '0'
+  currency  |  varchar(255)  |  NULL
+  receiving_currency  |  varchar(255)  |  NULL
+  exchange_rate  |  double  |  NULL DEFAULT '1'
+  user_id  |  int  |  NULL
+  company_id  |  int  |  NULL
+  comment_ar  |  varchar(255)  |  NULL
+  comment_en  |  varchar(255)  |  NULL
+  created_at  |  datetime  |  NOT NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+  user_comment  |  text  |  NULL
+
+=== notification_settings ===
+  id  |  bigint unsigned  |  NOT NULL
+  customer_coming_dues_invoices_notifications_days  |  int  |  NOT NULL DEFAULT '3'
+  customer_past_dues_invoices_notifications_days  |  int  |  NOT NULL DEFAULT '1'
+  cheques_in_safe_notifications_days  |  int  |  NOT NULL DEFAULT '3'
+  cheques_under_collection_notifications_days  |  int  |  NOT NULL DEFAULT '0'
+  supplier_coming_dues_invoices_notifications_days  |  int  |  NOT NULL DEFAULT '3'
+  supplier_past_dues_invoices_notifications_days  |  int  |  NOT NULL DEFAULT '1'
+  company_id  |  int  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  coming_payable_cheques_notifications_days  |  bigint unsigned  |  NOT NULL DEFAULT '3'
+
+=== notifications ===
+  id  |  char(36)  |  NOT NULL
+  type  |  varchar(255)  |  NOT NULL
+  notifiable_type  |  varchar(255)  |  NOT NULL
+  notifiable_id  |  bigint unsigned  |  NOT NULL
+  data  |  text  |  NOT NULL
+  read_at  |  timestamp  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== odoo_expenses ===
+  id  |  bigint unsigned  |  NOT NULL
+  odoo_id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  name  |  varchar(255)  |  NOT NULL
+  odoo_currency_id  |  varchar(255)  |  NOT NULL
+  state  |  varchar(255)  |  NOT NULL
+  payment_state  |  varchar(255)  |  NOT NULL
+  odoo_employee_id  |  bigint unsigned  |  NOT NULL
+  total_amount  |  bigint unsigned  |  NOT NULL
+  account_move_ids  |  bigint unsigned  |  NOT NULL
+  journal_id  |  bigint unsigned  |  NOT NULL
+  payment_method_line_id  |  bigint unsigned  |  NOT NULL
+  payment_mode  |  varchar(255)  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  account_number  |  varchar(255)  |  NULL
+  bank_name  |  varchar(255)  |  NULL
+
+=== odoo_settings ===
+  id  |  bigint unsigned  |  NOT NULL
+  cheques_receivable_code  |  varchar(255)  |  NOT NULL
+  cheques_receivable_id  |  bigint unsigned  |  NOT NULL
+  liquidity_transfer_account_code  |  varchar(255)  |  NOT NULL
+  liquidity_transfer_account_id  |  bigint unsigned  |  NOT NULL
+  cheques_payable_code  |  varchar(255)  |  NOT NULL
+  cheques_payable_id  |  bigint unsigned  |  NOT NULL
+  bid_lg_cash_cover_code  |  varchar(255)  |  NOT NULL
+  bid_lg_cash_cover_id  |  bigint unsigned  |  NOT NULL
+  final_lg_cash_cover_code  |  varchar(255)  |  NOT NULL
+  final_lg_cash_cover_id  |  bigint unsigned  |  NOT NULL
+  advanced_lg_cash_cover_code  |  varchar(255)  |  NOT NULL
+  advanced_lg_cash_cover_id  |  bigint unsigned  |  NOT NULL
+  performance_lg_cash_cover_code  |  varchar(255)  |  NOT NULL
+  performance_lg_cash_cover_id  |  bigint unsigned  |  NOT NULL
+  sight_lc_cash_cover_code  |  varchar(255)  |  NOT NULL
+  sight_lc_cash_cover_id  |  bigint unsigned  |  NOT NULL
+  deferred_lc_cash_cover_code  |  varchar(255)  |  NOT NULL
+  deferred_lc_cash_cover_id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  interest_revenue_code  |  varchar(255)  |  NOT NULL
+  interest_revenue_id  |  bigint unsigned  |  NOT NULL
+  custody_account_code  |  varchar(255)  |  NULL
+  custody_account_id  |  varchar(255)  |  NULL
+  employee_loans_account_code  |  varchar(255)  |  NOT NULL
+  employee_loans_account_id  |  bigint unsigned  |  NOT NULL
+  dividend_payable_account_code  |  varchar(255)  |  NOT NULL
+  dividend_payable_account_id  |  bigint unsigned  |  NOT NULL
+  shareholder_account_code  |  varchar(255)  |  NOT NULL
+  shareholder_account_id  |  bigint unsigned  |  NOT NULL
+  insurance_from_account_code  |  varchar(255)  |  NOT NULL
+  insurance_from_account_id  |  varchar(255)  |  NOT NULL
+  insurance_to_account_code  |  varchar(255)  |  NOT NULL
+  insurance_to_account_id  |  varchar(255)  |  NOT NULL
+  letter_of_guarantee_commission_fees_code  |  bigint unsigned  |  NULL
+  letter_of_guarantee_commission_fees_id  |  bigint unsigned  |  NULL
+  letter_of_guarantee_issuance_fees_code  |  bigint unsigned  |  NULL
+  letter_of_guarantee_issuance_fees_id  |  bigint unsigned  |  NULL
+  letter_of_credit_commission_fees_code  |  bigint unsigned  |  NULL
+  letter_of_credit_commission_fees_id  |  bigint unsigned  |  NULL
+  letter_of_credit_other_fees_code  |  bigint unsigned  |  NULL
+  letter_of_credit_other_fees_id  |  bigint unsigned  |  NULL
+  fully_secured_overdraft_interest_expense_code  |  bigint unsigned  |  NULL
+  fully_secured_overdraft_interest_expense_id  |  bigint unsigned  |  NULL
+  clean_overdraft_interest_expense_code  |  bigint unsigned  |  NULL
+  clean_overdraft_interest_expense_id  |  bigint unsigned  |  NULL
+  overdraft_against_commercial_paper_interest_expense_code  |  bigint unsigned  |  NULL
+  overdraft_against_commercial_paper_interest_expense_id  |  bigint unsigned  |  NULL
+  overdraft_against_contract_assignment_interest_expense_code  |  bigint unsigned  |  NULL
+  overdraft_against_contract_assignment_interest_expense_id  |  bigint unsigned  |  NULL
+  medium_term_loan_interest_expense_code  |  bigint unsigned  |  NULL
+  medium_term_loan_interest_expense_id  |  bigint unsigned  |  NULL
+  vat_taxes_code  |  bigint unsigned  |  NULL
+  vat_taxes_id  |  bigint unsigned  |  NULL
+  credit_withhold_taxes_code  |  bigint unsigned  |  NULL
+  credit_withhold_taxes_id  |  bigint unsigned  |  NULL
+  salary_taxes_code  |  bigint unsigned  |  NULL
+  salary_taxes_id  |  bigint unsigned  |  NULL
+  social_insurance_code  |  bigint unsigned  |  NULL
+  social_insurance_id  |  bigint unsigned  |  NULL
+  income_taxes_code  |  bigint unsigned  |  NULL
+  income_taxes_id  |  bigint unsigned  |  NULL
+  real_estate_taxes_code  |  bigint unsigned  |  NULL
+  real_estate_taxes_id  |  bigint unsigned  |  NULL
+  stamp_duty_taxes_code  |  bigint unsigned  |  NULL
+  stamp_duty_taxes_id  |  bigint unsigned  |  NULL
+  other_taxes_code  |  bigint unsigned  |  NULL
+  other_taxes_id  |  bigint unsigned  |  NULL
+  takaful_code  |  bigint unsigned  |  NULL
+  takaful_id  |  bigint unsigned  |  NULL
+  tax_for_victims_code  |  bigint unsigned  |  NULL
+  tax_for_victims_id  |  bigint unsigned  |  NULL
+  advances_to_suppliers_code  |  varchar(255)  |  NULL
+  advances_to_suppliers_id  |  varchar(255)  |  NULL
+  advances_from_customers_code  |  varchar(255)  |  NULL
+  advances_from_customers_id  |  varchar(255)  |  NULL
+
+=== opening_balances ===
+  id  |  bigint unsigned  |  NOT NULL
+  date  |  date  |  NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== other_partner_statements ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  currency_name  |  varchar(255)  |  NOT NULL
+  is_debit  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_credit  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  date  |  date  |  NULL
+  partner_id  |  bigint unsigned  |  NOT NULL
+  money_received_id  |  bigint unsigned  |  NULL
+  money_payment_id  |  bigint unsigned  |  NULL
+  full_date  |  datetime  |  NULL
+  beginning_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  debit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  credit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  end_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  comment_en  |  varchar(255)  |  NULL
+  comment_ar  |  varchar(255)  |  NULL
+
+=== outgoing_transfers ===
+  id  |  bigint unsigned  |  NOT NULL
+  money_payment_id  |  int  |  NULL
+  cash_expense_id  |  bigint unsigned  |  NULL
+  is_bank_charges  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  delivery_bank_id  |  int  |  NULL
+  account_type  |  varchar(255)  |  NULL
+  account_number  |  varchar(255)  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  actual_payment_date  |  date  |  NULL
+  status  |  varchar(255)  |  NOT NULL DEFAULT 'pending'
+
+=== outstanding_breakdowns ===
+  id  |  bigint unsigned  |  NOT NULL
+  settlement_date  |  date  |  NOT NULL
+  amount  |  decimal(14,2)  |  NOT NULL
+  model_id  |  int  |  NOT NULL
+  model_type  |  varchar(255)  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== overdraft_against_assignment_of_contract_bank_statements ===
+  id  |  bigint unsigned  |  NOT NULL
+  type  |  varchar(255)  |  NOT NULL
+  is_debit  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_credit  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  priority  |  int  |  NOT NULL DEFAULT '3'
+  overdraft_against_assignment_of_contract_id  |  int unsigned  |  NOT NULL
+  money_received_id  |  bigint unsigned  |  NOT NULL
+  money_payment_id  |  bigint unsigned  |  NULL
+  cash_expense_id  |  bigint unsigned  |  NULL
+  internal_money_transfer_id  |  bigint unsigned  |  NULL
+  buy_or_sell_currency_id  |  bigint unsigned  |  NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  overdraft_against_assignment_of_contract_limit_id  |  bigint unsigned  |  NULL
+  date  |  date  |  NOT NULL
+  limit  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  beginning_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  debit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  credit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  end_balance  |  varchar(255)  |  NULL DEFAULT '0.00'
+  room  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  interest_type  |  enum('normal','end_of_month')  |  NOT NULL DEFAULT 'normal'
+  interest_rate_annually  |  decimal(8,5)  |  NOT NULL DEFAULT '0.00000'
+  interest_rate_daily  |  decimal(8,5)  |  NOT NULL DEFAULT '0.00000'
+  days_count  |  int  |  NOT NULL DEFAULT '0'
+  interest_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  full_date  |  datetime  |  NULL
+  comment_en  |  varchar(255)  |  NULL
+  comment_ar  |  varchar(255)  |  NULL
+  outstanding_withdrawal_date  |  date  |  NULL
+  factoring_transaction_id  |  bigint unsigned  |  NULL
+  factoring_bank_movement_type  |  varchar(255)  |  NULL
+
+=== overdraft_against_assignment_of_contract_limits ===
+  id  |  bigint unsigned  |  NOT NULL
+  is_active  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  company_id  |  bigint unsigned  |  NOT NULL
+  overdraft_against_assignment_of_contract_id  |  bigint unsigned  |  NOT NULL
+  contract_id  |  bigint unsigned  |  NOT NULL
+  full_date  |  datetime  |  NOT NULL
+  limit  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  accumulated_limit  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== overdraft_against_assignment_of_contract_rates ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NULL
+  overdraft_against_assignment_of_contract_id  |  bigint unsigned  |  NOT NULL
+  date  |  date  |  NOT NULL
+  borrowing_rate  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  margin_rate  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  interest_rate  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  min_interest_rate  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== overdraft_against_assignment_of_contract_withdrawals ===
+  id  |  bigint unsigned  |  NOT NULL
+  overdraft_against_assignment_of_contract_bank_statement_id  |  bigint unsigned  |  NOT NULL
+  overdraft_against_assignment_of_contract_id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  max_settlement_days  |  int  |  NOT NULL DEFAULT '0'
+  due_date  |  date  |  NOT NULL
+  settlement_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  net_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== overdraft_against_assignment_of_contracts ===
+  id  |  int  |  NOT NULL
+  financial_institution_id  |  int  |  NULL
+  company_id  |  int  |  NOT NULL
+  is_active  |  tinyint unsigned  |  NOT NULL DEFAULT '1'
+  contract_start_date  |  date  |  NULL
+  contract_end_date  |  date  |  NULL
+  account_number  |  varchar(255)  |  NULL
+  odoo_code  |  varchar(255)  |  NULL
+  odoo_id  |  bigint unsigned  |  NULL
+  journal_id  |  bigint unsigned  |  NULL
+  currency  |  varchar(255)  |  NULL
+  limit  |  varchar(255)  |  NULL
+  outstanding_balance  |  varchar(255)  |  NULL
+  balance_date  |  date  |  NULL
+  highest_debt_balance_rate  |  double  |  NULL DEFAULT '0'
+  admin_fees_rate  |  double  |  NULL DEFAULT '0'
+  max_lending_limit_per_contract  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_by  |  int  |  NULL
+  updated_by  |  int  |  NULL
+  created_at  |  datetime  |  NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+  to_be_setteled_max_within_days  |  int  |  NULL DEFAULT '0'
+  start_settlement_from_bank_statement_date  |  datetime  |  NULL
+  oldest_date  |  date  |  NULL
+
+=== overdraft_against_commercial_paper_bank_statements ===
+  id  |  bigint unsigned  |  NOT NULL
+  type  |  varchar(255)  |  NOT NULL
+  is_debit  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_credit  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  priority  |  int  |  NOT NULL DEFAULT '3'
+  overdraft_against_commercial_paper_id  |  int unsigned  |  NOT NULL
+  money_received_id  |  bigint unsigned  |  NOT NULL
+  money_payment_id  |  bigint unsigned  |  NULL
+  cash_expense_id  |  bigint unsigned  |  NULL
+  internal_money_transfer_id  |  bigint unsigned  |  NULL
+  buy_or_sell_currency_id  |  bigint unsigned  |  NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  overdraft_against_commercial_paper_limit_id  |  bigint unsigned  |  NULL
+  date  |  date  |  NOT NULL
+  limit  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  beginning_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  debit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  credit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  end_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  room  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  interest_type  |  enum('normal','end_of_month')  |  NOT NULL DEFAULT 'normal'
+  interest_rate_annually  |  decimal(8,5)  |  NOT NULL DEFAULT '0.00000'
+  interest_rate_daily  |  decimal(8,5)  |  NOT NULL DEFAULT '0.00000'
+  days_count  |  int  |  NOT NULL DEFAULT '0'
+  interest_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  full_date  |  datetime  |  NULL
+  comment_en  |  varchar(255)  |  NULL
+  comment_ar  |  varchar(255)  |  NULL
+  outstanding_withdrawal_date  |  date  |  NULL
+  factoring_transaction_id  |  bigint unsigned  |  NULL
+  factoring_bank_movement_type  |  varchar(255)  |  NULL
+
+=== overdraft_against_commercial_paper_limits ===
+  id  |  bigint unsigned  |  NOT NULL
+  is_active  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  company_id  |  bigint unsigned  |  NOT NULL
+  overdraft_against_commercial_paper_id  |  bigint unsigned  |  NOT NULL
+  cheque_id  |  bigint unsigned  |  NOT NULL
+  full_date  |  datetime  |  NOT NULL
+  limit  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  accumulated_limit  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== overdraft_against_commercial_paper_rates ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NULL
+  overdraft_against_commercial_paper_id  |  bigint unsigned  |  NOT NULL
+  date  |  date  |  NOT NULL
+  borrowing_rate  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  margin_rate  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  interest_rate  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  min_interest_rate  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== overdraft_against_commercial_paper_withdrawals ===
+  id  |  bigint unsigned  |  NOT NULL
+  overdraft_against_commercial_paper_bank_statement_id  |  bigint unsigned  |  NOT NULL
+  overdraft_against_commercial_paper_id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  max_settlement_days  |  int  |  NOT NULL DEFAULT '0'
+  due_date  |  date  |  NOT NULL
+  settlement_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  net_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== overdraft_against_commercial_papers ===
+  id  |  int  |  NOT NULL
+  financial_institution_id  |  int  |  NULL
+  company_id  |  int  |  NOT NULL
+  is_active  |  tinyint unsigned  |  NOT NULL DEFAULT '1'
+  contract_start_date  |  date  |  NULL
+  contract_end_date  |  date  |  NULL
+  account_number  |  varchar(255)  |  NULL
+  odoo_code  |  varchar(255)  |  NULL
+  odoo_id  |  bigint unsigned  |  NULL
+  journal_id  |  bigint unsigned  |  NULL
+  currency  |  varchar(255)  |  NULL
+  limit  |  varchar(255)  |  NULL
+  outstanding_balance  |  varchar(255)  |  NULL
+  balance_date  |  date  |  NULL
+  highest_debt_balance_rate  |  double  |  NULL DEFAULT '0'
+  admin_fees_rate  |  double  |  NULL DEFAULT '0'
+  max_lending_limit_per_customer  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_by  |  int  |  NULL
+  updated_by  |  int  |  NULL
+  created_at  |  datetime  |  NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+  to_be_setteled_max_within_days  |  int  |  NULL DEFAULT '0'
+  start_settlement_from_bank_statement_date  |  datetime  |  NULL
+  oldest_date  |  date  |  NULL
+  origin_update_row_is_debit  |  tinyint(1)  |  NULL DEFAULT '0'
+
+=== partners ===
+  id  |  bigint unsigned  |  NOT NULL
+  odoo_id  |  bigint unsigned  |  NULL
+  company_id  |  int  |  NOT NULL
+  name  |  varchar(255)  |  NOT NULL
+  is_customer  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_supplier  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_employee  |  bigint unsigned  |  NOT NULL DEFAULT '0'
+  is_shareholder  |  bigint unsigned  |  NOT NULL DEFAULT '0'
+  is_other_partner  |  bigint unsigned  |  NOT NULL DEFAULT '0'
+  is_subsidiary_company  |  bigint unsigned  |  NOT NULL DEFAULT '0'
+  is_tax  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  due_to_chart_of_account_number_odoo_code  |  int  |  NULL
+  due_to_chart_of_account_number_odoo_id  |  int  |  NULL
+  due_from_chart_of_account_number_odoo_code  |  int  |  NULL
+  due_from_chart_of_account_number_odoo_id  |  int  |  NULL
+
+=== password_resets ===
+  email  |  varchar(255)  |  NOT NULL
+  token  |  varchar(255)  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+
+=== payable_cheques ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  int  |  NULL
+  cheque_number  |  varchar(255)  |  NULL
+  status  |  varchar(255)  |  NOT NULL DEFAULT 'pending'
+  money_payment_id  |  int  |  NULL
+  cash_expense_id  |  bigint unsigned  |  NULL
+  delivery_bank_id  |  int  |  NULL
+  account_type  |  varchar(255)  |  NOT NULL
+  account_number  |  varchar(255)  |  NULL
+  due_date  |  date  |  NULL
+  delivery_date  |  date  |  NULL
+  actual_payment_date  |  date  |  NULL
+  account_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== payment_settlements ===
+  id  |  int  |  NOT NULL
+  odoo_id  |  bigint unsigned  |  NULL
+  odoo_move_id  |  bigint unsigned  |  NULL
+  odoo_reference  |  varchar(255)  |  NULL
+  account_bank_statement_line_id  |  bigint unsigned  |  NULL
+  odoo_reference_name  |  varchar(255)  |  NULL
+  is_from_down_payment  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  invoice_id  |  bigint unsigned  |  NULL
+  partner_id  |  bigint unsigned  |  NOT NULL DEFAULT '0'
+  withhold_amount  |  varchar(255)  |  NULL
+  settlement_amount  |  varchar(255)  |  NULL
+  money_payment_id  |  int  |  NULL
+  cash_expense_id  |  bigint unsigned  |  NULL
+  letter_of_credit_issuance_id  |  bigint unsigned  |  NOT NULL
+  company_id  |  int  |  NULL
+  created_at  |  datetime  |  NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+
+=== permissions ===
+  id  |  bigint unsigned  |  NOT NULL
+  name  |  varchar(255)  |  NOT NULL
+  guard_name  |  varchar(255)  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== po_allocations ===
+  id  |  bigint unsigned  |  NOT NULL
+  contract_id  |  bigint unsigned  |  NULL
+  purchase_order_id  |  bigint unsigned  |  NULL
+  partner_id  |  bigint unsigned  |  NULL
+  allocation_percentage  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  allocation_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== purchase_orders ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  int  |  NOT NULL
+  created_by  |  int  |  NULL
+  updated_by  |  int  |  NULL
+  created_at  |  datetime  |  NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+  contract_id  |  bigint unsigned  |  NULL
+  po_number  |  varchar(255)  |  NULL
+  amount  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  start_date_1  |  date  |  NULL
+  end_date_1  |  date  |  NULL
+  execution_percentage_1  |  decimal(5,2)  |  NULL DEFAULT '0.00'
+  execution_days_1  |  int  |  NULL DEFAULT '0'
+  collection_days_1  |  int  |  NULL DEFAULT '0'
+  start_date_2  |  date  |  NULL
+  end_date_2  |  date  |  NULL
+  execution_percentage_2  |  decimal(5,2)  |  NULL DEFAULT '0.00'
+  execution_days_2  |  int  |  NULL DEFAULT '0'
+  collection_days_2  |  int  |  NULL DEFAULT '0'
+  start_date_3  |  date  |  NULL
+  end_date_3  |  date  |  NULL
+  execution_percentage_3  |  decimal(5,2)  |  NULL DEFAULT '0.00'
+  execution_days_3  |  int  |  NULL DEFAULT '0'
+  collection_days_3  |  int  |  NULL DEFAULT '0'
+  start_date_4  |  date  |  NULL
+  end_date_4  |  date  |  NULL
+  execution_percentage_4  |  decimal(5,2)  |  NULL DEFAULT '0.00'
+  execution_days_4  |  int  |  NULL DEFAULT '0'
+  collection_days_4  |  int  |  NULL DEFAULT '0'
+  start_date_5  |  date  |  NULL
+  end_date_5  |  date  |  NULL
+  execution_percentage_5  |  decimal(5,2)  |  NULL DEFAULT '0.00'
+  execution_days_5  |  int  |  NULL DEFAULT '0'
+  collection_days_5  |  int  |  NULL DEFAULT '0'
+
+=== role_has_permissions ===
+  permission_id  |  bigint unsigned  |  NOT NULL
+  role_id  |  bigint unsigned  |  NOT NULL
+
+=== roles ===
+  id  |  bigint unsigned  |  NOT NULL
+  name  |  varchar(255)  |  NOT NULL
+  scope  |  varchar(255)  |  NULL
+  guard_name  |  varchar(255)  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== sales_orders ===
+  id  |  bigint unsigned  |  NOT NULL
+  odoo_id  |  bigint unsigned  |  NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  contract_id  |  bigint unsigned  |  NOT NULL
+  so_number  |  varchar(255)  |  NULL
+  amount  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  start_date_1  |  date  |  NULL
+  end_date_1  |  date  |  NULL
+  execution_percentage_1  |  decimal(5,2)  |  NULL DEFAULT '0.00'
+  execution_days_1  |  int  |  NULL DEFAULT '0'
+  collection_days_1  |  int  |  NULL DEFAULT '0'
+  start_date_2  |  date  |  NULL
+  end_date_2  |  date  |  NULL
+  execution_percentage_2  |  decimal(5,2)  |  NULL DEFAULT '0.00'
+  execution_days_2  |  int  |  NULL DEFAULT '0'
+  collection_days_2  |  int  |  NULL DEFAULT '0'
+  start_date_3  |  date  |  NULL
+  end_date_3  |  date  |  NULL
+  execution_percentage_3  |  decimal(5,2)  |  NULL DEFAULT '0.00'
+  execution_days_3  |  int  |  NULL DEFAULT '0'
+  collection_days_3  |  int  |  NULL DEFAULT '0'
+  start_date_4  |  date  |  NULL
+  end_date_4  |  date  |  NULL
+  execution_percentage_4  |  decimal(5,2)  |  NULL DEFAULT '0.00'
+  execution_days_4  |  int  |  NULL DEFAULT '0'
+  collection_days_4  |  int  |  NULL DEFAULT '0'
+  start_date_5  |  date  |  NULL
+  end_date_5  |  date  |  NULL
+  execution_percentage_5  |  decimal(5,2)  |  NULL DEFAULT '0.00'
+  execution_days_5  |  int  |  NULL DEFAULT '0'
+  collection_days_5  |  int  |  NULL DEFAULT '0'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== sections ===
+  id  |  bigint unsigned  |  NOT NULL
+  name  |  longtext  |  NOT NULL
+  sub_of  |  varchar(255)  |  NOT NULL
+  icon  |  varchar(255)  |  NOT NULL
+  route  |  varchar(255)  |  NULL
+  order  |  int  |  NOT NULL DEFAULT '0'
+  trash  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  section_side  |  enum('admin','company-admin','client')  |  NOT NULL
+  updated_by  |  int  |  NULL
+  created_by  |  int  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  deleted_at  |  timestamp  |  NULL
+
+=== sessions ===
+  id  |  varchar(255)  |  NOT NULL
+  user_id  |  bigint unsigned  |  NULL
+  ip_address  |  varchar(45)  |  NULL
+  user_agent  |  text  |  NULL
+  payload  |  longtext  |  NOT NULL
+  last_activity  |  int  |  NOT NULL
+
+=== settlement_allocations ===
+  id  |  bigint unsigned  |  NOT NULL
+  invoice_id  |  bigint unsigned  |  NULL
+  money_payment_id  |  int  |  NULL
+  letter_of_credit_issuance_id  |  bigint unsigned  |  NULL
+  contract_id  |  bigint unsigned  |  NULL
+  partner_id  |  bigint unsigned  |  NULL
+  allocation_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== settlements ===
+  id  |  int  |  NOT NULL
+  odoo_id  |  bigint unsigned  |  NULL
+  odoo_move_id  |  bigint unsigned  |  NULL
+  odoo_reference  |  varchar(255)  |  NULL
+  account_bank_statement_line_id  |  bigint unsigned  |  NULL
+  odoo_reference_name  |  varchar(255)  |  NULL
+  is_from_down_payment  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  invoice_id  |  bigint unsigned  |  NULL
+  partner_id  |  bigint unsigned  |  NOT NULL DEFAULT '0'
+  withhold_amount  |  varchar(255)  |  NULL
+  settlement_amount  |  varchar(255)  |  NULL
+  money_received_id  |  int  |  NULL
+  factoring_transaction_id  |  bigint unsigned  |  NULL
+  company_id  |  int  |  NULL
+  created_at  |  datetime  |  NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  datetime  |  NULL
+
+=== shareholder_statements ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  currency_name  |  varchar(255)  |  NOT NULL
+  is_debit  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_credit  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  date  |  date  |  NULL
+  partner_id  |  bigint unsigned  |  NOT NULL
+  money_received_id  |  bigint unsigned  |  NULL
+  money_payment_id  |  bigint unsigned  |  NULL
+  full_date  |  datetime  |  NULL
+  beginning_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  debit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  credit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  end_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  comment_en  |  varchar(255)  |  NULL
+  comment_ar  |  varchar(255)  |  NULL
+
+=== subsidiary_company_statements ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  currency_name  |  varchar(255)  |  NOT NULL
+  is_debit  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_credit  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  date  |  date  |  NULL
+  partner_id  |  bigint unsigned  |  NOT NULL
+  money_received_id  |  bigint unsigned  |  NULL
+  money_payment_id  |  bigint unsigned  |  NULL
+  full_date  |  datetime  |  NULL
+  beginning_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  debit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  credit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  end_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  comment_en  |  varchar(255)  |  NULL
+  comment_ar  |  varchar(255)  |  NULL
+
+=== supplier_invoices ===
+  id  |  int  |  NOT NULL
+  odoo_id  |  bigint unsigned  |  NULL
+  company_id  |  int  |  NOT NULL
+  opening_balance_id  |  bigint unsigned  |  NULL
+  supplier_code  |  varchar(255)  |  NULL
+  sales_person  |  varchar(255)  |  NULL
+  supplier_id  |  int  |  NOT NULL
+  supplier_name  |  varchar(255)  |  NULL
+  business_sector  |  varchar(255)  |  NULL
+  project_name  |  varchar(255)  |  NULL
+  site_name  |  varchar(255)  |  NULL
+  invoice_date  |  date  |  NULL
+  invoice_month  |  varchar(2)  |  NULL
+  invoice_year  |  mediumint  |  NULL
+  invoice_number  |  varchar(255)  |  NULL
+  invoice_amount  |  varchar(255)  |  NULL DEFAULT '0'
+  currency  |  varchar(10)  |  NOT NULL
+  exchange_rate  |  decimal(10,5)  |  NOT NULL DEFAULT '1.00000'
+  invoice_amount_in_main_currency  |  double  |  NULL DEFAULT '0'
+  vat_amount  |  varchar(255)  |  NULL DEFAULT '0'
+  vat_amount_in_main_currency  |  double  |  NULL DEFAULT '0'
+  odoo_withhold_amount  |  decimal(14,5)  |  NOT NULL DEFAULT '0.00000'
+  odoo_withhold_amount_in_main_currency  |  decimal(14,5)  |  NOT NULL DEFAULT '0.00000'
+  withhold_amount  |  varchar(255)  |  NULL DEFAULT '0'
+  withhold_amount_in_main_currency  |  double  |  NULL DEFAULT '0'
+  total_withhold_amount  |  decimal(14,5)  |  NOT NULL DEFAULT '0.00000'
+  total_withhold_amount_in_main_currency  |  decimal(14,5)  |  NOT NULL DEFAULT '0.00000'
+  net_invoice_amount  |  varchar(255)  |  NULL DEFAULT '0'
+  net_invoice_amount_in_main_currency  |  double  |  NULL DEFAULT '0'
+  contracted_payment_days  |  varchar(255)  |  NULL
+  invoice_due_date  |  date  |  NULL
+  invoice_status  |  varchar(255)  |  NULL
+  odoo_paid_amount  |  decimal(14,5)  |  NOT NULL DEFAULT '0.00000'
+  odoo_paid_amount_in_main_currency  |  decimal(14,5)  |  NOT NULL DEFAULT '0.00000'
+  excel_paid_amount  |  decimal(14,5)  |  NULL DEFAULT '0.00000'
+  excel_paid_amount_in_main_currency  |  decimal(14,5)  |  NULL DEFAULT '0.00000'
+  paid_amount  |  varchar(255)  |  NULL DEFAULT '0'
+  paid_amount_in_main_currency  |  double  |  NULL DEFAULT '0'
+  total_paid_amount  |  decimal(14,5)  |  NOT NULL DEFAULT '0.00000'
+  total_paid_amount_in_main_currency  |  decimal(14,5)  |  NOT NULL DEFAULT '0.00000'
+  total_deductions  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  total_deductions_in_main_currency  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  net_balance  |  varchar(255)  |  NULL DEFAULT '0'
+  net_balance_in_main_currency  |  double  |  NULL DEFAULT '0'
+  is_period_closed  |  tinyint(1)  |  NULL DEFAULT '0'
+  is_canceled  |  tinyint(1)  |  NULL DEFAULT '0'
+  contract_date  |  date  |  NULL
+  contract_code  |  varchar(255)  |  NULL
+  contract_name  |  varchar(255)  |  NULL
+  contract_amount  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  created_at  |  datetime  |  NOT NULL DEFAULT 'CURRENT_TIMESTAMP'
+  created_by  |  int  |  NULL
+  updated_by  |  int  |  NULL
+  updated_at  |  datetime  |  NULL
+  discount_amount  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  discount_amount_in_main_currency  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  purchases_order_number  |  varchar(255)  |  NULL
+  purchases_order_date  |  date  |  NULL
+
+=== supplier_opening_balances ===
+  id  |  bigint unsigned  |  NOT NULL
+  date  |  date  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== tables_fields ===
+  id  |  bigint unsigned  |  NOT NULL
+  model_name  |  varchar(191)  |  NULL
+  field_name  |  varchar(255)  |  NULL
+  view_name  |  varchar(255)  |  NULL
+  is_sales_trend  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  company_id  |  int  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== tax_statements ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  currency_name  |  varchar(255)  |  NOT NULL
+  is_debit  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  is_credit  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  date  |  date  |  NULL
+  partner_id  |  bigint unsigned  |  NOT NULL
+  money_received_id  |  bigint unsigned  |  NULL
+  money_payment_id  |  bigint unsigned  |  NULL
+  full_date  |  datetime  |  NULL
+  beginning_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  debit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  credit  |  decimal(14,2)  |  NULL DEFAULT '0.00'
+  end_balance  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  comment_en  |  varchar(255)  |  NULL
+  comment_ar  |  varchar(255)  |  NULL
+
+=== td_renewal_date_histories ===
+  id  |  bigint unsigned  |  NOT NULL
+  time_of_deposit_id  |  int  |  NOT NULL
+  expiry_date  |  varchar(255)  |  NULL
+  renewal_date  |  varchar(255)  |  NOT NULL
+  interest_rate  |  decimal(8,4)  |  NOT NULL
+  company_id  |  int  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  interest_amount  |  decimal(14,5)  |  NOT NULL DEFAULT '0.00000'
+
+=== temp_deleted_statements ===
+  id  |  bigint unsigned  |  NOT NULL
+  company_id  |  bigint unsigned  |  NOT NULL
+  table_name  |  varchar(255)  |  NOT NULL
+  deleted_id  |  bigint unsigned  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== time_of_deposits ===
+  id  |  int  |  NOT NULL
+  store_break_journal_entry_id  |  varchar(255)  |  NULL
+  inbound_break_odoo_reference  |  varchar(255)  |  NULL
+  inbound_odoo_reference  |  varchar(255)  |  NULL
+  is_at_maturity  |  tinyint(1)  |  NOT NULL DEFAULT '1'
+  inbound_break_journal_entry_id  |  bigint unsigned  |  NULL
+  outbound_break_journal_entry_id  |  bigint unsigned  |  NULL
+  break_account_bank_statement_line_id  |  bigint unsigned  |  NULL
+  break_journal_entry_id  |  bigint unsigned  |  NULL
+  renewal_account_bank_statement_line_id  |  bigint unsigned  |  NULL
+  renewal_journal_entry_id  |  bigint unsigned  |  NULL
+  interest_account_bank_statement_line_id  |  bigint unsigned  |  NULL
+  interest_journal_entry_id  |  bigint unsigned  |  NULL
+  maturity_account_bank_statement_line_id  |  bigint unsigned  |  NULL
+  maturity_journal_entry_id  |  bigint unsigned  |  NULL
+  store_account_bank_statement_line_id  |  bigint unsigned  |  NULL
+  store_journal_entry_id  |  bigint unsigned  |  NULL
+  inbound_journal_entry_id  |  bigint unsigned  |  NULL
+  outbound_journal_entry_id  |  bigint unsigned  |  NULL
+  deducted_from_account_id  |  bigint unsigned  |  NULL
+  odoo_id  |  bigint unsigned  |  NULL
+  odoo_code  |  varchar(255)  |  NULL
+  status  |  varchar(255)  |  NOT NULL DEFAULT 'running'
+  financial_institution_id  |  int  |  NOT NULL
+  account_number  |  varchar(255)  |  NULL
+  amount  |  decimal(12,2)  |  NULL
+  currency  |  varchar(255)  |  NULL
+  interest_rate  |  decimal(5,2)  |  NOT NULL DEFAULT '0.00'
+  interest_amount  |  decimal(14,2)  |  NOT NULL DEFAULT '0.00'
+  actual_interest_amount  |  decimal(14,2)  |  NULL
+  deposit_date  |  date  |  NULL
+  start_date  |  date  |  NULL
+  end_date  |  date  |  NULL
+  maturity_amount_added_to_account_id  |  varchar(255)  |  NULL
+  company_id  |  int  |  NULL
+  is_active  |  tinyint unsigned  |  NOT NULL DEFAULT '1'
+  created_by  |  int  |  NULL
+  update_by  |  int  |  NULL
+  created_at  |  datetime  |  NOT NULL DEFAULT 'CURRENT_TIMESTAMP'
+  updated_at  |  decimal(10,0)  |  NULL
+  break_date  |  date  |  NULL
+  break_interest_amount  |  decimal(14,2)  |  NULL
+  break_charge_amount  |  decimal(14,2)  |  NULL
+
+=== users ===
+  id  |  bigint unsigned  |  NOT NULL
+  odoo_id  |  bigint unsigned  |  NULL
+  odoo_username  |  varchar(255)  |  NULL
+  odoo_db_password  |  varchar(255)  |  NULL
+  name  |  varchar(255)  |  NOT NULL
+  email  |  varchar(255)  |  NOT NULL
+  dark_mode  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  email_verified_at  |  timestamp  |  NULL
+  password  |  varchar(255)  |  NOT NULL
+  subscription  |  enum('free_trial','subscripted')  |  NULL
+  expiration_date  |  date  |  NULL
+  max_users  |  varchar(255)  |  NULL
+  acceptance_of_privacy_policy  |  tinyint(1)  |  NULL
+  remember_token  |  varchar(100)  |  NULL
+  created_by  |  int  |  NULL
+  updated_by  |  int  |  NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+  deleted_at  |  timestamp  |  NULL
+
+=== weekly_cashflow_custom_due_invoices ===
+  id  |  bigint unsigned  |  NOT NULL
+  is_contract  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  cashflow_report_id  |  bigint  |  NOT NULL DEFAULT '0'
+  invoice_id  |  int  |  NOT NULL
+  invoice_type  |  varchar(255)  |  NOT NULL DEFAULT 'CustomerInvoice'
+  week_start_date  |  date  |  NOT NULL
+  percentage  |  decimal(5,2)  |  NOT NULL DEFAULT '100.00'
+  amount  |  decimal(14,5)  |  NOT NULL DEFAULT '0.00000'
+  company_id  |  int  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL
+
+=== weekly_cashflow_custom_past_due_schedules ===
+  id  |  bigint unsigned  |  NOT NULL
+  is_contract  |  tinyint(1)  |  NOT NULL DEFAULT '0'
+  cashflow_report_id  |  bigint unsigned  |  NOT NULL DEFAULT '0'
+  loan_schedule_id  |  int  |  NOT NULL
+  week_start_date  |  date  |  NOT NULL
+  percentage  |  decimal(5,2)  |  NOT NULL DEFAULT '100.00'
+  amount  |  decimal(14,5)  |  NOT NULL DEFAULT '0.00000'
+  company_id  |  int  |  NOT NULL
+  created_at  |  timestamp  |  NULL
+  updated_at  |  timestamp  |  NULL

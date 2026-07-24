@@ -10,182 +10,255 @@ use App\Traits\GeneralFunctions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
+/**
+ * BranchesController
+ * ------------------------------------------------------------------
+ * "Safe Accounts" in the sidebar — confirmed to be this exact
+ * feature. ⚠️ Uses App\Models\CashVeroBranch, NOT App\Models\Branch —
+ * both point to the same `branch` table, but CashVeroBranch is the
+ * one actually used throughout this controller (route model binding,
+ * $company->branches, the BRANCHES constant); Branch appears to be a
+ * legacy/duplicate class. Matched exactly here.
+ *
+ * ⚠️ The create form is a REPEATER, not a single-record form — a
+ * company can create several safes in one submission (each row: Name
+ * + Currency, plus a Chart Of Account Number/odoo_code field only
+ * when the company has Odoo integration configured). The edit form
+ * only ever shows one row (no "Repeat" button in the original when
+ * editing) — matched exactly.
+ *
+ * ⚠️ Confirmed real bug, NOT present in this fixed version: the
+ * original store()/update() returned a raw JSON body
+ * (`{'redirectTo' => ...}`) instead of an HTTP redirect — same
+ * category of bug already found and fixed on Factoring Contract, LC
+ * Issuance's updateExpense(), and LG Issuance's
+ * editAmountToBeDecreased(). Fixed here by returning a normal
+ * redirect() response instead; financial/Odoo-sync logic UNCHANGED.
+ *
+ * ── Frontend migration status (as of this file's last update) ──────
+ *   ✅ index() / create() / edit() → MIGRATED to Vue + Inertia.
+ *      Renders resources/js/Pages/SafeAccounts/Index.vue and
+ *      .../Form.vue.
+ *   ⚠️ store() / update() → response type fixed (JSON → redirect, see
+ *      above). SafeRepository::store() call, Odoo sync
+ *      (OdooService::syncBranchSafe()) UNCHANGED.
+ *   ✅ destroy() / getBranchesForCurrency() → UNCHANGED, deliberately.
+ *      Already redirect/JSON-appropriately; getBranchesForCurrency()
+ *      is a pure AJAX data endpoint used elsewhere, not touched here.
+ */
 class BranchesController
 {
     use GeneralFunctions;
-    protected function applyFilter(Request $request,Collection $collection):Collection{
-		if(!count($collection)){
-			return $collection;
-		}
-		$searchFieldName = $request->get('field');
-		$dateFieldName =  'created_at' ; // change it 
-		// $dateFieldName = $searchFieldName === 'balance_date' ? 'balance_date' : 'created_at'; 
-		$from = $request->get('from');
-		$to = $request->get('to');
-		$value = $request->query('value');
-		$collection = $collection
-		->when($request->has('value'),function($collection) use ($value,$searchFieldName){
-			return $collection->filter(function($moneyReceived) use ($value,$searchFieldName){
-				$currentValue = $moneyReceived->{$searchFieldName} ;
-				// if($searchFieldName == 'bank_id'){
-				// 	$currentValue = $moneyReceived->getBankName() ;  
-				// }
-				return false !== stristr($currentValue , $value);
-			});
-		})
-		->when($request->get('from') , function($collection) use($dateFieldName,$from){
-			return $collection->where($dateFieldName,'>=',$from);
-		})
-		->when($request->get('to') , function($collection) use($dateFieldName,$to){
-			return $collection->where($dateFieldName,'<=',$to);
-		});
-		
-		
-		return $collection;
-	}
-	public function index(Company $company,Request $request)
-	{
-		
-		$numberOfMonthsBetweenEndDateAndStartDate = 18 ;
-		$currentType = $request->get('active',CashVeroBranch::BRANCHES);
-		
-		$filterDates = [];
-		foreach([CashVeroBranch::BRANCHES] as $type){
-			$startDate = $request->has('startDate') ? $request->input('startDate.'.$type) : now()->subMonths($numberOfMonthsBetweenEndDateAndStartDate)->format('Y-m-d');
-			$endDate = $request->has('endDate') ? $request->input('endDate.'.$type) : now()->format('Y-m-d');
-			
-			$filterDates[$type] = [
-				'startDate'=>$startDate,
-				'endDate'=>$endDate
-			];
-		}
-		
-		
-		 
-		  /**
-		 * * start of $branches 
-		 */
-		
-		$branchStartDate = $filterDates[CashVeroBranch::BRANCHES]['startDate'] ?? null ;
-		$branchEndDate = $filterDates[CashVeroBranch::BRANCHES]['endDate'] ?? null ;
-		$branches = $company->branches ;
-		$branches =  $branches->filterByCreatedAt($branchStartDate,$branchEndDate) ;
-		
-		$branches =  $currentType == CashVeroBranch::BRANCHES ? $this->applyFilter($request,$branches):$branches ;
 
-		/**
-		 * * end of $branches 
-		 */
-		 
-		
-		 $searchFields = [
-			CashVeroBranch::BRANCHES=>[
-				'created_at'=>__('Created At'),
-				'name'=>__('Name')
-			],
-		];
-	
-		$models = [
-			CashVeroBranch::BRANCHES =>$branches ,
-		];
+    protected function applyFilter(Request $request, Collection $collection): Collection
+    {
+        if (!count($collection)) {
+            return $collection;
+        }
 
-        return view('branches.index', [
-			'company'=>$company,
-			'searchFields'=>$searchFields,
-			'models'=>$models,
-			'filterDates'=>$filterDates,
-			'indexRouteName'=>'branches.index',
-			'title'=>__('Safe'),
-			'tableTitle'=>__('Safe Table'),
-			'createPermissionName'=>'create branches',
-			'updatePermissionName'=>'update branches',
-			'deletePermissionName'=>'delete branches',
-			'createRouteName'=>'branches.create',
-			'createRoute'=>route('branches.create',['company'=>$company->id]),
-			'editModelName'=>'branches.edit',
-			'deleteRouteName'=>'branches.destroy'
-		]);
+        $searchFieldName = $request->get('field');
+        $dateFieldName = 'created_at';
+        $from = $request->get('from');
+        $to = $request->get('to');
+        $value = $request->query('value');
+
+        return $collection
+            ->when($request->has('value'), function ($collection) use ($value, $searchFieldName) {
+                return $collection->filter(function ($item) use ($value, $searchFieldName) {
+                    $currentValue = $item->{$searchFieldName};
+
+                    return false !== stristr((string) $currentValue, (string) $value);
+                });
+            })
+            ->when($request->get('from'), function ($collection) use ($dateFieldName, $from) {
+                return $collection->where($dateFieldName, '>=', $from);
+            })
+            ->when($request->get('to'), function ($collection) use ($dateFieldName, $to) {
+                return $collection->where($dateFieldName, '<=', $to);
+            });
     }
-	public function create(Company $company)
-	{
-        return view('branches.form',$this->getCommonViewVars($company));
-    }
-	public function getCommonViewVars(Company $company,$model = null)
-	{
-	
-		return [
-			'model'=>$model,
-			'updateRouteName'=>'branches.update',
-			'storeRouteName'=>'branches.store',
-		];
-	}
-	
-	public function store(Company $company   , StoreBranchRequest $request,SafeRepository $safeRepository){
-		$type = CashVeroBranch::BRANCHES;
-		$hasOdoo  = $company->hasOdooIntegrationCredentials();
-		$odooService = null ;
-		if($hasOdoo){
-			$odooService = new OdooService($company);
-			
-		}
-		foreach($request->get('safe',[]) as $currentSafeArr){
-			$currentSafeArr = array_merge($currentSafeArr , [
-				'company_id'=>$company->id,
-				'created_by'=>auth()->user()->id
-			]);
-			$model = $safeRepository->store($currentSafeArr);
-			if($hasOdoo){
-				$odooService->syncBranchSafe($model->odoo_code,$company->id);
-			}
-		}
-		$activeTab = $type ; 
-		return response()->json([
-			'redirectTo'=>route('branches.index',['company'=>$company->id,'active'=>$activeTab])
-		]);
-		
-	}
 
-	public function edit(Company $company,CashVeroBranch $branch)
-	{
+    /**
+     * The main "Safe Accounts" list — one flat list, no tabs (matches
+     * the original exactly — it only ever had one tab, "Safe").
+     *
+     * ✅ MIGRATED to Vue + Inertia. Renders
+     * resources/js/Pages/SafeAccounts/Index.vue.
+     */
+    public function index(Company $company, Request $request)
+    {
+        $numberOfMonthsBetweenEndDateAndStartDate = 18;
+        $startDate = $request->has('startDate')
+            ? $request->input('startDate.'.CashVeroBranch::BRANCHES)
+            : now()->subMonths($numberOfMonthsBetweenEndDateAndStartDate)->format('Y-m-d');
+        $endDate = $request->has('endDate')
+            ? $request->input('endDate.'.CashVeroBranch::BRANCHES)
+            : now()->format('Y-m-d');
 
-        return view('branches.form' ,$this->getCommonViewVars($company,$branch));
+        $branches = $company->branches;
+        $branches = $branches->filterByCreatedAt($startDate, $endDate);
+        $branches = $this->applyFilter($request, $branches);
+
+        return \Inertia\Inertia::render('SafeAccounts/Index', [
+            'company' => ['id' => $company->id],
+            'canCreate' => hasAuthFor('create branches'),
+            'createUrl' => route('branches.create', ['company' => $company->id]),
+            'rows' => $branches->map(function (CashVeroBranch $branch) use ($company) {
+                return [
+                    'id' => $branch->id,
+                    'name' => $branch->getName(),
+                    'currency' => $branch->getCurrencyName(),
+                    'created_at_formatted' => $branch->getCreatedAtFormatted(),
+                    'edit_url' => route('branches.edit', ['company' => $company->id, 'branch' => $branch->id]),
+                    'delete_url' => route('branches.destroy', ['company' => $company->id, 'branch' => $branch->id]),
+                ];
+            })->values(),
+            'canUpdate' => hasAuthFor('update branches'),
+            'canDelete' => hasAuthFor('delete branches'),
+            'navUrls' => [
+                'home' => route('home', ['company' => $company->id]),
+                'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+                'customers' => route('partners.index', ['company' => $company->id, 'type' => 'customers']),
+                'suppliers' => route('partners.index', ['company' => $company->id, 'type' => 'suppliers']),
+                'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
+            ],
+        ]);
     }
-	
-	public function update(Company $company, StoreBranchRequest $request , CashVeroBranch $branch){
-		
-		// $newName = $request->get('name');
-		// $odooCode = $request->get('odoo_code');
-		$hasOdoo = $company->hasOdooIntegrationCredentials();
-		$odooService = null;
-		if($hasOdoo){
-			$odooService = new OdooService($company);
-		}
-		foreach($request->get('safe',[]) as $safeArr){
-			$branch->update($safeArr);
-			if($hasOdoo){
-				$odooService->syncBranchSafe($branch->odoo_code,$company->id);
-			}
-		}
-	
-		$type = CashVeroBranch::BRANCHES;
-		// $this->store($company,$request);
-		$activeTab = $type ;
-		return response()->json([
-			'redirectTo'=>route('branches.index',['company'=>$company->id,'active'=>$activeTab])
-		]);
-	}
-	
-	public function destroy(Company $company , CashVeroBranch $branch)
-	{
-		// $lcSettlementInternalTransfer->deleteRelations();
-		$branch->delete();
-		return redirect()->back()->with('success',__('Item Has Been Delete Successfully'));
-	}
-	public function getBranchesForCurrency(Request $request , Company $company){
-		$currency = $request->get('currencyName') ;
-		$branches = CashVeroBranch::where('company_id',$company->id)->where('currency',$currency)->pluck('id','name')->toArray() ;
-		return response()->json([
-			'branches'=>$branches
-		]);
-	}
+
+    /**
+     * Shows the "Add Safe" form — a repeater, so several safes can be
+     * created in one submission.
+     *
+     * ✅ MIGRATED to Vue + Inertia — shares the same page component as
+     * edit() (resources/js/Pages/SafeAccounts/Form.vue), distinguished
+     * by the `mode: 'create'` prop.
+     */
+    public function create(Company $company)
+    {
+        return \Inertia\Inertia::render('SafeAccounts/Form', [
+            'mode' => 'create',
+            'company' => ['id' => $company->id],
+            'currencies' => getCurrencies(),
+            'hasOdoo' => $company->hasOdooIntegrationCredentials(),
+            'model' => null,
+            'submitUrl' => route('branches.store', ['company' => $company->id]),
+            'backUrl' => route('branches.index', ['company' => $company->id]),
+            'navUrls' => [
+                'home' => route('home', ['company' => $company->id]),
+                'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+                'customers' => route('partners.index', ['company' => $company->id, 'type' => 'customers']),
+                'suppliers' => route('partners.index', ['company' => $company->id, 'type' => 'suppliers']),
+                'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
+            ],
+        ]);
+    }
+
+    /**
+     * Creates one or more Safe Accounts in a single submission.
+     * UNCHANGED except the response type (JSON → redirect, see class
+     * docblock).
+     */
+    public function store(Company $company, StoreBranchRequest $request, SafeRepository $safeRepository)
+    {
+        $hasOdoo = $company->hasOdooIntegrationCredentials();
+        $odooService = null;
+        if ($hasOdoo) {
+            $odooService = new OdooService($company);
+        }
+
+        foreach ($request->get('safe', []) as $currentSafeArr) {
+            $currentSafeArr = array_merge($currentSafeArr, [
+                'company_id' => $company->id,
+                'created_by' => auth()->user()->id,
+            ]);
+            $model = $safeRepository->store($currentSafeArr);
+            if ($hasOdoo) {
+                $odooService->syncBranchSafe($model->odoo_code, $company->id);
+            }
+        }
+
+        return redirect()
+            ->route('branches.index', ['company' => $company->id, 'active' => CashVeroBranch::BRANCHES])
+            ->with('success', __('Data Store Successfully'));
+    }
+
+    /**
+     * Shows the "Edit Safe" form — always a single row (no repeater
+     * "Add" affordance in edit mode, matching the original exactly).
+     *
+     * ✅ MIGRATED to Vue + Inertia — shares the same page component as
+     * create() (resources/js/Pages/SafeAccounts/Form.vue),
+     * distinguished by the `mode: 'edit'` prop.
+     */
+    public function edit(Company $company, CashVeroBranch $branch)
+    {
+        return \Inertia\Inertia::render('SafeAccounts/Form', [
+            'mode' => 'edit',
+            'company' => ['id' => $company->id],
+            'currencies' => getCurrencies(),
+            'hasOdoo' => $company->hasOdooIntegrationCredentials(),
+            'model' => [
+                'id' => $branch->id,
+                'name' => $branch->getName(),
+                'currency' => $branch->getCurrencyName(),
+                'odoo_code' => $branch->getOdooCode(),
+            ],
+            'submitUrl' => route('branches.update', ['company' => $company->id, 'branch' => $branch->id]),
+            'backUrl' => route('branches.index', ['company' => $company->id]),
+            'navUrls' => [
+                'home' => route('home', ['company' => $company->id]),
+                'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+                'customers' => route('partners.index', ['company' => $company->id, 'type' => 'customers']),
+                'suppliers' => route('partners.index', ['company' => $company->id, 'type' => 'suppliers']),
+                'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
+            ],
+        ]);
+    }
+
+    /**
+     * Updates a Safe Account. UNCHANGED except the response type
+     * (JSON → redirect, see class docblock).
+     */
+    public function update(Company $company, StoreBranchRequest $request, CashVeroBranch $branch)
+    {
+        $hasOdoo = $company->hasOdooIntegrationCredentials();
+        $odooService = null;
+        if ($hasOdoo) {
+            $odooService = new OdooService($company);
+        }
+
+        foreach ($request->get('safe', []) as $safeArr) {
+            $branch->update($safeArr);
+            if ($hasOdoo) {
+                $odooService->syncBranchSafe($branch->odoo_code, $company->id);
+            }
+        }
+
+        return redirect()
+            ->route('branches.index', ['company' => $company->id, 'active' => CashVeroBranch::BRANCHES])
+            ->with('success', __('Item Has Been Updated Successfully'));
+    }
+
+    /**
+     * Deletes a Safe Account. UNCHANGED.
+     */
+    public function destroy(Company $company, CashVeroBranch $branch)
+    {
+        $branch->delete();
+
+        return redirect()->back()->with('success', __('Item Has Been Delete Successfully'));
+    }
+
+    /**
+     * Pure AJAX data endpoint used elsewhere. UNCHANGED, deliberately.
+     */
+    public function getBranchesForCurrency(Request $request, Company $company)
+    {
+        $currency = $request->get('currencyName');
+        $branches = CashVeroBranch::where('company_id', $company->id)->where('currency', $currency)->pluck('id', 'name')->toArray();
+
+        return response()->json([
+            'branches' => $branches,
+        ]);
+    }
 }

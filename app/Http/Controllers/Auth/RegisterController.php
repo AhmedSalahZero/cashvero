@@ -24,7 +24,20 @@ class RegisterController extends Controller
 
     use RegistersUsers;
 
-   
+    /**
+     * ✅ MIGRATED to Inertia/Vue — renders resources/js/Pages/Auth/
+     * Register.vue via the shared AuthLayout, same visual pattern as
+     * LoginController@showLoginForm. validator()/create() below are
+     * UNCHANGED — only how the form reaches the browser changed.
+     */
+    public function showRegistrationForm()
+    {
+        return \Inertia\Inertia::render('Auth/Register', [
+            'registerUrl' => route('register'),
+            'loginUrl' => route('login'),
+        ]);
+    }
+
     public function redirectTo()
     {
         return route('home');

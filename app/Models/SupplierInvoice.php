@@ -157,7 +157,6 @@ class SupplierInvoice extends Model implements IInvoice
 	const UNAPPLIED_SETTLEMENT_TABLE = 'paymentSettlements';
 	const CLIENT_NAME_COLUMN_NAME = 'supplier_name';
 	const CLIENT_ID_COLUMN_NAME = 'supplier_id';
-	const JS_FILE = 'money-payment.js';
 	const RECEIVED_OR_PAYMENT_AMOUNT = 'paid_amount';
 	
 	const RECEIVING_OR_PAYMENT_DATE_COLUMN_NAME = 'delivery_date';
@@ -300,18 +299,30 @@ class SupplierInvoice extends Model implements IInvoice
 			$result[$index]['net_balance'] = $inEditMode ? $invoiceArr['net_balance'] +  $currentSettlementAmount  + (double) $invoiceArr['withhold_amount'] : $invoiceArr['net_balance']  ;
 			$result[$index]['settlement_amount'] = $inEditMode ? $currentSettlementAmount : 0;
 			$result[$index]['withhold_amount'] = $inEditMode ? $invoiceArr['withhold_amount'] : 0;
-			$result[$index]['invoice_date'] = Carbon::make($invoiceArr['invoice_date'])->format('d-m-Y');
-			$result[$index]['invoice_due_date'] = Carbon::make($invoiceArr['invoice_due_date'])->format('d-m-Y');
+			$result[$index]['invoice_date'] = $invoiceArr['invoice_date'] ? Carbon::make($invoiceArr['invoice_date'])->format('d-m-Y') : null;
+			$result[$index]['invoice_due_date'] = $invoiceArr['invoice_due_date'] ? Carbon::make($invoiceArr['invoice_due_date'])->format('d-m-Y') : null;
 			$result[$index]['settlement_allocations'] = $inEditMode ? $moneyPayment->settlementAllocations->where('invoice_id',$invoiceArr['id'])->map(function(SettlementAllocation $settlementAllocation){
-				$settlementAllocation->contract_code = $settlementAllocation->contract->getCode();
-				$settlementAllocation->contract_amount = $settlementAllocation->contract->getAmountWithCurrency();
+				// contract_id is nullable — most settlements (anything not
+				// tied to a Letter of Credit/contract) have no contract at
+				// all, so ->contract is null here far more often than not.
+				// Calling ->getCode()/->getAmountWithCurrency() on it
+				// unconditionally was a fatal "call to member function on
+				// null" on every single edit that included such a row —
+				// which is effectively every normal supplier payment edit.
+				$settlementAllocation->contract_code = $settlementAllocation->contract?->getCode();
+				$settlementAllocation->contract_amount = $settlementAllocation->contract?->getAmountWithCurrency();
 				return $settlementAllocation;
 			}) : [];
 			
 			
 			
 		}
-		return $result;
+		// Same fix as CustomerInvoice::formatInvoices() — $result keeps
+		// gaps in its keys every time `continue` skips a row, so
+		// json_encode() would send a JSON OBJECT instead of a JSON
+		// ARRAY, breaking the Vue form's data.invoices.map(...) with
+		// "Couldn't load invoices". array_values() re-numbers from 0.
+		return array_values($result);
 	}
 	// public static function getSettlementsTemplate()
 	// {

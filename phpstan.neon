@@ -12,4 +12,3 @@ parameters:
 
     excludePaths:
         - app/dompdf/*
-        - app/Traits/HasIndexedDates.php

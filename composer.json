@@ -9,8 +9,11 @@
     "license": "MIT",
     "require": {
         "php": "^8.4",
+        "barryvdh/laravel-dompdf": "^3.1",
         "dcvn/moving-average": "*",
+        "dompdf/dompdf": "^3.1",
         "guzzlehttp/guzzle": "^7.8",
+        "inertiajs/inertia-laravel": "^3.1",
         "laravel/framework": "^12.0",
         "laravel/tinker": "^2.9",
         "laravel/ui": "^4.0",
@@ -18,13 +21,13 @@
         "markrogoyski/math-php": "^2.10",
         "mcamara/laravel-localization": "^2.0",
         "php-ai/php-ml": "^0.10.0",
+        "php-flasher/flasher-toastr-laravel": "^2.6",
         "picqer/php-barcode-generator": "*",
         "sentry/sentry-laravel": "^4.26",
         "simplesoftwareio/simple-qrcode": "*",
         "spatie/laravel-medialibrary": "^11.0",
         "spatie/laravel-permission": "^6.0",
-        "winternet-studio/odoo-jsonrpc-client": "*",
-        "yoeunes/toastr": "^3.3"
+        "winternet-studio/odoo-jsonrpc-client": "*"
     },
     "require-dev": {
         "barryvdh/laravel-debugbar": "^3.10",

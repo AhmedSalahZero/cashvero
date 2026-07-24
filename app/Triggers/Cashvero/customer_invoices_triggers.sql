@@ -7,7 +7,7 @@ CREATE TRIGGER `insert_net_invoice_amount_for_customers` BEFORE INSERT
 	begin
 	
 	set new.withhold_amount_in_main_currency =new.withhold_amount * new.exchange_rate;
-		set new.total_withhold_amount = new.total_withhold_amount + new.odoo_withhold_amount;
+		set new.total_withhold_amount = new.withhold_amount + new.odoo_withhold_amount;
 	set new.total_withhold_amount_in_main_currency = new.withhold_amount_in_main_currency + new.odoo_withhold_amount_in_main_currency;
 	
 		set @totalInvoiceAmount := ifnull(new.invoice_amount,0)  + ifnull(new.vat_amount,0) - ifnull(new.discount_amount,0) ;

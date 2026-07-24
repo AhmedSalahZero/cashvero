@@ -172,6 +172,13 @@ public static function getPermissions(array $systemsNames  = []):array
             'view-name'=>'view supplier aging report'
         ],
         [
+            'name'=>'view payments effectiveness index',
+            'systems'=>[CASH_VERO],
+            'default-roles'=>[User::SUPER_ADMIN,User::COMPANY_ADMIN,User::MANAGER,User::USER],
+            'group'=>'payment effectiveness index',
+            'view-name'=>'view'
+        ],
+        [
             'name'=>'view customer balances',
             'systems'=>[CASH_VERO],
             'default-roles'=>[User::SUPER_ADMIN,User::COMPANY_ADMIN,User::MANAGER,User::USER],
@@ -1380,6 +1387,14 @@ public static function getPermissions(array $systemsNames  = []):array
             'default-roles'=>[User::SUPER_ADMIN,User::COMPANY_ADMIN,User::MANAGER,User::USER],
             'group'=>'overdraft against commercial paper',
             'view-name'=>'view'
+        ],
+        
+        [
+            'name'=>'create overdraft against commercial paper',
+            'systems'=>[CASH_VERO],
+            'default-roles'=>[User::SUPER_ADMIN,User::COMPANY_ADMIN,User::MANAGER,User::USER],
+            'group'=>'overdraft against commercial paper',
+            'view-name'=>'create'
         ],
         
         [

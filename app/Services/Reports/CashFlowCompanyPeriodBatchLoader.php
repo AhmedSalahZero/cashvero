@@ -34,11 +34,12 @@ final class CashFlowCompanyPeriodBatchLoader
         string $periodStart,
         string $periodEnd,
         array $periodsByWeekKey,
+        array &$letterOfGuaranteeModelData = [],
     ): void {
         self::applyMoneyReceivedMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey);
         self::applyMoneyPaymentMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey);
         self::applyTimeOfDepositMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey);
-        self::applyLetterOfGuaranteeMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey);
+        self::applyLetterOfGuaranteeMovements($result, $letterOfGuaranteeModelData, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey);
         self::applyLetterOfCreditMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey);
         self::applyCashExpenseMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey);
     }
@@ -365,6 +366,7 @@ final class CashFlowCompanyPeriodBatchLoader
 
     private static function applyLetterOfGuaranteeMovements(
         array &$result,
+        array &$letterOfGuaranteeModelData,
         Collection $foreignExchangeRates,
         string $mainFunctionalCurrency,
         int $companyId,
@@ -429,10 +431,10 @@ final class CashFlowCompanyPeriodBatchLoader
         $coverRows = DB::table('letter_of_guarantee_cash_cover_statements')
             ->where('letter_of_guarantee_cash_cover_statements.company_id', $companyId)
             ->join('letter_of_guarantee_issuances', 'letter_of_guarantee_issuances.id', '=', 'letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id')
+            ->join('partners', 'partners.id', '=', 'letter_of_guarantee_issuances.partner_id')
             ->whereBetween(self::LG_CASH_COVER_DATE_COLUMN, [$periodStart, $periodEnd])
             ->where('letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id', '>', 0)
-            ->groupByRaw('letter_of_guarantee_issuances.lg_type, letter_of_guarantee_cash_cover_statements.currency, '.self::LG_CASH_COVER_DATE_COLUMN)
-            ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, sum(debit) as total_amount, letter_of_guarantee_cash_cover_statements.currency as currency, '.self::LG_CASH_COVER_DATE_COLUMN.' as movement_date')
+            ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, letter_of_guarantee_cash_cover_statements.debit as total_amount, letter_of_guarantee_cash_cover_statements.currency as currency, '.self::LG_CASH_COVER_DATE_COLUMN.' as movement_date, partners.name as partner_name, letter_of_guarantee_issuances.lg_code as lg_code')
             ->get();
 
         foreach ($coverRows as $row) {
@@ -468,6 +470,19 @@ final class CashFlowCompanyPeriodBatchLoader
             $result[$inflowMainType][$subTypeCover][$lgType]['total'][$weekKey] += $amount;
             $result[$inflowMainType][$subTypeCover]['total'][$weekKey] += $amount;
             $result['customers'][$totalCashInFlowKey]['total'][$weekKey] = ($result['customers'][$totalCashInFlowKey]['total'][$weekKey] ?? 0) + $amount;
+
+            // ⚠️ Bug fix: this is the piece that was entirely missing on the
+            // Company Cash Flow path. The old query grouped straight down to
+            // (lg_type, currency, date) in SQL, so no individual LG's name/
+            // code ever survived to be shown in the "ℹ️ Breakdown" modal —
+            // every popup was empty by construction, not a display bug.
+            // Same capture shape as the already-working Contract Cash Flow
+            // path (CashFlowContractDetailPeriodBatchLoader::applyLetterOfGuaranteeMovements()).
+            $letterOfGuaranteeModelData[$lgType]['weeks'][$weekKey][] = [
+                'amount' => $amount,
+                'lg_code' => $row->lg_code,
+                'name' => $row->partner_name,
+            ];
         }
     }
 

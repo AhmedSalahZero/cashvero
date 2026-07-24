@@ -1,0 +1,295 @@
+<script setup>
+import { ref, reactive, watch, computed } from 'vue';
+import { router, Link, usePage } from '@inertiajs/vue3';
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+const props = defineProps({
+    company: Object,
+    transactions: Array,
+    canCreate: Boolean,
+    canUpdate: Boolean,
+    canDelete: Boolean,
+    financialInstitutionBanks: Array,
+    accountTypes: Array,
+    urls: Object,
+});
+
+const page = usePage();
+const errors = computed(() => page.props.errors || {});
+
+async function fetchJson(url) {
+    const res = await fetch(url, { headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
+    const text = await res.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch (e) { /* leave null */ }
+    return { ok: res.ok, data };
+}
+
+const canAct = computed(() => props.canCreate || props.canUpdate);
+
+/* ── Collect modal ────────────────────────────────────────────── */
+const collectTarget = ref(null);
+const collectForm = reactive({ collection_date: '', financial_institution_id: '', account_type_id: '', account_number: '' });
+const collectAccountNumbers = ref([]);
+function openCollect(row) {
+    collectTarget.value = row;
+    collectForm.collection_date = new Date().toISOString().slice(0, 10);
+    collectForm.financial_institution_id = row.financial_institution_id || '';
+    collectForm.account_type_id = row.account_type_id || '';
+    collectForm.account_number = row.account_number || '';
+    collectAccountNumbers.value = row.account_number ? [row.account_number] : [];
+}
+watch([() => collectForm.account_type_id, () => collectForm.financial_institution_id], async () => {
+    collectAccountNumbers.value = [];
+    if (!collectTarget.value || !collectForm.account_type_id || !collectForm.financial_institution_id) return;
+    const url = `${props.urls.getAccountNumbersForType}/${collectForm.account_type_id}/${collectTarget.value.invoice_currency}/${collectForm.financial_institution_id}`;
+    const result = await fetchJson(url);
+    collectAccountNumbers.value = Object.values(result.data?.data || {});
+});
+function submitCollect() {
+    router.post(collectTarget.value.mark_collected_url, { ...collectForm }, { onSuccess: () => { collectTarget.value = null; } });
+}
+
+/* ── Reject modal ─────────────────────────────────────────────── */
+const rejectTarget = ref(null);
+const rejectForm = reactive({ rejection_date: '', uncollected_invoice_charges: 0, financial_institution_id: '', account_type_id: '', account_number: '' });
+const rejectAccountNumbers = ref([]);
+function openReject(row) {
+    rejectTarget.value = row;
+    rejectForm.rejection_date = new Date().toISOString().slice(0, 10);
+    rejectForm.uncollected_invoice_charges = 0;
+    rejectForm.financial_institution_id = row.financial_institution_id || '';
+    rejectForm.account_type_id = row.account_type_id || '';
+    rejectForm.account_number = row.account_number || '';
+    rejectAccountNumbers.value = row.account_number ? [row.account_number] : [];
+}
+watch([() => rejectForm.account_type_id, () => rejectForm.financial_institution_id], async () => {
+    rejectAccountNumbers.value = [];
+    if (!rejectTarget.value || !rejectForm.account_type_id || !rejectForm.financial_institution_id) return;
+    const url = `${props.urls.getAccountNumbersForType}/${rejectForm.account_type_id}/${rejectTarget.value.invoice_currency}/${rejectForm.financial_institution_id}`;
+    const result = await fetchJson(url);
+    rejectAccountNumbers.value = Object.values(result.data?.data || {});
+});
+function submitReject() {
+    router.post(rejectTarget.value.mark_rejected_url, { ...rejectForm }, { onSuccess: () => { rejectTarget.value = null; } });
+}
+
+/* ── Revert / Delete confirmations ───────────────────────────── */
+const revertCollectTarget = ref(null);
+function submitRevertCollect() {
+    router.post(revertCollectTarget.value.revert_collected_url, {}, { onFinish: () => { revertCollectTarget.value = null; } });
+}
+const revertRejectTarget = ref(null);
+function submitRevertReject() {
+    router.post(revertRejectTarget.value.revert_rejected_url, {}, { onFinish: () => { revertRejectTarget.value = null; } });
+}
+const deleteTarget = ref(null);
+function destroyRow() {
+    router.delete(deleteTarget.value.delete_url, { onFinish: () => { deleteTarget.value = null; } });
+}
+</script>
+
+<template>
+    <AppLayout>
+        <div class="p-6 mx-auto">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h1 class="text-xl font-semibold cvr-text-primary mb-1">Factoring With Recourse</h1>
+                    <p class="text-sm cvr-text-muted">Factoring Transactions</p>
+                </div>
+                <Link v-if="canCreate" :href="urls.create" class="cvr-btn-primary px-4 py-2 rounded text-sm">
+                    + Create New
+                </Link>
+            </div>
+
+            <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
+                <table class="min-w-full text-sm">
+                    <thead class="cvr-table-head">
+                        <tr>
+                            <th class="px-4 py-3 text-left">#</th>
+                            <th class="px-4 py-3 text-left">Factoring Date</th>
+                            <th class="px-4 py-3 text-left">Factoring Company</th>
+                            <th class="px-4 py-3 text-left">Customer</th>
+                            <th class="px-4 py-3 text-left">Invoice Number</th>
+                            <th class="px-4 py-3 text-left">Currency</th>
+                            <th class="px-4 py-3 text-left">Factoring Amount</th>
+                            <th class="px-4 py-3 text-left">Received Amount</th>
+                            <th class="px-4 py-3 text-left">Status</th>
+                            <th class="px-4 py-3 text-left">Bank</th>
+                            <th class="px-4 py-3 text-left">Account Number</th>
+                            <th class="px-4 py-3 text-left">Control</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="(row, index) in transactions" :key="row.id" class="cvr-table-row">
+                            <td class="px-4 py-3">{{ index + 1 }}</td>
+                            <td class="px-4 py-3 whitespace-nowrap">{{ row.factoring_date_formatted }}</td>
+                            <td class="px-4 py-3">{{ row.factoring_company_name }}</td>
+                            <td class="px-4 py-3">{{ row.customer_name }}</td>
+                            <td class="px-4 py-3">{{ row.invoice_number }}</td>
+                            <td class="px-4 py-3 uppercase">{{ row.invoice_currency }}</td>
+                            <td class="px-4 py-3 cvr-num">{{ Number(row.factoring_amount).toLocaleString() }}</td>
+                            <td class="px-4 py-3 cvr-num">{{ Number(row.received_amount).toLocaleString() }}</td>
+                            <td class="px-4 py-3">
+                                <template v-if="row.is_collected">
+                                    <span class="cvr-badge cvr-badge-active">Collected</span>
+                                    <div v-if="row.collection_date" class="text-xs cvr-text-muted mt-1">{{ row.collection_date }}</div>
+                                </template>
+                                <template v-else-if="row.is_rejected">
+                                    <span class="cvr-badge cvr-badge-overdue">Rejected</span>
+                                    <div v-if="row.rejection_date" class="text-xs cvr-text-muted mt-1">{{ row.rejection_date }}</div>
+                                    <div v-if="row.uncollected_invoice_charges > 0" class="text-xs cvr-text-muted mt-1">
+                                        Uncollected Invoices Charges: {{ Number(row.uncollected_invoice_charges).toLocaleString() }}
+                                    </div>
+                                </template>
+                                <span v-else class="cvr-badge cvr-badge-pending">Pending</span>
+                            </td>
+                            <td class="px-4 py-3">{{ row.financial_institution_name }}</td>
+                            <td class="px-4 py-3">{{ row.account_number }}</td>
+                            <td class="px-4 py-3">
+                                <div class="flex items-center gap-1">
+                                    <Link v-if="canUpdate && row.is_pending" :href="row.edit_url" class="cvr-action-btn" title="Edit">✏️</Link>
+                                    <button v-if="canAct && row.is_pending" @click="openCollect(row)" class="cvr-action-btn" title="Collect">✅</button>
+                                    <button v-if="canAct && row.is_pending" @click="openReject(row)" class="cvr-action-btn-danger cvr-action-btn" title="Reject">✖️</button>
+                                    <button v-if="canAct && row.is_collected" @click="revertCollectTarget = row" class="cvr-action-btn" title="Revert Collection">↩️</button>
+                                    <button v-if="canAct && row.is_rejected" @click="revertRejectTarget = row" class="cvr-action-btn" title="Revert Rejection">↩️</button>
+                                    <button v-if="canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Delete">🗑️</button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="transactions.length === 0">
+                            <td colspan="12" class="px-4 py-8 text-center cvr-text-muted">No records found.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Collect modal -->
+            <div v-if="collectTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-md">
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Collect</h2>
+                    <div v-if="collectTarget.difference_amount > 0" class="mb-4 px-4 py-3 rounded cvr-badge-pending text-sm">
+                        <strong>Difference Amount:</strong> {{ Number(collectTarget.difference_amount).toLocaleString() }}
+                        <span class="uppercase">{{ collectTarget.invoice_currency }}</span>
+                        <div class="text-xs mt-1">Confirm that you have received this amount from the factoring company.</div>
+                    </div>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="cvr-form-label">Collection Date *</label>
+                            <input v-model="collectForm.collection_date" type="date" :max="new Date().toISOString().slice(0,10)" class="cvr-input w-full px-3 py-2 rounded" />
+                            <p v-if="errors.collection_date" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.collection_date }}</p>
+                        </div>
+                        <div>
+                            <label class="cvr-form-label">Bank *</label>
+                            <select v-model="collectForm.financial_institution_id" class="cvr-input w-full px-3 py-2 rounded">
+                                <option value="">Select</option>
+                                <option v-for="b in financialInstitutionBanks" :key="b.id" :value="b.id">{{ b.name }}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="cvr-form-label">Account Type *</label>
+                            <select v-model="collectForm.account_type_id" class="cvr-input w-full px-3 py-2 rounded">
+                                <option value="">Select</option>
+                                <option v-for="a in accountTypes" :key="a.id" :value="a.id">{{ a.name }}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="cvr-form-label">Account Number *</label>
+                            <select v-model="collectForm.account_number" class="cvr-input w-full px-3 py-2 rounded">
+                                <option value="">Select</option>
+                                <option v-for="n in collectAccountNumbers" :key="n" :value="n">{{ n }}</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-2 mt-5">
+                        <button @click="collectTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                        <button @click="submitCollect" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reject modal -->
+            <div v-if="rejectTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-md">
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Rejected</h2>
+                    <div class="mb-4 px-4 py-3 rounded cvr-badge-pending text-sm">
+                        <strong>Factoring Amount:</strong> {{ Number(rejectTarget.factoring_amount).toLocaleString() }}
+                        <span class="uppercase">{{ rejectTarget.invoice_currency }}</span>
+                        <div class="text-xs mt-1">Confirm payment to the factoring company because the customer did not pay.</div>
+                    </div>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="cvr-form-label">Uncollected Invoices Charges</label>
+                            <input v-model="rejectForm.uncollected_invoice_charges" type="number" step="any" min="0" class="cvr-input w-full px-3 py-2 rounded" />
+                        </div>
+                        <div>
+                            <label class="cvr-form-label">Date *</label>
+                            <input v-model="rejectForm.rejection_date" type="date" :max="new Date().toISOString().slice(0,10)" class="cvr-input w-full px-3 py-2 rounded" />
+                            <p v-if="errors.rejection_date" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.rejection_date }}</p>
+                        </div>
+                        <div>
+                            <label class="cvr-form-label">Bank *</label>
+                            <select v-model="rejectForm.financial_institution_id" class="cvr-input w-full px-3 py-2 rounded">
+                                <option value="">Select</option>
+                                <option v-for="b in financialInstitutionBanks" :key="b.id" :value="b.id">{{ b.name }}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="cvr-form-label">Account Type *</label>
+                            <select v-model="rejectForm.account_type_id" class="cvr-input w-full px-3 py-2 rounded">
+                                <option value="">Select</option>
+                                <option v-for="a in accountTypes" :key="a.id" :value="a.id">{{ a.name }}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="cvr-form-label">Account Number *</label>
+                            <select v-model="rejectForm.account_number" class="cvr-input w-full px-3 py-2 rounded">
+                                <option value="">Select</option>
+                                <option v-for="n in rejectAccountNumbers" :key="n" :value="n">{{ n }}</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-2 mt-5">
+                        <button @click="rejectTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                        <button @click="submitReject" class="cvr-btn-danger px-3 py-1.5 rounded">Confirm</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Revert Collection confirmation -->
+            <div v-if="revertCollectTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Revert Collection</h2>
+                    <p class="text-sm cvr-text-muted mb-4">Do you want to revert the collection, remove the settlement, and restore the invoice to pending?</p>
+                    <div class="flex justify-end gap-2">
+                        <button @click="revertCollectTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                        <button @click="submitRevertCollect" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm Reset</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Revert Rejection confirmation -->
+            <div v-if="revertRejectTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Revert Rejection</h2>
+                    <p class="text-sm cvr-text-muted mb-4">Do you want to revert the rejection and remove the related bank and factoring statement entries?</p>
+                    <div class="flex justify-end gap-2">
+                        <button @click="revertRejectTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                        <button @click="submitRevertReject" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm Reset</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Delete confirmation -->
+            <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Do you want to delete this item?</h2>
+                    <div class="flex justify-end gap-2">
+                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded">Confirm Delete</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </AppLayout>
+</template>

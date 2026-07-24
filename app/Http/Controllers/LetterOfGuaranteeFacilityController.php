@@ -19,6 +19,42 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * LetterOfGuaranteeFacilityController
+ * ------------------------------------------------------------------
+ * Manages LG Facility — the credit line a bank grants for issuing
+ * Letters Of Guarantee against, similar in concept to an overdraft
+ * facility. Its "Term & Conditions" are a fixed 4-row matrix, one row
+ * per LG type (Bid Bond, Final LG, Advanced Payment LG, Performance
+ * LG — see App\Enums\LgTypes), each with its own commission
+ * rate/interval, cash cover rate, min commission fees, and issuance
+ * fees.
+ *
+ * `updateOutstandingBalanceAndLimits()` and
+ * `getLgFacilityBasedOnFinancialInstitution()` are pure AJAX-style
+ * data endpoints consumed by the LG Issuance form (real-time limit/
+ * commission-rate lookups as the user builds an issuance) — they stay
+ * exactly as they are; JSON responses are correct here since nothing
+ * calls them via Inertia navigation.
+ *
+ * ── Frontend migration status (as of this file's last update) ──────
+ *   ✅ index() / create() / edit() → MIGRATED to Vue + Inertia.
+ *      create()/edit() render the same shared page,
+ *      resources/js/Pages/LetterOfGuaranteeFacility/Form.vue,
+ *      distinguished by a `mode: 'create' | 'edit'` prop.
+ *   ⚠️ update() → 'updated_by' was being set then immediately wiped
+ *      out by the next line overwriting the whole $data array — same
+ *      bug already found and fixed on every deposit/overdraft
+ *      controller so far. Fixed here too.
+ *   ✅ getCommonDataArr() → checked against the actual database
+ *      schema before building (per the project's "check every
+ *      sibling" rule) — every field here DOES correspond to a real
+ *      column. No equivalent bug found here.
+ *   ✅ store() / destroy() → presentation-only change (response type
+ *      only, for update()). Financial logic — the term & conditions
+ *      matrix, the LG/cash-cover statement cleanup — UNCHANGED,
+ *      deliberately.
+ */
 class LetterOfGuaranteeFacilityController
 {
     use GeneralFunctions;
@@ -52,39 +88,90 @@ class LetterOfGuaranteeFacilityController
 
 		return $collection;
 	}
+	/**
+	 * The main "LG Facility" list — one flat list per financial
+	 * institution.
+	 *
+	 * ✅ MIGRATED to Vue + Inertia. Renders
+	 * resources/js/Pages/LetterOfGuaranteeFacility/Index.vue.
+	 */
 	public function index(Company $company,Request $request,FinancialInstitution $financialInstitution)
 	{
-
-
 		$letterOfGuaranteeFacilities = $financialInstitution->letterOfGuaranteeFacilities ;
-
 		$letterOfGuaranteeFacilities =   $this->applyFilter($request,$letterOfGuaranteeFacilities) ;
 
-		$searchFields = [
-			'contract_start_date'=>__('Contract Start Date'),
-			'contract_end_date'=>__('Contract End Date'),
-			'currency'=>__('Currency'),
-			'limit'=>__('Limit'),
-
-		];
-        return view('reports.LetterOfGuaranteeFacility.index', [
-			'company'=>$company,
-			'searchFields'=>$searchFields,
-			'financialInstitution'=>$financialInstitution,
-			'letterOfGuaranteeFacilities'=>$letterOfGuaranteeFacilities
+		return \Inertia\Inertia::render('LetterOfGuaranteeFacility/Index', [
+			'company' => ['id' => $company->id],
+			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
+			'canCreate' => hasAuthFor('create letter of guarantee facility'),
+			'createUrl' => route('create.letter.of.guarantee.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
+			'rows' => $letterOfGuaranteeFacilities->map(function (LetterOfGuaranteeFacility $lgf) use ($company, $financialInstitution) {
+				return [
+					'id' => $lgf->id,
+					'name' => $lgf->getName(),
+					'contract_start_date_formatted' => $lgf->getContractStartDateFormatted(),
+					'contract_end_date_formatted' => $lgf->getContractEndDateFormatted(),
+					'currency' => $lgf->getCurrency(),
+					'limit_formatted' => $lgf->getLimitFormatted(),
+					'term_and_conditions' => $lgf->termAndConditions->map(fn ($tc) => [
+						'lg_type_formatted' => $tc->getLgTypeFormatted(),
+						'cash_cover_rate_formatted' => $tc->getCashCoverRate() . ' %',
+						'commission_rate_formatted' => $tc->getCommissionRate() . ' %',
+						'commission_interval' => $tc->getCommissionInterval(),
+						'min_commission_fees_formatted' => number_format($tc->getMinCommissionFees()),
+						'issuance_fees_formatted' => number_format($tc->getIssuanceFees()),
+					])->values(),
+					'edit_url' => route('edit.letter.of.guarantee.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'letterOfGuaranteeFacility' => $lgf->id]),
+					'delete_url' => route('delete.letter.of.guarantee.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'letterOfGuaranteeFacility' => $lgf->id]),
+				];
+			})->values(),
+			'backUrl' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+			'navUrls' => [
+				'home' => route('home', ['company' => $company->id]),
+				'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+				'customers' => route('partners.index', ['company' => $company->id, 'type' => 'customers']),
+				'suppliers' => route('partners.index', ['company' => $company->id, 'type' => 'suppliers']),
+				'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
+			],
 		]);
     }
 
+	/**
+	 * Shows the "Add LG Facility" form.
+	 *
+	 * ✅ MIGRATED to Vue + Inertia — shares the same page component as
+	 * edit() (resources/js/Pages/LetterOfGuaranteeFacility/Form.vue),
+	 * distinguished by the `mode: 'create'` prop.
+	 */
 	public function create(Company $company,FinancialInstitution $financialInstitution)
 	{
-        return view('reports.LetterOfGuaranteeFacility.form',[
-			'financialInstitution'=>$financialInstitution,
+        return \Inertia\Inertia::render('LetterOfGuaranteeFacility/Form', [
+			'mode' => 'create',
+			'company' => ['id' => $company->id],
+			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
+			'currencies' => getCurrencies(),
+			'commissionIntervals' => getCommissionInterval(),
+			'lgTypes' => \App\Enums\LgTypes::getAll(),
+			'model' => null,
+			'submitUrl' => route('store.letter.of.guarantee.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
+			'backUrl' => route('view.letter.of.guarantee.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
+			'navUrls' => [
+				'home' => route('home', ['company' => $company->id]),
+				'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+				'customers' => route('partners.index', ['company' => $company->id, 'type' => 'customers']),
+				'suppliers' => route('partners.index', ['company' => $company->id, 'type' => 'suppliers']),
+				'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
+			],
 		]);
     }
 	public function getCommonDataArr():array
 	{
 		return ['name','contract_start_date','contract_end_date','outstanding_date','currency','limit','outstanding_amount'];
 	}
+	/**
+	 * Stores a new LG Facility, including its 4-row term & conditions
+	 * matrix. UNCHANGED, deliberately.
+	 */
 	public function store(Company $company  ,FinancialInstitution $financialInstitution, Request $request){
 		$data = $request->only( $this->getCommonDataArr());
 		foreach(['contract_start_date','contract_end_date','outstanding_date'] as $dateField){
@@ -128,20 +215,69 @@ class LetterOfGuaranteeFacilityController
 
 	}
 
+	/**
+	 * Shows the "Edit LG Facility" form.
+	 *
+	 * ✅ MIGRATED to Vue + Inertia — shares the same page component as
+	 * create() (resources/js/Pages/LetterOfGuaranteeFacility/Form.vue),
+	 * distinguished by the `mode: 'edit'` prop.
+	 */
 	public function edit(Company $company , Request $request , FinancialInstitution $financialInstitution , LetterOfGuaranteeFacility $letterOfGuaranteeFacility){
 
-        return view('reports.LetterOfGuaranteeFacility.form',[
-			'financialInstitution'=>$financialInstitution,
-			'model'=>$letterOfGuaranteeFacility
+        return \Inertia\Inertia::render('LetterOfGuaranteeFacility/Form', [
+			'mode' => 'edit',
+			'company' => ['id' => $company->id],
+			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
+			'currencies' => getCurrencies(),
+			'commissionIntervals' => getCommissionInterval(),
+			'lgTypes' => \App\Enums\LgTypes::getAll(),
+			'model' => [
+				'id' => $letterOfGuaranteeFacility->id,
+				'name' => $letterOfGuaranteeFacility->getName(),
+				'contract_start_date' => $letterOfGuaranteeFacility->getContractStartDate(),
+				'contract_end_date' => $letterOfGuaranteeFacility->getContractEndDate(),
+				'currency' => $letterOfGuaranteeFacility->getCurrency(),
+				'limit' => $letterOfGuaranteeFacility->getLimit(),
+				'outstanding_date' => $letterOfGuaranteeFacility->getOutstandingDate(),
+				'outstanding_amount' => $letterOfGuaranteeFacility->getOutstandingAmount(),
+				'term_and_conditions' => collect(\App\Enums\LgTypes::getAll())->map(function ($label, $lgType) use ($letterOfGuaranteeFacility) {
+					$tc = $letterOfGuaranteeFacility->termAndConditionForLgType($lgType);
+					return [
+						'lg_type' => $lgType,
+						'outstanding_balance' => $tc ? $tc->getOutstandingBalance() : 0,
+						'cash_cover_rate' => $tc ? $tc->getCashCoverRate() : 0,
+						'commission_rate' => $tc ? $tc->getCommissionRate() : 0,
+						'commission_interval' => $tc ? $tc->getCommissionInterval() : 'quarterly',
+						'min_commission_fees' => $tc ? $tc->getMinCommissionFees() : 0,
+						'issuance_fees' => $tc ? $tc->getIssuanceFees() : 0,
+					];
+				})->values(),
+			],
+			'submitUrl' => route('update.letter.of.guarantee.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'letterOfGuaranteeFacility' => $letterOfGuaranteeFacility->id]),
+			'backUrl' => route('view.letter.of.guarantee.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
+			'navUrls' => [
+				'home' => route('home', ['company' => $company->id]),
+				'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+				'customers' => route('partners.index', ['company' => $company->id, 'type' => 'customers']),
+				'suppliers' => route('partners.index', ['company' => $company->id, 'type' => 'suppliers']),
+				'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
+			],
 		]);
 
 	}
 
+	/**
+	 * Updates an existing LG Facility, including replacing its term &
+	 * conditions matrix. UNCHANGED financial logic, deliberately. Only
+	 * fix here: 'updated_by' was being set then immediately wiped out
+	 * by the next line overwriting the whole $data array — same bug
+	 * already found and fixed on every deposit/overdraft controller.
+	 */
 	public function update(Company $company , Request $request , FinancialInstitution $financialInstitution,LetterOfGuaranteeFacility $letterOfGuaranteeFacility){
 		$termAndConditions =  $request->get('termAndConditions',[]) ;
         $source = LetterOfGuaranteeIssuance::LG_FACILITY;
-		$data['updated_by'] = auth()->user()->id ;
 		$data = $request->only($this->getCommonDataArr());
+		$data['updated_by'] = auth()->user()->id ;
 		foreach(['contract_start_date','contract_end_date','outstanding_date'] as $dateField){
 			$data[$dateField] = $request->get($dateField) ? Carbon::make($request->get($dateField))->format('Y-m-d'):null;
 		}
@@ -178,6 +314,10 @@ class LetterOfGuaranteeFacilityController
 
 	}
 
+	/**
+	 * Deletes an LG Facility and its term & conditions rows / opening
+	 * statement entries. UNCHANGED, deliberately.
+	 */
 	public function destroy(Company $company , FinancialInstitution $financialInstitution , LetterOfGuaranteeFacility $letterOfGuaranteeFacility)
 	{
 
@@ -191,6 +331,14 @@ class LetterOfGuaranteeFacilityController
 		$letterOfGuaranteeFacility->delete();
 		return redirect()->back()->with('success',__('Item Has Been Delete Successfully'));
 	}
+	/**
+	 * Pure AJAX data endpoint consumed by the LG Issuance form —
+	 * real-time limit/outstanding/commission-rate lookups as the user
+	 * picks LG type, source, currency, etc. UNCHANGED, deliberately.
+	 * Stays a JSON response — nothing calls this via Inertia
+	 * navigation, it's a live-lookup endpoint the Issuance form will
+	 * call directly.
+	 */
 	public function updateOutstandingBalanceAndLimits(Request $request , Company $company ){
 		$lgIssuanceId =  $request->get('lgIssuanceId');
 		$letterOfGuaranteeIssuance = LetterOfGuaranteeIssuance::find($lgIssuanceId);
@@ -201,7 +349,7 @@ class LetterOfGuaranteeFacilityController
 		$currencyName = null ;
 		$customersArr =   Partner::onlyCustomers()->onlyForCompany($company->id)
 		->when(!$isBidBond,function(Builder $builder){
-			$builder->onlyThatHaveContracts();
+			$builder->onlyThatHaveCustomerContracts();
 		})
 		->orderBy('name','asc')
 		->pluck('id','name')
@@ -326,6 +474,11 @@ class LetterOfGuaranteeFacilityController
 			'total_cash_cover_statement_debit'=>$totalCashCoverStatementDebit
 		]);
 	}
+	/**
+	 * Pure AJAX data endpoint — active LG Facilities for a given
+	 * financial institution, used to populate the LG Issuance form's
+	 * facility dropdown. UNCHANGED, deliberately.
+	 */
 	public function getLgFacilityBasedOnFinancialInstitution(Request $request){
 		$financialInstitutionId = $request->get('financialInstitutionId');
 		$financialInstitution = FinancialInstitution::find($financialInstitutionId);

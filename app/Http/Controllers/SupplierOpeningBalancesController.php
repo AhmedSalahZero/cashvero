@@ -3,26 +3,161 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreOpeningBalanceRequest;
-use App\Models\Bank;
 use App\Models\Company;
 use App\Models\MoneyPayment;
 use App\Models\Partner;
+use App\Models\SupplierInvoice;
 use App\Models\SupplierOpeningBalance;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
+/**
+ * SupplierOpeningBalancesController
+ * ------------------------------------------------------------------
+ * Manages the company's Suppliers Opening Balance — a SINGLETON per
+ * company (Company::supplierOpeningBalance() is a HasOne), holding
+ * two repeaters: opening supplier invoices, and advanced/down-payment
+ * balances (each also creates a linked `DownPaymentMoneyPaymentSettlement`
+ * row). Mirror of CustomerOpeningBalancesController — see its
+ * docblock, and OpeningBalancesController's, for the full rationale.
+ *
+ * `store()` / `update()` / `generateData()` / `generateAdvancedData()`
+ * / `generateDownPaymentData()`'s SAVE LOGIC is completely UNCHANGED.
+ *
+ * ── Frontend migration status (as of this file's last update) ──────
+ *   ✅ index() → REPURPOSED — read-only Vue summary page.
+ *   ✅ manage() → MIGRATED to Vue + Inertia. Renders
+ *      resources/js/Pages/SupplierOpeningBalance/Form.vue, submitting
+ *      the exact field/array names store()/update() already expect
+ *      (`opening-balances[]`, `advanced-opening-balances[]`, each row
+ *      keeping its `id` — 0 for new rows). Mirror of
+ *      CustomerOpeningBalance/Form.vue with two field-name
+ *      differences confirmed from the original Blade:
+ *      `paid_amount` (not `received_amount`) and
+ *      `purchases_order_number` (not `sales_order_number`).
+ *   ⚠️ store() / update() → response type fixed from raw JSON to a
+ *      real `redirect()->with('success')` — same fix as the other two
+ *      opening balance controllers, required once the caller became
+ *      Inertia. Save logic itself untouched.
+ *   ⚠️ Contract Name / Contract picker → same real, still-wired AJAX
+ *      routes as the Customers form
+ *      (`update.contracts.based.on.customer`,
+ *      `update.sales.orders.based.on.contract`), called with
+ *      `is_lc=1` this time so the endpoint's existing
+ *      `$contract->forSupplier()` branch is used instead of
+ *      `forCustomer()` — that branching already existed in
+ *      ContractsController, untouched here. The "Purchase Order
+ *      Number" field reuses the SAME sales-orders endpoint the
+ *      Customers form uses (not the separate, more complex
+ *      `update.purchase.orders.based.on.contract` endpoint, which has
+ *      its own -1/-2 "new PO" special cases for a different feature)
+ *      — matching the original Blade, whose dropdown for this field
+ *      was literally reusing the `sales_order_number` CSS class,
+ *      i.e. already wired to the same endpoint before this migration.
+ */
 class SupplierOpeningBalancesController
 {
-    public function index(Company $company, Request $request)
+    /**
+     * NEW — read-only summary. Shows both repeaters (opening invoices
+     * and down payments) if a record exists, with a "Manage" button
+     * to the real form. Presentation only.
+     */
+    public function index(Company $company)
     {
-        $suppliers = Partner::getSuppliersForCompanyFormattedForSelect($company);
-//        $banks = Bank::pluck('view_name', 'id');
-        return view('supplier-opening-balance.form', [
-            'company' => $company,
-            'model' => $company->supplierOpeningBalance,
-			'isCustomer'=>0,
-            'suppliersFormatted' => $suppliers,
-   
+        $openingBalance = $company->supplierOpeningBalance;
+
+        if (!$openingBalance) {
+            return \Inertia\Inertia::render('SupplierOpeningBalance/Index', [
+                'company' => ['id' => $company->id],
+                'exists' => false,
+                'manageUrl' => route('suppliers-opening-balance.manage', ['company' => $company->id]),
+            ]);
+        }
+
+        $invoices = $openingBalance->supplierInvoices->map(fn (SupplierInvoice $invoice) => [
+            'id' => $invoice->id,
+            'supplier' => $invoice->getSupplierName(),
+            'invoice_number' => $invoice->invoice_number,
+            'invoice_due_date' => $invoice->invoice_due_date,
+            'currency' => $invoice->currency,
+            'amount' => (float) $invoice->invoice_amount,
+            'contract_name' => $invoice->contract_name,
+            'contract_code' => $invoice->contract_code,
+            'purchases_order_number' => $invoice->getPurchasesOrderNumber(),
+        ])->values();
+
+        $downPayments = $openingBalance->moneyModel->map(fn (MoneyPayment $money) => [
+            'id' => $money->getId(),
+            'supplier' => $money->getSupplierName(),
+            'down_payment_type' => $money->down_payment_type,
+            'contract_name' => $money->getContractName(),
+            'currency' => $money->getCurrency(),
+            'amount' => (float) $money->getPaidAmount(),
+        ])->values();
+
+        return \Inertia\Inertia::render('SupplierOpeningBalance/Index', [
+            'company' => ['id' => $company->id],
+            'exists' => true,
+            'date' => $openingBalance->getDate(),
+            'manageUrl' => route('suppliers-opening-balance.manage', ['company' => $company->id]),
+            'invoices' => $invoices,
+            'downPayments' => $downPayments,
+        ]);
+    }
+
+    /**
+     * MIGRATED — renders the real create/edit form as Vue + Inertia.
+     */
+    public function manage(Company $company, Request $request)
+    {
+        $model = $company->supplierOpeningBalance;
+
+        $suppliers = Partner::where('company_id', $company->id)->where('is_supplier', 1)->orderBy('name')
+            ->get()->map(fn (Partner $p) => ['id' => $p->id, 'name' => $p->getName()])->values();
+
+        $modelData = null;
+        if ($model) {
+            $modelData = [
+                'id' => $model->id,
+                'date' => $model->getDate(),
+                'invoices' => $model->supplierInvoices->map(fn (SupplierInvoice $row) => [
+                    'id' => $row->id,
+                    'partner_id' => $row->getPartnerId(),
+                    'invoice_number' => $row->invoice_number,
+                    'contract_name' => $row->contract_name,
+                    'contract_code' => $row->contract_code,
+                    'contract_date' => $row->contract_date,
+                    'purchases_order_number' => $row->getPurchasesOrderNumber(),
+                    'paid_amount' => (float) $row->invoice_amount,
+                    'currency' => $row->currency,
+                    'exchange_rate' => (float) $row->exchange_rate,
+                    'invoice_due_date' => $row->invoice_due_date,
+                ])->values(),
+                'downPayments' => $model->moneyModel->map(fn (MoneyPayment $row) => [
+                    'id' => $row->getId(),
+                    'partner_id' => $row->getSupplierId(),
+                    'paid_amount' => (float) $row->getPaidAmount(),
+                    'currency' => $row->getCurrency(),
+                    'exchange_rate' => (float) $row->getExchangeRate(),
+                    'down_payment_type' => $row->down_payment_type,
+                    'contract_id' => $row->getContractId(),
+                    'contract_name' => $row->getContractName(),
+                ])->values(),
+            ];
+        }
+
+        return \Inertia\Inertia::render('SupplierOpeningBalance/Form', [
+            'company' => ['id' => $company->id],
+            'submitUrl' => $model
+                ? route('suppliers-opening-balance.update', ['company' => $company->id, 'suppliers_opening_balance' => $model->id])
+                : route('suppliers-opening-balance.store', ['company' => $company->id]),
+            'backUrl' => route('suppliers-opening-balance.index', ['company' => $company->id]),
+            'isEdit' => (bool) $model,
+            'model' => $modelData,
+            'currencies' => getCurrencies(),
+            'suppliers' => $suppliers,
+            'contractsForSupplierUrl' => route('update.contracts.based.on.customer', ['company' => $company->id]),
+            'salesOrdersForContractUrl' => route('update.sales.orders.based.on.contract', ['company' => $company->id]),
         ]);
     }
 
@@ -52,9 +187,9 @@ class SupplierOpeningBalancesController
         } 
 		
        
-		return response()->json([
-			'redirectTo'=>route('suppliers-opening-balance.index',['company'=>$company->id])
-		]);
+		return redirect()
+			->route('suppliers-opening-balance.index', ['company' => $company->id])
+			->with('success', __('Data Store Successfully'));
       
     }
 
@@ -135,9 +270,9 @@ public function update(Company $company, StoreOpeningBalanceRequest $request, Su
             }
         }
 		
-		 return response()->json([
-			'redirectTo'=>route('suppliers-opening-balance.index',['company'=>$company->id])
-		]);
+		 return redirect()
+			->route('suppliers-opening-balance.index', ['company' => $company->id])
+			->with('success', __('Item Has Been Updated Successfully'));
 		
     }
 	public static function generateData(string $openingBalanceDate , array $openingBalanceArr , Company $company):array 

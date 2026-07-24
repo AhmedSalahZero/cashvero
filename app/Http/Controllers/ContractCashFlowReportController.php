@@ -8,15 +8,74 @@ use App\Models\Partner;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
+/**
+ * ContractCashFlowReportController
+ * ------------------------------------------------------------------
+ * The form/list page for a per-contract cash flow report. The actual
+ * report engine is NOT here — result() is a thin wrapper that
+ * pre-resolves the contract/customer and delegates straight into
+ * CashFlowReportController::result(), which already renders Inertia
+ * (Pages/CashFlowReport/Result.vue — shared with Company Cash Flow).
+ * ⚠️ CALCULATION LOGIC IS 100% UNTOUCHED here, same reasoning as
+ * CashFlowReportController's own class docblock.
+ *
+ * ── Frontend migration status ───────────────────────────────────
+ *   index()  → ✅ Inertia::render, Pages/ContractCashFlowReport/Index.vue
+ *              (customer → contract cascading select, reusing the
+ *              existing get.contracts.for.customer.or.supplier AJAX
+ *              endpoint the same way CashExpense/Form.vue already
+ *              does + saved-reports list). Previously Blade
+ *              (reports.contract_cash_flow_form +
+ *              contract-cashflow-report-index).
+ *   result() → already Inertia (delegates into
+ *              CashFlowReportController::result()), UNCHANGED.
+ *   Excel export → handled by CashFlowReportController::exportExcel(),
+ *              since Contract Cash Flow shares that same Result.vue
+ *              page and export route with Company Cash Flow.
+ */
 class ContractCashFlowReportController
 {
     use GeneralFunctions;
+
+	/**
+	 * Form + saved-reports list. getContractsForCustomerOrSupplier()
+	 * (ContractsController, UNCHANGED) already returns each contract's
+	 * id/name/code/amount/currency/start_date/end_date — exactly the
+	 * fields the old Blade's inline JS read off `data-*` attributes —
+	 * so the Vue page fetches it the same way CashExpense/Form.vue's
+	 * loadContractsForPartner() already does, no new endpoint needed.
+	 */
     public function index(Company $company)
 	{
-		$clientsWithContracts = Partner::onlyCompany($company->id)->orderBy('name')->onlyCustomers()->onlyThatHaveContracts()->get();
-		$contractCashflowReports = $company->cashflowReports->where('is_contract',1);
-        return view('reports.contract_cash_flow_form', compact('company','clientsWithContracts','contractCashflowReports'));
+		$clientsWithContracts = Partner::onlyCompany($company->id)->orderBy('name')->onlyCustomers()->onlyThatHaveCustomerContracts()->get();
+		$contractCashflowReports = $company->cashflowReports->where('is_contract', 1);
+
+		return Inertia::render('ContractCashFlowReport/Index', [
+			'company' => ['id' => $company->id, 'name' => $company->getName()],
+			'clientsWithContracts' => $clientsWithContracts->map(fn ($p) => ['id' => $p->id, 'name' => $p->getName()])->values(),
+			'getContractsForCustomerUrl' => route('get.contracts.for.customer.or.supplier', ['company' => $company->id]),
+			'savedReports' => $contractCashflowReports->values()->map(fn ($r) => [
+				'id' => $r->id,
+				'name' => $r->getName(),
+				'interval' => $r->getIntervalName(),
+				'start_date_formatted' => $r->getStartDateFormatted(),
+				'end_date_formatted' => $r->getEndDateFormatted(),
+				// Reusing the generic (company) result route is deliberate,
+				// not a leftover bug — CashFlowReportController::result()
+				// already fully handles cached-report replay for BOTH
+				// company and contract reports purely from $cashflowReport
+				// ->report_data, without needing contract_id again. This
+				// matches the exact routing the original Blade partial
+				// (contract-cashflow-report-index.blade.php) already used.
+				'view_url' => route('result.cashflow.report', ['company' => $company->id, 'returnResultAsArray' => 'view', 'cashflowReport' => $r->id]),
+				'delete_url' => route('delete.cashflow.report', ['company' => $company->id, 'cashflowReport' => $r->id]),
+			]),
+			'urls' => [
+				'result' => route('result.contract.cashflow.report', ['company' => $company->id]),
+			],
+		]);
     }
 	public function result(Company $company , Request $request , bool $returnResultAsArray = false ,$defaultCashFlowId = 0){
 		$formStartDate =$request->get('start_date',$request->get('cash_start_date'));

@@ -29,6 +29,7 @@ class Kernel extends HttpKernel
 
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
             \App\Http\Middleware\canViewCurrentCompany::class,
+            \App\Http\Middleware\HandleInertiaRequests::class,
 			
             
         ],

@@ -90,7 +90,7 @@ UPDATE
 	set new.discount_amount_in_main_currency = (new.discount_amount * new.exchange_rate);
 	set new.vat_amount_in_main_currency = (new.vat_amount * new.exchange_rate);
 	
-	set new.net_balance = round(@totalInvoiceAmount - ifnull(new.total_withhold_amount,0) - ifnull(new.total_paid_amount,2) - new.total_deductions,2);
+	set new.net_balance = round(@totalInvoiceAmount - ifnull(new.total_withhold_amount,0) - ifnull(new.total_paid_amount,0) - new.total_deductions,2);
 	set new.net_balance_in_main_currency = round(new.net_balance * new.exchange_rate,2);
 	IF(new.currency = 'EUR') then 
 		set new.currency = 'EURO';

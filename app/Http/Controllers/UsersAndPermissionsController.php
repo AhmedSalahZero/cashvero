@@ -3,50 +3,51 @@
 namespace App\Http\Controllers;
 
 use App\Models\Company;
-use App\Models\Section;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 
+/**
+ * UsersAndPermissionsController
+ * ------------------------------------------------------------------
+ * edit()/update() — the "eye icon" screen from the User list:
+ * editing one specific user's individual permission overrides.
+ *
+ * ── Frontend migration status ─────────────────────────────────────
+ *   ✅ edit() → Vue + Inertia (SuperAdmin/Users/Permissions.vue)
+ *   ✅ update() → redirects correctly
+ */
 class UsersAndPermissionsController extends Controller
 {
-    public function index($scope)
+    public function edit(User $user, ?Company $company = null)
     {
-        $roles = Role::where('scope',$scope)->get();
-        return view('super_admin_view.roles_and_permissions.index',compact('scope','roles'));
+        $groups = [];
+        foreach (\App\Helpers\HAuth::getPermissions($user->getSystemsNames()) as $permissionArr) {
+            $groups[$permissionArr['group']][] = [
+                'name' => $permissionArr['name'],
+                'label' => $permissionArr['view-name'],
+                'checked' => $user->can($permissionArr['name']),
+            ];
+        }
+
+        return \Inertia\Inertia::render('SuperAdmin/Users/Permissions', [
+            'company' => $company ? ['id' => $company->id] : null,
+            'user' => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email],
+            'groups' => collect($groups)->map(fn ($perms, $groupName) => [
+                'name' => $groupName,
+                'permissions' => $perms,
+            ])->values(),
+            'submitUrl' => $company
+                ? route('user.permissions.update', ['user' => $user->id, 'company' => $company->id])
+                : route('user.permissions.update', ['user' => $user->id]),
+            'backUrl' => $company ? route('user.index', ['company' => $company->id]) : route('user.index'),
+        ]);
     }
-    public function create($scope)
+
+    public function update(Request $request, User $user)
     {
-        $sections = Section::where('section_side','client')->get();
-        return view('super_admin_view.roles_and_permissions.form',compact('scope','sections'));
-    }
-    public function store(Request $request ,$scope)
-    {
-        $role = Role::create(['name' => $request->role,'scope' => $scope]);
-        $prev_name = '';
-        $name_arr = [];
-        $sections = Section::where('section_side','client')->get();
-        $permissions = array_keys($request->permissions);
-        $name_of_permissions = [
-            'view',
-            'create',
-            'edit',
-            'delete',
-        ];
-      
-        $role->syncPermissions(array_keys($request->permissions));
-        toastr()->success(__('Created Successfully'));
-        return redirect()->back();
-    }
-    public function edit(User $user , ?Company $company = null)
-    {
-        return view('super_admin_view.users_permissions.form',compact('user','company'));
-    }
-    public function update(Request $request,user $user )
-    {
-		$user->syncPermissions(array_keys((array)$request->permissions));
+        $user->syncPermissions(array_keys((array) $request->permissions));
         toastr()->success(__('updated Successfully'));
+
         return redirect()->back();
     }
 }

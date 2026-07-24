@@ -129,6 +129,12 @@ class Partner extends Model
             $builder->where('model_type', 'Customer');
         });
     }
+	public function scopeOnlyThatHaveSupplierContracts(Builder $query)
+    {
+        return $query->whereHas('contracts', function (Builder $builder) {
+            $builder->where('model_type', 'Supplier');
+        });
+    }
     public function scopeOnlyHasInvoicesWithCurrency(Builder $query, string $currencyName)
     {
         return $query->whereHas('SupplierInvoice', function (Builder $builder) use ($currencyName) {

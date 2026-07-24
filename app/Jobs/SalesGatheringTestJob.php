@@ -51,8 +51,27 @@ class SalesGatheringTestJob implements ShouldQueue
 		}
 		$uploadParamsForType = getUploadParamsFromType($this->modelName);
 		$modelTableName = $uploadParamsForType['dbName'];
+
+		// ── Duplicate protection (confirmed with project owner): never
+		// insert a row whose invoice_number+currency already exists
+		// for this company. Deliberately SKIP, never replace/update —
+		// real financial records (collections, deductions, settlements)
+		// reference an invoice by its database id, and replacing an
+		// existing row would orphan them. Pre-fetched once here rather
+		// than per-chunk, since this company's existing invoice
+		// numbers don't change mid-job.
+		$existingInvoiceKeys = null;
+		$skippedDuplicateCount = 0;
+		if (in_array($this->modelName, ['CustomerInvoice', 'SupplierInvoice'], true)) {
+			$existingInvoiceKeys = DB::table($modelTableName)
+				->where('company_id', $this->company_id)
+				->whereNotNull('invoice_number')
+				->get(['invoice_number', 'currency'])
+				->map(fn ($r) => $r->invoice_number . '|' . strtoupper($r->currency ?? ''))
+				->flip();
+		}
 		
-        CachingCompany::where('company_id' , $this->company_id )->get()->each(function($cachingCompany) use($modelTableName){
+        CachingCompany::where('company_id' , $this->company_id )->get()->each(function($cachingCompany) use($modelTableName, $existingInvoiceKeys, &$skippedDuplicateCount){
             $cacheGroup = Cache::get($cachingCompany->key_name) ?: [];
             $chunks = \array_chunk($cacheGroup ,1000);
             foreach($chunks as $chunk)
@@ -66,6 +85,20 @@ class SalesGatheringTestJob implements ShouldQueue
 					continue;
 				}
 
+				if ($existingInvoiceKeys !== null) {
+					$chunk = array_values(array_filter($chunk, function (array $row) use ($existingInvoiceKeys, &$skippedDuplicateCount) {
+						$key = ($row['invoice_number'] ?? '') . '|' . strtoupper($row['currency'] ?? '');
+						if (($row['invoice_number'] ?? '') !== '' && $existingInvoiceKeys->has($key)) {
+							$skippedDuplicateCount++;
+							return false;
+						}
+						return true;
+					}));
+					if ($chunk === []) {
+						continue;
+					}
+				}
+
 				$chunk = $this->ReplaceAllSpecialCharactersInArrayValuesAndAddExtraFieldsToBeStored($chunk,$this->modelName,$this->loanId);
 				
                 DB::table($modelTableName)->insert($chunk);
@@ -74,6 +107,10 @@ class SalesGatheringTestJob implements ShouldQueue
                 cache::forever( $key , $oldTotalUploaded + count($chunk) );
             }
         });
+
+		if ($skippedDuplicateCount > 0) {
+			cache::forever(getSkippedDuplicatesCacheKey($this->company_id, $this->modelName), $skippedDuplicateCount);
+		}
     }
 	public function ReplaceAllSpecialCharactersInArrayValuesAndAddExtraFieldsToBeStored(array $items,$modelName ,$loanId )
 	{

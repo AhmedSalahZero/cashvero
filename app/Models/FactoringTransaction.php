@@ -54,7 +54,28 @@ class FactoringTransaction extends Model
         $contractInterestRate = $borrowingRate + $marginRate;
         $dueDate = Carbon::parse($invoiceDueDate)->startOfDay();
         $factorDate = Carbon::parse($factoringDate)->startOfDay();
-        $diffInDays = $dueDate->diffInDays($factorDate);
+        /**
+         * ⚠️ REAL BUG FIXED HERE (same Carbon 3 sign-bug class already
+         * found and fixed on TimeOfDeposit::calculateInterestAmount()
+         * and Cheque::calculateChequeExpectedCollectionDate()).
+         *
+         * $dueDate (the invoice's due date, almost always LATER —
+         * factoring happens before an invoice is due, that's the
+         * whole point of factoring) was the base, $factorDate (the
+         * earlier date) was the argument. Under Carbon 2 this always
+         * returned a positive day-count regardless of order; Carbon 3
+         * (shipped with this project's Laravel 12) made it signed by
+         * default, so this returned a NEGATIVE day-count in the
+         * normal case, not an edge case. The stored 'diff_in_days'
+         * column on every factoring transaction was affected (shown
+         * back to the user on the edit screen) — traced and confirmed
+         * this does NOT affect the actual money fields saved
+         * (factoring_interest_amount / received_amount come from the
+         * frontend's own submitted values, cross-checked by a separate
+         * sum-consistency rule, not from this calculation). Fixed by
+         * forcing $absolute = true.
+         */
+        $diffInDays = $dueDate->diffInDays($factorDate, true);
         $factoringInterestAmount = (($factoringAmount * $contractInterestRate / 100) / 360) * $diffInDays;
         $receivedAmount = $factoringAmount - $factoringInterestAmount - $otherCharges;
 

@@ -20,6 +20,18 @@ class StoreOverdraftAgainstCommercialPaperRequest extends FormRequest
     }
 
 
+    /**
+     * ⚠️ REAL BUG FIXED HERE (same class of bug already found and
+     * fixed on Fully Secured Overdraft and Clean Overdraft):
+     * 'balance_date' was never actually validated here — only a
+     * browser-only `required` hint on the old Blade form.
+     * OverdraftAgainstCommercialPaper::boot()'s created() hook uses
+     * this exact field's raw value as the `date` for the very first
+     * rate-history row it creates, and that column is NOT NULL in the
+     * database — so an empty Balance Date would reach a hard SQL
+     * error instead of a clean validation message. Fixed here before
+     * it could cause the same crash.
+     */
     public function rules(array $excludeAccountNumbers = [])
     {
 
@@ -29,6 +41,7 @@ class StoreOverdraftAgainstCommercialPaperRequest extends FormRequest
 			'contract_end_date'=>'required|date|after:contract_start_date',
             'account_number'=>['required',new UniqueAccountNumberRule($excludeAccountNumbers)],
 			'currency'=>'required',
+			'balance_date'=>'required|date',
 			'limit'=>['required','gt:0'],
 			'interest_rate'=>['sometimes','required','gt:0'],
 	//		'infos'=>[new LendingRateRule()],

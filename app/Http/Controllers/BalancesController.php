@@ -10,8 +10,48 @@ use App\Models\User;
 use App\Traits\GeneralFunctions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
 
-
+/**
+ * BalancesController
+ * ------------------------------------------------------------------
+ * Shows how much each partner currently owes/is owed — this ONE
+ * controller serves BOTH the "Customers Balances" and "Suppliers
+ * Balances" sidebar pages, distinguished only by the $modelType
+ * route parameter ('CustomerInvoice' vs 'SupplierInvoice'). Nothing
+ * here is customer-specific; migrating index() migrates both pages
+ * at once (confirmed intentional, not an accident of this migration).
+ *
+ * All net-balance math (net_balance, invoice_status, total_deductions)
+ * is computed by MySQL triggers on `customer_invoices` /
+ * `supplier_invoices` / `invoice_deductions` — see
+ * app/Triggers/Cashvero/customer_invoices_triggers.sql and
+ * invoice_deductions.sql. This controller only READS those columns;
+ * none of that math is touched or duplicated here.
+ *
+ * ── Frontend migration status (as of this file's last update) ──────
+ *   - index()                            → ALREADY migrated. Returns
+ *                                           Inertia::render(), served by
+ *                                           resources/js/Pages/Balances/Index.vue
+ *                                           (shared page — see class note above).
+ *                                           Calculation logic (sumNetBalancePerCurrency,
+ *                                           getDownPaymentInMainCurrency, subtractQuery,
+ *                                           addMainCurrency) is UNCHANGED, deliberately.
+ *   - showTotalNetBalanceDetailsReport() → ALREADY migrated. Returns
+ *                                           Inertia::render(), served by
+ *                                           resources/js/Pages/Balances/TotalNetBalanceDetails.vue.
+ *                                           Now supports a third filter
+ *                                           mode, "Coming Dues"
+ *                                           (invoice_status = 'not_due_yet'),
+ *                                           added at the project owner's
+ *                                           request — new, not part of
+ *                                           the original app.
+ *
+ * Two related report pages reached from this one — the per-customer
+ * "Statement Report" and "Invoice Report" buttons — live in
+ * CustomerInvoiceDashboardController (showInvoiceStatementReport /
+ * showInvoiceReport), not here. Still Blade as of this update.
+ */
 class BalancesController
 {
 	CONST NET_BALANCE_CONDITION = ' ';
@@ -50,6 +90,16 @@ class BalancesController
 		$total['currencies'] = [$mainCurrency => $valueAtMainCurrency]+$totalOfCurrency ;
 		return $total ;
 	}
+    /**
+     * Customers/Suppliers Balances — summary page.
+     * Renders resources/js/Pages/Balances/Index.vue.
+     * $modelType decides which sidebar page this serves ('CustomerInvoice'
+     * or 'SupplierInvoice') — see class docblock. All balance math below
+     * this line is UNCHANGED from the original Blade version; only the
+     * final `return` was rewritten (view() → Inertia::render()), plus
+     * the pre-resolving of every button URL the Vue page needs (no
+     * Ziggy in this project — see Style Guide §8).
+     */
     public function index(Request $request,Company $company,string $modelType)
 	{
 		$netBalanceCondition = self::NET_BALANCE_CONDITION;
@@ -82,8 +132,89 @@ class BalancesController
 		
 		$invoicesBalances = array_merge($invoicesBalances , $invoicesBalancesForMainFunctionalCurrency);
 		$cardNetBalances = $this->sumNetBalancePerCurrency($invoicesBalances,$mainFunctionalCurrency,$clientNameColumnName);
-		$hasMoreThanCurrency = isset($cardNetBalances['currencies']) && count($cardNetBalances['currencies']) >1 ; 
-        return view('admin.reports.balances_form', compact('company','mainFunctionalCurrency','hasMoreThanCurrency','title','invoicesBalances','cardNetBalances','mainCurrency','modelType','clientNameColumnName','clientIdColumnName','customersOrSupplierStatementText'));
+		$hasMoreThanCurrency = isset($cardNetBalances['currencies']) && count($cardNetBalances['currencies']) >1 ;
+
+		// ── Group the flat $invoicesBalances list by currency, and
+		// pre-resolve every button URL the Vue page needs (no Ziggy —
+		// see Style Guide §8). This block is purely presentational:
+		// it reshapes the exact same $invoicesBalances / $cardNetBalances
+		// the Blade version already had, nothing above is touched.
+		$rowsByCurrency = [];
+		foreach ($invoicesBalances as $row) {
+			$currency = $row->currency;
+			// Partners with zero invoices come back from the left-join
+			// SQL above with currency = NULL. The original Blade never
+			// showed these rows either (each row only rendered inside
+			// a tab whose currency matched — a null currency matches
+			// no tab). Same behavior here, just made explicit instead
+			// of an accidental side effect of the template loop.
+			if (!$currency) {
+				continue;
+			}
+			$rowsByCurrency[$currency][] = [
+				'client_id' => $row->{$clientIdColumnName},
+				'client_name' => $row->{$clientNameColumnName},
+				'currency' => $currency,
+				'net_balance' => (float) $row->net_balance,
+				// "Invoice Report" never existed for the main-currency
+				// pseudo-row in the original Blade either (confirmed,
+				// not a gap introduced here) — null hides the button.
+				'statement_report_url' => route('view.invoice.statement.report', [
+					'company' => $company->id, 'partnerId' => $row->{$clientIdColumnName},
+					'currency' => $currency, 'modelType' => $modelType,
+				]),
+				'invoice_report_url' => $currency !== 'main_currency' ? route('view.invoice.report', [
+					'company' => $company->id, 'partnerId' => $row->{$clientIdColumnName},
+					'currency' => $currency, 'modelType' => $modelType,
+				]) : null,
+			];
+		}
+
+		$currencyCards = [];
+		foreach ($cardNetBalances['currencies'] ?? [] as $currencyName => $total) {
+			$currencyCards[] = [
+				'currency' => $currencyName,
+				'total' => (float) $total,
+				'rows' => $rowsByCurrency[$currencyName] ?? [],
+				// The original Blade rendered these two buttons for
+				// main_currency too, just visually hidden via a CSS
+				// class (visibility-hidden) — the effect for the user
+				// was identical to not rendering them, so that's what
+				// we do here. Flagging this explicitly per methodology
+				// §3.3 rather than leaving it a silent behavior change.
+				'all_invoices_url' => $currencyName !== 'main_currency' ? route('show.total.net.balance.in', [
+					'company' => $company->id, 'currency' => $currencyName, 'modelType' => $modelType,
+				]) : null,
+				'past_due_url' => $currencyName !== 'main_currency' ? route('show.total.net.balance.in', [
+					'company' => $company->id, 'currency' => $currencyName, 'modelType' => $modelType, 'only' => 'past_due',
+				]) : null,
+				// New — not part of the original app. See
+				// showTotalNetBalanceDetailsReport()'s docblock for
+				// the confirmed "Coming Dues" definition.
+				'coming_dues_url' => $currencyName !== 'main_currency' ? route('show.total.net.balance.in', [
+					'company' => $company->id, 'currency' => $currencyName, 'modelType' => $modelType, 'only' => 'coming_due',
+				]) : null,
+				// "Statement Report for every partner in this currency at once"
+				// — the button the original injected via JS at the top of
+				// each currency tab (see balances_form.blade.php's bottom
+				// @foreach script block). Same target route, partnerId=0
+				// + all_partners=1, just a real button now instead of JS-injected.
+				'bulk_statement_url' => route('view.invoice.statement.report', [
+					'company' => $company->id, 'partnerId' => 0, 'currency' => $currencyName,
+					'modelType' => $modelType, 'all_partners' => 1,
+				]),
+			];
+		}
+
+		return Inertia::render('Balances/Index', [
+			'company' => ['id' => $company->id],
+			'modelType' => $modelType,
+			'title' => $title,
+			'customersOrSupplierText' => $customersOrSupplierText,
+			'customersOrSupplierStatementText' => $customersOrSupplierStatementText,
+			'mainFunctionalCurrency' => $mainFunctionalCurrency,
+			'currencyCards' => $currencyCards,
+		]);
     }
 	protected function getDownPaymentInMainCurrency(array $partnerIds,string $mainFunctionalCurrency,string $clientIdColumnName,string $downPaymentSettlementModelName , string $moneyModelName,Company $company):array{
 		$result = [];
@@ -199,11 +330,33 @@ class BalancesController
 		// return $result;
 	}
 	
+	/**
+	 * All Invoices / Past Due / Coming Dues report — reached from the
+	 * KPI card buttons on the Customers/Suppliers Balances page.
+	 * Renders resources/js/Pages/Balances/TotalNetBalanceDetails.vue.
+	 *
+	 * "Coming Dues" (invoice_status = 'not_due_yet') is a genuinely
+	 * NEW filter mode, added at the project owner's request — it did
+	 * not exist in the original app. Confirmed definition: invoices
+	 * that are not yet due (excludes 'due_to_day', which is due
+	 * TODAY, not upcoming).
+	 *
+	 * The original only checked whether an `only` query param was
+	 * PRESENT at all (any value meant "past due"). Switched to
+	 * checking its VALUE instead, to support a third mode — this is
+	 * backward compatible: the existing "Past Due" button already
+	 * sends only=past_due (see BalancesController::index()), so its
+	 * behavior is unchanged.
+	 */
 	public function showTotalNetBalanceDetailsReport(Request $request,Company $company , string $currency , string $modelType)
 	{
 		$netBalanceCondition = self::NET_BALANCE_CONDITION;
-		$onlyPasted = $request->has('only') ;
-		$additionalWhereClause = $onlyPasted ? "and invoice_status in ('past_due' , 'partially_collected_and_past_due' )" :  '' ;
+		$onlyMode = $request->get('only');
+		$additionalWhereClause = match ($onlyMode) {
+			'past_due' => "and invoice_status in ('past_due' , 'partially_collected_and_past_due' )",
+			'coming_due' => "and invoice_status = 'not_due_yet'",
+			default => '',
+		};
 		$fullClassName = ('\App\Models\\'.$modelType) ;
 		$customersOrSupplierText = (new $fullClassName )->getClientDisplayName();
 		$title = (new $fullClassName )->getBalancesTitle();
@@ -217,7 +370,35 @@ class BalancesController
 		$clientNameText = (new $fullClassName)->getClientNameText();
 		$query = 'select id,'. $clientNameColumnName .' ,invoice_due_date,invoice_status,invoice_number,DATE_FORMAT(invoice_date,"%d-%m-%Y") as invoice_date, currency , net_balance   from '. $tableName .' where '.$netBalanceCondition.'  currency = "'. $currency .'" and company_id = '. $company->id . ' ' . $additionalWhereClause . ' order by invoice_due_date asc , net_balance desc ;';
 		$invoicesBalances = DB::select($query);
-        return view('admin.reports.total_net_balance_details', compact('company','invoicesBalances','currency','moneyReceivedOrPaidUrlName','moneyReceivedOrPaidText','clientNameColumnName','clientNameText'));
+
+		$rows = collect($invoicesBalances)->map(function ($row) use ($clientNameColumnName, $company, $modelType, $moneyReceivedOrPaidUrlName) {
+			return [
+				'id' => $row->id,
+				'client_name' => $row->{$clientNameColumnName},
+				'invoice_number' => $row->invoice_number,
+				'invoice_date' => $row->invoice_date,
+				'currency' => $row->currency,
+				'net_balance_formatted' => number_format($row->net_balance),
+				'invoice_due_date_formatted' => \Carbon\Carbon::make($row->invoice_due_date)->format('d-m-Y'),
+				'status_formatted' => snakeToCamel($row->invoice_status),
+				'money_action_url' => route($moneyReceivedOrPaidUrlName, ['company' => $company->id, 'model' => $row->id]),
+			];
+		})->values();
+
+		$reportTitle = match ($onlyMode) {
+			'past_due' => 'Past Due',
+			'coming_due' => 'Coming Dues',
+			default => 'All Invoices',
+		};
+
+		return Inertia::render('Balances/TotalNetBalanceDetails', [
+			'invoicesBalances' => $rows,
+			'currency' => $currency,
+			'clientNameText' => $clientNameText,
+			'moneyReceivedOrPaidText' => $moneyReceivedOrPaidText,
+			'reportTitle' => $reportTitle,
+			'backUrl' => route('view.balances', ['company' => $company->id, 'modelType' => $modelType]),
+		]);
     }
 
 

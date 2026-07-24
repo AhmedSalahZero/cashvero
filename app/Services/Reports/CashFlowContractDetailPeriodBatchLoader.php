@@ -236,7 +236,12 @@ final class CashFlowContractDetailPeriodBatchLoader
     ): void {
         $rows = DB::table('settlement_allocations')
             ->join('letter_of_credit_issuances', 'settlement_allocations.letter_of_credit_issuance_id', '=', 'letter_of_credit_issuances.id')
-            ->join('partners', 'partners.id', '=', 'letter_of_credit_issuances.supplier_id')
+            // ⚠️ Was `letter_of_credit_issuances.supplier_id` — that column doesn't
+            // exist (confirmed against schema_full.txt). The correct FK is
+            // `partner_id`, same as LetterOfCreditIssuance::supplier()'s own
+            // belongsTo(Partner::class, 'partner_id', 'id') — same bug class as
+            // roadmap §14 (invalid columns not matching the actual schema).
+            ->join('partners', 'partners.id', '=', 'letter_of_credit_issuances.partner_id')
             ->where('settlement_allocations.contract_id', $contractId)
             ->where('settlement_allocations.partner_id', $customerId)
             ->whereBetween('letter_of_credit_issuances.due_date', [$periodStart, $periodEnd])

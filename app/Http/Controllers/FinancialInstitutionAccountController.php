@@ -3,7 +3,6 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\DeleteCurrentAccountRequest;
 use App\Http\Requests\UpdateCurrentAccountRequest;
-use App\Models\Branch;
 use App\Models\Company;
 use App\Models\CurrentAccountBankStatement;
 use App\Models\FinancialInstitution;
@@ -14,17 +13,81 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * FinancialInstitutionAccountController
+ * ------------------------------------------------------------------
+ * Manages a single bank account record that belongs to a Financial
+ * Institution — editing its details, its interest rate schedule
+ * (multiple time-bound rate periods), deleting it, and locking/
+ * unlocking it.
+ *
+ * ── Frontend migration status (as of this file's last update) ──────
+ *   - edit()             → ALREADY migrated. Returns Inertia::render(),
+ *                          served by resources/js/Pages/FinancialInstitutions/EditAccount.vue
+ *   - update()           → UNCHANGED, deliberately. This method recalculates
+ *                          bank statement history when the balance date
+ *                          shifts, diffs the interest-rate schedule
+ *                          (create/update/delete), and syncs to Odoo if
+ *                          configured. This is sensitive financial logic —
+ *                          only the presentation layer was touched.
+ *   - destroy() / lockOrUnlock() → NOT YET migrated (still return redirects
+ *                          to Blade-rendered pages; low priority, simple actions)
+ */
 class FinancialInstitutionAccountController
 {
     use GeneralFunctions;
   
+	/**
+	 * Show the "edit financial institution account" form — includes the
+	 * account's core fields plus its interest rate schedule (multiple
+	 * time-bound interest rate periods, managed as a repeater).
+	 *
+	 * ✅ MIGRATED to Vue + Inertia. Renders
+	 * resources/js/Pages/FinancialInstitutions/EditAccount.vue.
+	 *
+	 * ⚠️ update() below is UNCHANGED — this is deliberate. It recalculates
+	 * bank statement history when the balance date shifts, diffs the
+	 * interest-rate schedule (create/update/delete), and syncs to Odoo
+	 * if configured. This is real, sensitive financial logic — only the
+	 * *presentation* layer (edit()) was touched, not the calculation logic.
+	 */
 	public function edit(Company $company , Request $request , FinancialInstitutionAccount $financialInstitutionAccount){
 
-		$selectedBranches =  Branch::getBranchesForCurrentCompany($company->id) ;
-        return view('reports.financial-institution-accounts.edit',[
-			'selectedBranches'=>$selectedBranches,
-			'model'=>$financialInstitutionAccount,
-			'financialInstitution'=>$financialInstitutionAccount->financialInstitution
+		return \Inertia\Inertia::render('FinancialInstitutions/EditAccount', [
+			'company' => ['id' => $company->id],
+			'financialInstitution' => [
+				'id' => $financialInstitutionAccount->financialInstitution->id,
+				'name' => $financialInstitutionAccount->financialInstitution->getName(),
+			],
+			'model' => [
+				'id' => $financialInstitutionAccount->id,
+				'account_number' => $financialInstitutionAccount->getAccountNumber(),
+				'iban' => $financialInstitutionAccount->getIban(),
+				'odoo_code' => $financialInstitutionAccount->getOdooCode(),
+				'balance_amount' => $financialInstitutionAccount->getBalanceAmount(),
+				'balance_date' => $financialInstitutionAccount->getBalanceDateForSelect(),
+				'currency' => $financialInstitutionAccount->getCurrency(),
+				'exchange_rate' => $financialInstitutionAccount->getExchangeRate(),
+			],
+			'accountInterests' => $financialInstitutionAccount->accountInterests->map(function ($ai) {
+				return [
+					'id' => $ai->getId(),
+					'start_date' => $ai->getStartDateForSelect(),
+					'interest_rate' => $ai->getInterestRate(),
+					'min_balance' => $ai->getMinBalance(),
+				];
+			})->values(),
+			'currencies' => getCurrencies(),
+			'hasOdooIntegration' => $company->hasOdooIntegrationCredentials(),
+			'backUrl' => route('view.all.bank.accounts', ['company' => $company->id, 'financialInstitution' => $financialInstitutionAccount->financialInstitution->id]),
+			'submitUrl' => route('update.financial.institutions.account', ['company' => $company->id, 'financialInstitution' => $financialInstitutionAccount->financialInstitution->id, 'financialInstitutionAccount' => $financialInstitutionAccount->id]),
+			'navUrls' => [
+				'home' => route('home', ['company' => $company->id]),
+				'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+				'customers' => route('partners.index', ['company' => $company->id, 'type' => 'customers']),
+				'suppliers' => route('partners.index', ['company' => $company->id, 'type' => 'suppliers']),
+				'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
+			],
 		]);
 	}
 	public function update(Company $company , UpdateCurrentAccountRequest $request ,FinancialInstitution $financialInstitution , FinancialInstitutionAccount $financialInstitutionAccount){

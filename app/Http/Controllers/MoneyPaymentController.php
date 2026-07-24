@@ -24,13 +24,84 @@ use App\Models\SupplierInvoice;
 use App\Services\Api\OdooPayment;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Inertia\Inertia;
 
+/**
+ * MoneyPaymentController
+ * ------------------------------------------------------------------
+ * Treasury Operations → "Money Payment" — the supplier-side mirror of
+ * Money Received (MoneyReceivedController). Every way cash physically
+ * or virtually LEAVES the company: cheques issued (payable), outgoing
+ * bank transfers, and cash paid out. Also handles "Down Payment"
+ * money paid (an advance not yet tied to a specific supplier invoice)
+ * via the same underlying `money_payments` table, distinguished by
+ * `money_type` — same shape as Money Received's own down payment.
+ *
+ * ── Real differences from Money Received (confirmed against this
+ *    codebase, not assumed) — worth knowing before touching this file:
+ * - Only 3 index tabs, not 7: Payable Cheques, Outgoing Transfer, Cash
+ *   Payment. There is no cheque-collection sub-lifecycle (Under
+ *   Collection/Collected/Rejected) — we aren't depositing these
+ *   cheques for clearance, the recipient is. The old markup for those
+ *   4 extra tabs exists in the original Blade but is commented out —
+ *   genuinely dead, not a gap.
+ * - The payable-cheque lifecycle is ONE step ("Mark As Paid"), not
+ *   two — no separate "send to collection" stage, since the bank/
+ *   account is already fixed on the cheque at creation time.
+ *   markChequesAsPaid() also does a real balance check before
+ *   allowing it (via AmountCanNotBeGreaterThanEndBalanceAtPaymentDate)
+ *   and reuses MoneyReceivedController::updateNetBalanceBasedOnAccountNumber
+ *   directly — a genuine cross-controller call, not a mistake.
+ * - The Outgoing Transfer tab's batch "Mark As Paid" is non-functional
+ *   in the ORIGINAL app: its route (outgoing.transfer.mark.as.paid)
+ *   points at MoneyPaymentController::markOutgoingTransfersAsPaid,
+ *   which does not exist on this controller (only CashExpenseController
+ *   has a method by that name — a different feature). The original
+ *   Blade's own checkbox column for this tab is ALSO commented out,
+ *   confirming this was already disabled, not merely broken. This
+ *   migration matches that: no batch selection/action is rendered for
+ *   Outgoing Transfer. Flagged to the project owner rather than
+ *   silently inventing real behavior for a route that's never worked.
+ * - "Opening balance" payable cheques are edited through a separate,
+ *   still-Blade flow (`_edit_opening_balance_cheque.blade.php` +
+ *   updateOpeningPayableCheque()) — not migrated in this pass.
+ * - A supplier payment can additionally be "allocated" against a
+ *   *customer's* contract (`storeNewAllocation()`) — a feature with no
+ *   equivalent on the Money Received side. Scoped for the Form page,
+ *   not the Index page.
+ * - Review permission gate: unlike Money Received (which uses a real,
+ *   seeded `review money received` permission via getReviewPermissionName()),
+ *   the review modal here is gated directly on `update supplier payment`
+ *   in the original Blade — getReviewPermissionName('MoneyPayment')
+ *   returns 'review supplier payments' (plural), which is NOT a seeded
+ *   permission in HAuth.php, so that helper is unusable here. Matched
+ *   the Blade's actual gate, not the unused helper.
+ * - "Resend To Odoo" is ALSO broken in the original for this model:
+ *   the shared `_user_odoo_modal.blade.php` partial hardcodes its
+ *   form action as `route('resend.with.odoo', ['moneyReceived'=>...])`
+ *   regardless of which model included it, and that route is hard-
+ *   bound to `MoneyReceivedController::resendToOdoo(MoneyReceived
+ *   $moneyReceived)` — passing a MoneyPayment id 404s (different
+ *   table, unrelated id sequence). The Odoo-error DISPLAY still works
+ *   (plain attribute reads); the "Resend" action does not, and isn't
+ *   wired here for that reason — see mapMoneyPaymentRow().
+ *
+ * ── Frontend migration status (as of this file's last update) ──────
+ * - index() → ✅ Inertia/Vue (`Pages/MoneyPayment/Index.vue`).
+ * - create()/store()/edit()/update()/destroy() → 🔲 still Blade, next.
+ * - store()/update()/markChequesAsPaid()'s responses were changed from
+ *   a raw JSON body (correct for the old jQuery-AJAX page) to real
+ *   redirects — required for Inertia, same fix already applied twice
+ *   on the Money Received side (bug #19/#22 in the Roadmap). Fixed
+ *   proactively here since markChequesAsPaid() is already called from
+ *   the new Vue Index page's "Mark As Paid" action.
+ */
 class MoneyPaymentController
 {
     use GeneralFunctions;
+
 // 	protected function applyFilter(Request $request, $query)
 // {
 //     $searchFieldName = $request->get('field');
@@ -107,152 +178,385 @@ class MoneyPaymentController
     //     ->sortByDesc('delivery_date')->values();
     //     return $collection;
     // }
+    /**
+     * The 3 tabs on the Money Payment index page, in the original's
+     * nav-tabs order. See class docblock for why there are only 3
+     * (no cheque-collection sub-lifecycle on the payment side).
+     */
+    protected function tabDefinitions(): array
+    {
+        return [
+            MoneyPayment::PAYABLE_CHEQUE => [
+                'label' => __('Payable Cheques'),
+                'query' => 'getMoneyPaymentPayableCheques',
+                'page' => 'payableChequesPage',
+                'searchFields' => [
+                    'partner_name' => __('Supplier Name'),
+                    'delivery_date' => __('Payment Date'),
+                    'cheque_number' => __('Cheque Number'),
+                    'currency' => __('Currency'),
+                    'payment_currency' => __('Payment Currency'),
+                    'payment_bank_name' => __('Payment Bank'),
+                    'due_date' => __('Due Date'),
+                ],
+            ],
+            MoneyPayment::OUTGOING_TRANSFER => [
+                'label' => __('Outgoing Transfer'),
+                'query' => 'getMoneyPaymentOutgoingTransfer',
+                'page' => 'outgoingTransferPage',
+                'searchFields' => [
+                    'partner_name' => __('Supplier Name'),
+                    'delivery_date' => __('Payment Date'),
+                    'payment_bank_name' => __('Payment Bank'),
+                    'currency' => __('Currency'),
+                    'payment_currency' => __('Payment Currency'),
+                    'account_number' => __('Account Number'),
+                ],
+            ],
+            MoneyPayment::CASH_PAYMENT => [
+                'label' => __('Cash Payment'),
+                'query' => 'getMoneyPaymentCashPayments',
+                'page' => 'cashPaymentsPage',
+                'searchFields' => [
+                    'partner_name' => __('Supplier Name'),
+                    'delivery_date' => __('Payment Date'),
+                    'delivery_branch_name' => __('Branch'),
+                    'currency' => __('Currency'),
+                    'payment_currency' => __('Payment Currency'),
+                    'receipt_number' => __('Receipt Number'),
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Money Payment index — the Treasury Operations "Money Payment"
+     * list. Same shape as MoneyReceivedController::index() (see that
+     * file for the fuller rationale) — each tab keeps its own real,
+     * server-side-paginated, server-side-searchable query, unchanged.
+     */
     public function index(Company $company, Request $request)
     {
-		$paginationPerPage = GeneralFunctions::getPaginationLimit();
-		$suppliersFormatted = Partner::getSuppliersForCompanyFormattedForSelect($company);
-      //  $company->load(['moneyPayments.payableCheque','moneyPayments.partner','moneyPayments.outgoingTransfer','moneyPayments.cashPayment.deliveryBranch']);
-        $numberOfMonthsBetweenEndDateAndStartDate = 18 ;
-        $activeTab = $request->get('active', MoneyPayment::CASH_PAYMENT) ;
+        $paginationPerPage = GeneralFunctions::getPaginationLimit();
+        $numberOfMonthsBetweenEndDateAndStartDate = 18;
+        $activeTab = $request->get('active', MoneyPayment::PAYABLE_CHEQUE);
+        $tabs = $this->tabDefinitions();
+
         $filterDates = [];
         foreach (MoneyPayment::getAllTypes() as $type) {
             $startDate = $request->has('startDate') ? $request->input('startDate.'.$type) : now()->subMonths($numberOfMonthsBetweenEndDateAndStartDate)->format('Y-m-d');
             $endDate = $request->has('endDate') ? $request->input('endDate.'.$type) : now()->format('Y-m-d');
-
             $filterDates[$type] = [
-                'startDate'=>$startDate,
-                'endDate'=>$endDate
+                'startDate' => $startDate,
+                'endDate' => $endDate,
             ];
         }
-        // cash
-        $cashPaymentsStartDate = $filterDates[MoneyPayment::CASH_PAYMENT]['startDate'] ?? null ;
-        $cashPaymentsEndDate = $filterDates[MoneyPayment::CASH_PAYMENT]['endDate'] ?? null ;
 
+        $tabsOut = [];
+        foreach ($tabs as $type => $definition) {
+            $startDate = $filterDates[$type]['startDate'] ?? null;
+            $endDate = $filterDates[$type]['endDate'] ?? null;
 
-        // outgoing transfer
-        $outgoingTransferStartDate = $filterDates[MoneyPayment::OUTGOING_TRANSFER]['startDate'] ?? null ;
-        $outgoingTransferEndDate = $filterDates[MoneyPayment::OUTGOING_TRANSFER]['endDate'] ?? null ;
+            $query = $company->{$definition['query']}($startDate, $endDate, $activeTab);
 
-        /**
-         * * cheques in safe
-         */
-        $payableChequesStartDate = $filterDates[MoneyPayment::PAYABLE_CHEQUE]['startDate'] ?? null ;
-        $payableChequesEndDate = $filterDates[MoneyPayment::PAYABLE_CHEQUE]['endDate'] ?? null ;
-        
+            $totalCount = (clone $query)->count();
+            $totalAmount = (clone $query)->sum('paid_amount');
 
-    
-        $cashPayments = $company->getMoneyPaymentCashPayments($cashPaymentsStartDate, $cashPaymentsEndDate,$activeTab  )->paginate($paginationPerPage,['*'],'cashPaymentsPage') ;
-        $outgoingTransfer = $company->getMoneyPaymentOutgoingTransfer($outgoingTransferStartDate, $outgoingTransferEndDate,$activeTab)->paginate($paginationPerPage,['*'],'outgoingTransferPage') ;
-        $payableCheques = $company->getMoneyPaymentPayableCheques($payableChequesStartDate, $payableChequesEndDate,$activeTab)->paginate($paginationPerPage,['*'],'payableChequesPage');
-        
-        $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->get();
-        
-        $accountTypes = AccountType::onlyCashAccounts()->get();
-        // $cashPayments = $activeTab == MoneyPayment::CASH_PAYMENT ? $this->applyFilter ($request, $cashPayments) :$cashPayments  ;
-		// $cashPayments = $cashPayments->paginate($paginationPerPage,['*'],'cashPaymentsPage');
-        // $outgoingTransfer = $activeTab === MoneyPayment::OUTGOING_TRANSFER ? $this->applyFilter($request, $outgoingTransfer) : $outgoingTransfer  ;
-        // $outgoingTransfer = $outgoingTransfer->paginate($paginationPerPage,['*'],'outgoingTransferPage');
-        // $payableCheques = $activeTab == MoneyPayment::PAYABLE_CHEQUE ? $this->applyFilter($request, $payableCheques) : $payableCheques;
-		// $payableCheques = $payableCheques->paginate($paginationPerPage,['*'],'payableChequesPage');
+            $paginator = $query->paginate($paginationPerPage, ['*'], $definition['page']);
+            $paginator->appends(array_merge($request->except('page'), ['active' => $type]));
 
-        $payableChequesTableSearchFields = [
-            'partner_name'=>__('Supplier Name'),
-            'delivery_date'=>__('Payment Date'),
-            'cheque_number'=>__('Cheque Number'),
-            'currency'=>__('Currency'),
-            'payment_currency'=>__('Payment Currency'),
-            'payment_bank_name'=>__('Payment Bank'),
-            'due_date'=>__('Due Date'),
-         //   'cheque_status'=>__('Status')
-        ];
+            $paginatorArray = $paginator->toArray();
+            $paginatorArray['data'] = $activeTab === $type
+                ? $paginator->getCollection()->map(fn (MoneyPayment $moneyPayment) => $this->mapMoneyPaymentRow($moneyPayment, $type, $company))->all()
+                : [];
 
+            $tabsOut[$type] = [
+                'label' => $definition['label'],
+                'searchFields' => $definition['searchFields'],
+                'totalCount' => $totalCount,
+                'totalAmount' => round($totalAmount, 2),
+                'paginator' => $paginatorArray,
+            ];
+        }
 
-        
+        $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->with('bank:id,view_name')->get(['id', 'type', 'name', 'bank_id']);
+        $accountTypes = AccountType::onlyCashAccounts()->get(['id', 'name_en', 'name_ar']);
+        $user = auth()->user();
 
-        $outgoingTransferTableSearchFields = [
-            'partner_name'=>__('Supplier Name'),
-            'delivery_date'=>__('Payment Date'),
-            'payment_bank_name'=>__('Payment Bank'),
-            // 'paid_amount'=>__('Transfer Amount'),
-            'currency'=>__('Currency'),
-			'payment_currency'=>__('Payment Currency'),			
-            'account_number'=>__('Account Number')
-        ];
-
-        $payableCashTableSearchFields = [
-            'partner_name'=>__('Supplier Name'),
-            'delivery_date'=>__('Payment Date'),
-            'delivery_branch_name'=>__('Branch'),
-            // 'paid_amount'=>__('Paid Amount'),
-            'currency'=>__('Currency'),
-			'payment_currency'=>__('Payment Currency'),
-            'receipt_number'=>__('Receipt Number')
-        ];
-
-        return view('reports.moneyPayments.index', [
-            'company'=>$company ,
-			'suppliersFormatted'=>$suppliersFormatted,
-            'payableCheques'=>$payableCheques,
-            'cashPayments'=>$cashPayments,
-            'payableChequesTableSearchFields'=>$payableChequesTableSearchFields,
-            'outgoingTransfer'=>$outgoingTransfer,
-            'payableCashTableSearchFields'=>$payableCashTableSearchFields,
-            'outgoingTransferTableSearchFields'=>$outgoingTransferTableSearchFields,
-            'financialInstitutionBanks'=>$financialInstitutionBanks,
-            'accountTypes'=>$accountTypes,
-            'filterDates'=>$filterDates,
+        return Inertia::render('MoneyPayment/Index', [
+            'company' => ['id' => $company->id, 'name' => $company->getName()],
+            'activeTab' => $activeTab,
+            'tabs' => $tabsOut,
+            'filterDates' => $filterDates,
+            'search' => [
+                'field' => $request->get('field'),
+                'value' => $request->get('value'),
+                'from' => $request->get('from'),
+                'to' => $request->get('to'),
+            ],
+            'financialInstitutionBanks' => $financialInstitutionBanks->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()]),
+            'accountTypes' => $accountTypes->map(fn ($a) => ['id' => $a->id, 'name' => $a->getName()]),
+            'permissions' => [
+                'canCreate' => $user->can('create supplier payment'),
+                'canUpdate' => $user->can('update supplier payment'),
+                'canDelete' => $user->can('delete supplier payment'),
+            ],
+            'companyHasOdoo' => $company->hasOdooIntegrationCredentials(),
+            'urls' => [
+                'index' => route('view.money.payment', ['company' => $company->id]),
+                'createMoneyPayment' => route('create.money.payment', ['company' => $company->id]),
+                'createDownPayment' => route('create.money.payment', ['company' => $company->id, 'type' => 'down-payment']),
+                'markChequesAsPaid' => route('payable.cheque.mark.as.paid', ['company' => $company->id]),
+                'balanceForAccountNumber' => route('update.balance.and.net.balance.based.on.account.number', ['company' => $company->id]),
+            ],
         ]);
+    }
+
+    /**
+     * Builds one Money Payment index-table row as a plain array, every
+     * value pre-formatted and every URL pre-resolved — same reasoning
+     * as MoneyReceivedController::mapMoneyReceivedRow().
+     */
+    protected function mapMoneyPaymentRow(MoneyPayment $moneyPayment, string $type, Company $company): array
+    {
+        $common = [
+            'id' => $moneyPayment->id,
+            'type_formatted' => $moneyPayment->getMoneyTypeFormatted(),
+            'partner_name' => $moneyPayment->getSupplierName(),
+            'delivery_date' => $moneyPayment->getDeliveryDate(),
+            'delivery_date_formatted' => $moneyPayment->getDeliveryDateFormatted(),
+            'paid_amount_formatted' => $moneyPayment->getPaidAmountFormatted(),
+            'currency' => $moneyPayment->getPaymentCurrency(),
+            'currency_formatted' => $moneyPayment->getCurrencyToPaymentCurrencyFormatted(),
+            'is_open_balance' => $moneyPayment->isOpenBalance(),
+            'is_reviewed' => $moneyPayment->isReviewed(),
+            'has_comment' => $moneyPayment->hasComment(),
+            'user_comment' => $moneyPayment->hasComment() ? $moneyPayment->getUserComment() : null,
+            'has_odoo_error' => $company->hasOdooIntegrationCredentials() && $moneyPayment->hasOdooError(),
+            'odoo_error' => $moneyPayment->hasOdooError() ? $moneyPayment->getOdooError() : null,
+            'is_fully_integrated_with_odoo' => $company->hasOdooIntegrationCredentials() && $moneyPayment->fullyIntegratedWithOdoo(),
+            'odoo_reference_names' => $company->hasOdooIntegrationCredentials() && $moneyPayment->fullyIntegratedWithOdoo() ? $moneyPayment->getOdooReferenceNames() : [],
+            'edit_url' => route('edit.money.payment', ['company' => $company->id, 'moneyPayment' => $moneyPayment->id]),
+            'delete_url' => route('delete.money.payment', ['company' => $company->id, 'moneyPayment' => $moneyPayment->id]),
+            'review_url' => route('confirmed.review', ['company' => $company->id, 'model' => $moneyPayment->id]),
+            // ⚠️ No resend_odoo_url here — see class docblock. The
+            // shared _user_odoo_modal partial's "Resend" button posts
+            // to a route hard-bound to MoneyReceivedController's
+            // MoneyReceived $moneyReceived type-hint; passing a
+            // MoneyPayment id 404s (different table, unrelated id
+            // sequence). Genuinely broken in the original, not
+            // something to wire up here without a real fix decision.
+        ];
+
+        return match ($type) {
+            MoneyPayment::PAYABLE_CHEQUE => array_merge($common, [
+                'status_formatted' => $moneyPayment->payableCheque?->getStatusFormatted(),
+                'is_paid' => $moneyPayment->payableCheque?->getStatus() === 'paid',
+                'cheque_number' => $moneyPayment->payableCheque?->getChequeNumber(),
+                'payment_bank_name' => $moneyPayment->payableCheque?->getDeliveryBankName(),
+                'account_type_name' => $moneyPayment->payableCheque?->getAccountTypeName(),
+                'account_number' => $moneyPayment->payableCheque?->getAccountNumber(),
+                'due_date' => $moneyPayment->payableCheque?->getDueDate(),
+                'due_date_formatted' => $moneyPayment->payableCheque?->getDueDateFormatted(),
+                'due_after_days' => $moneyPayment->payableCheque?->getDueAfterDays(),
+                'due_status' => $moneyPayment->payableCheque?->getDueStatusFormatted(),
+                'is_due' => $moneyPayment->getIsPayableChequeDue(),
+            ]),
+            MoneyPayment::OUTGOING_TRANSFER => array_merge($common, [
+                'payment_bank_name' => $moneyPayment->getOutgoingTransferDeliveryBankName(),
+                'account_type_name' => $moneyPayment->getOutgoingTransferAccountTypeName(),
+                'account_number' => $moneyPayment->getOutgoingTransferAccountNumber(),
+            ]),
+            MoneyPayment::CASH_PAYMENT => array_merge($common, [
+                'branch_name' => $moneyPayment->getCashPaymentBranchName(),
+                'receipt_number' => $moneyPayment->getCashPaymentReceiptNumber(),
+            ]),
+            default => $common,
+        };
+    }
+
+    /**
+     * Same helper as MoneyReceivedController::companyScopedUrl() — see
+     * that file's docblock for the full "why". money-payment's own
+     * unnamed AJAX endpoints (getInvoiceNumber, getAccountNumbersFor-
+     * AccountType) need this exact same fix when the Form page is
+     * built next.
+     */
+    protected function companyScopedUrl(Company $company, string $path): string
+    {
+        return url('/'.app()->getLocale().'/'.$company->id.'/'.ltrim($path, '/'));
+    }
+
+    /**
+     * The 3 Money Payment "Money Type" options — matches the original
+     * Blade `<select id="type">`'s static option list exactly.
+     */
+    protected function moneyTypeOptions(): array
+    {
+        return [
+            ['value' => MoneyPayment::CASH_PAYMENT, 'label' => __('Cash Payment')],
+            ['value' => MoneyPayment::PAYABLE_CHEQUE, 'label' => __('Payable Cheques')],
+            ['value' => MoneyPayment::OUTGOING_TRANSFER, 'label' => __('Outgoing Transfer')],
+        ];
     }
 
     public function create(Company $company, $supplierInvoiceId = null)
     {
-        $clientsWithContracts = Partner::orderBy('name')->onlyCompany($company->id)	->onlyCustomers()->onlyThatHaveContracts()->get();
-        $currencies = SupplierInvoice::getCurrencies();
         $isDownPayment = Request()->has('type');
-        $viewName = $isDownPayment  ?  'reports.moneyPayments.down-payments-form' : 'reports.moneyPayments.form';
-        
-        $accountTypes = AccountType::onlyCashAccounts()->get();
-        $selectedBranches =  Branch::getBranchesForCurrentCompany($company->id) ;
-        $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->get();
+        $currencies = SupplierInvoice::getCurrencies();
+
+        if ($isDownPayment) {
+            return $this->createDownPayment($company);
+        }
+
+        $accountTypes = AccountType::onlyCashAccounts()->get(['id', 'name_en', 'name_ar']);
+        $selectedBranches = Branch::getBranchesForCurrentCompany($company->id);
+        $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->with('bank:id,view_name')->get(['id', 'type', 'name', 'bank_id']);
         $selectedCurrency = $supplierInvoiceId ? SupplierInvoice::where('id', $supplierInvoiceId)->first()->getCurrency() : null;
+        $invoiceNumber = $supplierInvoiceId ? SupplierInvoice::where('id', $supplierInvoiceId)->first()->getInvoiceNumber() : null;
 
-        $invoiceNumber = $supplierInvoiceId ? SupplierInvoice::where('id', $supplierInvoiceId)->first()->getInvoiceNumber():null;
-        /**
-         * * for contracts
-         */
-        $suppliers =  $supplierInvoiceId ?  Partner::orderBy('name')->where('id', SupplierInvoice::find($supplierInvoiceId)->supplier_id)
-        ->when($isDownPayment, function (Builder $q) {
-            $q->has('contracts');
-        })
-        ->where('company_id', $company->id)->pluck('name', 'id')->toArray() :Partner::orderBy('name')->where('is_supplier', 1)->where('company_id', $company->id)
-        ->when($isDownPayment, function (Builder $q) {
-            $q->has('contracts');
-        })
-        ->pluck('name', 'id')->toArray();
-    
-        $contracts = [];
-        
-        return view($viewName, [
-            'financialInstitutionBanks'=>$financialInstitutionBanks,
-            'selectedBranches'=>$selectedBranches,
-            'singleModel'=>$supplierInvoiceId,
-            'invoiceNumber'=>$invoiceNumber,
-            'currencies'=>$currencies,
-            'accountTypes'=>$accountTypes,
-            'suppliers'=>$suppliers,
-            'contracts'=>$contracts,
-            'clientsWithContracts'=>$clientsWithContracts,
-            'selectedCurrency'=>$selectedCurrency,
-			
+        $suppliers = $supplierInvoiceId
+            ? Partner::orderBy('name')->where('id', SupplierInvoice::find($supplierInvoiceId)->supplier_id)->where('company_id', $company->id)->pluck('name', 'id')
+            : Partner::orderBy('name')->where('is_supplier', 1)->where('company_id', $company->id)->pluck('name', 'id');
+
+        return Inertia::render('MoneyPayment/Form', [
+            'company' => ['id' => $company->id, 'name' => $company->getName(), 'mainFunctionalCurrency' => $company->getMainFunctionalCurrency()],
+            'model' => null,
+            'singleModel' => $supplierInvoiceId,
+            'invoiceNumber' => $invoiceNumber,
+            'warningMessage' => null,
+            'suppliers' => collect($suppliers)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'partnerTypes' => collect(getAllPartnerTypesForSuppliers())->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
+            'moneyTypes' => $this->moneyTypeOptions(),
+            'currencies' => collect($selectedCurrency ? [$selectedCurrency => $selectedCurrency] : getBanksCurrencies())->map(fn ($label, $code) => ['code' => $code, 'label' => strtoupper($label)])->values(),
+            'selectedBranches' => collect($selectedBranches)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'financialInstitutionBanks' => $financialInstitutionBanks->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()]),
+            'accountTypes' => $accountTypes->map(fn ($a) => ['id' => $a->id, 'name' => $a->getName()]),
+            'urls' => $this->formUrls($company),
         ]);
     }
 
-    public function result(Company $company, Request $request)
+    /**
+     * Down Payment create — renders `Pages/MoneyPayment/DownPaymentForm.vue`.
+     * Initial supplier list matches the default Down Payment Type
+     * ('over_contract'), i.e. suppliers who have at least one contract;
+     * the Vue page refreshes this itself via getSuppliersWithOpeningBalance
+     * whenever Down Payment Type changes — same pattern as Money
+     * Received's own Down Payment form.
+     */
+    protected function createDownPayment(Company $company)
     {
+        $selectedBranches = Branch::getBranchesForCurrentCompany($company->id);
+        $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->with('bank:id,view_name')->get(['id', 'type', 'name', 'bank_id']);
+        $accountTypes = AccountType::onlyCashAccounts()->get(['id', 'name_en', 'name_ar']);
+        $suppliers = Partner::orderBy('name')->where('is_supplier', 1)->where('company_id', $company->id)->onlyThatHaveSupplierContracts()->pluck('name', 'id');
 
-        return view('reports.moneyPayments.form', [
+        return Inertia::render('MoneyPayment/DownPaymentForm', [
+            'company' => ['id' => $company->id, 'name' => $company->getName(), 'mainFunctionalCurrency' => $company->getMainFunctionalCurrency()],
+            'model' => null,
+            'suppliers' => collect($suppliers)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'moneyTypes' => $this->moneyTypeOptions(),
+            'currencies' => collect(getBanksCurrencies())->map(fn ($label, $code) => ['code' => $code, 'label' => strtoupper($label)])->values(),
+            'selectedBranches' => collect($selectedBranches)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'financialInstitutionBanks' => $financialInstitutionBanks->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()]),
+            'accountTypes' => $accountTypes->map(fn ($a) => ['id' => $a->id, 'name' => $a->getName()]),
+            'urls' => $this->downPaymentFormUrls($company),
         ]);
     }
+
+    /**
+     * Same idea as MoneyReceivedController::formUrls(), for the
+     * dedicated Down Payment form. getSuppliersWithOpeningBalance is a
+     * real, existing, NAMED route despite its historical name — it's
+     * the endpoint the Down Payment Type change handler always calls,
+     * returning either "suppliers who have a contract" (over_contract)
+     * or "every supplier" (general).
+     */
+    protected function downPaymentFormUrls(Company $company): array
+    {
+        return [
+            'index' => route('view.money.payment', ['company' => $company->id]),
+            'store' => route('store.money.payment', ['company' => $company->id]),
+            'getContractsForSupplier' => route('get.contracts.for.supplier', ['company' => $company->id]),
+            'getContractsForCustomer' => route('get.contracts.for.customer', ['company' => $company->id]),
+            'getPurchaseOrdersForContract' => $this->companyScopedUrl($company, 'down-payments/get-purchases-orders-for-contract'),
+            'getSuppliersWithOpeningBalance' => route('get.suppliers.of.opening-balance', ['company' => $company->id]),
+            'getAccountNumbersForType' => $this->companyScopedUrl($company, 'money-payment/get-account-numbers-based-on-account-type'),
+            'balanceForAccountNumber' => route('update.balance.and.net.balance.based.on.account.number', ['company' => $company->id]),
+            'getBranchBasedOnCurrency' => route('get.branch.based.on.currency', ['company' => $company->id]),
+            'getCashInSafeEndBalance' => route('get.current.end.balance.of.cash.in.safe.statement', ['company' => $company->id]),
+        ];
+    }
+
+    /**
+     * Every URL the Vue Form page needs, pre-resolved (no Ziggy). Uses
+     * companyScopedUrl() for every route that was never given a
+     * ->name(...) in the original app — same root cause, same fix, as
+     * MoneyReceivedController::formUrls().
+     */
+    protected function formUrls(Company $company): array
+    {
+        return [
+            'index' => route('view.money.payment', ['company' => $company->id]),
+            'store' => route('store.money.payment', ['company' => $company->id]),
+            'getInvoiceNumbers' => $this->companyScopedUrl($company, 'money-payment/get-invoice-numbers'),
+            'getAccountNumbersForType' => $this->companyScopedUrl($company, 'money-payment/get-account-numbers-based-on-account-type'),
+            'balanceForAccountNumber' => route('update.balance.and.net.balance.based.on.account.number', ['company' => $company->id]),
+            'getContractsForSupplier' => route('get.contracts.for.supplier', ['company' => $company->id]),
+            'getContractsForCustomer' => route('get.contracts.for.customer', ['company' => $company->id]),
+            'getPurchaseOrdersForContract' => $this->companyScopedUrl($company, 'down-payments/get-purchases-orders-for-contract'),
+            'getSuppliersBasedOnCurrency' => $this->companyScopedUrl($company, 'get-suppliers-based-on-currency'),
+            'getBranchBasedOnCurrency' => route('get.branch.based.on.currency', ['company' => $company->id]),
+            'getCashInSafeEndBalance' => route('get.current.end.balance.of.cash.in.safe.statement', ['company' => $company->id]),
+        ];
+    }
+
+    /**
+     * Same idea as MoneyReceivedController::serializeMoneyReceivedForForm()
+     * — the Vue Form page re-fetches invoices/allocations itself from
+     * the same real AJAX endpoint (with inEditMode=1, money_payment_id
+     * set), so this only needs the record's own scalar fields.
+     */
+    protected function serializeMoneyPaymentForForm(MoneyPayment $moneyPayment): array
+    {
+        $type = $moneyPayment->getType();
+
+        return [
+            'id' => $moneyPayment->id,
+            'delivery_date' => $moneyPayment->getDeliveryDate(),
+            'partner_type' => $moneyPayment->getPartnerType(),
+            'supplier_id' => $moneyPayment->getPartnerId(),
+            'supplier_name' => $moneyPayment->getPartnerName(),
+            'currency' => $moneyPayment->getCurrency(),
+            'payment_currency' => $moneyPayment->getPaymentCurrency(),
+            'type' => $type,
+            'transaction_type' => $moneyPayment->getTransactionType(),
+            'user_comment' => $moneyPayment->getUserComment(),
+            'paid_amount' => $moneyPayment->getPaidAmount(),
+            'exchange_rate' => $moneyPayment->getExchangeRate(),
+            'amount_in_invoice_currency' => $moneyPayment->getAmountInInvoiceCurrency(),
+            'has_unapplied_or_down_payment' => (bool) $moneyPayment->has_unapplied_or_down_payment,
+            'contract_id' => $moneyPayment->getContractId(),
+            'contract_name' => $moneyPayment->getContractName(),
+            'cash_payment' => $moneyPayment->isCashPayment() ? [
+                'delivery_branch_id' => $moneyPayment->getCashPaymentBranchId(),
+                'receipt_number' => $moneyPayment->getCashPaymentReceiptNumber(),
+            ] : null,
+            'outgoing_transfer' => $moneyPayment->isOutgoingTransfer() ? [
+                'delivery_bank_id' => $moneyPayment->getOutgoingTransferDeliveryBankId(),
+                'account_type_id' => $moneyPayment->getOutgoingTransferAccountTypeId(),
+                'account_number' => $moneyPayment->getOutgoingTransferAccountNumber(),
+            ] : null,
+            'payable_cheque' => $moneyPayment->isPayableCheque() ? [
+                'delivery_bank_id' => $moneyPayment->getPayableChequePaymentBankId(),
+                'account_type_id' => $moneyPayment->getPayableChequeAccountTypeId(),
+                'account_number' => $moneyPayment->getPayableChequeAccountNumber(),
+                'due_date' => $moneyPayment->getPayableChequeDueDate(),
+                'cheque_number' => $moneyPayment->payableCheque?->getChequeNumber(),
+            ] : null,
+        ];
+    }
+
     public function getContractsForSupplier(Company $company, Request $request)
     {
         $contracts = Contract::where('partner_id', $request->get('supplierId'))
@@ -337,7 +641,7 @@ class MoneyPaymentController
         }
 
         $invoices = $this->formatInvoices($invoices, $inEditMode, $moneyPayment);
-        $clientsWithContracts = Partner::onlyCompany($company->id)	->onlyCustomers()->onlyThatHaveContracts()->pluck('name', 'id')->toArray();
+        $clientsWithContracts = Partner::onlyCompany($company->id)	->onlyCustomers()->onlyThatHaveCustomerContracts()->pluck('name', 'id')->toArray();
         
         return response()->json([
             'status'=>true ,
@@ -524,11 +828,6 @@ class MoneyPaymentController
         if ($returnModel) {
             return $moneyPayment;
         }
-        if ($request->ajax()) {
-            return response()->json([
-                'redirectTo'=>route('view.money.payment', ['company'=>$company->id,'active'=>$activeTab])
-            ]);
-        }
         return redirect()->route('view.money.payment', ['company'=>$company->id,'active'=>$activeTab])->with('success', __('Data Store Successfully'));
 
     }
@@ -536,61 +835,110 @@ class MoneyPaymentController
 	
     public function edit(Company $company, Request $request, moneyPayment $moneyPayment, $supplierInvoiceId = null)
     {
-		
-        $clientsWithContracts = Partner::onlyCompany($company->id)	->onlyCustomers()->onlyThatHaveContracts()->get();
+        $isDownPayment = $moneyPayment->isDownPayment();
+        $partnerType = $moneyPayment->partner->getSupplierType();
         $currencies = SupplierInvoice::getCurrencies();
         $selectedCurrency = $supplierInvoiceId ? SupplierInvoice::where('id', $supplierInvoiceId)->first()->getCurrency() : null;
-        $isDownPayment = $moneyPayment->isDownPayment();
-        $viewName = $isDownPayment  ?  'reports.moneyPayments.down-payments-form' : 'reports.moneyPayments.form';
-		// if($isOpeningBalance){
-			// $viewName = 're';
-		// }
-        $banks = Bank::pluck('view_name', 'id');
-        $selectedBranches =  Branch::getBranchesForCurrentCompany($company->id) ;
-        $accountTypes = AccountType::onlyCashAccounts()->get();
-        $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->get();
-        $partnerType = $moneyPayment->partner->getSupplierType();
-		
-		// $customerInvoice = CustomerInvoice::find($supplierInvoiceId);
-        // $suppliers =  $supplierInvoiceId ?  Partner::orderBy('name')->where('id', $customerInvoice->supplier_id)->where('company_id', $company->id)->has('contracts')->pluck('name', 'id')->toArray() :Partner::where('is_supplier', 1)->where('company_id', $company->id)->has('contracts')->pluck('name', 'id')->toArray();
-        /**
-         * * for contracts
-         */
-		/**
-		 * @var SupplierInvoice $supplierInvoice
-		 */
-		$supplierInvoice = SupplierInvoice::find($supplierInvoiceId);
-		
-        $suppliers =  $supplierInvoiceId ?  Partner::orderBy('name')->where('id', $supplierInvoice->supplier_id)
-        ->when($isDownPayment, function (Builder $q) {
-            $q->has('contracts');
-        })
-        ->where('company_id', $company->id)->pluck('name', 'id')->toArray() :Partner::orderBy('name')->where($partnerType, 1)->where('company_id', $company->id)
-        ->when($isDownPayment, function (Builder $q) {
-            $q->has('contracts');
-        })
-        ->pluck('name', 'id')->toArray();
-        
-        $contracts = Contract::where('company_id', $company->id)->get();
-        $warningMessage = count($moneyPayment->settlementsForDownPaymentThatComeFromMoneyModel) ? __('Warning, please take care incase you changed the paid amount, the invoices settled using this down payment will be deleted'):null;
-        
-        return view($viewName, [
-            'banks'=>$banks,
-            'suppliers'=>$suppliers,
-            'contracts'=>$contracts,
-            // 'supplierInvoices'=>$supplierInvoices ,
-            'selectedBranches'=>$selectedBranches,
-            'accountTypes'=>$accountTypes,
-            'financialInstitutionBanks'=>$financialInstitutionBanks,
-            'model'=>$moneyPayment,
-            'singleModel'=>$supplierInvoiceId,
-            'currencies'=>$currencies,
-            'clientsWithContracts'=>$clientsWithContracts ,
-            'selectedCurrency'=>$selectedCurrency,
-            'warningMessage'=>$warningMessage
-        ]);
 
+        if ($isDownPayment) {
+            return $this->editDownPayment($company, $moneyPayment);
+        }
+
+        $accountTypes = AccountType::onlyCashAccounts()->get(['id', 'name_en', 'name_ar']);
+        $selectedBranches = Branch::getBranchesForCurrentCompany($company->id);
+        $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->with('bank:id,view_name')->get(['id', 'type', 'name', 'bank_id']);
+        $suppliers = Partner::orderBy('name')->where($partnerType, 1)->where('company_id', $company->id)->pluck('name', 'id');
+        $warningMessage = count($moneyPayment->settlementsForDownPaymentThatComeFromMoneyModel) ? __('Warning, please take care incase you changed the paid amount, the invoices settled using this down payment will be deleted') : null;
+
+        return Inertia::render('MoneyPayment/Form', [
+            'company' => ['id' => $company->id, 'name' => $company->getName(), 'mainFunctionalCurrency' => $company->getMainFunctionalCurrency()],
+            'model' => $this->serializeMoneyPaymentForForm($moneyPayment),
+            'singleModel' => $supplierInvoiceId,
+            'invoiceNumber' => null,
+            'warningMessage' => $warningMessage,
+            'suppliers' => collect($suppliers)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'partnerTypes' => collect(getAllPartnerTypesForSuppliers())->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
+            'moneyTypes' => $this->moneyTypeOptions(),
+            'currencies' => collect($selectedCurrency ? [$selectedCurrency => $selectedCurrency] : getBanksCurrencies())->map(fn ($label, $code) => ['code' => $code, 'label' => strtoupper($label)])->values(),
+            'selectedBranches' => collect($selectedBranches)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'financialInstitutionBanks' => $financialInstitutionBanks->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()]),
+            'accountTypes' => $accountTypes->map(fn ($a) => ['id' => $a->id, 'name' => $a->getName()]),
+            'urls' => array_merge($this->formUrls($company), [
+                'update' => route('update.money.payment', ['company' => $company->id, 'moneyPayment' => $moneyPayment->id]),
+            ]),
+        ]);
     }
+
+    /**
+     * Down Payment edit — mirrors editDownPayment()'s counterpart on
+     * MoneyReceivedController. Purchase orders (and their pre-filled
+     * amounts) are fetched client-side, same "one source of truth"
+     * reasoning as the plain form's invoices.
+     */
+    protected function editDownPayment(Company $company, MoneyPayment $moneyPayment)
+    {
+        $selectedBranches = Branch::getBranchesForCurrentCompany($company->id);
+        $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->with('bank:id,view_name')->get(['id', 'type', 'name', 'bank_id']);
+        $accountTypes = AccountType::onlyCashAccounts()->get(['id', 'name_en', 'name_ar']);
+        $suppliers = Partner::orderBy('name')->where('is_supplier', 1)->where('company_id', $company->id)
+            ->when($moneyPayment->isDownPaymentOverContract(), fn ($q) => $q->onlyThatHaveSupplierContracts())
+            ->pluck('name', 'id');
+        $warningMessage = count($moneyPayment->settlementsForDownPaymentThatComeFromMoneyModel) ? __('Warning, please take care incase you changed the paid amount, the invoices settled using this down payment will be deleted') : null;
+
+        return Inertia::render('MoneyPayment/DownPaymentForm', [
+            'company' => ['id' => $company->id, 'name' => $company->getName(), 'mainFunctionalCurrency' => $company->getMainFunctionalCurrency()],
+            'model' => $this->serializeDownPaymentForForm($moneyPayment),
+            'warningMessage' => $warningMessage,
+            'suppliers' => collect($suppliers)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'moneyTypes' => $this->moneyTypeOptions(),
+            'currencies' => collect(getBanksCurrencies())->map(fn ($label, $code) => ['code' => $code, 'label' => strtoupper($label)])->values(),
+            'selectedBranches' => collect($selectedBranches)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'financialInstitutionBanks' => $financialInstitutionBanks->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()]),
+            'accountTypes' => $accountTypes->map(fn ($a) => ['id' => $a->id, 'name' => $a->getName()]),
+            'urls' => array_merge($this->downPaymentFormUrls($company), [
+                'update' => route('update.money.payment', ['company' => $company->id, 'moneyPayment' => $moneyPayment->id]),
+            ]),
+        ]);
+    }
+
+    protected function serializeDownPaymentForForm(MoneyPayment $moneyPayment): array
+    {
+        $type = $moneyPayment->getType();
+
+        return [
+            'id' => $moneyPayment->id,
+            'delivery_date' => $moneyPayment->getDeliveryDate(),
+            'down_payment_type' => $moneyPayment->getDownPaymentType(),
+            'currency' => $moneyPayment->getCurrency(),
+            'supplier_id' => $moneyPayment->getPartnerId(),
+            'supplier_name' => $moneyPayment->getPartnerName(),
+            'payment_currency' => $moneyPayment->getPaymentCurrency(),
+            'type' => $type,
+            'user_comment' => $moneyPayment->getUserComment(),
+            'paid_amount' => $moneyPayment->getPaidAmount(),
+            'exchange_rate' => $moneyPayment->getExchangeRate(),
+            'amount_in_invoice_currency' => $moneyPayment->getAmountInInvoiceCurrency(),
+            'contract_id' => $moneyPayment->getContractId(),
+            'contract_name' => $moneyPayment->getContractName(),
+            'cash_payment' => $moneyPayment->isCashPayment() ? [
+                'delivery_branch_id' => $moneyPayment->getCashPaymentBranchId(),
+                'receipt_number' => $moneyPayment->getCashPaymentReceiptNumber(),
+            ] : null,
+            'outgoing_transfer' => $moneyPayment->isOutgoingTransfer() ? [
+                'delivery_bank_id' => $moneyPayment->getOutgoingTransferDeliveryBankId(),
+                'account_type_id' => $moneyPayment->getOutgoingTransferAccountTypeId(),
+                'account_number' => $moneyPayment->getOutgoingTransferAccountNumber(),
+            ] : null,
+            'payable_cheque' => $moneyPayment->isPayableCheque() ? [
+                'delivery_bank_id' => $moneyPayment->getPayableChequePaymentBankId(),
+                'account_type_id' => $moneyPayment->getPayableChequeAccountTypeId(),
+                'account_number' => $moneyPayment->getPayableChequeAccountNumber(),
+                'due_date' => $moneyPayment->getPayableChequeDueDate(),
+                'cheque_number' => $moneyPayment->payableCheque?->getChequeNumber(),
+            ] : null,
+        ];
+    }
+
 
     public function update(Company $company, StoreMoneyPaymentRequest $request, moneyPayment $moneyPayment)
     {
@@ -614,11 +962,6 @@ class MoneyPaymentController
             );
         }
         $activeTab = $newType;
-        if ($request->ajax()) {
-            return response()->json([
-                'redirectTo'=>route('view.money.payment', ['company'=>$company->id,'active'=>$activeTab])
-            ]);
-        }
         return redirect()->route('view.money.payment', ['company'=>$company->id,'active'=>$activeTab])->with('success', __('Money Payment Has Been Updated Successfully'));
     }
 
@@ -670,14 +1013,6 @@ class MoneyPaymentController
             $errMessage = __('Net Balance Less Than Paid Amount');
     
             if ($balance < $currentPaidAmount) {
-                if ($request->ajax()) {
-                    return response()->json([
-                        'status'=>false ,
-                        'msg'=>$errMessage = __('Net Balance Less Than Paid Amount'),
-                        'pageLink'=>route('view.money.payment', ['company'=>$company->id,'active'=>MoneyPayment::PAYABLE_CHEQUE])
-                    ]);
-                }
-            
                 return redirect()->back()->with('fail', $errMessage);
             }
             // $chequeDueDate = $moneyPayment->payableCheque->due_date;
@@ -699,14 +1034,8 @@ class MoneyPaymentController
             }
 
         }
-        if ($request->ajax()) {
-            return response()->json([
-                'status'=>true ,
-                'msg'=>__('Good'),
-                'pageLink'=>route('view.money.payment', ['company'=>$company->id,'active'=>MoneyPayment::PAYABLE_CHEQUE])
-            ]);
-        }
-        return redirect()->route('view.money.payment', ['company'=>$company->id,'active'=>MoneyPayment::PAYABLE_CHEQUE]);
+        return redirect()->route('view.money.payment', ['company'=>$company->id,'active'=>MoneyPayment::PAYABLE_CHEQUE])
+            ->with('success', __('Cheques Marked As Paid Successfully'));
 
     }
 
@@ -732,7 +1061,7 @@ class MoneyPaymentController
         $type =$request->get('type') ;
         $partners = [];
         if ($type == 'over_contract') {
-            $partners=  Partner::has('contracts')->where('is_supplier', 1)->orderBy('name')
+            $partners=  Partner::onlyThatHaveSupplierContracts()->where('is_supplier', 1)->orderBy('name')
                                     ->where('company_id', $company->id)->pluck('id', 'name');
         } elseif ($type == 'general') {
             $partners =  Partner::where('is_supplier', 1)->orderBy('name')

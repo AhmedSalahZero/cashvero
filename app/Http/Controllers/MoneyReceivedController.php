@@ -29,242 +29,525 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
 
+/**
+ * MoneyReceivedController
+ * ------------------------------------------------------------------
+ * Treasury Operations → "Money Received". Every way cash physically
+ * or virtually arrives into the company: cheques received (in safe /
+ * under collection / collected / rejected), incoming bank transfers,
+ * bank deposits, and cash into a safe/branch. Also handles "Down
+ * Payment" money received (an advance not yet tied to a specific
+ * invoice) via the same underlying `money_received` table and
+ * `MoneyReceived` model, distinguished by `money_type`.
+ *
+ * This is one of the most business-critical, most intertwined parts
+ * of CashVero: every save here can create/adjust real bank & partner
+ * statements (several via database triggers — see
+ * CashVero_Roadmap.md §1), and can create/void a real Odoo payment
+ * when the company has Odoo integration configured. Money Payment
+ * (the supplier-side mirror) shares a large amount of this same
+ * shape and several of the same underlying helpers (IsMoney trait).
+ *
+ * ── Frontend migration status (as of this file's last update) ──────
+ * - index() → ✅ Inertia/Vue (`Pages/MoneyReceived/Index.vue`). All 7 tabs.
+ * - create()/store()/edit()/update() → ✅ Inertia/Vue
+ *   (`Pages/MoneyReceived/Form.vue`) for the plain "Money Received"
+ *   form, and (`Pages/MoneyReceived/DownPaymentForm.vue`) for the
+ *   dedicated Down Payment form (`?type=down-payment` on create, or
+ *   editing a record where `isDownPayment()` is true) — routed via
+ *   createDownPayment()/editDownPayment(). Cheque Under Collection
+ *   still keeps its own dedicated Blade edit view, matching the
+ *   original (not a gap this migration introduced).
+ * - store()/update()'s final response was changed from a raw JSON body
+ *   (`['redirectTo'=>...]`, correct for the old jQuery-AJAX form) to a
+ *   real redirect — required for Inertia, same fix already documented
+ *   elsewhere in this codebase (bug #19/#22 in the Roadmap). The
+ *   `$returnModel` early-return path `update()` relies on internally
+ *   is untouched.
+ * - destroy() → already Inertia-compatible (real redirect), untouched.
+ * - Both Vue Form pages re-use the exact same real AJAX endpoints the
+ *   original jQuery form called (getInvoiceNumber, getContractsFor-
+ *   Customer, getSalesOrdersForContract, account-number/balance
+ *   lookups) rather than duplicating their logic server-side — so
+ *   there remains exactly one source of truth for invoice/settlement
+ *   row data, in both create and edit mode.
+ */
 class MoneyReceivedController
 {
     use GeneralFunctions, HasBasicFilter;
-   
+
+    /**
+     * The 7 tabs on the Money Received index page, in the exact order
+     * the original Blade page displayed them, each mapped to:
+     *   - the (unchanged) Company:: query-builder method that supplies its rows
+     *   - the pagination page-name Laravel uses for that tab (so all 7
+     *     tabs can be paginated independently on one URL, matching the original)
+     *   - the search fields the "Filter" feature supports for that tab
+     *     (these field names are read directly from Request() deep inside
+     *     the query builder methods themselves — see Company.php — so they
+     *     are passed through here unchanged, not reimplemented)
+     */
+    protected function tabDefinitions(): array
+    {
+        return [
+            MoneyReceived::CHEQUE => [
+                'label' => __('Cheques In Safe'),
+                'query' => 'getReceivedChequesInSafe',
+                'page' => 'cheques-in-safe-page',
+                'searchFields' => [
+                    'partner_name' => __('Customer Name'),
+                    'receiving_date' => __('Receiving Date'),
+                    'cheque_number' => __('Cheque Number'),
+                    'currency' => __('Currency'),
+                    'receiving_currency' => __('Receiving Currency'),
+                    'drawee_bank_name' => __('Drawee Bank'),
+                    'due_date' => __('Due Date'),
+                ],
+            ],
+            MoneyReceived::CHEQUE_REJECTED => [
+                'label' => __('Rejected Cheques'),
+                'query' => 'getReceivedRejectedChequesInSafe',
+                'page' => 'rejected-cheques-in-safe-page',
+                'searchFields' => [
+                    'partner_name' => __('Customer Name'),
+                    'receiving_date' => __('Receiving Date'),
+                    'cheque_number' => __('Cheque Number'),
+                    'currency' => __('Currency'),
+                    'drawee_bank_name' => __('Drawee Bank'),
+                    'due_date' => __('Due Date'),
+                ],
+            ],
+            MoneyReceived::CHEQUE_UNDER_COLLECTION => [
+                'label' => __('Cheques Under Collection'),
+                'query' => 'getReceivedChequesUnderCollection',
+                'page' => 'cheques-under-collection-page',
+                'searchFields' => [
+                    'partner_name' => __('Customer Name'),
+                    'cheque_number' => __('Cheque Number'),
+                    'received_amount' => __('Cheque Amount'),
+                    'deposit_date' => __('Deposit Date'),
+                    'drawl_bank_name' => __('Drawl Bank'),
+                    'clearance_days' => __('Clearance Days'),
+                ],
+            ],
+            MoneyReceived::CHEQUE_COLLECTED => [
+                'label' => __('Collected Cheques'),
+                'query' => 'getCollectedCheques',
+                'page' => 'collected-cheques-page',
+                'searchFields' => [
+                    'partner_name' => __('Customer Name'),
+                    'cheque_number' => __('Cheque Number'),
+                    'drawee_bank_name' => __('Drawee Bank'),
+                    'due_date' => __('Due Date'),
+                    'currency' => __('Currency'),
+                    'receiving_currency' => __('Receiving Currency'),
+                    'account_number' => __('Account Number'),
+                ],
+            ],
+            MoneyReceived::INCOMING_TRANSFER => [
+                'label' => __('Incoming Transfer'),
+                'query' => 'getReceivedTransfer',
+                'page' => 'incoming-transfer-page',
+                'searchFields' => [
+                    'partner_name' => __('Customer Name'),
+                    'receiving_date' => __('Receiving Date'),
+                    'receiving_bank_name' => __('Receiving Bank'),
+                    'received_amount' => __('Transfer Amount'),
+                    'currency' => __('Currency'),
+                    'receiving_currency' => __('Receiving Currency'),
+                    'account_number' => __('Account Number'),
+                ],
+            ],
+            MoneyReceived::CASH_IN_SAFE => [
+                'label' => __('Cash In Safe'),
+                'query' => 'getReceivedCashesInSafe',
+                'page' => 'cash-in-safe-page',
+                'searchFields' => [
+                    'partner_name' => __('Customer Name'),
+                    'receiving_date' => __('Receiving Date'),
+                    'receiving_branch_name' => __('Branch'),
+                    'received_amount' => __('Received Amount'),
+                    'currency' => __('Currency'),
+                    'receiving_currency' => __('Receiving Currency'),
+                    'receipt_number' => __('Receipt Number'),
+                ],
+            ],
+            MoneyReceived::CASH_IN_BANK => [
+                'label' => __('Bank Deposit'),
+                'query' => 'getReceivedCashesInBank',
+                'page' => 'cash-in-bank-page',
+                'searchFields' => [
+                    'partner_name' => __('Customer Name'),
+                    'receiving_date' => __('Receiving Date'),
+                    'receiving_bank_name' => __('Receiving Bank'),
+                    'received_amount' => __('Deposit Amount'),
+                    'currency' => __('Currency'),
+                    'receiving_currency' => __('Receiving Currency'),
+                    'account_number' => __('Account Number'),
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Money Received index — the Treasury Operations "Money Received"
+     * list. Migrated to Inertia/Vue; renders `Pages/MoneyReceived/Index.vue`.
+     *
+     * Every one of the 7 tabs keeps its own real, server-side pagination
+     * and its own real, server-side search (the search itself is
+     * UNCHANGED — it's implemented deep inside each `Company::getReceivedXxx()`
+     * query builder, reading `Request('field'|'value'|'from'|'to')`, gated
+     * to only apply to whichever tab is currently active — see
+     * app/Models/Company.php). Only the currently-active tab's data is
+     * fully built into row arrays; the other 6 tabs still run their
+     * queries (for accurate counts/totals) but are not rendered until
+     * the person switches to them, at which point a fresh request re-runs
+     * this method with `active` changed — this mirrors the original
+     * Blade page's own behaviour (it also ran all 7 queries on every
+     * load) rather than introducing a new lazy-tab pattern that would
+     * behave differently from what the business already relies on.
+     */
     public function index(Company $company, Request $request)
     {
-		$paginationPerPage = GeneralFunctions::getPaginationLimit();
-        // $company->load(['moneyReceived.cheque','moneyReceived.partner','moneyReceived.incomingTransfer','moneyReceived.cashInSafe.receivingBranch']);
-        $numberOfMonthsBetweenEndDateAndStartDate = 18 ;
-        $activeTab = $request->get('active', MoneyReceived::CHEQUE) ;
+        $paginationPerPage = GeneralFunctions::getPaginationLimit();
+        $numberOfMonthsBetweenEndDateAndStartDate = 18;
+        $activeTab = $request->get('active', MoneyReceived::CHEQUE);
+        $tabs = $this->tabDefinitions();
+
+        // Date-range filter — UNCHANGED default window logic (18 months
+        // back to today unless the person picked an explicit range).
         $filterDates = [];
         foreach (MoneyReceived::getAllTypes() as $type) {
             $startDate = $request->has('startDate') ? $request->input('startDate.'.$type) : now()->subMonths($numberOfMonthsBetweenEndDateAndStartDate)->format('Y-m-d');
             $endDate = $request->has('endDate') ? $request->input('endDate.'.$type) : now()->format('Y-m-d');
             $filterDates[$type] = [
-                'startDate'=>$startDate,
-                'endDate'=>$endDate
+                'startDate' => $startDate,
+                'endDate' => $endDate,
             ];
         }
-        // cash in safe
-        $receivedCashesInSafeStartDate = $filterDates[MoneyReceived::CASH_IN_SAFE]['startDate'] ?? null ;
-        $receivedCashesInSafeEndDate = $filterDates[MoneyReceived::CASH_IN_SAFE]['endDate'] ?? null ;
-        
-        // cashes in Bank
-        $cashesInBankStartDate = $filterDates[MoneyReceived::CASH_IN_BANK]['startDate'] ?? null ;
-        $cashesInBankEndDate = $filterDates[MoneyReceived::CASH_IN_BANK]['endDate'] ?? null ;
-        // incoming transfer
-        $incomingTransferStartDate = $filterDates[MoneyReceived::INCOMING_TRANSFER]['startDate'] ?? null ;
-        $incomingTransferEndDate = $filterDates[MoneyReceived::INCOMING_TRANSFER]['endDate'] ?? null ;
-            
-        /**
-         * * cheques in safe
-         */
-        $chequesInSafeStartDate = $filterDates[MoneyReceived::CHEQUE]['startDate'] ?? null ;
-        $chequesInSafeEndDate = $filterDates[MoneyReceived::CHEQUE]['endDate'] ?? null ;
-        
-        /**
-         * * rejected cheques
-         */
-        $chequesRejectedStartDate = $filterDates[MoneyReceived::CHEQUE_REJECTED]['startDate'] ?? null ;
-        $chequesRejectedEndDate = $filterDates[MoneyReceived::CHEQUE_REJECTED]['endDate'] ?? null ;
-        
-        
-        /**
-         * *  cheques under collection
-         */
-        $chequesUnderCollectionStartDate = $filterDates[MoneyReceived::CHEQUE_UNDER_COLLECTION]['startDate'] ?? null ;
-        $chequesUnderCollectionEndDate = $filterDates[MoneyReceived::CHEQUE_UNDER_COLLECTION]['endDate'] ?? null ;
-        /**
-         * *  cheques collection
-         */
-        $chequesCollectedStartDate = $filterDates[MoneyReceived::CHEQUE_COLLECTED]['startDate'] ?? null ;
-        $chequesCollectedEndDate = $filterDates[MoneyReceived::CHEQUE_COLLECTED]['endDate'] ?? null ;
-        
-        
-        
-    
-    
-        
-        $receivedCashesInSafe = $company->getReceivedCashesInSafe($receivedCashesInSafeStartDate, $receivedCashesInSafeEndDate , $activeTab)->paginate($paginationPerPage,['*'],'cash-in-safe-page') ;
-		
-		
-        $receivedCashesInBanks = $company->getReceivedCashesInBank($cashesInBankStartDate, $cashesInBankEndDate,$activeTab)->paginate($paginationPerPage,['*'],'cash-in-bank-page') ;
-        $receivedTransfer = $company->getReceivedTransfer($incomingTransferStartDate, $incomingTransferEndDate,$activeTab)->paginate($paginationPerPage,['*'],'incoming-transfer-page') ;
-        $receivedChequesInSafe = $company->getReceivedChequesInSafe($chequesInSafeStartDate, $chequesInSafeEndDate, $activeTab)->paginate($paginationPerPage,['*'],'cheques-in-safe-page') ;
-        $receivedRejectedChequesInSafe = $company->getReceivedRejectedChequesInSafe($chequesRejectedStartDate, $chequesRejectedEndDate,$activeTab)->paginate($paginationPerPage,['*'],'rejected-cheques-in-safe-page') ;
-        $receivedChequesUnderCollection=  $company->getReceivedChequesUnderCollection($chequesUnderCollectionStartDate, $chequesUnderCollectionEndDate, $activeTab)->paginate($paginationPerPage,['*'],'cheques-under-collection-page') ;
-        $collectedCheques=  $company->getCollectedCheques($chequesCollectedStartDate, $chequesCollectedEndDate,$activeTab)->paginate($paginationPerPage,['*'],'collected-cheques-page') ;
-        
-        
-        
-        $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->get();
-        
-        $accountTypes = AccountType::onlyCashAccounts()->get();
-        // $receivedCashesInSafe = $activeTab == MoneyReceived::CASH_IN_SAFE ? $this->applyFilter($request, $receivedCashesInSafe) :$receivedCashesInSafe  ;
-        // $receivedCashesInBanks = $activeTab == MoneyReceived::CASH_IN_BANK ? $this->applyFilter($request, $receivedCashesInBanks) :$receivedCashesInBanks  ;
-        // $receivedTransfer = $activeTab === MoneyReceived::INCOMING_TRANSFER ? $this->applyFilter($request, $receivedTransfer) : $receivedTransfer  ;
-        
-    
-        // $receivedChequesInSafe = $activeTab == MoneyReceived::CHEQUE ? $this->applyFilter($request, $receivedChequesInSafe) : $receivedChequesInSafe;
-        
-        
-        // $receivedRejectedChequesInSafe = $activeTab == MoneyReceived::CHEQUE_REJECTED ? $this->applyFilter($request, $receivedRejectedChequesInSafe) : $receivedRejectedChequesInSafe;
-        
-        // $receivedChequesUnderCollection=  $activeTab == MoneyReceived::CHEQUE_UNDER_COLLECTION ? $this->applyFilter($request, $receivedChequesUnderCollection) : $receivedChequesUnderCollection ;
-        
-        // $collectedCheques=  $activeTab == MoneyReceived::CHEQUE_COLLECTED ? $this->applyFilter($request, $collectedCheques) : $collectedCheques ;
-        
-        
-        $selectedBanks = MoneyReceived::getDrawlBanksForCurrentCompany($company->id) ;
-        $chequesReceivedTableSearchFields = [
-            'partner_name'=>__('Customer Name'),
-            'receiving_date'=>__('Receiving Date'),
-            'cheque_number'=>__('Cheque Number'),
-            'currency'=>__('Currency'),
-			'receiving_currency'=>__('Receiving Currency'),
-            'drawee_bank_name'=>__('Drawee Bank'),
-            'due_date'=>__('Due Date'),
-            // 'cheque_status'=>__('Status')
-        ];
-        $chequesRejectedTableSearchFields = [
-            'partner_name'=>__('Customer Name'),
-            'receiving_date'=>__('Receiving Date'),
-            'cheque_number'=>__('Cheque Number'),
-            'currency'=>__('Currency'),
-            'drawee_bank_name'=>__('Drawee Bank'),
-            'due_date'=>__('Due Date'),
-            // 'cheque_status'=>__('Status')
-        ];
-        $chequesUnderCollectionTableSearchFields = [
-            'partner_name'=>__('Customer Name'),
-            'cheque_number'=>__('Cheque Number'),
-            'received_amount'=>__('Cheque Amount'),
-            'deposit_date'=>__('Deposit Date'),
-            'drawl_bank_name'=>__('Drawl Bank'),
-            // 'account_type'=>__('Account Number'),
-            'clearance_days'=>'Clearance Days'
-        ];
-        
-        $collectedChequesTableSearchFields = [
-            'partner_name'=>__('Customer Name'),
-            'cheque_number'=>__('Cheque Number'),
-            'received_amount'=>__('Cheque Amount'),
-			'drawee_bank_name'=>__('Drawee Bank'),
-			'due_date'=>__('Due Date'),
-			'currency'=>__('Currency'),
-			'receiving_currency'=>__('Receiving Currency'),
-			'account_number'=>__('Account Number'),
-        ];
-        
-        $incomingTransferTableSearchFields = [
-            'partner_name'=>__('Customer Name'),
-            'receiving_date'=>__('Receiving Date'),
-            'receiving_bank_name'=>__('Receiving Bank'),
-            'received_amount'=>__('Transfer Amount'),
-            'currency'=>__('Currency'),
-			'receiving_currency'=>__('Receiving Currency'),
-            'account_number'=>__('Account Number')
-        ];
-        
-        $cashInBankTableSearchFields = [
-            'partner_name'=>__('Customer Name'),
-            'receiving_date'=>__('Receiving Date'),
-            'receiving_bank_name'=>__('Receiving Bank'),
-            'received_amount'=>__('Deposit Amount'),
-            'currency'=>__('Currency'),
-			'receiving_currency'=>__('Receiving Currency'),
-            'account_number'=>__('Account Number')
-        ];
-        
-        $cashInSafeReceivedTableSearchFields = [
-            'partner_name'=>__('Customer Name'),
-            'receiving_date'=>__('Receiving Date'),
-            'receiving_branch_name'=>__('Branch'),
-            'received_amount'=>__('Received Amount'),
-            'currency'=>__('Currency'),
-			'receiving_currency'=>__('Receiving Currency'),
-            'receipt_number'=>__('Receipt Number')
-        ];
-        
-        
-        
-        
-        $banks = Bank::pluck('view_name', 'id');
-		// Log::error('2Test Error');
-		// throw new \Exception('2Test Exception');
-		
-        return view('reports.moneyReceived.index', [
-            'company'=>$company ,
-            'selectedBanks'=>$selectedBanks,
-            'receivedChequesInSafe'=>$receivedChequesInSafe,
-            'receivedCashesInSafe'=>$receivedCashesInSafe,
-            'chequesReceivedTableSearchFields'=>$chequesReceivedTableSearchFields,
-            'receivedTransfer'=>$receivedTransfer,
-            'receivedCashesInBanks'=>$receivedCashesInBanks,
-            'banks'=>$banks,
-            'receivedChequesUnderCollection'=>$receivedChequesUnderCollection,
-            'chequesUnderCollectionTableSearchFields'=>$chequesUnderCollectionTableSearchFields ,
-            'cashInSafeReceivedTableSearchFields'=>$cashInSafeReceivedTableSearchFields,
-            'incomingTransferTableSearchFields'=>$incomingTransferTableSearchFields,
-            'cashInBankTableSearchFields'=>$cashInBankTableSearchFields,
-            'financialInstitutionBanks'=>$financialInstitutionBanks,
-            'accountTypes'=>$accountTypes,
-            'chequesRejectedTableSearchFields'=>$chequesRejectedTableSearchFields,
-            'receivedRejectedChequesInSafe'=>$receivedRejectedChequesInSafe,
-            'collectedCheques'=>$collectedCheques,
-            'collectedChequesTableSearchFields'=>$collectedChequesTableSearchFields,
-            'filterDates'=>$filterDates,
 
+        $tabsOut = [];
+        foreach ($tabs as $type => $definition) {
+            $startDate = $filterDates[$type]['startDate'] ?? null;
+            $endDate = $filterDates[$type]['endDate'] ?? null;
+
+            // Real, unchanged query builder from Company.php — the exact
+            // same method the original Blade page called.
+            $query = $company->{$definition['query']}($startDate, $endDate, $activeTab);
+
+            $totalCount = (clone $query)->count();
+            $totalAmount = (clone $query)->sum('received_amount');
+
+            $paginator = $query->paginate($paginationPerPage, ['*'], $definition['page']);
+            $paginator->appends(array_merge($request->except('page'), ['active' => $type]));
+
+            // Only build the (potentially heavy) row arrays for the tab
+            // actually being viewed — the other 6 only need the count/sum
+            // above for their tab-pill badges, matching how the original
+            // Blade page ran all 7 queries but only rendered one table.
+            $paginatorArray = $paginator->toArray();
+            $paginatorArray['data'] = $activeTab === $type
+                ? $paginator->getCollection()->map(fn (MoneyReceived $moneyReceived) => $this->mapMoneyReceivedRow($moneyReceived, $type, $company))->all()
+                : [];
+
+            $tabsOut[$type] = [
+                'label' => $definition['label'],
+                'searchFields' => $definition['searchFields'],
+                'totalCount' => $totalCount,
+                'totalAmount' => round($totalAmount, 2),
+                'paginator' => $paginatorArray,
+            ];
+        }
+
+        $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->with('bank:id,view_name')->get(['id', 'type', 'name', 'bank_id']);
+        $accountTypes = AccountType::onlyCashAccounts()->get(['id', 'name_en', 'name_ar']);
+        $user = auth()->user();
+
+        return Inertia::render('MoneyReceived/Index', [
+            'company' => ['id' => $company->id, 'name' => $company->getName()],
+            'activeTab' => $activeTab,
+            'tabs' => $tabsOut,
+            'filterDates' => $filterDates,
+            'search' => [
+                'field' => $request->get('field'),
+                'value' => $request->get('value'),
+                'from' => $request->get('from'),
+                'to' => $request->get('to'),
+            ],
+            'financialInstitutionBanks' => $financialInstitutionBanks->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()]),
+            'accountTypes' => $accountTypes->map(fn ($a) => ['id' => $a->id, 'name' => $a->getName()]),
+            'permissions' => [
+                'canCreate' => $user->can('create money received'),
+                'canUpdate' => $user->can('update money received'),
+                'canDelete' => $user->can('delete money received'),
+                'canReview' => $user->can(getReviewPermissionName('MoneyReceived')),
+            ],
+            'companyHasOdoo' => $company->hasOdooIntegrationCredentials(),
+            'urls' => [
+                'index' => route('view.money.receive', ['company' => $company->id]),
+                'createMoneyReceived' => route('create.money.receive', ['company' => $company->id]),
+                'createDownPayment' => route('create.money.receive', ['company' => $company->id, 'type' => 'down-payment']),
+                'sendToCollection' => route('cheque.send.to.collection', ['company' => $company->id]),
+                'accountNumbersForType' => $this->companyScopedUrl($company, 'money-received/get-account-numbers-based-on-account-type'),
+                'balanceForAccountNumber' => route('update.balance.and.net.balance.based.on.account.number', ['company' => $company->id]),
+            ],
         ]);
     }
+
+    /**
+     * Builds one Money Received index-table row as a plain array, with
+     * every URL pre-resolved (this app has no Ziggy — see Style Guide
+     * §8) and every value pre-formatted exactly as the original Blade
+     * table cell displayed it. Kept as one shared mapper (rather than
+     * 7 near-duplicate ones) because ~80% of the fields are identical
+     * across tabs; `$type`-specific fields are merged in per tab below.
+     */
+    protected function mapMoneyReceivedRow(MoneyReceived $moneyReceived, string $type, Company $company): array
+    {
+        $company = $company ?: $moneyReceived->company;
+
+        $common = [
+            'id' => $moneyReceived->id,
+            'type_formatted' => $moneyReceived->getMoneyTypeFormatted(),
+            'customer_name' => $moneyReceived->getCustomerName(),
+            'receiving_date' => $moneyReceived->getReceivingDate(),
+            'receiving_date_formatted' => $moneyReceived->getReceivingDateFormatted(),
+            'received_amount_formatted' => $moneyReceived->getReceivedAmountFormatted(),
+            'currency' => $moneyReceived->getReceivingCurrency(),
+            'currency_formatted' => $moneyReceived->getCurrencyToReceivingCurrencyFormatted(),
+            'is_open_balance' => $moneyReceived->isOpenBalance(),
+            'is_reviewed' => $moneyReceived->isReviewed(),
+            'has_comment' => $moneyReceived->hasComment(),
+            'user_comment' => $moneyReceived->hasComment() ? $moneyReceived->getUserComment() : null,
+            'has_odoo_error' => $company->hasOdooIntegrationCredentials() && $moneyReceived->hasOdooError(),
+            'odoo_error' => $moneyReceived->hasOdooError() ? $moneyReceived->getOdooError() : null,
+            'is_fully_integrated_with_odoo' => $company->hasOdooIntegrationCredentials() && $moneyReceived->fullyIntegratedWithOdoo(),
+            'odoo_reference_names' => $company->hasOdooIntegrationCredentials() && $moneyReceived->fullyIntegratedWithOdoo() ? $moneyReceived->getOdooReferenceNames() : [],
+            'edit_url' => route('edit.money.receive', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
+            'delete_url' => route('delete.money.receive', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
+            'review_url' => route('confirmed.review', ['company' => $company->id, 'model' => $moneyReceived->id]),
+            'resend_odoo_url' => route('resend.with.odoo', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
+        ];
+
+        return match ($type) {
+            MoneyReceived::CHEQUE => array_merge($common, [
+                'cheque_number' => $moneyReceived->cheque?->getChequeNumber(),
+                'drawee_bank_name' => $moneyReceived->cheque?->getDraweeBankName(),
+                'due_date_formatted' => $moneyReceived->cheque?->getDueDateFormatted(),
+                'due_after_days' => $moneyReceived->cheque?->getDueAfterDays(),
+                'due_status' => $moneyReceived->cheque?->getDueStatusFormatted(),
+                'due_status_bool' => (bool) $moneyReceived->cheque?->getDueStatus(),
+            ]),
+            MoneyReceived::CHEQUE_REJECTED => array_merge($common, [
+                'cheque_number' => $moneyReceived->cheque?->getChequeNumber(),
+                'drawee_bank_name' => $moneyReceived->cheque?->getDraweeBankName(),
+                'due_date_formatted' => $moneyReceived->cheque?->getDueDateFormatted(),
+                'status_formatted' => $moneyReceived->cheque?->getStatusFormatted(),
+            ]),
+            MoneyReceived::CHEQUE_UNDER_COLLECTION => array_merge($common, [
+                'cheque_number' => $moneyReceived->cheque?->getChequeNumber(),
+                'deposit_date' => $moneyReceived->cheque?->deposit_date,
+                'deposit_date_formatted' => $moneyReceived->cheque?->getDepositDateFormatted(),
+                'drawl_bank_id' => $moneyReceived->cheque?->drawl_bank_id,
+                'drawl_bank_name' => $moneyReceived->cheque?->getDrawlBankName(),
+                'account_type' => $moneyReceived->cheque?->account_type,
+                'account_type_name' => $moneyReceived->cheque?->getAccountTypeName(),
+                'account_number' => $moneyReceived->cheque?->getAccountNumber(),
+                'due_date_formatted' => $moneyReceived->cheque?->getDueDateFormatted(),
+                'clearance_days' => $moneyReceived->cheque?->getClearanceDays(),
+                'expected_collection_date_formatted' => $moneyReceived->cheque?->chequeExpectedCollectionDateFormatted(),
+                'due_status' => $moneyReceived->cheque?->getDueStatusFormatted(),
+                'due_status_bool' => (bool) $moneyReceived->cheque?->getDueStatus(),
+                'apply_collection_url' => route('cheque.apply.collection', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
+                'send_to_safe_url' => route('cheque.send.to.safe', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
+                'send_to_rejected_safe_url' => route('cheque.send.to.rejected.safe', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
+            ]),
+            MoneyReceived::CHEQUE_COLLECTED => array_merge($common, [
+                'cheque_number' => $moneyReceived->cheque?->getChequeNumber(),
+                'due_date_formatted' => $moneyReceived->cheque?->getDueDateFormatted(),
+                'deposit_date_formatted' => $moneyReceived->cheque?->getDepositDateFormatted(),
+                'drawl_bank_name' => $moneyReceived->cheque?->getDrawlBankName(),
+                'account_type_name' => $moneyReceived->cheque?->getAccountTypeName(),
+                'account_number' => $moneyReceived->cheque?->getAccountNumber(),
+                'actual_collection_date_formatted' => $moneyReceived->cheque?->chequeActualCollectionDateFormatted(),
+                'send_to_under_collection_url' => route('cheque.send.to.under.collection', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
+            ]),
+            MoneyReceived::INCOMING_TRANSFER => array_merge($common, [
+                'receiving_bank_name' => $moneyReceived->getIncomingTransferReceivingBankName(),
+                'account_type_name' => $moneyReceived->getIncomingTransferAccountTypeName(),
+                'account_number' => $moneyReceived->getIncomingTransferAccountNumber(),
+            ]),
+            MoneyReceived::CASH_IN_SAFE => array_merge($common, [
+                'branch_name' => $moneyReceived->getCashInSafeBranchName(),
+                'receipt_number' => $moneyReceived->getCashInSafeReceiptNumber(),
+            ]),
+            MoneyReceived::CASH_IN_BANK => array_merge($common, [
+                'receiving_bank_name' => $moneyReceived->getCashInBankReceivingBankName(),
+                'account_type_name' => $moneyReceived->getCashInBankAccountTypeName(),
+                'account_number' => $moneyReceived->getCashInBankAccountNumber(),
+            ]),
+            default => $common,
+        };
+    }
+
     
+    /**
+     * The 4 Money Received "Money Type" options — hardcoded here to
+     * match the original Blade `<select id="type">`'s static option
+     * list exactly (Cash In Safe / Bank Deposit / Cheque / Incoming
+     * Transfer). Cheque-related sibling types (Under Collection/
+     * Collected/Rejected) are index-only states, never chosen here.
+     */
+    protected function moneyTypeOptions(): array
+    {
+        return [
+            ['value' => MoneyReceived::CASH_IN_SAFE, 'label' => __('Cash In Safe')],
+            ['value' => MoneyReceived::CASH_IN_BANK, 'label' => __('Bank Deposit')],
+            ['value' => MoneyReceived::CHEQUE, 'label' => __('Cheque')],
+            ['value' => MoneyReceived::INCOMING_TRANSFER, 'label' => __('Incoming Transfer')],
+        ];
+    }
+
     public function create(Company $company, $customerInvoiceId = null)
     {
         $isDownPayment = Request()->has('type');
         $customerInvoiceCurrencies = CustomerInvoice::getCurrencies($customerInvoiceId);
-        
-        $viewName = $isDownPayment  ?  'reports.moneyReceived.down-payments-form' : 'reports.moneyReceived.form';
+
+        if ($isDownPayment) {
+            return $this->createDownPayment($company);
+        }
+
         $banks = Bank::pluck('view_name', 'id');
-        $accountTypes = AccountType::onlyCashAccounts()->get();
-        $selectedBranches =  Branch::getBranchesForCurrentCompany($company->id) ;
-        $selectedBanks = MoneyReceived::getDrawlBanksForCurrentCompany($company->id) ;
-        $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->get();
-        $invoiceNumber = $customerInvoiceId ? CustomerInvoice::where('id', $customerInvoiceId)->first()->getInvoiceNumber():null;
-        /**
-         * * for contracts
-         */
-        $customers =  $customerInvoiceId ?  Partner::orderBy('name')->where('id', CustomerInvoice::find($customerInvoiceId)->customer_id)->where('company_id', $company->id)
-        ->when($isDownPayment, function (Builder $q) {
-            $q->has('contracts');
-        })
-        ->pluck('name', 'id')->toArray() : Partner::orderBy('name')->where('is_customer', 1)->where('company_id', $company->id)->when($isDownPayment, function (Builder $q) {
-            $q->has('contracts');
-        })->pluck('name', 'id')->toArray();
-        $contracts = [];
-        return view($viewName, [
-            'financialInstitutionBanks'=>$financialInstitutionBanks,
-            'customers'=>$customers ,
-            'selectedBranches'=>$selectedBranches,
-            'selectedBanks'=>$selectedBanks,
-            'singleModel'=>$customerInvoiceId,
-            'invoiceNumber'=>$invoiceNumber,
-            'banks'=>$banks,
-            'accountTypes'=>$accountTypes,
-            'contracts'=>$contracts,
-            'currencies'=>$customerInvoiceCurrencies
+        $accountTypes = AccountType::onlyCashAccounts()->get(['id', 'name_en', 'name_ar']);
+        $selectedBranches = Branch::getBranchesForCurrentCompany($company->id);
+        $selectedBanks = MoneyReceived::getDrawlBanksForCurrentCompany($company->id);
+        $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->with('bank:id,view_name')->get(['id', 'type', 'name', 'bank_id']);
+        $invoiceNumber = $customerInvoiceId ? CustomerInvoice::where('id', $customerInvoiceId)->first()->getInvoiceNumber() : null;
+
+        $customers = $customerInvoiceId
+            ? Partner::orderBy('name')->where('id', CustomerInvoice::find($customerInvoiceId)->customer_id)->where('company_id', $company->id)->pluck('name', 'id')->toArray()
+            : Partner::orderBy('name')->where('is_customer', 1)->where('company_id', $company->id)->pluck('name', 'id')->toArray();
+
+        return Inertia::render('MoneyReceived/Form', [
+            'company' => ['id' => $company->id, 'name' => $company->getName(), 'mainFunctionalCurrency' => $company->getMainFunctionalCurrency()],
+            'model' => null,
+            'singleModel' => $customerInvoiceId,
+            'invoiceNumber' => $invoiceNumber,
+            'warningMessage' => null,
+            'customers' => collect($customers)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'partnerTypes' => collect(getAllPartnerTypesForCustomers())->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
+            'moneyTypes' => $this->moneyTypeOptions(),
+            'currencies' => collect($customerInvoiceCurrencies ?: getBanksCurrencies())->map(fn ($label, $code) => ['code' => $code, 'label' => strtoupper($label)])->values(),
+            'selectedBranches' => collect($selectedBranches)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'selectedBanks' => collect($banks)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'financialInstitutionBanks' => $financialInstitutionBanks->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()]),
+            'accountTypes' => $accountTypes->map(fn ($a) => ['id' => $a->id, 'name' => $a->getName()]),
+            'urls' => $this->formUrls($company),
         ]);
     }
-    
-    public function result(Company $company, Request $request)
+
+    /**
+     * Down Payment create — renders `Pages/MoneyReceived/DownPaymentForm.vue`.
+     * Initial customer list matches the default Down Payment Type
+     * ('over_contract' — the select's first, pre-selected option), i.e.
+     * customers who have at least one contract; the Vue page refreshes
+     * this list itself via `getCustomersOfOpeningBalance` whenever Down
+     * Payment Type changes, exactly like the original's own on-change
+     * (and on-load) AJAX refresh.
+     */
+    protected function createDownPayment(Company $company)
     {
-        
-        return view('reports.moneyReceived.form', [
+        $selectedBranches = Branch::getBranchesForCurrentCompany($company->id);
+        $selectedBanks = Bank::pluck('view_name', 'id');
+        $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->with('bank:id,view_name')->get(['id', 'type', 'name', 'bank_id']);
+        $accountTypes = AccountType::onlyCashAccounts()->get(['id', 'name_en', 'name_ar']);
+        $customers = Partner::orderBy('name')->where('is_customer', 1)->where('company_id', $company->id)->onlyThatHaveCustomerContracts()->pluck('name', 'id');
+
+        return Inertia::render('MoneyReceived/DownPaymentForm', [
+            'company' => ['id' => $company->id, 'name' => $company->getName(), 'mainFunctionalCurrency' => $company->getMainFunctionalCurrency()],
+            'model' => null,
+            'customers' => collect($customers)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'moneyTypes' => $this->moneyTypeOptions(),
+            'currencies' => collect(getBanksCurrencies())->map(fn ($label, $code) => ['code' => $code, 'label' => strtoupper($label)])->values(),
+            'selectedBranches' => collect($selectedBranches)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'selectedBanks' => collect($selectedBanks)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'financialInstitutionBanks' => $financialInstitutionBanks->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()]),
+            'accountTypes' => $accountTypes->map(fn ($a) => ['id' => $a->id, 'name' => $a->getName()]),
+            'urls' => $this->downPaymentFormUrls($company),
         ]);
     }
+
+    /**
+     * Every URL the Vue Form page needs, pre-resolved (no Ziggy — see
+     * Style Guide §8). Shared between create() and edit().
+     */
+    protected function formUrls(Company $company): array
+    {
+        return [
+            'index' => route('view.money.receive', ['company' => $company->id]),
+            'store' => route('store.money.receive', ['company' => $company->id]),
+            'getInvoiceNumbers' => $this->companyScopedUrl($company, 'money-received/get-invoice-numbers'),
+            'getAccountNumbersForType' => $this->companyScopedUrl($company, 'money-received/get-account-numbers-based-on-account-type'),
+            'balanceForAccountNumber' => route('update.balance.and.net.balance.based.on.account.number', ['company' => $company->id]),
+            'getContractsForCustomer' => route('get.contracts.for.customer', ['company' => $company->id]),
+            'getSalesOrdersForContract' => $this->companyScopedUrl($company, 'down-payments/get-sales-orders-for-contract'),
+            'getPartnersBasedOnCurrency' => $this->companyScopedUrl($company, 'get-partners-based-on-type'),
+            'getBranchBasedOnCurrency' => route('get.branch.based.on.currency', ['company' => $company->id]),
+            'getCashInSafeEndBalance' => route('get.current.end.balance.of.cash.in.safe.statement', ['company' => $company->id]),
+        ];
+    }
+
+    /**
+     * Same idea as formUrls(), for the dedicated Down Payment form.
+     * `getCustomersOfOpeningBalance` is a real, existing, NAMED route
+     * (no locale/company-prefix issue) despite its historical name —
+     * it's the same endpoint the original's Down Payment Type change
+     * handler always calls, returning either "customers who have a
+     * contract" (over_contract) or "every customer" (general).
+     */
+    protected function downPaymentFormUrls(Company $company): array
+    {
+        return [
+            'index' => route('view.money.receive', ['company' => $company->id]),
+            'store' => route('store.money.receive', ['company' => $company->id]),
+            'getContractsForCustomer' => route('get.contracts.for.customer', ['company' => $company->id]),
+            'getSalesOrdersForContract' => $this->companyScopedUrl($company, 'down-payments/get-sales-orders-for-contract'),
+            'getCustomersOfOpeningBalance' => route('get.customers.of.opening-balance', ['company' => $company->id]),
+            'getAccountNumbersForType' => $this->companyScopedUrl($company, 'money-received/get-account-numbers-based-on-account-type'),
+            'balanceForAccountNumber' => route('update.balance.and.net.balance.based.on.account.number', ['company' => $company->id]),
+            'getBranchBasedOnCurrency' => route('get.branch.based.on.currency', ['company' => $company->id]),
+            'getCashInSafeEndBalance' => route('get.current.end.balance.of.cash.in.safe.statement', ['company' => $company->id]),
+        ];
+    }
+
+    /**
+     * ⚠️ Real bug fix — root cause of "Settlement Information shows no
+     * invoices no matter which customer is picked": several of this
+     * page's AJAX endpoints (getInvoiceNumber, getAccountNumbersFor-
+     * AccountType, getSalesOrdersForContract, getPartnersBasedOn-
+     * Currency) were never given a route `->name(...)` in the original
+     * app — every route in this section actually lives under TWO
+     * nested prefixes (`LaravelLocalization::setLocale()` for the
+     * locale segment, then `Route::prefix('{company}')`), which is
+     * exactly what the original jQuery built by hand:
+     * `'/' + lang + '/' + companyId + '/money-received/...'`
+     * (see custom/money-receive.js). Laravel's plain `url()` helper
+     * has no way to know about either prefix for an unnamed route, so
+     * `url('money-received/get-invoice-numbers')` silently built a
+     * URL missing BOTH segments — the fetch calls were hitting a
+     * non-existent path and failing quietly (no invoices, no sales
+     * orders, no account numbers, no currency-filtered partners,
+     * anywhere on this page). This helper reproduces the original's
+     * exact, working mechanism instead of guessing at a `url()` fix.
+     */
+    protected function companyScopedUrl(Company $company, string $path): string
+    {
+        return url('/'.app()->getLocale().'/'.$company->id.'/'.ltrim($path, '/'));
+    }
+
+    
     public function getContractsForCustomer(Company $company, Request $request)
     {
         $contracts = Contract::where('partner_id', $request->get('customerId'))
@@ -372,7 +655,7 @@ class MoneyReceivedController
             $invoices[$index]['withhold_amount'] = $moneyReceived ? $moneyReceived->sumWithholdAmountForInvoice($invoiceArr['id'], $partnerId, 0) : 0;
         }
 
-        $invoices = $this->formatInvoices($invoices, $inEditMode);
+        $invoices = $this->formatInvoices($invoices, (int) $inEditMode);
         return response()->json([
             'status'=>true ,
             'invoices'=>$invoices,
@@ -544,74 +827,190 @@ class MoneyReceivedController
             return $moneyReceived;
         }
 
-        return response()->json([
-            'redirectTo'=>route('view.money.receive', ['company'=>$company->id,'active'=>$activeTab])
-        ]);
-
-        
+        return redirect()->route('view.money.receive', ['company' => $company->id, 'active' => $activeTab])
+            ->with('success', __('Money Received Has Been Saved Successfully'));
     }
  
     public function edit(Company $company, Request $request, MoneyReceived $moneyReceived, $customerInvoiceId = null)
     {
-        
         $isDownPayment = $moneyReceived->isDownPayment();
         $partnerType = $moneyReceived->partner->getCustomerType();
-    
         $customerInvoiceCurrencies = CustomerInvoice::getCurrencies($customerInvoiceId);
-        
-        
-        $viewName = $isDownPayment  ?  'reports.moneyReceived.down-payments-form' : 'reports.moneyReceived.form';
         $banks = Bank::pluck('view_name', 'id');
-        $selectedBanks = MoneyReceived::getDrawlBanksForCurrentCompany($company->id) ;
-        $selectedBranches =  Branch::getBranchesForCurrentCompany($company->id) ;
-        $accountTypes = AccountType::onlyCashAccounts()->get();
+        $selectedBanks = MoneyReceived::getDrawlBanksForCurrentCompany($company->id);
+        $selectedBranches = Branch::getBranchesForCurrentCompany($company->id);
         $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->get();
-        $selectedBanks = MoneyReceived::getDrawlBanksForCurrentCompany($company->id) ;
-        /**
-         * * for contracts
-         */
-        $customers =  $customerInvoiceId ?  Partner::orderBy('name')->where('id', CustomerInvoice::find($customerInvoiceId)->customer_id)->where('company_id', $company->id)
-        ->when($isDownPayment, function (Builder $q) {
-            $q->has('contracts');
-        })
-        ->pluck('name', 'id')->toArray() : Partner::orderBy('name')->where($partnerType, 1)->where('company_id', $company->id)->when($isDownPayment, function (Builder $q) {
-            $q->has('contracts');
-        })->pluck('name', 'id')->toArray();
-        
-        $contracts = Contract::where('company_id', $company->id)->get();
+
+        // Cheque Under Collection deposit edits use the Index.vue collection
+        // modal (same sendToCollection endpoint) — not a separate form page.
         if ($moneyReceived->isChequeUnderCollection()) {
-            return view('reports.moneyReceived.edit-cheque-under-collection', [
-                'banks'=>$banks,
-                // 'customerInvoices'=>$customerInvoices ,
-                'selectedBranches'=>$selectedBranches,
-                'selectedBanks'=>$selectedBanks,
-                'model'=>$moneyReceived,
-                'singleModel'=>$customerInvoiceId,
-                'accountTypes'=>$accountTypes,
-                'financialInstitutionBanks'=>$financialInstitutionBanks,
-                'currencies'=>$customerInvoiceCurrencies,
-                
+            return redirect()->route('view.money.receive', [
+                'company' => $company->id,
+                'active' => MoneyReceived::CHEQUE_UNDER_COLLECTION,
             ]);
         }
-        $warningMessage = count($moneyReceived->settlementsForDownPaymentThatComeFromMoneyModel) ? __('Warning, please take care incase you changed the received amount, the invoices settled using this down payment will be deleted'):null;
-        
-        return view($viewName, [
-            'banks'=>$banks,
-            'customers'=>$customers,
-            'contracts'=>$contracts,
-            // 'customerInvoices'=>$customerInvoices ,
-            'selectedBranches'=>$selectedBranches,
-            'accountTypes'=>$accountTypes,
-            'financialInstitutionBanks'=>$financialInstitutionBanks,
-            'selectedBanks'=>$selectedBanks,
-            'model'=>$moneyReceived,
-            'singleModel'=>$customerInvoiceId,
-            'currencies'=>$customerInvoiceCurrencies,
-            'warningMessage'=>$warningMessage
+
+        // Down Payment edit → Pages/MoneyReceived/DownPaymentForm.vue.
+        if ($isDownPayment) {
+            return $this->editDownPayment($company, $moneyReceived);
+        }
+
+        $accountTypes = AccountType::onlyCashAccounts()->get(['id', 'name_en', 'name_ar']);
+        $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->with('bank:id,view_name')->get(['id', 'type', 'name', 'bank_id']);
+        $customers = Partner::orderBy('name')->where($partnerType, 1)->where('company_id', $company->id)->pluck('name', 'id')->toArray();
+        $warningMessage = count($moneyReceived->settlementsForDownPaymentThatComeFromMoneyModel) ? __('Warning, please take care incase you changed the received amount, the invoices settled using this down payment will be deleted') : null;
+
+        return Inertia::render('MoneyReceived/Form', [
+            'company' => ['id' => $company->id, 'name' => $company->getName(), 'mainFunctionalCurrency' => $company->getMainFunctionalCurrency()],
+            'model' => $this->serializeMoneyReceivedForForm($moneyReceived),
+            'singleModel' => $customerInvoiceId,
+            'invoiceNumber' => null,
+            'warningMessage' => $warningMessage,
+            'customers' => collect($customers)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'partnerTypes' => collect(getAllPartnerTypesForCustomers())->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
+            'moneyTypes' => $this->moneyTypeOptions(),
+            'currencies' => collect($customerInvoiceCurrencies ?: getBanksCurrencies())->map(fn ($label, $code) => ['code' => $code, 'label' => strtoupper($label)])->values(),
+            'selectedBranches' => collect($selectedBranches)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'selectedBanks' => collect($banks)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'financialInstitutionBanks' => $financialInstitutionBanks->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()]),
+            'accountTypes' => $accountTypes->map(fn ($a) => ['id' => $a->id, 'name' => $a->getName()]),
+            'urls' => array_merge($this->formUrls($company), [
+                'update' => route('update.money.receive', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
+            ]),
         ]);
-        
     }
-    
+
+    /**
+     * Serializes a MoneyReceived record into the exact plain-array shape
+     * `Pages/MoneyReceived/Form.vue` expects to prefill the form. Invoice
+     * settlement rows and down-payment sales-order rows are deliberately
+     * NOT pre-built here — the Vue page fetches them itself from the
+     * same real, unchanged AJAX endpoints the original jQuery form used
+     * (`getInvoiceNumber` with `inEditMode=1`, `getSalesOrdersForContract`
+     * with `down_payment_id`), so there is exactly one source of truth
+     * for "what does this invoice/SO row look like", not two.
+     */
+    protected function serializeMoneyReceivedForForm(MoneyReceived $moneyReceived): array
+    {
+        $type = $moneyReceived->getType();
+
+        return [
+            'id' => $moneyReceived->id,
+            'receiving_date' => $moneyReceived->getReceivingDate(),
+            'partner_type' => $moneyReceived->getPartnerType(),
+            'customer_id' => $moneyReceived->getPartnerId(),
+            'customer_name' => $moneyReceived->getPartnerName(),
+            'currency' => $moneyReceived->getCurrency(),
+            'receiving_currency' => $moneyReceived->getReceivingCurrency(),
+            'type' => $type,
+            'transaction_type' => $moneyReceived->getTransactionType(),
+            'user_comment' => $moneyReceived->getUserComment(),
+            'received_amount' => $moneyReceived->getReceivedAmount(),
+            'exchange_rate' => $moneyReceived->getExchangeRate(),
+            'amount_in_invoice_currency' => $moneyReceived->getAmountInInvoiceCurrency(),
+            'has_unapplied_or_down_payment' => (bool) $moneyReceived->has_unapplied_or_down_payment,
+            'contract_id' => $moneyReceived->getContractId(),
+            'contract_name' => $moneyReceived->getContractName(),
+            'cash_in_safe' => $moneyReceived->isCashInSafe() ? [
+                'receiving_branch_id' => $moneyReceived->getCashInSafeReceivingBranchId(),
+                'receipt_number' => $moneyReceived->getCashInSafeReceiptNumber(),
+            ] : null,
+            'cash_in_bank' => $moneyReceived->isCashInBank() ? [
+                'receiving_bank_id' => $moneyReceived->getCashInBankReceivingBankId(),
+                'account_type_id' => $moneyReceived->getCashInBankAccountTypeId(),
+                'account_number' => $moneyReceived->getCashInBankAccountNumber(),
+            ] : null,
+            'incoming_transfer' => $moneyReceived->isIncomingTransfer() ? [
+                'receiving_bank_id' => $moneyReceived->getIncomingTransferReceivingBankId(),
+                'account_type_id' => $moneyReceived->getIncomingTransferAccountTypeId(),
+                'account_number' => $moneyReceived->getIncomingTransferAccountNumber(),
+            ] : null,
+            'cheque' => $moneyReceived->isCheque() ? [
+                'drawee_bank_id' => $moneyReceived->getChequeDraweeBankId(),
+                'due_date' => $moneyReceived->getChequeDueDate(),
+                'cheque_number' => $moneyReceived->getChequeNumber(),
+                'branch_id' => $moneyReceived->getCashInSafeReceivingBranchId(),
+            ] : null,
+        ];
+    }
+
+    /**
+     * Down Payment edit — mirrors editDownPayment()'s counterpart for the
+     * plain form. Sales orders (and their pre-filled amounts) are fetched
+     * client-side from the same getSalesOrdersForContract endpoint,
+     * passing this record's id as down_payment_id — same "one source of
+     * truth" reasoning as the plain form's invoices.
+     */
+    protected function editDownPayment(Company $company, MoneyReceived $moneyReceived)
+    {
+        $selectedBranches = Branch::getBranchesForCurrentCompany($company->id);
+        $selectedBanks = Bank::pluck('view_name', 'id');
+        $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->with('bank:id,view_name')->get(['id', 'type', 'name', 'bank_id']);
+        $accountTypes = AccountType::onlyCashAccounts()->get(['id', 'name_en', 'name_ar']);
+        $customers = Partner::orderBy('name')->where('is_customer', 1)->where('company_id', $company->id)
+            ->when($moneyReceived->isDownPaymentOverContract(), fn ($q) => $q->onlyThatHaveCustomerContracts())
+            ->pluck('name', 'id');
+        $warningMessage = count($moneyReceived->settlementsForDownPaymentThatComeFromMoneyModel) ? __('Warning, please take care incase you changed the received amount, the invoices settled using this down payment will be deleted') : null;
+
+        return Inertia::render('MoneyReceived/DownPaymentForm', [
+            'company' => ['id' => $company->id, 'name' => $company->getName(), 'mainFunctionalCurrency' => $company->getMainFunctionalCurrency()],
+            'model' => $this->serializeDownPaymentForForm($moneyReceived),
+            'warningMessage' => $warningMessage,
+            'customers' => collect($customers)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'moneyTypes' => $this->moneyTypeOptions(),
+            'currencies' => collect(getBanksCurrencies())->map(fn ($label, $code) => ['code' => $code, 'label' => strtoupper($label)])->values(),
+            'selectedBranches' => collect($selectedBranches)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'selectedBanks' => collect($selectedBanks)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'financialInstitutionBanks' => $financialInstitutionBanks->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()]),
+            'accountTypes' => $accountTypes->map(fn ($a) => ['id' => $a->id, 'name' => $a->getName()]),
+            'urls' => array_merge($this->downPaymentFormUrls($company), [
+                'update' => route('update.money.receive', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
+            ]),
+        ]);
+    }
+
+    protected function serializeDownPaymentForForm(MoneyReceived $moneyReceived): array
+    {
+        $type = $moneyReceived->getType();
+
+        return [
+            'id' => $moneyReceived->id,
+            'receiving_date' => $moneyReceived->getReceivingDate(),
+            'down_payment_type' => $moneyReceived->getDownPaymentType(),
+            'currency' => $moneyReceived->getCurrency(),
+            'customer_id' => $moneyReceived->getPartnerId(),
+            'customer_name' => $moneyReceived->getPartnerName(),
+            'receiving_currency' => $moneyReceived->getReceivingCurrency(),
+            'type' => $type,
+            'user_comment' => $moneyReceived->getUserComment(),
+            'received_amount' => $moneyReceived->getReceivedAmount(),
+            'exchange_rate' => $moneyReceived->getExchangeRate(),
+            'amount_in_invoice_currency' => $moneyReceived->getAmountInInvoiceCurrency(),
+            'contract_id' => $moneyReceived->getContractId(),
+            'contract_name' => $moneyReceived->getContractName(),
+            'cash_in_safe' => $moneyReceived->isCashInSafe() ? [
+                'receiving_branch_id' => $moneyReceived->getCashInSafeReceivingBranchId(),
+                'receipt_number' => $moneyReceived->getCashInSafeReceiptNumber(),
+            ] : null,
+            'cash_in_bank' => $moneyReceived->isCashInBank() ? [
+                'receiving_bank_id' => $moneyReceived->getCashInBankReceivingBankId(),
+                'account_type_id' => $moneyReceived->getCashInBankAccountTypeId(),
+                'account_number' => $moneyReceived->getCashInBankAccountNumber(),
+            ] : null,
+            'incoming_transfer' => $moneyReceived->isIncomingTransfer() ? [
+                'receiving_bank_id' => $moneyReceived->getIncomingTransferReceivingBankId(),
+                'account_type_id' => $moneyReceived->getIncomingTransferAccountTypeId(),
+                'account_number' => $moneyReceived->getIncomingTransferAccountNumber(),
+            ] : null,
+            'cheque' => $moneyReceived->isCheque() ? [
+                'drawee_bank_id' => $moneyReceived->getChequeDraweeBankId(),
+                'due_date' => $moneyReceived->getChequeDueDate(),
+                'cheque_number' => $moneyReceived->getChequeNumber(),
+                'branch_id' => $moneyReceived->getCashInSafeReceivingBranchId(),
+            ] : null,
+        ];
+    }
+
     public function update(Company $company, StoreMoneyReceivedRequest $request, moneyReceived $moneyReceived)
     {
         
@@ -638,9 +1037,8 @@ class MoneyReceivedController
         }
         $activeTab = $newType;
 
-        return response()->json([
-           'redirectTo'=>route('view.money.receive', ['company'=>$company->id,'active'=>$activeTab])
-        ]);
+        return redirect()->route('view.money.receive', ['company' => $company->id, 'active' => $activeTab])
+            ->with('success', __('Money Received Has Been Updated Successfully'));
     }
     
     public function destroy(Company $company, MoneyReceived $moneyReceived, DeleteMoneyReceivedRequest $request)
@@ -703,14 +1101,8 @@ class MoneyReceivedController
                 
             }
         }
-        if ($request->ajax()) {
-            return response()->json([
-                'status'=>true ,
-                'msg'=>__('Good'),
-                'pageLink'=>route('view.money.receive', ['company'=>$company->id,'active'=>MoneyReceived::CHEQUE_UNDER_COLLECTION])
-            ]);
-        }
-        return redirect()->route('view.money.receive', ['company'=>$company->id,'active'=>MoneyReceived::CHEQUE_UNDER_COLLECTION]);
+        return redirect()->route('view.money.receive', ['company'=>$company->id,'active'=>MoneyReceived::CHEQUE_UNDER_COLLECTION])
+            ->with('success', __('Cheques Sent To Collection Successfully'));
         
     }
     /**
@@ -787,12 +1179,6 @@ class MoneyReceivedController
                     
                 }
             }
-        }
-        if ($request->ajax()) {
-            return response()->json([
-                'status'=>true ,
-                'redirectTo'=>route('view.money.receive', ['company'=>$company->id,'active'=>MoneyReceived::CHEQUE_COLLECTED])
-            ]);
         }
         return redirect()->route('view.money.receive', ['company'=>$company->id,'active'=>MoneyReceived::CHEQUE_COLLECTED])->with('success', __('Cheque Is Returned To Safe'));
     }
@@ -927,7 +1313,7 @@ class MoneyReceivedController
         return response()->json([
             'status'=>true ,
             'amount'=>$accountNumberModel ? $accountNumberModel->getAmount($currencyName, $accountNumber, $financialInstitutionId, $company->id) : 0 ,
-            'interest_rate'=>($accountNumberModel && method_exists($accountNumberModel, 'getInterestRate')) ? $accountNumberModel->getInterestRate() : 0,
+       //     'interest_rate'=>$accountNumberModel ? $accountNumberModel->getInterestRate() : 0,
             'currencyName'=>$currencyName
         ]);
     }
@@ -1033,7 +1419,7 @@ class MoneyReceivedController
         $type =$request->get('type') ;
         $partners = [];
         if ($type == 'over_contract') {
-            $partners=  Partner::has('contracts')->where('is_customer', 1)->orderBy('name')
+            $partners=  Partner::onlyThatHaveCustomerContracts()->where('is_customer', 1)->orderBy('name')
                                     ->where('company_id', $company->id)->pluck('id', 'name');
         } elseif ($type == 'general') {
             $partners =  Partner::where('is_customer', 1)->orderBy('name')

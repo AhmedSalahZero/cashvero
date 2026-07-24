@@ -171,9 +171,6 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property-read \Illuminate\Notifications\DatabaseNotificationCollection<int, \Illuminate\Notifications\DatabaseNotification> $notifications
  * @property-read int|null $notifications_count
  * @property-read bool|null $notifications_exists
- * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\OdooExpense> $odooApprovedExpenses
- * @property-read int|null $odoo_approved_expenses_count
- * @property-read bool|null $odoo_approved_expenses_exists
  * @property-read \App\OdooSetting|null $odooSetting
  * @property-read \App\Models\OpeningBalance|null $openingBalance
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Partner> $otherPartners
@@ -643,7 +640,7 @@ class Company extends Model implements HasMedia
 		})
 		->with([
 			'partner:id,name',
-			'outgoingTransfer.deliveryBank.bank:id,view_name',
+			'outgoingTransfer.deliveryBank.bank:id,view_name,name_en,name_ar',
 			'cashExpenseCategoryName:id,name,cash_expense_category_id',
 			'cashExpenseCategoryName.cashExpenseCategory:id,name',
 		])
@@ -693,6 +690,7 @@ class Company extends Model implements HasMedia
 		->with([
 			'partner:id,name',
 			'payableCheque:id,cash_expense_id,money_payment_id,status,cheque_number,delivery_bank_id,account_type,account_number,due_date',
+			'payableCheque.deliveryBank.bank:id,view_name,name_en,name_ar',
 			'cashExpenseCategoryName:id,name,cash_expense_category_id',
 			'cashExpenseCategoryName.cashExpenseCategory:id,name',
 		])
@@ -1553,11 +1551,6 @@ class Company extends Model implements HasMedia
         DB::table('cash_projections')
         ->where('cashflow_report_id', '=', 0)->where('company_id', $this->id)->delete();
     }
-    public function odooApprovedExpenses():HasMany
-    {
-        return $this->hasMany(OdooExpense::class, 'company_id', 'id');
-    }
-   
     public function getIntegrationStartDate():?string
     {
         return $this->odoo_integration_start_date?:'2025-01-01';

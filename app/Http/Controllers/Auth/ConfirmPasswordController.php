@@ -21,6 +21,17 @@ class ConfirmPasswordController extends Controller
 
     use ConfirmsPasswords;
 
+    /**
+     * ✅ MIGRATED to Inertia/Vue — renders resources/js/Pages/Auth/
+     * ConfirmPassword.vue. confirm() (the rest of this trait) is
+     * UNCHANGED.
+     */
+    public function showConfirmForm()
+    {
+        return \Inertia\Inertia::render('Auth/ConfirmPassword', [
+            'passwordConfirmUrl' => route('password.confirm'),
+        ]);
+    }
   
     public function redirectTo()
     {

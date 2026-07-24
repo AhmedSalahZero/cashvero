@@ -1,0 +1,910 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ══════════════════════════════════════════════════════════════════
+   CASHVERO — Global Theme & Component Stylesheet
+   ─────────────────────────────────────────────────────────────────
+   Concept     : "Digital Vault" — treasury, security, cash in motion
+   Theme       : Dark-first (default), Light mode via [data-theme="light"]
+   Dark bg     : #0A1930 — deep navy-blue (not charcoal, not green)
+   Cards       : #102A4C  (border: #1E3A5F)
+   Accents     : Emerald #1D9A6C · Copper #B5651D · Sky-Cyan #38BDF8
+   ─────────────────────────────────────────────────────────────────
+   NUMBER COLOR RULE (mandatory across all modules & pages)
+     --cvr-num          standard monetary amounts, table cells
+     --cvr-num-blue     KPI headlines, ratios, dashboard figures
+     --cvr-num-green    positive deltas, settled, collected, favorable
+     --cvr-num-amber    pending, at-risk, near-due, needs attention
+     --cvr-num-red      overdue, negative deltas, critical, rejected
+   ─────────────────────────────────────────────────────────────────
+   Prefix      : --cvr-   (cashvero specific — avoids collision with
+                 --cv- already used in Vero Cattle Management)
+   Bilingual   : Arabic (RTL) + English (LTR) — use logical properties
+                 (margin-inline-start, not margin-left, etc.)
+   Stack       : Laravel 12 · Vue 3 · Inertia.js · Tailwind CSS
+══════════════════════════════════════════════════════════════════ */
+
+
+/* ══════════════════════════════════════════════════════════════════
+   1. DESIGN TOKENS
+══════════════════════════════════════════════════════════════════ */
+
+:root {
+    /* ── Page & Surface (Dark Default) ───────────────────────────── */
+    --cvr-bg:              #0A1930;
+    --cvr-bg-surface:      #071528;
+    --cvr-bg-card:         #102A4C;
+    --cvr-bg-card-alt:     #143355;
+    --cvr-bg-input:        #143355;
+    --cvr-bg-modal:        #102A4C;
+    --cvr-bg-hover:        #163C63;
+
+    /* ── Navigation — unified deep navy tone (top bar + sidebar) ──── */
+    --cvr-nav-bg:               #071528;
+    --cvr-nav-bg-deep:          #040D1A;
+    --cvr-nav-bg-hover:         rgba(56, 189, 248, 0.14);
+    --cvr-nav-active-bg:        rgba(29, 154, 108, 0.14);
+    --cvr-nav-active-border:    #2FC48A;
+    --cvr-nav-text:              rgba(226, 232, 240, 0.62);
+    --cvr-nav-text-active:       #FFFFFF;
+    --cvr-nav-text-muted:        rgba(226, 232, 240, 0.32);
+    --cvr-nav-icon:              rgba(226, 232, 240, 0.42);
+    --cvr-nav-divider:           rgba(255, 255, 255, 0.07);
+    /* Sidebar hierarchy — main section headers vs sub-items need to
+       read as clearly different weights of importance */
+    --cvr-nav-section-text:      #38BDF8;
+    --cvr-nav-section-text-hover: #7DD3FC;
+    --cvr-nav-sub-text:          rgba(226, 232, 240, 0.88);
+    --cvr-nav-sub-text-hover:    #FFFFFF;
+
+    /* ── Borders ──────────────────────────────────────────────────── */
+    --cvr-border:          rgba(56, 189, 248, 0.22);;
+    --cvr-border-md:       #2A4A72;
+    --cvr-border-focus:    #2FC48A;
+    --cvr-border-input:    #1E3A5F;
+
+    /* ── Text ─────────────────────────────────────────────────────── */
+    --cvr-text-primary:    #E7EDF3;
+    --cvr-text-secondary:  #9FB0C0;
+    --cvr-text-muted:      #5B6B7A;
+    --cvr-text-placeholder:#3A4552;
+    --cvr-text-on-brand:   #FFFFFF;
+    --cvr-text-green:      #1D9A6C;
+    --cvr-text-blue:       #38BDF8;
+
+    /* ── Table Header (dark mode: unchanged from before — same as
+       the general surface/secondary-text tokens) ────────────────── */
+    --cvr-table-head-bg:   var(--cvr-bg-surface);
+    --cvr-table-head-text: var(--cvr-text-secondary);
+
+    /* ── Cash Flow Report sub-rows (expanded breakdown rows) ────────
+       Dark mode: light blue tint. Light mode override below flips
+       this to a light green tint. */
+    --cvr-subrow-bg:       rgba(56, 191, 248, 0.267);
+    --cvr-subrow-bg-hover: rgba(56, 189, 248, 0.16);
+
+    /* ── Primary Accent — Emerald (cash / growth) ────────────────── */
+    --cvr-green:           #1D9A6C;
+    --cvr-green-bright:    #2FC48A;
+    --cvr-amber-bright:    #F88F00;
+    --cvr-green-hover:     #17835A;
+    --cvr-green-deep:      #0E3D2A;
+    --cvr-green-dim:       rgba(47, 196, 138, 0.10);
+    --cvr-green-border:    rgba(47, 196, 138, 0.22);
+
+    /* ── Secondary Accent — Copper (vault / CTAs) ────────────────── */
+    --cvr-copper:          #B5651D;
+    --cvr-copper-bright:   #D97F2E;
+    --cvr-copper-hover:    #965216;
+    --cvr-copper-dim:      rgba(217, 127, 46, 0.12);
+    --cvr-copper-border:   rgba(217, 127, 46, 0.24);
+    --cvr-copper-text:     #E8A25C;
+
+    /* ── Tertiary Accent — Sky-Cyan (data / metrics) ─────────────── */
+    --cvr-blue:            #38BDF8;
+    --cvr-blue-hover:      #229FD8;
+    --cvr-blue-dim:        rgba(56, 189, 248, 0.10);
+    --cvr-blue-border:     rgba(56, 189, 248, 0.22);
+    --cvr-blue-text:       #63CBFA;
+
+    /* ── Semantic Colors ──────────────────────────────────────────── */
+    --cvr-success:         #2FC48A;
+    --cvr-success-bg:      rgba(47, 196, 138, 0.10);
+    --cvr-success-border:  rgba(47, 196, 138, 0.22);
+    --cvr-success-text:    #5FDBAA;
+
+    --cvr-warning:         #D9A02E;
+    --cvr-warning-bg:      rgba(217, 160, 46, 0.10);
+    --cvr-warning-border:  rgba(217, 160, 46, 0.22);
+    --cvr-warning-text:    #E8BC60;
+
+    --cvr-danger:          #E4574C;
+    --cvr-danger-bg:       rgba(228, 87, 76, 0.10);
+    --cvr-danger-border:   rgba(228, 87, 76, 0.22);
+    --cvr-danger-text:     #F0847A;
+
+    --cvr-info:            #38BDF8;
+    --cvr-info-bg:         rgba(56, 189, 248, 0.10);
+    --cvr-info-border:     rgba(56, 189, 248, 0.22);
+    --cvr-info-text:       #63CBFA;
+
+    /* ── Number Color Rule (mandatory — see header note) ─────────── */
+    --cvr-num:             #E7EDF3;
+    --cvr-num-blue:        #63CBFA;
+    --cvr-num-green:       #5FDBAA;
+    --cvr-num-amber:       #E8BC60;
+    --cvr-num-red:         #F0847A;
+
+    /* ── Sidebar ──────────────────────────────────────────────────── */
+    --cvr-sidebar-text:          rgba(226, 232, 240, 0.68);
+    --cvr-sidebar-text-muted:    rgba(226, 232, 240, 0.30);
+    --cvr-sidebar-active-bg:     rgba(47, 196, 138, 0.10);
+    --cvr-sidebar-active-border: #2FC48A;
+    --cvr-sidebar-hover-bg:      rgba(255, 255, 255, 0.04);
+    --cvr-sidebar-icon:          rgba(226, 232, 240, 0.40);
+
+    /* ── Shadows ──────────────────────────────────────────────────── */
+    --cvr-shadow-sm:       0 1px 4px rgba(0, 0, 0, 0.35);
+    --cvr-shadow:          0 4px 18px rgba(0, 0, 0, 0.40);
+    --cvr-shadow-md:       0 8px 32px rgba(0, 0, 0, 0.50);
+    --cvr-shadow-focus:    0 0 0 3px rgba(47, 196, 138, 0.20);
+    --cvr-shadow-copper:   0 3px 14px rgba(217, 127, 46, 0.28);
+    --cvr-shadow-blue:     0 3px 14px rgba(56, 189, 248, 0.22);
+
+    /* ── Radius ───────────────────────────────────────────────────── */
+    --cvr-radius-sm:       6px;
+    --cvr-radius:          9px;
+    --cvr-radius-md:       12px;
+    --cvr-radius-lg:       16px;
+    --cvr-radius-xl:       20px;
+
+    /* ── Transitions (specific props only — never 'all') ─────────── */
+    --cvr-transition:      color 0.15s ease,
+                           background-color 0.15s ease,
+                           border-color 0.15s ease,
+                           box-shadow 0.15s ease,
+                           opacity 0.15s ease;
+    --cvr-transition-slow: color 0.25s ease,
+                           background-color 0.25s ease,
+                           border-color 0.25s ease,
+                           box-shadow 0.25s ease;
+
+    /* ── Layout ───────────────────────────────────────────────────── */
+    --cvr-sidebar-width:     240px;
+    --cvr-sidebar-collapsed: 64px;
+    --cvr-header-height:     60px;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   LIGHT MODE  —  [data-theme="light"] on <html>
+   Toggle via: document.documentElement.setAttribute('data-theme','light')
+══════════════════════════════════════════════════════════════════ */
+
+[data-theme="light"] {
+    --cvr-bg:              #EEF3F7;
+    --cvr-bg-surface:      #0E3D2A;
+    --cvr-bg-card:         #FFFFFF;
+    --cvr-bg-card-alt:     #EAF2F8;
+    --cvr-bg-input:        #FFFFFF;
+    --cvr-bg-modal:        #FFFFFF;
+    --cvr-bg-hover:        #E3F1EC;
+
+    --cvr-nav-bg:               #0E3D2A;
+    --cvr-nav-bg-deep:          #0A2E1F;
+    --cvr-nav-bg-hover:         rgba(255, 200, 45, 0.16);
+    --cvr-nav-active-bg:        rgba(255, 255, 255, 0.16);
+    --cvr-nav-active-border:    #FFC82D;
+    --cvr-nav-text:              rgba(255, 255, 255, 0.78);
+    --cvr-nav-text-active:       #FFFFFF;
+    --cvr-nav-text-muted:        rgba(255, 255, 255, 0.42);
+    --cvr-nav-icon:              rgba(255, 255, 255, 0.62);
+    --cvr-nav-divider:           rgba(255, 255, 255, 0.12);
+    /* Sidebar hierarchy — cyan for main sections (consistent meaning
+       across both themes, distinct from gold's existing role as the
+       active-item indicator), white for subs */
+    --cvr-nav-section-text:      #38BDF8;
+    --cvr-nav-section-text-hover: #7DD3FC;
+    --cvr-nav-sub-text:          rgba(255, 255, 255, 0.88);
+    --cvr-nav-sub-text-hover:    #FFFFFF;
+
+    --cvr-border:          rgba(15, 157, 93, 0.274);
+    --cvr-border-md:       #B8C8D6;
+    --cvr-border-focus:    #1487C4;
+    --cvr-border-input:    #D2DEE8;
+
+    --cvr-text-primary:    #0F2233;
+    --cvr-text-secondary:  #3E5568;
+    --cvr-text-muted:      #7995A8;
+    --cvr-text-placeholder:#A9C0CE;
+    --cvr-text-on-brand:   #FFFFFF;
+
+    /* ── Table Header (light mode: green background, white text,
+       per explicit request — every table header uses this) ──────── */
+    --cvr-table-head-bg:   #0F9D5C;
+    --cvr-table-head-text: #FFFFFF;
+
+    /* ── Cash Flow Report sub-rows — light green tint in light mode ── */
+    --cvr-subrow-bg:       rgba(15, 157, 92, 0.10);
+    --cvr-subrow-bg-hover: rgba(15, 157, 92, 0.18);
+
+    --cvr-green:           #0F9D5C;
+    --cvr-green-bright:    #12B56C;
+    --cvr-green-hover:     #0C7F4A;
+    --cvr-green-deep:      #DFF7EA;
+    --cvr-green-dim:       rgba(15, 157, 92, 0.10);
+    --cvr-green-border:    rgba(15, 157, 92, 0.26);
+
+    --cvr-copper:          #D2691E;
+    --cvr-copper-bright:   #E67E22;
+    --cvr-copper-hover:    #B8560F;
+    --cvr-copper-dim:      rgba(210, 105, 30, 0.12);
+    --cvr-copper-border:   rgba(210, 105, 30, 0.28);
+    --cvr-copper-text:     #B8560F;
+
+    --cvr-blue:            #1487C4;
+    --cvr-blue-hover:      #0F6FA3;
+    --cvr-blue-dim:        rgba(20, 135, 196, 0.10);
+    --cvr-blue-border:     rgba(20, 135, 196, 0.26);
+    --cvr-blue-text:       #0F6FA3;
+
+    --cvr-success:         #0F9D5C;
+    --cvr-success-bg:      rgba(15, 157, 92, 0.10);
+    --cvr-success-border:  rgba(15, 157, 92, 0.26);
+    --cvr-success-text:    #0C7F4A;
+
+    --cvr-warning:         #D68910;
+    --cvr-warning-bg:      rgba(214, 137, 16, 0.10);
+    --cvr-warning-border:  rgba(214, 137, 16, 0.26);
+    --cvr-warning-text:    #A8690B;
+
+    --cvr-danger:          #D9382C;
+    --cvr-danger-bg:       rgba(217, 56, 44, 0.10);
+    --cvr-danger-border:   rgba(217, 56, 44, 0.26);
+    --cvr-danger-text:     #B32C21;
+
+    --cvr-info:            #6C3FA8;
+    --cvr-info-bg:         rgba(108, 63, 168, 0.10);
+    --cvr-info-border:     rgba(108, 63, 168, 0.24);
+    --cvr-info-text:       #5A3489;
+
+    --cvr-num:             #0F2233;
+    --cvr-num-blue:        #0F6FA3;
+    --cvr-num-green:       #0C7F4A;
+    --cvr-num-amber:       #A8690B;
+    --cvr-num-red:         #B32C21;
+
+    --cvr-sidebar-text:          rgba(255, 255, 255, 0.82);
+    --cvr-sidebar-text-muted:    rgba(255, 255, 255, 0.40);
+    --cvr-sidebar-active-bg:     rgba(255, 255, 255, 0.16);
+    --cvr-sidebar-active-border: #FFC82D;
+    --cvr-sidebar-hover-bg:      rgba(255, 255, 255, 0.10);
+    --cvr-sidebar-icon:          rgba(255, 255, 255, 0.62);
+
+    --cvr-shadow-sm:       0 1px 3px rgba(15, 34, 51, 0.07);
+    --cvr-shadow:          0 4px 16px rgba(15, 34, 51, 0.09);
+    --cvr-shadow-md:       0 8px 28px rgba(15, 34, 51, 0.12);
+    --cvr-shadow-focus:    0 0 0 3px rgba(15, 157, 92, 0.18);
+    --cvr-shadow-copper:   0 3px 12px rgba(210, 105, 30, 0.22);
+    --cvr-shadow-blue:     0 3px 12px rgba(20, 135, 196, 0.20);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   2. GLOBAL BASE STYLES
+══════════════════════════════════════════════════════════════════ */
+
+body {
+    background-color: var(--cvr-bg);
+    color: var(--cvr-text-primary);
+    transition: var(--cvr-transition-slow);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   3. COMPONENT UTILITY CLASSES  (use these in ALL .vue files)
+══════════════════════════════════════════════════════════════════ */
+
+/* ── Backgrounds ──────────────────────────────────────────────── */
+.cvr-bg          { background-color: var(--cvr-bg); }
+.cvr-surface-bg  { background-color: var(--cvr-bg-surface); }
+.cvr-card-bg     { background-color: var(--cvr-bg-card); }
+.cvr-modal-bg    { background-color: var(--cvr-bg-modal); }
+.cvr-hover-bg:hover { background-color: var(--cvr-bg-hover); }
+
+/* ── Borders ──────────────────────────────────────────────────── */
+.cvr-border      { border-color: var(--cvr-border) !important; }
+
+/* ── Text ─────────────────────────────────────────────────────── */
+.cvr-text-primary   { color: var(--cvr-text-primary); }
+.cvr-text-secondary { color: var(--cvr-text-secondary); }
+.cvr-text-muted     { color: var(--cvr-text-muted); }
+
+/* ── Number Color Rule — use across every table/report/dashboard ─ */
+.cvr-num        { color: var(--cvr-num); font-variant-numeric: tabular-nums; }
+.cvr-num-blue   { color: var(--cvr-num-blue); font-variant-numeric: tabular-nums; }
+.cvr-num-green  { color: var(--cvr-num-green); font-variant-numeric: tabular-nums; }
+.cvr-num-amber  { color: var(--cvr-num-amber); font-variant-numeric: tabular-nums; }
+.cvr-num-red    { color: var(--cvr-num-red); font-variant-numeric: tabular-nums; }
+
+/* ── Inputs & Selects ─────────────────────────────────────────── */
+.cvr-input,
+.cvr-select {
+    background-color: var(--cvr-bg-input);
+    border: 1px solid var(--cvr-border-input);
+    color: var(--cvr-text-primary);
+    border-radius: var(--cvr-radius-sm);
+    transition: var(--cvr-transition);
+}
+.cvr-input:focus,
+.cvr-select:focus {
+    outline: none;
+    border-color: var(--cvr-border-focus);
+    box-shadow: var(--cvr-shadow-focus);
+}
+.cvr-input::placeholder { color: var(--cvr-text-placeholder); }
+
+/* ── Cards ────────────────────────────────────────────────────── */
+.cvr-card {
+    background-color: var(--cvr-bg-card);
+    border: 1px solid var(--cvr-border);
+    border-radius: var(--cvr-radius-md);
+    box-shadow: var(--cvr-shadow-sm);
+    padding: 1.25rem;
+    transition: var(--cvr-transition-slow);
+}
+.cvr-card:hover {
+    border-color: var(--cvr-green-border);
+    background-color: var(--cvr-bg-hover);
+}
+
+/* ── Tables ───────────────────────────────────────────────────── */
+.cvr-table-row {
+    border-bottom: 1px solid var(--cvr-border);
+    transition: var(--cvr-transition);
+}
+.cvr-table-row:hover { background-color: var(--cvr-bg-hover); }
+
+/* Expanded breakdown rows (e.g. Cash Flow Report sub-rows) — a
+   distinct tint from ordinary rows so drill-down detail is visually
+   separated from the main category rows above it. */
+.cvr-subrow {
+    background-color: var(--cvr-subrow-bg);
+    border-bottom: 1px solid var(--cvr-border);
+    transition: var(--cvr-transition);
+}
+.cvr-subrow:hover { background-color: var(--cvr-subrow-bg-hover); }
+
+/* Expandable child/sub-rows (drill-down detail under a parent row,
+   e.g. Aging's per-invoice rows under a customer) — a distinct
+   surface color, not just a faint opacity tweak, so the parent/child
+   relationship reads clearly at a glance in both themes. The sticky
+   variant is for the first (sticky-positioned) cell in a row, which
+   needs its own explicit background — a sticky element paints over
+   whatever scrolls beneath it, but only if it carries its own
+   background-color rather than inheriting the row's. */
+.cvr-sub-row { background-color: var(--cvr-bg-card-alt); }
+.cvr-sub-row-sticky { background-color: var(--cvr-bg-card-alt); }
+
+.cvr-table-head {
+    color: var(--cvr-table-head-text);
+    background-color: var(--cvr-table-head-bg);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+/* ── Avatar ───────────────────────────────────────────────────── */
+.cvr-avatar {
+    width: 2.25rem;
+    height: 2.25rem;
+    background: linear-gradient(135deg, var(--cvr-green), var(--cvr-blue));
+    border-radius: var(--cvr-radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+}
+
+/* ── Badges ───────────────────────────────────────────────────── */
+.cvr-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+}
+.cvr-badge-active   { background: var(--cvr-success-bg); color: var(--cvr-success-text); border: 1px solid var(--cvr-success-border); }
+.cvr-badge-inactive { background: rgba(120,132,144,0.12); color: var(--cvr-text-muted); border: 1px solid rgba(120,132,144,0.20); }
+.cvr-badge-pending  { background: var(--cvr-warning-bg); color: var(--cvr-warning-text); border: 1px solid var(--cvr-warning-border); }
+.cvr-badge-overdue  { background: var(--cvr-danger-bg); color: var(--cvr-danger-text); border: 1px solid var(--cvr-danger-border); }
+
+/* ── Account-type badges (bank accounts, facilities, deposits) ──── */
+.cvr-badge-current   { background: var(--cvr-success-bg); color: var(--cvr-success-text); border: 1px solid var(--cvr-success-border); }
+.cvr-badge-deposit   { background: var(--cvr-blue-dim); color: var(--cvr-blue-text); border: 1px solid var(--cvr-blue-border); }
+.cvr-badge-facility  { background: var(--cvr-copper-dim); color: var(--cvr-copper-text); border: 1px solid var(--cvr-copper-border); }
+.cvr-badge-info      { background: var(--cvr-info-bg); color: var(--cvr-info-text); border: 1px solid var(--cvr-info-border); }
+
+/* ── KPI Summary Cards ────────────────────────────────────────── */
+.cvr-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+@media (max-width: 720px) {
+    .cvr-kpi-row {
+        grid-template-columns: 1fr;
+    }
+}
+.cvr-kpi-card {
+    background-color: var(--cvr-bg-card);
+    border: 1px solid var(--cvr-border);
+    border-radius: var(--cvr-radius-md);
+    box-shadow: var(--cvr-shadow-sm);
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    transition: var(--cvr-transition-slow);
+}
+.cvr-kpi-card:hover {
+    border-color: var(--cvr-green-border);
+    box-shadow: var(--cvr-shadow);
+}
+.cvr-kpi-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--cvr-radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 1.1rem;
+}
+.cvr-kpi-icon-green  { background: var(--cvr-green-dim); color: var(--cvr-green-bright); }
+.cvr-kpi-icon-blue   { background: var(--cvr-blue-dim); color: var(--cvr-blue-text); }
+.cvr-kpi-icon-copper { background: var(--cvr-copper-dim); color: var(--cvr-copper-text); }
+.cvr-kpi-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--cvr-text-muted);
+}
+.cvr-kpi-value {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--cvr-text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Filter / Search Bar ──────────────────────────────────────── */
+.cvr-filter-pill {
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.4rem 0.9rem;
+    border-radius: var(--cvr-radius);
+    color: var(--cvr-text-secondary);
+    background: transparent;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: var(--cvr-transition);
+}
+.cvr-filter-pill-active {
+    background: var(--cvr-green-dim);
+    color: var(--cvr-green-bright);
+    border-color: var(--cvr-green-border);
+}
+.cvr-search-bar {
+    background-color: var(--cvr-bg-input);
+    border: 1px solid var(--cvr-border-input);
+    color: var(--cvr-text-primary);
+    border-radius: var(--cvr-radius);
+    transition: var(--cvr-transition);
+}
+.cvr-search-bar:focus-within {
+    border-color: var(--cvr-border-focus);
+    box-shadow: var(--cvr-shadow-focus);
+}
+.cvr-search-bar::placeholder { color: var(--cvr-text-placeholder); }
+
+/* ── Tags ─────────────────────────────────────────────────────── */
+.cvr-tag {
+    font-size: 0.65rem;
+    font-weight: 600;
+    background: var(--cvr-blue-dim);
+    color: var(--cvr-blue-text);
+    border: 1px solid var(--cvr-blue-border);
+    padding: 0.15rem 0.5rem;
+    border-radius: var(--cvr-radius-sm);
+}
+.cvr-tag-copper {
+    background: var(--cvr-copper-dim);
+    color: var(--cvr-copper-text);
+    border-color: var(--cvr-copper-border);
+}
+
+/* ── Buttons ──────────────────────────────────────────────────── */
+.cvr-btn-primary {
+    background-color: var(--cvr-green);
+    border: 1px solid var(--cvr-green-hover);
+    color: #fff;
+    border-radius: var(--cvr-radius-sm);
+    cursor: pointer;
+    transition: var(--cvr-transition);
+}
+.cvr-btn-primary:hover { background-color: var(--cvr-green-hover); }
+
+.cvr-btn-secondary {
+    background-color: var(--cvr-bg-card);
+    border: 1px solid var(--cvr-border);
+    color: var(--cvr-text-secondary);
+    border-radius: var(--cvr-radius-sm);
+    cursor: pointer;
+    transition: var(--cvr-transition);
+}
+.cvr-btn-secondary:hover { border-color: var(--cvr-green); color: var(--cvr-green-bright); }
+
+.cvr-btn-copper {
+    background-color: var(--cvr-copper);
+    border: 1px solid var(--cvr-copper-hover);
+    color: #fff;
+    border-radius: var(--cvr-radius-sm);
+    cursor: pointer;
+    transition: var(--cvr-transition);
+}
+.cvr-btn-copper:hover { background-color: var(--cvr-copper-hover); }
+
+.cvr-btn-danger {
+    background-color: transparent;
+    border: 1px solid var(--cvr-danger-border);
+    color: var(--cvr-danger-text);
+    border-radius: var(--cvr-radius-sm);
+    cursor: pointer;
+    transition: var(--cvr-transition);
+}
+.cvr-btn-danger:hover { background-color: var(--cvr-danger-bg); }
+
+/* ── Action Icon Buttons ──────────────────────────────────────── */
+.cvr-action-btn {
+    width: 1.875rem;
+    height: 1.875rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--cvr-radius-sm);
+    color: var(--cvr-text-muted);
+    background: transparent;
+    border: 1px solid transparent;
+    transition: var(--cvr-transition);
+    cursor: pointer;
+}
+.cvr-action-btn:hover {
+    color: var(--cvr-blue-text);
+    background: var(--cvr-blue-dim);
+    border-color: var(--cvr-blue-border);
+}
+.cvr-action-btn-danger:hover {
+    color: var(--cvr-danger-text);
+    background: var(--cvr-danger-bg);
+    border-color: var(--cvr-danger-border);
+}
+.cvr-action-btn-copper:hover {
+    color: var(--cvr-copper-text);
+    background: var(--cvr-copper-dim);
+    border-color: var(--cvr-copper-border);
+}
+
+/* ── Modals ───────────────────────────────────────────────────── */
+.cvr-modal {
+    background-color: var(--cvr-bg-modal);
+    border: 1px solid var(--cvr-border);
+    border-radius: var(--cvr-radius-lg);
+    box-shadow: var(--cvr-shadow-md);
+}
+.modal-enter-active, .modal-leave-active { transition: opacity 0.2s ease; }
+.modal-enter-from,   .modal-leave-to     { opacity: 0; }
+
+/* ── Dividers ─────────────────────────────────────────────────── */
+.cvr-divider { border-color: var(--cvr-border); }
+
+/* ── Form Field Grids (guaranteed — same fix pattern as .cvr-kpi-row) ─
+   Tailwind's `grid grid-cols-*` utilities have proven unreliable in
+   this project (same root cause as the KPI card bug). Use these
+   hand-authored classes for ANY multi-column form layout instead. */
+.cvr-form-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+.cvr-form-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+.cvr-form-grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+.cvr-form-grid-5 {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+/* Unequal ratio — roughly 8:2:2 out of 12, for rows where one field
+   (like a long bank name) needs much more room than its neighbors */
+.cvr-form-grid-8-2-2 {
+    display: grid;
+    grid-template-columns: 4fr 1fr 1fr;
+    gap: 1rem;
+}
+/* Unequal ratio — 6:2:2:2 out of 12, for rows with one wide field
+   (e.g. a bank name that can run long) followed by three narrower
+   date/number fields */
+.cvr-form-grid-6-2-2-2 {
+    display: grid;
+    grid-template-columns: 3fr 1fr 1fr 1fr;
+    gap: 1rem;
+}
+/* Unequal ratio — 8:4 out of 12, for a wide primary field beside one
+   narrower secondary field */
+.cvr-form-grid-8-4 {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1rem;
+}
+/* Unequal ratio — 7:3:2 out of 12 */
+.cvr-form-grid-7-3-2 {
+    display: grid;
+    grid-template-columns: 7fr 3fr 2fr;
+    gap: 1rem;
+}
+/* Unequal ratio — 6:3:6 out of 12 */
+.cvr-form-grid-6-3-3 {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 1rem;
+}
+/* Unequal ratio — 2:2:1:4:1:2 out of 12, for the Money Received /
+   Money Payment header row: Receiving Date, Partner Type, Invoice
+   Currency, Name (needs real room — customer/partner names run long),
+   Receive Currency, Money Type. Confirmed against the real original
+   CashVero screenshots, not guessed. */
+.cvr-form-grid-2-2-1-4-1-2 {
+    display: grid;
+    grid-template-columns: 2fr 2fr 1fr 4fr 1fr 2fr;
+    gap: 1rem;
+}
+/* Unequal ratio — 3:3:2:2:2 out of 12, for the Money Received /
+   Money Payment Settlement Information invoice row: Project Name,
+   Invoice Number, Invoice Date, Due Date, Invoice Amount. */
+.cvr-form-grid-3-3-2-2-2 {
+    display: grid;
+    grid-template-columns: 3fr 3fr 2fr 2fr 2fr;
+    gap: 1rem;
+}
+/* Unequal ratio — 2:2:2:4:2 out of 12, for the Down Payment Form
+   header row: Receiving Date, Down Payment Type, Contract Currency,
+   Customer Name (needs room), Receive Currency. */
+.cvr-form-grid-2-2-2-4-2 {
+    display: grid;
+    grid-template-columns: 2fr 2fr 2fr 4fr 2fr;
+    gap: 1rem;
+}
+/* Unequal ratio — 2:2:6:2 out of 12, same header row as above but for
+   General Down Payment, where Contract Currency is not rendered at
+   all (v-if, not v-show) so it must not reserve a grid track.
+   Customer/Supplier Name gets the freed-up room instead of being
+   squeezed into the old 2fr Contract Currency track. */
+.cvr-form-grid-2-2-6-2 {
+    display: grid;
+    grid-template-columns: 2fr 2fr 6fr 2fr;
+    gap: 1rem;
+}
+/* Unequal ratio — 4:5:2:1 out of 12, for the Money Payment Allocate
+   modal's row: Customer Name, Project Name (needs the most room —
+   contract names run long), Allocation Amount, Remove button. */
+.cvr-form-grid-4-5-2-1 {
+    display: grid;
+    grid-template-columns: 4fr 5fr 2fr 1fr;
+    gap: 1rem;
+}
+@media (max-width: 720px) {
+    .cvr-form-grid-2,
+    .cvr-form-grid-3,
+    .cvr-form-grid-4,
+    .cvr-form-grid-5,
+    .cvr-form-grid-8-2-2,
+    .cvr-form-grid-6-2-2-2,
+    .cvr-form-grid-8-4,
+    .cvr-form-grid-7-3-2,
+    .cvr-form-grid-6-3-3,
+    .cvr-form-grid-2-2-1-4-1-2,
+    .cvr-form-grid-3-3-2-2-2,
+    .cvr-form-grid-2-2-2-4-2,
+    .cvr-form-grid-2-2-6-2,
+    .cvr-form-grid-4-5-2-1 {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ── Form Labels — high-contrast on both themes ──────────────────
+   Dark mode: sky-cyan · Light mode: blue (both use the existing
+   --cvr-blue-text token, which is already tuned per-theme) */
+.cvr-form-label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--cvr-blue-text);
+    margin-bottom: 0.25rem;
+}
+
+/* ── Remove Row Button (repeaters) — clearly visible, not a subtle icon-only button ─ */
+.cvr-btn-remove-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #fff;
+    background-color: var(--cvr-danger);
+    border: 1px solid var(--cvr-danger);
+    padding: 0.35rem 0.75rem;
+    border-radius: var(--cvr-radius-sm);
+    cursor: pointer;
+    transition: var(--cvr-transition);
+}
+.cvr-btn-remove-row:hover {
+    background-color: #b8362c;
+}
+/* ── Dropdown Menu Items (for use with the Dropdown.vue component) ─ */
+.cvr-dropdown-item {
+    display: block;
+    color: var(--cvr-text-primary);
+    transition: var(--cvr-transition);
+}
+.cvr-dropdown-item:hover {
+    background-color: var(--cvr-bg-hover);
+    color: var(--cvr-green-bright);
+}
+/* ── Sidebar / Nav ────────────────────────────────────────────── */
+.cvr-nav-bg          { background-color: var(--cvr-nav-bg); }
+.cvr-nav-item        { color: var(--cvr-nav-text); transition: var(--cvr-transition); }
+.cvr-nav-item:hover  { background-color: var(--cvr-nav-bg-hover); color: var(--cvr-nav-text-active); }
+.cvr-nav-item-active {
+    background-color: var(--cvr-nav-active-bg);
+    border-inline-start: 2px solid var(--cvr-nav-active-border);
+    color: var(--cvr-nav-text-active);
+}
+/* Main section headers (Dashboard, Statements, Reports, ...) —
+   distinctly colored from sub-items so the hierarchy reads instantly */
+.cvr-nav-section-title {
+    color: var(--cvr-nav-section-text);
+    transition: var(--cvr-transition);
+}
+.cvr-nav-section-title:hover { color: var(--cvr-nav-section-text-hover); }
+/* Sub-items under each section */
+.cvr-nav-sub-item { color: var(--cvr-nav-sub-text); transition: var(--cvr-transition); }
+.cvr-nav-sub-item:hover {
+    background-color: var(--cvr-nav-bg-hover);
+    color: var(--cvr-nav-sub-text-hover);
+}
+.cvr-nav-sub-item.cvr-nav-item-active { color: var(--cvr-nav-text-active); }
+/* ══════════════════════════════════════════════════════════════════
+   DASHBOARD (Cash Status / LG & LC Status / Cash Forecast)
+   ─────────────────────────────────────────────────────────────────
+   Added for the Dashboard section's 3-tab rebuild. Follows the same
+   "guaranteed hand-authored grid" rule as .cvr-kpi-row / .cvr-form-
+   grid-* — Tailwind's grid utilities have proven unreliable in this
+   project more than once (see incident notes above), so any new
+   multi-column layout gets its own explicit class here rather than
+   reaching for `grid grid-cols-*` as a shortcut.
+══════════════════════════════════════════════════════════════════ */
+
+/* 4-equal-column KPI row — .cvr-kpi-row is fixed at 3 columns, but the
+   Dashboard's card rows (Cash & Banks/TD/CD/Total, and
+   Limit/Outstanding/Available/Interest) are genuinely 4 items wide. */
+.cvr-kpi-row-4 {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+}
+@media (max-width: 900px) {
+    .cvr-kpi-row-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+    .cvr-kpi-row-4 { grid-template-columns: 1fr; }
+}
+
+/* Dashboard tab bar (Cash Status / LG & LC Status / Cash Forecast) —
+   larger and bolder than the ordinary in-page .cvr-filter-pill tabs,
+   since these are top-level navigation between 3 full pages, not a
+   client-side content filter. */
+.cvr-dash-tab {
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 0.6rem 1.25rem;
+    border-radius: var(--cvr-radius-md);
+    border: 1px solid var(--cvr-border);
+    background-color: var(--cvr-bg-card);
+    color: var(--cvr-text-secondary);
+    transition: var(--cvr-transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.cvr-dash-tab:hover {
+    color: var(--cvr-text-primary);
+    border-color: var(--cvr-green-border);
+    background-color: var(--cvr-bg-hover);
+}
+.cvr-dash-tab-active {
+    background: linear-gradient(135deg, var(--cvr-green-dim), var(--cvr-blue-dim));
+    border-color: var(--cvr-green-border);
+    color: var(--cvr-text-primary);
+    box-shadow: var(--cvr-shadow-sm);
+}
+
+/* Chart card — a .cvr-card variant with a colored top accent bar,
+   used to frame every donut/line chart on the Dashboard so each
+   section (Cash Status, LG, LC, Forecast) reads as its own visual
+   block. The accent color is set inline per-instance via
+   `border-top-color` (green = cash/positive, blue = KPI/data, copper
+   = facility/vault, amber = at-risk/forecast) per the Number Color
+   Rule's existing meaning-based palette. */
+.cvr-chart-card {
+    background-color: var(--cvr-bg-card);
+    border: 1px solid var(--cvr-border);
+    border-top: 3px solid var(--cvr-green-bright);
+    border-radius: var(--cvr-radius-md);
+    box-shadow: var(--cvr-shadow-sm);
+    padding: 1rem 1.25rem 1.25rem;
+}
+
+/* Small mini-KPI strip inside a chart card (e.g. an overdraft type's
+   Limit/Outstanding/Room/Interest, shown compact above its own
+   charts) — distinct from the page-level .cvr-kpi-card, which is
+   larger and carries an icon. */
+.cvr-mini-kpi {
+    background-color: var(--cvr-bg-card-alt);
+    border: 1px solid var(--cvr-border);
+    border-radius: var(--cvr-radius);
+    padding: 0.6rem 0.85rem;
+}
+.cvr-mini-kpi-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--cvr-text-muted);
+}
+.cvr-mini-kpi-value {
+    font-size: 1.05rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Section divider header used between major Dashboard blocks
+   (e.g. "Short Term Cash Facilities", "Fully Secured Overdraft") —
+   a left accent bar rather than a full card, so long pages don't turn
+   into a wall of identical boxes. */
+.cvr-section-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding-inline-start: 0.75rem;
+    border-inline-start: 3px solid var(--cvr-copper-bright);
+    margin-block: 1.5rem 1rem;
+}
+.cvr-section-heading h2, .cvr-section-heading h3 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--cvr-text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}

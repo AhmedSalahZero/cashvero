@@ -19,4 +19,20 @@ class ForgotPasswordController extends Controller
     */
 
     use SendsPasswordResetEmails;
+
+    /**
+     * ✅ MIGRATED to Inertia/Vue — renders resources/js/Pages/Auth/
+     * ForgotPassword.vue. sendResetLinkEmail() (the rest of this
+     * trait) is UNCHANGED — it already flashes `status` on success,
+     * which this page reads exactly the way Login.vue already reads
+     * `status`/`expiredLogin`.
+     */
+    public function showLinkRequestForm()
+    {
+        return \Inertia\Inertia::render('Auth/ForgotPassword', [
+            'status' => session('status'),
+            'passwordEmailUrl' => route('password.email'),
+            'loginUrl' => route('login'),
+        ]);
+    }
 }

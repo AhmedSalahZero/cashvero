@@ -22,43 +22,282 @@ use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
+/**
+ * OpeningBalancesController
+ * ------------------------------------------------------------------
+ * Manages the company's "Cash in Safe & Cheque Balance" opening
+ * balance — a SINGLETON per company (Company::openingBalance() is a
+ * HasOne, not HasMany), holding four repeaters: Cash In Safe entries,
+ * Cheques In Safe, Cheques Under Collection, and Payable Cheques.
+ * There is exactly one of these per company, ever — which is why the
+ * original app never had a separate list/index page; visiting the
+ * section always meant "show me the one record for this company,
+ * create it if it doesn't exist yet."
+ *
+ * `store()` / `update()`'s actual SAVE LOGIC is completely UNCHANGED —
+ * this is genuinely heavy, trigger-adjacent logic (cheque pivot data,
+ * bank-statement credit/debit handling via `handleCreditStatement()` /
+ * `handleFullDateAfterDateEdit()`) and this migration deliberately
+ * does not touch either method's business logic — only what BUILDS
+ * the request they receive changed, not what they do with it.
+ *
+ * ⚠️ ONE further fix was required after the form went live: both
+ * methods used to `return response()->json(['redirectTo'=>...])` —
+ * correct for the OLD jQuery-AJAX Blade form, which read that JSON
+ * and redirected itself client-side. Once the caller became a real
+ * Inertia page, that raw JSON response broke Inertia entirely
+ * ("All Inertia requests must receive a valid Inertia response").
+ * Fixed by returning a real `redirect()->route(...)->with('success', ...)`
+ * instead — same fix already applied everywhere else in this project
+ * (see roadmap §11 item 19); only the response TYPE changed, not the
+ * save logic above it.
+ *
+ * ── Frontend migration status (as of this file's last update) ──────
+ *   ✅ index() → REPURPOSED (see previous update) — read-only Vue
+ *      summary page.
+ *   ✅ manage() → MIGRATED to Vue + Inertia. Renders
+ *      resources/js/Pages/OpeningBalance/Form.vue instead of the
+ *      1,390-line Blade form. Submits the EXACT SAME field/array
+ *      names the untouched store()/update() already expect
+ *      (`cash-in-safe`, `cheque`, `cheque-under-collection`,
+ *      `payable_cheque`, each row keeping its `id` — 0 for new rows,
+ *      matching `StoreOpeningBalanceRequest`'s validation keys and
+ *      the update() diff-by-id logic exactly) — so store()/update()
+ *      needed ZERO changes.
+ *   ⚠️ Two deliberate, flagged simplifications (not silent drops —
+ *      confirmed acceptable trade-offs, see chat):
+ *      1. The original's "Drawee Bank" dropdown only listed banks
+ *         already used by this company's cheques, with a modal to
+ *         search all banks and inject a new one into the list (no
+ *         traceable server route for that modal's search in this
+ *         codebase). Replaced with the FULL bank list directly —
+ *         strictly more capable, no modal needed.
+ *      2. The "Account Number" dropdown (Cheque Under Collection /
+ *         Payable Cheque) was populated by client-side JS with no
+ *         traceable AJAX route in this codebase either. Replaced
+ *         with the same "fetch every account up front, filter
+ *         client-side by bank + account type" pattern already used
+ *         for Fully Secured Overdraft's CD/TD picker — every Current
+ *         Account, Fully Secured/Clean/Commercial-Paper/Assignment-
+ *         of-Contract Overdraft account for this company is fetched
+ *         once via `AccountType::onlyCashAccounts()` +
+ *         `getModelName()`, tagged with its account type and
+ *         financial institution, and Vue narrows it down as the user
+ *         picks a bank and account type.
+ *   ⚠️ store() / update() → save logic NOT touched; response type
+ *      fixed from raw JSON to a real redirect (see above), required
+ *      once the caller became Inertia.
+ */
 class OpeningBalancesController
 {
     use GeneralFunctions;
 
-    public function index(Company $company, Request $request)
+    /**
+     * NEW — read-only summary. Shows the current state of the
+     * company's opening balance (if one exists) with counts and full
+     * repeater contents, and a "Manage" button to the real form.
+     * Presentation only; does not create, update, or delete anything.
+     */
+    public function index(Company $company)
     {
-        return view('opening-balance.form', $this->getViewVars($company,$request) );
+        $openingBalance = $company->openingBalance;
+
+        if (!$openingBalance) {
+            return \Inertia\Inertia::render('OpeningBalance/Index', [
+                'company' => ['id' => $company->id],
+                'exists' => false,
+                'manageUrl' => route('opening-balance.manage', ['company' => $company->id]),
+            ]);
+        }
+
+        $cashInSafe = $openingBalance->cashInSafeStatements->map(fn (CashInSafeStatement $row) => [
+            'id' => $row->getId(),
+            'branch' => $row->branch?->getName(),
+            'currency' => $row->getCurrency(),
+            'amount' => (float) $row->getDebitAmount(),
+            'exchange_rate' => (float) $row->getExchangeRate(),
+        ])->values();
+
+        $chequesInSafe = $openingBalance->chequeInSafe->map(fn (MoneyReceived $row) => [
+            'id' => $row->getId(),
+            'customer' => $row->getCustomerName(),
+            'cheque_number' => $row->cheque?->getChequeNumber(),
+            'drawee_bank' => $row->cheque?->getDraweeBankName(),
+            'currency' => $row->getCurrency(),
+            'amount' => (float) $row->getReceivedAmount(),
+            'due_date' => $row->cheque?->getDueDateFormatted(),
+        ])->values();
+
+        $chequesUnderCollection = $openingBalance->chequeUnderCollections->map(fn (MoneyReceived $row) => [
+            'id' => $row->getId(),
+            'customer' => $row->getCustomerName(),
+            'cheque_number' => $row->cheque?->getChequeNumber(),
+            'drawee_bank' => $row->cheque?->getDraweeBankName(),
+            'currency' => $row->getCurrency(),
+            'amount' => (float) $row->getReceivedAmount(),
+            'due_date' => $row->cheque?->getDueDateFormatted(),
+            'deposit_date' => $row->cheque?->deposit_date,
+            'account_type' => $row->cheque?->getAccountTypeName(),
+            'account_number' => $row->cheque?->getAccountNumber(),
+        ])->values();
+
+        $payableCheques = $openingBalance->payableCheques->map(fn (MoneyPayment $row) => [
+            'id' => $row->getId(),
+            'supplier' => $row->getSupplierName(),
+            'cheque_number' => $row->payableCheque?->getChequeNumber(),
+            'delivery_bank' => $row->payableCheque?->getDeliveryBankName(),
+            'currency' => $row->getCurrency(),
+            'amount' => (float) $row->getPaidAmount(),
+            'due_date' => $row->payableCheque?->getDueDateFormatted(),
+            'account_type' => $row->payableCheque?->getAccountTypeName(),
+            'account_number' => $row->payableCheque?->getAccountNumber(),
+        ])->values();
+
+        return \Inertia\Inertia::render('OpeningBalance/Index', [
+            'company' => ['id' => $company->id],
+            'exists' => true,
+            'date' => $openingBalance->getDate(),
+            'manageUrl' => route('opening-balance.manage', ['company' => $company->id]),
+            'cashInSafe' => $cashInSafe,
+            'chequesInSafe' => $chequesInSafe,
+            'chequesUnderCollection' => $chequesUnderCollection,
+            'payableCheques' => $payableCheques,
+        ]);
     }
-	protected function getViewVars(Company $company, Request $request):array 
-	{
-		$financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)
+
+    /**
+     * MIGRATED — renders the real create/edit form as Vue + Inertia.
+     * Gathers reference data (branches, customers, suppliers, banks,
+     * account types, and the "cash accounts" list used for the
+     * account-number cascading dropdown) plus the existing model (if
+     * any) flattened into plain arrays keyed exactly the way
+     * store()/update() already expect them back.
+     */
+    public function manage(Company $company, Request $request)
+    {
+        $model = $company->openingBalance;
+
+        $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)
             ->onlyBanks()
             ->join('banks', 'banks.id', '=', 'financial_institutions.bank_id')
             ->orderBy('banks.view_name')
             ->select('financial_institutions.*')
-            ->get();
+            ->get()
+            ->map(fn (FinancialInstitution $fi) => ['id' => $fi->id, 'name' => $fi->getName()])
+            ->values();
+
         $accountTypes = AccountType::onlyCashAccounts()->get();
-        $selectedBanks = MoneyReceived::getDrawlBanksForCurrentCompany($company->id) ;
-        $customers = Partner::where('company_id', $company->id)->where('is_customer', 1)->orderBy('name', 'asc')->get()->formattedForSelect(true, 'getId', 'getName');
-        $suppliers = Partner::where('company_id', $company->id)->where('is_supplier', 1)->orderBy('name', 'asc')->get()->formattedForSelect(true, 'getId', 'getName');
-        $selectedBranches =  Branch::getBranchesForCurrentCompany($company->id) ;
-        $branchCurrencies = Branch::where('company_id', $company->id)->pluck('currency', 'id');
-        $banks = Bank::pluck('view_name', 'id');
-		
-		return [
-            'company' => $company,
-            'model' => $company->openingBalance,
-            'selectedBanks' => $selectedBanks,
-            'banks' => $banks,
-            'customersFormatted' => $customers,
+
+        // "Cash accounts" for the Account Number cascading dropdown —
+        // see the docblock above for why this replaces the original's
+        // client-side-JS-populated select (no traceable route for it).
+        $cashAccounts = collect();
+        foreach ($accountTypes as $accountType) {
+            $modelClass = '\\App\\Models\\'.$accountType->getModelName();
+            if (!class_exists($modelClass)) {
+                continue;
+            }
+            foreach ($modelClass::where('company_id', $company->id)->get() as $row) {
+                if (!$row->account_number) {
+                    continue;
+                }
+                $cashAccounts->push([
+                    'account_type_id' => $accountType->id,
+                    'financial_institution_id' => $row->financial_institution_id,
+                    'account_number' => $row->account_number,
+                    'currency' => $row->currency,
+                ]);
+            }
+        }
+
+        // Full bank list — see docblock: replaces the original's
+        // "already-used banks + add-new modal" with the complete list.
+        $draweeBanks = Bank::orderBy('view_name')->get()->map(fn (Bank $bank) => [
+            'id' => $bank->id,
+            'name' => $bank->view_name,
+        ])->values();
+
+        $customers = Partner::where('company_id', $company->id)->where('is_customer', 1)->orderBy('name')
+            ->get()->map(fn (Partner $p) => ['id' => $p->id, 'name' => $p->getName()])->values();
+        $suppliers = Partner::where('company_id', $company->id)->where('is_supplier', 1)->orderBy('name')
+            ->get()->map(fn (Partner $p) => ['id' => $p->id, 'name' => $p->getName()])->values();
+
+        $branches = Branch::where('company_id', $company->id)->get()->map(fn (Branch $b) => [
+            'id' => $b->id,
+            'name' => $b->getName(),
+            'currency' => $b->currency,
+        ])->values();
+
+        $modelData = null;
+        if ($model) {
+            $modelData = [
+                'id' => $model->id,
+                'date' => $model->getDate(),
+                'cashInSafe' => $model->cashInSafeStatements->map(fn (CashInSafeStatement $row) => [
+                    'id' => $row->id,
+                    'received_branch_id' => $row->getBranchId(),
+                    'received_amount' => (float) $row->getDebitAmount(),
+                    'currency' => $row->getCurrency(),
+                    'exchange_rate' => (float) $row->getExchangeRate(),
+                ])->values(),
+                'cheque' => $model->chequeInSafe->map(fn (MoneyReceived $row) => [
+                    'id' => $row->id,
+                    'customer_id' => $row->getPartnerId(),
+                    'currency' => $row->getCurrency(),
+                    'due_date' => $row->getChequeDueDate(),
+                    'drawee_bank_id' => $row->cheque?->getDraweeBankId(),
+                    'received_amount' => (float) $row->getReceivedAmount(),
+                    'cheque_number' => $row->getChequeNumber(),
+                    'exchange_rate' => (float) $row->getExchangeRate(),
+                ])->values(),
+                'chequeUnderCollection' => $model->chequeUnderCollections->map(fn (MoneyReceived $row) => [
+                    'id' => $row->id,
+                    'customer_id' => $row->getCustomerId(),
+                    'currency' => $row->getCurrency(),
+                    'due_date' => $row->getChequeDueDate(),
+                    'drawee_bank_id' => $row->cheque?->getDraweeBankId(),
+                    'received_amount' => (float) $row->getReceivedAmount(),
+                    'cheque_number' => $row->getChequeNumber(),
+                    'exchange_rate' => (float) $row->getExchangeRate(),
+                    'deposit_date' => $row->getChequeDepositDate(),
+                    'drawl_bank_id' => $row->getChequeDrawlBankId(),
+                    'account_type' => $row->getChequeAccountType(),
+                    'account_number' => $row->getChequeAccountNumber(),
+                    'clearance_days' => $row->getChequeClearanceDays(),
+                ])->values(),
+                'payableCheque' => $model->payableCheques->map(fn (MoneyPayment $row) => [
+                    'id' => $row->id,
+                    'supplier_id' => $row->getSupplierId(),
+                    'currency' => $row->getCurrency(),
+                    'due_date' => $row->getPayableChequeDueDate(),
+                    'paid_amount' => (float) $row->getPaidAmount(),
+                    'cheque_number' => $row->getPayableChequeNumber(),
+                    'exchange_rate' => (float) $row->getExchangeRate(),
+                    'delivery_bank_id' => $row->getPayableChequePaymentBankId(),
+                    'account_type' => $row->getPayableChequeAccountType(),
+                    'account_number' => $row->getPayableChequeAccountNumber(),
+                ])->values(),
+            ];
+        }
+
+        return \Inertia\Inertia::render('OpeningBalance/Form', [
+            'company' => ['id' => $company->id],
+            'submitUrl' => $model
+                ? route('opening-balance.update', ['company' => $company->id, 'opening_balance' => $model->id])
+                : route('opening-balance.store', ['company' => $company->id]),
+            'backUrl' => route('opening-balance.index', ['company' => $company->id]),
+            'isEdit' => (bool) $model,
+            'model' => $modelData,
+            'currencies' => getCurrencies(),
+            'branches' => $branches,
+            'customers' => $customers,
+            'suppliers' => $suppliers,
             'financialInstitutionBanks' => $financialInstitutionBanks,
-            'accountTypes' => $accountTypes,
-            'suppliersFormatted'=>$suppliers,
-            'selectedBranches'=>$selectedBranches,
-            'branchCurrencies'=>$branchCurrencies,
-        ];
-	}
+            'draweeBanks' => $draweeBanks,
+            'accountTypes' => $accountTypes->map(fn (AccountType $t) => ['id' => $t->id, 'name' => $t->getName()])->values(),
+            'cashAccounts' => $cashAccounts->values(),
+        ]);
+    }
 
     public function store(StoreOpeningBalanceRequest $request, Company $company)
     {
@@ -202,16 +441,11 @@ class OpeningBalancesController
         
         
         
-        return response()->json([
-            'redirectTo'=>route('opening-balance.index', ['company'=>$company->id])
-        ]);
+        return redirect()
+            ->route('opening-balance.index', ['company' => $company->id])
+            ->with('success', __('Data Store Successfully'));
       
     }
-	
-	// public function editPayableChequesFromMoneyPaymentsPage(Company $company, StoreOpeningBalanceRequest $request, OpeningBalance $openingBalance)
-	// {
-	// 	return view('opening-balance.form', $this->getViewVars($company,$request) );
-	// }
 
     public function update(Company $company, StoreOpeningBalanceRequest $request, OpeningBalance $openingBalance)
     {
@@ -542,9 +776,9 @@ class OpeningBalancesController
                 $payableCheque->update(['updated_at'=>now()]);
             }
         }
-        return response()->json([
-           'redirectTo'=>route('opening-balance.index',['company'=>$company->id])
-        ]);
+        return redirect()
+            ->route('opening-balance.index', ['company' => $company->id])
+            ->with('success', __('Item Has Been Updated Successfully'));
         
     }
 }

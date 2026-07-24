@@ -416,9 +416,32 @@ class TimeOfDeposit extends Model implements IHasDebitCurrentAccountStatement
     {
         return $this->hasOne(CurrentAccountBankStatement::class, 'time_of_deposit_id', 'id')->where('is_debit', 1)->where('is_td_renewal', 1)->where('date', $date)->first();
     }
+    /**
+     * ⚠️ REAL BUG FIXED HERE (found and confirmed with the project
+     * owner during modernization — a renewed TD showed a negative
+     * interest amount).
+     *
+     * Root cause: this line used to call diffInDays() without forcing
+     * an absolute value. Under Carbon 2 (what this code was written
+     * against), diffInDays() always returned a positive day-count by
+     * default, regardless of argument order — so the fact that
+     * $renewalDate (the later date) is the base and $expiryDate (the
+     * earlier date) is the argument never mattered. Carbon 3 — which
+     * ships with Laravel 12, CashVero's current stack — changed that
+     * default to return a SIGNED value instead, so this exact same,
+     * otherwise-untouched line started returning a negative day-count,
+     * and therefore a negative interest amount.
+     *
+     * $renewal_date is always validated to be greater than
+     * $expiry_date (see StoreTdRenewalDateRequest's
+     * DateMustBeGreaterThanDate rule) — the day-count between them
+     * should never legitimately be negative. Forcing $absolute = true
+     * restores that guarantee explicitly, regardless of Carbon
+     * version or which date happens to be passed as the base.
+     */
     public function calculateInterestAmount(string $expiryDate, string $renewalDate, $newInterestRate)
     {
-        $diffBetweenTwoDatesInDays = Carbon::make($renewalDate)->diffInDays(Carbon::make($expiryDate));
+        $diffBetweenTwoDatesInDays = Carbon::make($renewalDate)->diffInDays(Carbon::make($expiryDate), true);
         $amount = $this->getAmount();
         return  $newInterestRate / 100 / 365 *  $diffBetweenTwoDatesInDays * $amount;
     }

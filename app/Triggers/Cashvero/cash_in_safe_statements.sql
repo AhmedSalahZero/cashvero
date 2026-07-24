@@ -46,6 +46,8 @@ begin
 	
 	 set new.beginning_balance = if(_count_all_rows,_last_end_balance,ifnull(new.beginning_balance,0)) ;
 	set new.end_balance = new.beginning_balance + new.debit - new.credit ; 
+	set new.is_debit = if(new.debit > 0 , 1 , 0);
+	set new.is_credit = if(new.debit > 0 , 0 , 1);
 	
 end //
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\CashFlowMatrixExport;
 use App\Helpers\HArr;
 use App\Helpers\HDate;
 use App\Models\CashExpense;
@@ -31,16 +32,73 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
 
+/**
+ * CashFlowReportController
+ * ------------------------------------------------------------------
+ * The Company Cash Flow Report AND the Contract Cash Flow Report share
+ * this exact same result() engine — ContractCashFlowReportController::result()
+ * is a thin wrapper that just pre-sets contract_id/title and delegates
+ * straight into this class. Same for the Consolidated Cash Flow Report,
+ * which uses a separate service but the same underlying data primitives.
+ *
+ * ⚠️ CALCULATION LOGIC IS 100% UNTOUCHED. Every method here that builds
+ * the actual report numbers (result(), finalizeContractCashFlowTotals(),
+ * the batch loaders, every model static method it calls) is left exactly
+ * as-is — this migration only changes HOW the final payload is delivered
+ * to the browser (Inertia::render() instead of view()), never what's IN
+ * that payload or how it's computed. Given this report drives real
+ * business decisions and has genuinely intricate calculation logic
+ * (weekly/monthly/daily bucketing, multi-currency, saved-report JSON
+ * snapshots), that separation was deliberate.
+ *
+ * ── Frontend migration status ───────────────────────────────────
+ *   index()  → Inertia::render, Pages/CashFlowReport/Index.vue
+ *              (filter form + saved-reports list)
+ *   result() → Inertia::render, Pages/CashFlowReport/Result.vue
+ *              (both the "replay a saved report" early-return branch
+ *              and the normal freshly-computed branch — same payload
+ *              shape either way, since a saved report is just this
+ *              same $reportData JSON-cached and replayed later)
+ *   adjustCustomerDueInvoices() / adjustLoanPastDueInstallments() /
+ *   saveProjection() / destroy() → UNCHANGED. These already respond
+ *              with plain JSON ({status, reloadCurrentPage:true}) or a
+ *              redirect for their own AJAX/form-post callers — not
+ *              full-page Inertia visits, so no conversion needed. The
+ *              Vue page calls them with fetch() and reloads via
+ *              router.reload() on success, same effect as the
+ *              original's window.location.reload().
+ *   exportExcel() → ✅ New (project-owner requested, "same as the
+ *              Statements reports"). Colored via the new
+ *              App\Exports\CashFlowMatrixExport — deliberately fed
+ *              from the client-computed table (see that class's own
+ *              docblock for why), never recomputed here. Shared by
+ *              both Company and Contract Cash Flow, since both use
+ *              this same Result.vue page and the same export route.
+ */
 class CashFlowReportController
 {
     use GeneralFunctions;
     public function index(Company $company)
 	{
 		$cashflowReports = $company->cashflowReports->where('is_contract',0);
-        return view('reports.cash_flow_form',[
-			'company'=>$company,
-			'cashflowReports'=>$cashflowReports
+        return Inertia::render('CashFlowReport/Index', [
+			'company' => ['id' => $company->id, 'name' => $company->getName()],
+			'currencies' => collect(getBanksCurrencies())->map(fn ($label, $code) => ['code' => $code, 'label' => touppercase($label)])->values(),
+			'mainFunctionalCurrency' => $company->getMainFunctionalCurrency(),
+			'savedReports' => $cashflowReports->values()->map(fn ($r) => [
+				'id' => $r->id,
+				'name' => $r->getName(),
+				'interval' => $r->getIntervalName(),
+				'start_date_formatted' => $r->getStartDateFormatted(),
+				'end_date_formatted' => $r->getEndDateFormatted(),
+				'view_url' => route('result.cashflow.report', ['company' => $company->id, 'returnResultAsArray' => 'view', 'cashflowReport' => $r->id]),
+				'delete_url' => route('delete.cashflow.report', ['company' => $company->id, 'cashflowReport' => $r->id]),
+			]),
+			'urls' => [
+				'result' => route('result.cashflow.report', ['company' => $company->id]),
+			],
 		]);
     }
 	public function getRedirectRoute(bool $isContract):string 
@@ -170,7 +228,7 @@ class CashFlowReportController
 		if($cashflowReport && $cashflowReport->report_data){
 			$reportData = json_decode($cashflowReport->report_data,true);
 			$currencyName = Arr::first($reportData['allCurrencies']);
-			return view('admin.reports.contract-cash-flow-report',array_merge($reportData,['cashflowReport'=>$cashflowReport,'currencyName'=>$currencyName,'contractCode'=>$contractCode]));
+			return Inertia::render('CashFlowReport/Result', array_merge($reportData, $this->resultViewExtras($company, $contractCode, $currencyName, $cashflowReport, $reportData['letterOfGuaranteeModelData'] ?? [])));
 		}
 			$mainFunctionalCurrency= $company->getMainFunctionalCurrency();
 		$isContract = (bool)$contract ;
@@ -326,6 +384,7 @@ class CashFlowReportController
 					$periodStart,
 					$periodEnd,
 					$dates,
+					$letterOfGuaranteeModelData,
 				);
 			} else {
 				CashFlowContractDetailPeriodBatchLoader::apply(
@@ -433,6 +492,7 @@ class CashFlowReportController
 			'supplierDueInvoices' => $supplierDueInvoices,
 			'pastDueInstallments' => $pastDueInstallments,
 			'pastDueLoanInstallments' => $pastDueLoanInstallments,
+			'letterOfGuaranteeModelData' => $letterOfGuaranteeModelData,
 			'months' => $months,
 			'days' => $days,
 			'reportInterval' => $reportInterval,
@@ -459,7 +519,90 @@ class CashFlowReportController
 			return redirect()->route($redirectRouteName, $routeParams);
 		}
 
-		return view('admin.reports.contract-cash-flow-report', array_merge($reportData, ['currencyName' => $currencyName, 'contractCode' => $contractCode, 'letterOfGuaranteeModelData' => $letterOfGuaranteeModelData]));
+		return Inertia::render('CashFlowReport/Result', array_merge($reportData, $this->resultViewExtras($company, $contractCode, $currencyName, null, $letterOfGuaranteeModelData)));
+	}
+
+	/**
+	 * Colored Excel export (project-owner requested — "same as the
+	 * Statements reports") for Company AND Contract Cash Flow, which
+	 * share this exact same Result.vue page. Styled via the shared
+	 * App\Exports\CashFlowMatrixExport.
+	 *
+	 * ⚠️ Deliberately does NOT recompute the report. The `payload`
+	 * posted here is built client-side by Result.vue from its own
+	 * already-rendered `tablesByCurrency` — the same buildCurrencyTable()
+	 * output the person is looking at — so the export is guaranteed to
+	 * match the screen exactly, and this method never re-implements
+	 * that row-mutation calculation logic in PHP. Received via a plain
+	 * POST form submit (not axios/fetch), matching the existing
+	 * "native form submission avoids Inertia's ajax() branch" pattern
+	 * already used elsewhere in this codebase (see roadmap bug #38) —
+	 * appropriate here too, since triggering a file download from a
+	 * fetch/axios response requires extra blob handling this avoids.
+	 */
+	public function exportExcel(Company $company, Request $request)
+	{
+		$payload = json_decode((string) $request->input('payload', '{}'), true);
+		if (! is_array($payload)) {
+			$payload = [];
+		}
+
+		$title = (string) ($payload['title'] ?? __('Cash Flow Report'));
+		$currency = (string) ($payload['currency'] ?? '');
+		$periodLabels = array_values($payload['periodLabels'] ?? []);
+		$rows = $payload['rows'] ?? [];
+
+		$headings = array_merge([__('Item')], $periodLabels, [__('Total')]);
+
+		$exportRows = collect($rows)->map(function ($row) {
+			return [
+				'label' => (string) ($row['label'] ?? ''),
+				'type' => (string) ($row['type'] ?? 'row'),
+				'values' => array_map(static fn ($v) => (float) $v, $row['values'] ?? []),
+				'total' => (float) ($row['total'] ?? 0),
+			];
+		})->values()->all();
+
+		$fileNameParts = ['Cash-Flow-Report', $currency];
+		$fileName = preg_replace('/[^A-Za-z0-9\-]+/', '-', implode('-', array_filter($fileNameParts))).'.xlsx';
+
+		return (new CashFlowMatrixExport($headings, $exportRows, $title))->download($fileName);
+	}
+
+	/**
+	 * Shared extra props for both result() view branches (cached-replay
+	 * and freshly-computed) — company/urls/cashflowReport, none of which
+	 * affect the calculation itself.
+	 */
+	protected function resultViewExtras(Company $company, ?string $contractCode, ?string $currencyName, ?CashflowReport $cashflowReport = null, array $letterOfGuaranteeModelData = []): array
+	{
+		$isContract = $contractCode ? 1 : 0;
+		$projectionModel = $cashflowReport ?: $company;
+		$cashProjections = $projectionModel->cashProjects()->where('is_contract', $isContract)->get();
+
+		return [
+			'company' => ['id' => $company->id, 'name' => $company->getName()],
+			'currencyName' => $currencyName,
+			'contractCode' => $contractCode,
+			'letterOfGuaranteeModelData' => $letterOfGuaranteeModelData,
+			'cashflowReport' => $cashflowReport ? [
+				'id' => $cashflowReport->id,
+				'name' => $cashflowReport->getName(),
+				'is_contract' => (bool) $cashflowReport->is_contract,
+			] : null,
+			'cashProjections' => [
+				'in' => $cashProjections->where('type', 'in')->values()->map(fn ($p) => ['id' => $p->id, 'name' => $p->name, 'amounts' => $p->amounts ?: []]),
+				'out' => $cashProjections->where('type', 'out')->values()->map(fn ($p) => ['id' => $p->id, 'name' => $p->name, 'amounts' => $p->amounts ?: []]),
+			],
+			'urls' => [
+				'index' => route('view.cashflow.report', ['company' => $company->id]),
+				'result' => route('result.cashflow.report', ['company' => $company->id]),
+				'adjustCustomerDueInvoices' => route('adjust.customer.dues.invoices', ['company' => $company->id]),
+				'adjustLoanPastDueInstallments' => route('adjust.loan.past.dues.installments', ['company' => $company->id]),
+				'saveProjection' => route('save.projection', ['company' => $company->id]),
+				'exportExcel' => route('export.cashflow.report', ['company' => $company->id]),
+			],
+		];
 	}
 
 	
@@ -633,7 +776,7 @@ class CashFlowReportController
 		->whereIn('loan_schedules.status',['past_due','partially_collected_and_past_due'])
 		->where('date','<',now()->format('Y-m-d'))
 		->orderBy('date')
-		->selectRaw('loan_schedules.*,medium_term_loans.currency')->get()->toArray() ;
+		->selectRaw('loan_schedules.*,medium_term_loans.currency,medium_term_loans.name as loan_name')->get()->toArray() ;
 		return $items;
 	}
 	

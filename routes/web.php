@@ -4,7 +4,6 @@ use App\Http\Controllers\DeleteAllRowsFromCaching;
 use App\Http\Controllers\DeleteMultiRowsFromCaching;
 use App\Http\Controllers\getUploadPercentage;
 use App\Http\Controllers\Helpers\DeleteSingleRecordController;
-use App\Http\Controllers\Helpers\HelpersController;
 use App\Http\Controllers\RemoveCompanyController;
 use App\Http\Controllers\RemoveUsercontroller;
 use App\Http\Controllers\SalesGatheringTestController;
@@ -28,7 +27,6 @@ use Mcamara\LaravelLocalization\Facades\LaravelLocalization;
 */
 
 Route::middleware([])->group(function () {
-    // Route::any('FreeUserSubscription', 'UserController@freeSubscription')->name('free.user.subscription');
     Auth::routes();
     
     Route::group(
@@ -40,114 +38,49 @@ Route::middleware([])->group(function () {
     
             Route::post('remove-user', [RemoveUsercontroller::class, '__invoke'])->name('remove.user');
             Route::post('remove-company', [RemoveCompanyController::class, '__invoke'])->name('remove.company');
-            Route::get('/client', function () {
-                return view('client_view.supplier_invoices.form');
-            });
 
-            Route::resource('section', 'SectionController');
             Route::resource('companySection', 'CompanyController');
-            // Route::resource('user', 'UserController');
             Route::get('user/create/{company?}', 'UserController@create')->middleware('isCashManagement')->name('user.create');
             Route::get('user/all/{company?}', 'UserController@index')->middleware('isCashManagement')->name('user.index');
             Route::post('user/{company?}', 'UserController@store')->middleware('isCashManagement')->name('user.store');
             Route::get('user/{user}/edit/{company?}', 'UserController@edit')->middleware('isCashManagement')->name('user.edit');
             Route::put('user/{user}/{company?}', 'UserController@update')->middleware('isCashManagement')->name('user.update');
             Route::delete('user/{user}/{company?}', 'UserController@destroy')->middleware('isCashManagement')->name('user.destroy');
-            // Route::resource('toolTipData', 'ToolTipDataController');
-
-            
-            
-            
-            Route::group(['prefix' => 'roles-permissions/', 'as' => 'roles.permissions.'], function () {
-                // Route::get('/index/{company?}', 'RolesAndPermissionsController@index')->name('index');
-                // Route::get('/create/{company?}', 'RolesAndPermissionsController@create')->name('create');
-                // Route::post('/store/{company?}', 'RolesAndPermissionsController@store')->name('store');
-                Route::get('/edit/{company?}', 'RolesAndPermissionsController@edit')->middleware(['isCashManagement'])->name('edit');
-                Route::post('/update/{company?}', 'RolesAndPermissionsController@update')->name('update');
-            });
 
             Route::get('profile', 'ProfileController@edit')->name('profile.edit');
             Route::put('profile', 'ProfileController@update')->name('profile.update');
             Route::post('toggle-theme', 'ProfileController@toggleTheme')->name('theme.toggle');
 
-            Route::get('update-users-based-on-company-and-role', 'UserController@getUsersBasedOnCompanyAndRole')->name('update.users.based.on.company.and.role');
-            Route::get('render-permission-html-for-user', 'UserController@renderPermissionForUser')->name('render.permissions.html.for.user');
             Route::group(['prefix' => 'user-permissions/{user}/', 'as' => 'user.permissions.'], function () {
-                Route::get('/index', 'UsersAndPermissionsController@index')->name('index');
-                Route::get('/create', 'UsersAndPermissionsController@create')->name('create');
-                Route::post('/store', 'UsersAndPermissionsController@store')->name('store');
                 Route::get('/edit/{company?}', 'UsersAndPermissionsController@edit')->middleware('isCashManagement')->name('edit');
                 Route::post('/update', 'UsersAndPermissionsController@update')->name('update');
             });
-            // Route::get('toolTipSectionsFields/{id}', 'ToolTipDataController@sectionFields')->name('section.fields');
-            Route::get('logs', 'LogController@show')->name('admin.show.logs');
-            Route::get('logs/{user}', 'LogController@showDetail')->name('admin.show.logs.detail');
-            //########### Client View ############
             Route::get('/', 'HomeController@index')->name('home');
 
             Route::prefix('{company}')->group(function () {
-                
-                //cash vero roles and permissions
-                // Route::group(['prefix'=>'cash-vero-permissions'],function(){
-                // 	Route::get('create','CashVeroPermissionsController@create')->name('cashvero.permissions.create');
-                // 	Route::post('store','CashVeroPermissionsController@store')->name('cashvero.permissions.store');
-                // });
-            
-                    
                 Route::get('update-currency-account-based-on-currency/{financialInstitution}', 'UpdateCurrentAccountBasedOnCurrencyController@index')->name('update.current.account.based.on.currency');
-
 
                 Route::get('checkIfJobFinished/{modelName}', 'SalesGatheringTestController@activeJob')->name('active.job');
 
                 Route::get('/redirect', 'HomeController@redirectFun')->name('home.redirect');
-                //########### Dashboard ############
-                Route::get('/companyGroup', 'HomeController@companyGroup')->name('company.group');
-                // Route::any('Admin_Company', 'CompanyController@adminCompany')->name('admin.company');
-                // Route::any('Edit_Admin_Company/{companySection}', 'CompanyController@editAdminCompany')->name('edit.admin.company');
 
-                
-
-                //########### Import Routs ############
-                // Route::any('inventoryStatementImport', 'InventoryStatementTestController@import')->name('inventoryStatementImport');
-                // Route::get('inventoryStatement/insertToMainTable', 'InventoryStatementTestController@insertToMainTable')->name('inventoryStatementTest.insertToMainTable');
                 Route::get('salesGatheringImport/{model}/cached-row/{rowId}/edit', 'SalesGatheringTestController@editCachedRow')->name('salesGatheringTest.editCachedRow');
                 Route::put('salesGatheringImport/{model}/cached-row/{rowId}', 'SalesGatheringTestController@updateCachedRow')->name('salesGatheringTest.updateCachedRow');
                 Route::any('salesGatheringImport/{model}', 'SalesGatheringTestController@import')->name('salesGatheringImport');
                 Route::get('SalesGathering/insertToMainTable/{modelName}', 'SalesGatheringTestController@insertToMainTable')->name('salesGatheringTest.insertToMainTable');
 
-                //########### Export Routes ############
                 Route::get('salesGathering/export/{model}', 'SalesGatheringController@export')->name('salesGathering.export');
-                // type excel or pdf
-      
-                // ->parameters(['name-of-route'=> inventoryStatement [dependancies injection of model]])
 
-                //########### test table for uploading ############
-                // Route::resource('inventoryStatementTest', 'InventoryStatementTestController')
-                // 	->only(['edit', 'update', 'destroy']);
                 Route::resource('salesGatheringTest', 'SalesGatheringTestController')
                     ->only(['edit', 'update', 'destroy']);
 
-                //########### Sections Resources ############
-
-                // Route::resource('inventoryStatement', 'InventoryStatementController');
                 Route::resource('salesGathering', 'SalesGatheringController');
 
                 Route::get('uploading/{model}/{loanId?}', 'SalesGatheringController@index')->name('view.uploading');
 
-                //###########  (TRUNCATE) ############
                 Route::get('Truncate/{model}', 'DeletingClass@truncate')->name('truncate');
                 Route::delete('DeleteMultipleRows/{model}', 'DeletingClass@multipleRowsDeleting')->name('multipleRowsDelete');
                 Route::delete('delete-model', [DeleteSingleRecordController::class, '__invoke'])->name('delete.model');
-
-                //########### Inventory Links ############
-                // Route::prefix('/Inventory')->group(function () {
-                //     Route::get('/EndBalanceAnalysis/View', 'Analysis\Inventory\EndBalanceAnalysisReport@index')->name('end.balance.analysis');
-                //     Route::post('/EndBalanceAnalysis/Result', 'Analysis\Inventory\EndBalanceAnalysisReport@result')->name('end.balance.analysis.result');
-                // });
-
-                Route::post('store-new-model', [HelpersController::class, 'storeNewModal'])->name('admin.store.new.modal');
-               
-                
 
                 // bank certificate of deposit
                 Route::middleware('isCashManagement')->group(function () {
@@ -165,16 +98,7 @@ Route::middleware([])->group(function () {
 
                     // Route::get('get-financial-institution-accounts-number-based-on-currency/{financialInstitution}/{currency}', 'FinancialInstitutionController@getAccountNumbersBasedOnCurrency');
 
-                    Route::get('financial-institutions', 'FinancialInstitutionController@index')->name('view.financial.institutions');
-                    Route::get('financial-institutions/create/{model?}', 'FinancialInstitutionController@create')->name('create.financial.institutions');
-                    Route::post('financial-institutions/create', 'FinancialInstitutionController@store')->name('store.financial.institutions');
-                    Route::get('financial-institutions/edit/{financialInstitution}', 'FinancialInstitutionController@edit')->name('edit.financial.institutions');
-                    Route::put('financial-institutions/update/{financialInstitution}', 'FinancialInstitutionController@update')->name('update.financial.institutions');
-                    Route::delete('financial-institutions/delete/{financialInstitution}', 'FinancialInstitutionController@destroy')->name('delete.financial.institutions');
-
-                    Route::get('leasing-companies/create', 'LeasingCompanyController@create')->name('leasing.companies.create');
                     Route::post('leasing-companies/create', 'LeasingCompanyController@store')->name('leasing.companies.store');
-                    Route::get('leasing-companies/edit/{leasingCompany}', 'LeasingCompanyController@edit')->name('leasing.companies.edit');
                     Route::put('leasing-companies/update/{leasingCompany}', 'LeasingCompanyController@update')->name('leasing.companies.update');
                     Route::delete('leasing-companies/delete/{leasingCompany}', 'LeasingCompanyController@destroy')->name('leasing.companies.destroy');
 
@@ -185,9 +109,7 @@ Route::middleware([])->group(function () {
                     Route::put('leasing-companies/{leasingCompany}/contracts/{leasingContract}/update', 'LeasingContractController@update')->name('leasing.contracts.update');
                     Route::delete('leasing-companies/{leasingCompany}/contracts/{leasingContract}/delete', 'LeasingContractController@destroy')->name('leasing.contracts.destroy');
 
-                    Route::get('factoring-companies/create', 'FactoringCompanyController@create')->name('factoring.companies.create');
                     Route::post('factoring-companies/create', 'FactoringCompanyController@store')->name('factoring.companies.store');
-                    Route::get('factoring-companies/edit/{factoringCompany}', 'FactoringCompanyController@edit')->name('factoring.companies.edit');
                     Route::put('factoring-companies/update/{factoringCompany}', 'FactoringCompanyController@update')->name('factoring.companies.update');
                     Route::delete('factoring-companies/delete/{factoringCompany}', 'FactoringCompanyController@destroy')->name('factoring.companies.destroy');
 
@@ -214,8 +136,11 @@ Route::middleware([])->group(function () {
 
                     Route::post('add-new-partner', 'AddNewCustomerController@addNew')->name('add.new.partner');
                     Route::post('add-new-partner/{type}', 'AddNewCustomerController@addNew2')->name('add.new.partner.type');
+                    Route::get('opening-balance/manage', 'OpeningBalancesController@manage')->name('opening-balance.manage');
                     Route::resource('opening-balance', 'OpeningBalancesController');
+                    Route::get('customers-opening-balance/manage', 'CustomerOpeningBalancesController@manage')->name('customers-opening-balance.manage');
                     Route::resource('customers-opening-balance', 'CustomerOpeningBalancesController');
+                    Route::get('suppliers-opening-balance/manage', 'SupplierOpeningBalancesController@manage')->name('suppliers-opening-balance.manage');
                     Route::resource('suppliers-opening-balance', 'SupplierOpeningBalancesController');
 					Route::get('ajax-refresh-limits-chart', 'CustomerInvoiceDashboardController@refreshBankMovementChart')->name('refresh.chart.limits.data') ; // ajax request
 					Route::get('/get-customers-from-currencies/{modelType}', 'AgingController@getCustomersFromBusinessUnitsAndCurrencies')->name('get.customers.or.suppliers.from.business.units.currencies');
@@ -230,81 +155,21 @@ Route::middleware([])->group(function () {
                         Route::get('partners/{partner}/edit', 'PartnersController@edit')->name('partners.edit');
                         Route::put('partners/{partner}/update', 'PartnersController@update')->name('partners.update');
                         Route::delete('partners/{partner}/delete', 'PartnersController@destroy')->name('partners.destroy');
-                    
-                        Route::get('customers', 'CustomersController@index')->name('customers.index');
-                        Route::get('customers/create', 'CustomersController@create')->name('customers.create');
-                        Route::post('customers/store', 'CustomersController@store')->name('customers.store');
-                        Route::get('customers/{supplier}/edit', 'CustomersController@edit')->name('customers.edit');
-                        Route::put('customers/{supplier}/update', 'CustomersController@update')->name('customers.update');
-                        Route::delete('customers/{supplier}/delete', 'CustomersController@destroy')->name('customers.destroy');
-                    
-                    
-                        Route::get('suppliers', 'SuppliersController@index')->name('suppliers.index');
-                        Route::get('suppliers/create', 'SuppliersController@create')->name('suppliers.create');
-                        Route::post('suppliers/store', 'SuppliersController@store')->name('suppliers.store');
-                        Route::get('suppliers/{supplier}/edit', 'SuppliersController@edit')->name('suppliers.edit');
-                        Route::put('suppliers/{supplier}/update', 'SuppliersController@update')->name('suppliers.update');
-                        Route::delete('suppliers/{supplier}/delete', 'SuppliersController@destroy')->name('suppliers.destroy');
-                    
-                    
-                    
-                        Route::get('shareholders', 'ShareholdersController@index')->name('shareholders.index');
-                        Route::get('shareholders/create', 'ShareholdersController@create')->name('shareholders.create');
-                        Route::post('shareholders/store', 'ShareholdersController@store')->name('shareholders.store');
-                        Route::get('shareholders/{shareholder}/edit', 'ShareholdersController@edit')->name('shareholders.edit');
-                        Route::put('shareholders/{shareholder}/update', 'ShareholdersController@update')->name('shareholders.update');
-                        Route::delete('shareholders/{shareholder}/delete', 'ShareholdersController@destroy')->name('shareholders.destroy');
-                    
-                        Route::get('employees', 'EmployeesController@index')->name('employees.index');
-                        Route::get('employees/create', 'EmployeesController@create')->name('employees.create');
-                        Route::post('employees/store', 'EmployeesController@store')->name('employees.store');
-                        Route::get('employees/{employee}/edit', 'EmployeesController@edit')->name('employees.edit');
-                        Route::put('employees/{employee}/update', 'EmployeesController@update')->name('employees.update');
-                        Route::delete('employees/{employee}/delete', 'EmployeesController@destroy')->name('employees.destroy');
-                    
-                        Route::get('subsidiary-companies', 'SubsidiaryCompaniesController@index')->name('subsidiary.companies.index');
-                        Route::get('subsidiary-companies/create', 'SubsidiaryCompaniesController@create')->name('subsidiary.companies.create');
-                        Route::post('subsidiary-companies/store', 'SubsidiaryCompaniesController@store')->name('subsidiary.companies.store');
-                        Route::get('subsidiary-companies/{subsidiaryCompany}/edit', 'SubsidiaryCompaniesController@edit')->name('subsidiary.companies.edit');
-                        Route::put('subsidiary-companies/{subsidiaryCompany}/update', 'SubsidiaryCompaniesController@update')->name('subsidiary.companies.update');
-                        Route::delete('subsidiary-companies/{subsidiaryCompany}/delete', 'SubsidiaryCompaniesController@destroy')->name('subsidiary.companies.destroy');
-                    
-                        // Route::get('taxes', 'TaxesController@index')->name('taxes.index');
-                        // Route::get('taxes/create', 'TaxesController@create')->name('taxes.create');
-                        // Route::post('taxes/store', 'TaxesController@store')->name('taxes.store');
-                        // Route::get('taxes/{employee}/edit', 'TaxesController@edit')->name('taxes.edit');
-                        // Route::put('taxes/{employee}/update', 'TaxesController@update')->name('taxes.update');
-                        // Route::delete('taxes/{employee}/delete', 'TaxesController@destroy')->name('taxes.destroy');
-                    
-                    
-                    
-                        Route::get('other-partners', 'OtherPartnersController@index')->name('other.partners.index');
-                        Route::get('other-partners/create', 'OtherPartnersController@create')->name('other.partners.create');
-                        Route::post('other-partners/store', 'OtherPartnersController@store')->name('other.partners.store');
-                        Route::get('other-partners/{otherPartner}/edit', 'OtherPartnersController@edit')->name('other.partners.edit');
-                        Route::put('other-partners/{otherPartner}/update', 'OtherPartnersController@update')->name('other.partners.update');
-                        Route::delete('other-partners/{otherPartner}/delete', 'OtherPartnersController@destroy')->name('other.partners.destroy');
-                    
+
                         Route::get('business-sectors', 'BusinessSectorsController@index')->name('business.sectors.index');
-                        Route::get('business-sectors/create', 'BusinessSectorsController@create')->name('business.sectors.create');
                         Route::post('business-sectors/store', 'BusinessSectorsController@store')->name('business.sectors.store');
-                        Route::get('business-sectors/{businessSector}/edit', 'BusinessSectorsController@edit')->name('business.sectors.edit');
                         Route::put('business-sectors/{businessSector}/update', 'BusinessSectorsController@update')->name('business.sectors.update');
                         Route::delete('business-sectors/{businessSector}/delete', 'BusinessSectorsController@destroy')->name('business.sectors.destroy');
                     
                     
                         Route::get('business-units', 'BusinessUnitsController@index')->name('business.units.index');
-                        Route::get('business-units/create', 'BusinessUnitsController@create')->name('business.units.create');
                         Route::post('business-units/store', 'BusinessUnitsController@store')->name('business.units.store');
-                        Route::get('business-units/{businessUnit}/edit', 'BusinessUnitsController@edit')->name('business.units.edit');
                         Route::put('business-units/{businessUnit}/update', 'BusinessUnitsController@update')->name('business.units.update');
                         Route::delete('business-units/{businessUnit}/delete', 'BusinessUnitsController@destroy')->name('business.units.destroy');
                     
                     
                         Route::get('sales-channels', 'SalesChannelsController@index')->name('sales.channels.index');
-                        Route::get('sales-channels/create', 'SalesChannelsController@create')->name('sales.channels.create');
                         Route::post('sales-channels/store', 'SalesChannelsController@store')->name('sales.channels.store');
-                        Route::get('sales-channels/{salesChannel}/edit', 'SalesChannelsController@edit')->name('sales.channels.edit');
                         Route::put('sales-channels/{salesChannel}/update', 'SalesChannelsController@update')->name('sales.channels.update');
                         Route::delete('sales-channels/{salesChannel}/delete', 'SalesChannelsController@destroy')->name('sales.channels.destroy');
                     
@@ -312,9 +177,7 @@ Route::middleware([])->group(function () {
                     
                                         
                         Route::get('sales-persons', 'SalesPersonsController@index')->name('sales.persons.index');
-                        Route::get('sales-persons/create', 'SalesPersonsController@create')->name('sales.persons.create');
                         Route::post('sales-persons/store', 'SalesPersonsController@store')->name('sales.persons.store');
-                        Route::get('sales-persons/{salesPerson}/edit', 'SalesPersonsController@edit')->name('sales.persons.edit');
                         Route::put('sales-persons/{salesPerson}/update', 'SalesPersonsController@update')->name('sales.persons.update');
                         Route::delete('sales-persons/{salesPerson}/delete', 'SalesPersonsController@destroy')->name('sales.persons.destroy');
                     
@@ -330,9 +193,7 @@ Route::middleware([])->group(function () {
                     
                     
                         Route::get('deductions', 'DeductionsController@index')->name('deductions.index');
-                        Route::get('deductions/create', 'DeductionsController@create')->name('deductions.create');
                         Route::post('deductions/store', 'DeductionsController@store')->name('deductions.store');
-                        Route::get('deductions/{deduction}/edit', 'DeductionsController@edit')->name('deductions.edit');
                         Route::put('deductions/{deduction}/update', 'DeductionsController@update')->name('deductions.update');
                         Route::delete('deductions/{deduction}/delete', 'DeductionsController@destroy')->name('deductions.destroy');
                     
@@ -405,6 +266,7 @@ Route::middleware([])->group(function () {
                     Route::get('update-expense-category-name-based-on-expense-category-category', 'CashExpenseCategoryController@updateExpenseCategoryNameBasedOnCategory')->name('update.expense.category.name.based.on.category');
                     //
                     Route::get('notifications/{type}', 'NotificationsController@index')->name('view.notifications');
+                    Route::get('notifications-detail/{type}', 'NotificationsController@detail')->name('notifications.detail');
                     Route::resource('notifications-settings', 'NotificationSettingsController');
                     Route::resource('odoo-settings', 'OdooSettingController');
                     Route::get('mark-notifications-as-read', 'NotificationSettingsController@markAsRead')->name('mark.notifications.as.read');
@@ -591,6 +453,7 @@ Route::middleware([])->group(function () {
                     Route::get('financial-institutions/update-outstanding-balance-and-limits', 'LetterOfGuaranteeFacilityController@updateOutstandingBalanceAndLimits')->name('update.letter.of.guarantee.outstanding.balance.and.limit');
                     Route::get('get-lg-facility-based-on-financial-institution', 'LetterOfGuaranteeFacilityController@getLgFacilityBasedOnFinancialInstitution')->name('get.lg.facility.based.on.financial.institution');
                     Route::get('letter-of-guarantee-issuance', 'LetterOfGuaranteeIssuanceController@index')->name('view.letter.of.guarantee.issuance');
+                    Route::get('letter-of-guarantee-issuance-tab-data', 'LetterOfGuaranteeIssuanceController@tabData')->name('letter.of.guarantee.issuance.tab.data');
                     Route::get('letter-of-guarantee-issuance/create/{source}', 'LetterOfGuaranteeIssuanceController@create')->name('create.letter.of.guarantee.issuance');
                     Route::post('letter-of-guarantee-issuance/create/{source}', 'LetterOfGuaranteeIssuanceController@store')->name('store.letter.of.guarantee.issuance');
                     Route::get('letter-of-guarantee-issuance/edit/{letterOfGuaranteeIssuance}/{source}', 'LetterOfGuaranteeIssuanceController@edit')->name('edit.letter.of.guarantee.issuance');
@@ -601,6 +464,10 @@ Route::middleware([])->group(function () {
                     Route::post('letter-of-guarantee-issuance/edit-amount-to-be-decreased/{lgAdvancedPaymentHistory}/{source}', 'LetterOfGuaranteeIssuanceController@editAmountToBeDecreased')->name('advanced.lg.payment.edit.amount.to.be.decreased');
                     Route::get('letter-of-guarantee-issuance/delete-advanced-payment/{lgAdvancedPaymentHistory}', 'LetterOfGuaranteeIssuanceController@deleteAdvancedPayment')->name('delete.lg.advanced.payment');
                     Route::post('letter-of-guarantee-issuance/back-to-running/{letterOfGuaranteeIssuance}/{source}', 'LetterOfGuaranteeIssuanceController@backToRunningStatus')->name('back.to.running.letter.of.guarantee.issuance');
+                    Route::get('letter-of-guarantee-issuance/template/{source}', 'LgIssuanceImportController@downloadTemplate')->name('download.letter.of.guarantee.issuance.template');
+                    Route::post('letter-of-guarantee-issuance/import/{source}', 'LgIssuanceImportController@upload')->name('import.letter.of.guarantee.issuance');
+                    Route::get('letter-of-guarantee-issuance/import-status/{importRun}', 'LgIssuanceImportController@status')->name('status.letter.of.guarantee.issuance.import');
+                    Route::get('letter-of-guarantee-issuance/import-errors/{importRun}', 'LgIssuanceImportController@errors')->name('errors.letter.of.guarantee.issuance.import');
                     
                                      
                     Route::get('letter-of-guarantee-issuance-renewal-date/{letterOfGuaranteeIssuance}', 'LetterOfGuaranteeIssuanceRenewalDateController@index')->name('letter.of.issuance.renewal.date');
@@ -653,42 +520,59 @@ Route::middleware([])->group(function () {
                     
                     Route::get('effectiveness-index-report/collection', 'CollectionEffectivenessIndexController@index')->name('view.collections.effectiveness.index');
                     Route::post('effectiveness-index-report/collection', 'CollectionEffectivenessIndexController@result')->name('result.collections.effectiveness.index');
+                    // Supplier-side counterpart — completes what the controller's
+                    // own modelType-detection logic (in_array('collection', $request->segments()))
+                    // was already written to support; only this route + the
+                    // sidebar entry were ever missing. See CollectionEffectivenessIndexController's docblock.
+                    Route::get('effectiveness-index-report/payment', 'CollectionEffectivenessIndexController@index')->name('view.payments.effectiveness.index');
+                    Route::post('effectiveness-index-report/payment', 'CollectionEffectivenessIndexController@result')->name('result.payments.effectiveness.index');
 
 
                     Route::get('safe-statement', 'SafeStatementController@index')->name('view.safe.statement');
-                    Route::post('safe-statement', 'SafeStatementController@result')->name('result.safe.statement');
+                    Route::get('safe-statement/result', 'SafeStatementController@result')->name('result.safe.statement');
+                    Route::get('safe-statement/export', 'SafeStatementController@exportExcel')->name('export.safe.statement');
 
                     Route::get('cash-expense-statement', 'CashExpenseStatementController@index')->name('view.cash.expense.statement');
-                    Route::post('cash-expense-statement', 'CashExpenseStatementController@result')->name('result.cash.expense.statement');
+                    Route::get('cash-expense-statement/result', 'CashExpenseStatementController@result')->name('result.cash.expense.statement');
+                    Route::get('cash-expense-statement/export', 'CashExpenseStatementController@exportExcel')->name('export.cash.expense.statement');
                     
                     Route::get('partners-statement', 'PartnersStatementController@index')->name('view.partners.statement');
-                    Route::post('partners-statement', 'PartnersStatementController@result')->name('result.partners.statement');
+                    Route::get('partners-statement/partners-by-type', 'PartnersStatementController@getPartnersByType')->name('partners.statement.partners.by.type');
+                    Route::get('partners-statement/result', 'PartnersStatementController@result')->name('result.partners.statement');
+                    Route::get('partners-statement/export', 'PartnersStatementController@exportExcel')->name('export.partners.statement');
                     
                     
                     Route::get('show-bank-statement', 'BankStatementController@index')->name('view.bank.statement');
                     Route::get('bank-statement', 'BankStatementController@result')->name('result.bank.statement');
+                    Route::get('bank-statement/account-numbers', 'BankStatementController@getAccountNumbers')->name('bank.statement.account.numbers');
+                    Route::get('bank-statement/export', 'BankStatementController@exportExcel')->name('export.bank.statement');
 
                     Route::get('factoring-statement', 'FactoringStatementController@index')->name('view.factoring.statement');
                     Route::get('factoring-statement/result', 'FactoringStatementController@result')->name('result.factoring.statement');
-                    Route::get('factoring-statement/currencies/{factoringCompany}', 'FactoringStatementController@getCurrencies');
-                    Route::get('factoring-statement/contracts/{factoringCompany}/{currency}', 'FactoringStatementController@getContracts');
+                    Route::get('factoring-statement/export', 'FactoringStatementController@exportExcel')->name('export.factoring.statement');
+                    Route::get('factoring-statement/currencies', 'FactoringStatementController@getCurrencies')->name('factoring.statement.currencies');
+                    Route::get('factoring-statement/contracts', 'FactoringStatementController@getContracts')->name('factoring.statement.contracts');
 
                     Route::get('factoring-charges-statement', 'FactoringChargesStatementController@index')->name('view.factoring.charges.statement');
                     Route::get('factoring-charges-statement/result', 'FactoringChargesStatementController@result')->name('result.factoring.charges.statement');
-                    Route::get('factoring-charges-statement/currencies/{factoringCompany}', 'FactoringChargesStatementController@getCurrencies');
-                    Route::get('factoring-charges-statement/contracts/{factoringCompany}/{currency}', 'FactoringChargesStatementController@getContracts');
+                    Route::get('factoring-charges-statement/export', 'FactoringChargesStatementController@exportExcel')->name('export.factoring.charges.statement');
+                    Route::get('factoring-charges-statement/currencies', 'FactoringChargesStatementController@getCurrencies')->name('factoring.charges.statement.currencies');
+                    Route::get('factoring-charges-statement/contracts', 'FactoringChargesStatementController@getContracts')->name('factoring.charges.statement.contracts');
                     
                     Route::post('update-commission-fees', 'BankStatementController@updateCommissionFees')->name('update.commission.fees');
                     Route::post('update-bank-statement-row-fees', 'BankStatementController@updateBankStatementRow')->name('update.bank.statement.debit.or.credit');
                     
                     Route::get('show-lg-by-beneficiary-name-report', 'LgByBeneficiaryNameReportController@index')->name('view.lg.by.beneficiary.name.report');
                     Route::get('lg-by-beneficiary-name-report', 'LgByBeneficiaryNameReportController@result')->name('result.lg.by.beneficiary.name.report');
+                    Route::get('lg-by-beneficiary-name-report/export', 'LgByBeneficiaryNameReportController@exportExcel')->name('export.lg.by.beneficiary.name.report');
                     
                     Route::get('show-lg-by-bank-name-report', 'LgByBankNameReportController@index')->name('view.lg.by.bank.name.report');
                     Route::get('lg-by-bank-name-report', 'LgByBankNameReportController@result')->name('result.lg.by.bank.name.report');
+                    Route::get('lg-by-bank-name-report/export', 'LgByBankNameReportController@exportExcel')->name('export.lg.by.bank.name.report');
                     
                     Route::get('lg-lc-bank-statement', 'LGLCSBanktatementController@index')->name('view.lg.lc.bank.statement');
-                    Route::post('lg-lc-bank-statement', 'LGLCSBanktatementController@result')->name('result.lg.lc.bank.statement');
+                    Route::get('lg-lc-bank-statement/result', 'LGLCSBanktatementController@result')->name('result.lg.lc.bank.statement');
+                    Route::get('lg-lc-bank-statement/export', 'LGLCSBanktatementController@exportExcel')->name('export.lg.lc.bank.statement');
                     Route::get('get-lg-lc-types', 'LGLCSBanktatementController@getLgOrLcType')->name('get.lc.or.lg.types');
 
                     Route::get('customer-balances/{modelType}', 'BalancesController@index')->name('view.balances');
@@ -698,19 +582,26 @@ Route::middleware([])->group(function () {
                     Route::get('/cashvero-dashboard/lglc', 'CustomerInvoiceDashboardController@viewLGLCDashboard')->name('view.lglc.dashboard');
                     // Route::get('/cashvero-dashboard-update-lg-dashboard','CustomerInvoiceDashboardController@updateLgDashboard')->name('update.lg.table.and.charts');
                     Route::get('/customer-balances/invoices-report/{partnerId}/{currency}/{modelType}', 'CustomerInvoiceDashboardController@showInvoiceReport')->name('view.invoice.report');
+                    Route::get('/customer-balances/invoices-report/{partnerId}/{currency}/{modelType}/export', 'CustomerInvoiceDashboardController@exportInvoiceReport')->name('export.invoice.report');
                     Route::get('/customer-balances/invoices-statement-report/{partnerId}/{currency}/{modelType}', 'CustomerInvoiceDashboardController@showInvoiceStatementReport')->name('view.invoice.statement.report');
+                    Route::get('/customer-balances/invoices-statement-report/{partnerId}/{currency}/{modelType}/export', 'CustomerInvoiceDashboardController@exportInvoiceStatementReport')->name('export.invoice.statement.report');
                     Route::get('/customer-balances/total-net-balance-details/{currency}/{modelType}', 'BalancesController@showTotalNetBalanceDetailsReport')->name('show.total.net.balance.in');
                     // Route::get('collection-effectiveness-index-report',[]);
                     Route::get('get-contract-name-for-customer-or-supplier', 'getProjectsForCustomerOrSupplierController@handle')->name('get.projects.for.customer.or.supplier');
                     Route::get('get-po-or-so-for-contract', 'getPoOrSoFromContractController@handle')->name('get.po.or.so.from.contract');
                     Route::get('cashflow-report', 'CashFlowReportController@index')->name('view.cashflow.report');
                     Route::get('cashflow-report-result/{returnResultAsArray?}/{cashflowReport?}', 'CashFlowReportController@result')->name('result.cashflow.report');
+                    // POST (not GET): receives the client-computed table payload built by
+                    // Result.vue's exportExcel() — see CashFlowReportController::exportExcel()'s
+                    // own docblock for why this report's export can't be a simple GET.
+                    Route::post('cashflow-report-export', 'CashFlowReportController@exportExcel')->name('export.cashflow.report');
 					
 					Route::prefix('reports/consolidated-cash-flow')
                 ->name('reports.consolidated-cash-flow.')
                 ->group(function () {
                     Route::get('/', [\App\Http\Controllers\Reports\ConsolidatedCashFlowReportController::class, 'index'])->name('index');
                     Route::get('/result', [\App\Http\Controllers\Reports\ConsolidatedCashFlowReportController::class, 'result'])->name('result');
+                    Route::get('/export', [\App\Http\Controllers\Reports\ConsolidatedCashFlowReportController::class, 'exportExcel'])->name('export');
                 });
 				
                     Route::delete('delete-cashflow-report/{cashflowReport}', 'CashFlowReportController@destroy')->name('delete.cashflow.report');
@@ -720,6 +611,7 @@ Route::middleware([])->group(function () {
 
                     Route::get('withdrawals-settlements-report', 'WithdrawalsSettlementReportController@index')->name('view.withdrawals.settlement.report');
                     Route::post('withdrawals-settlements-report', 'WithdrawalsSettlementReportController@result')->name('result.withdrawals.settlement.report');
+                    Route::get('withdrawals-settlements-report/export', 'WithdrawalsSettlementReportController@exportExcel')->name('export.withdrawals.settlement.report');
 
                     Route::get('refresh-withdrawal-dues-report', 'WithdrawalsSettlementReportController@refreshReport')->name('refresh.withdrawal.report'); // ajax
 
@@ -732,10 +624,6 @@ Route::middleware([])->group(function () {
                     Route::post('read-odoo-contracts', 'ReadOdooContracts@handle')->name('read-odoo-contracts');
                     Route::post('read-odoo-partners', 'ReadOdooPartners@handle')->name('read-odoo-partners');
                     Route::post('send-odoo-collection-or-payments', 'SendOdooCollectionOrPayment@handle')->name('send-odoo-collection-or-payments');
-                    Route::post('read-expenses', 'ReadOdooExpense@handle')->name('read-odoo-expenses');
-                    Route::get('allocate-expense/{cashExpense}', 'CashExpenseController@viewAllocation')->name('cash.expense.allocate');
-                    Route::put('allocate-expense/{cashExpense}', 'CashExpenseController@postAllocation')->name('allocate.odoo.cash.expense');
-                    
                     Route::get('money-received', 'MoneyReceivedController@index')->name('view.money.receive');
                     Route::get('money-received/json', 'MoneyReceivedController@indexJson')->name('view.money.receive.json');
                     Route::post('resend-odoo-money/{moneyReceived}', 'MoneyReceivedController@resendToOdoo')->name('resend.with.odoo');
@@ -756,15 +644,6 @@ Route::middleware([])->group(function () {
                     Route::get('get-bank-name-from-lg-issuance-based-on-currency', 'LetterOfGuaranteeIssuanceController@getBankNameByCurrency')->name('get.bank.name.by.currency');
                     Route::post('confirmed-reviewed/{model}', 'MoneyReceivedController@markAsConfirmed')->name('confirmed.review');
                     
-                    Route::get('money-received', 'MoneyReceivedController@index')->name('view.money.receive');
-                    Route::get('money-received/json', 'MoneyReceivedController@indexJson')->name('view.money.receive.json');
-                    Route::get('money-received/create/{model?}', 'MoneyReceivedController@create')->name('create.money.receive');
-                    Route::post('money-received/create', 'MoneyReceivedController@store')->name('store.money.receive');
-                    Route::get('money-received/edit/{moneyReceived}', 'MoneyReceivedController@edit')->name('edit.money.receive');
-                    Route::put('money-received/update/{moneyReceived}', 'MoneyReceivedController@update')->name('update.money.receive');
-                    Route::delete('money-received/delete/{moneyReceived}', 'MoneyReceivedController@destroy')->name('delete.money.receive');
-                    Route::get('money-received/get-invoice-numbers/{customer_name}/{currency?}', 'MoneyReceivedController@getInvoiceNumber'); // ajax request
-                    Route::get('money-received/get-account-numbers-based-on-account-type/{accountType}/{currency}/{financialInstitutionId}', 'MoneyReceivedController@getAccountNumbersForAccountType'); // ajax request
                     Route::get('get-interest-rate-for-financial-institution-id', 'FinancialInstitutionController@getInterestRateForFinancialInstitution')->name('get.interest.rate.for.financial.institution.id');
 
                     // money payments
@@ -814,13 +693,6 @@ Route::middleware([])->group(function () {
                     // cash expense
                     Route::get('get-exchange-rate-for-date-and-currencies', 'ForeignExchangeRateController@getExchangeRate');
                     
-                    Route::get('odoo-approved-expenses', 'OdooExpensesController@index')->name('odoo-expenses.index');
-                    // Route::get('odoo-approved-expenses/create','OdooExpensesController@create')->name('odoo-expenses.create');
-                    Route::post('odoo-approved-expenses/mark-as-paid', 'OdooExpensesController@markAsPaid')->name('odoo-expenses.mark.as.paid');
-                    // Route::get('odoo-approved-expenses/{odooExpense}/edit','OdooExpensesController@edit')->name('odoo-expenses.edit');
-                    // Route::put('odoo-approved-expenses/{odooExpense}/update','OdooExpensesController@update')->name('odoo-expenses.update');
-                    Route::delete('odoo-approved-expenses/{odooExpense}/delete', 'OdooExpensesController@destroy')->name('odoo-expenses.destroy');
-                    
                     Route::get('cash-expense', 'CashExpenseController@index')->name('view.cash.expense');
                     Route::get('cash-expense/create/{model?}', 'CashExpenseController@create')->name('create.cash.expense');
                     Route::post('cash-expense/create', 'CashExpenseController@store')->name('store.cash.expense');
@@ -859,12 +731,8 @@ Route::middleware([])->group(function () {
                 Route::get('down-payments/get-sales-orders-for-contract/{contract_id}/{currency?}', 'MoneyReceivedController@getSalesOrdersForContract'); // ajax request
                 Route::get('down-payments/get-purchases-orders-for-contract/{contract_id}/{currency?}', 'MoneyPaymentController@getSalesOrdersForContract'); // ajax request
                 Route::post('update-payable-cheques/{moneyPayment}/{payableCheque}', 'MoneyPaymentController@updateOpeningPayableCheque')->name('update.opening.payable.cheque');
-          		  Route::post('store-new', 'DynamicItemsController@storeNewModal')->name('admin.store.new.modal.dynamic');
-
-                Route::post('/store-dynamic-items', 'DynamicItemsController@storeSubItems')->name('store.dynamic.items.names');
                 Route::get('/create-item/{model}', 'SalesGatheringTestController@createModel')->name('create.sales.form');
                 Route::post('/create-item/{model}', 'SalesGatheringTestController@storeModel')->name('admin.store.analysis');
-                Route::post('/close-period-action', 'ClosePeriodController@execute')->name('store.close.period');
 
                 Route::get('/create-item/{model}/edit/{modelId}', 'SalesGatheringTestController@editModel')->name('edit.sales.form');
                 Route::post('/create-item/{model}/update/{modelId}', 'SalesGatheringTestController@updateModel')->name('admin.update.analysis');

@@ -15,10 +15,71 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
+/**
+ * ExportTable
+ * ------------------------------------------------------------------
+ * "Select Template Field" — one shared page serving several
+ * different upload types (Customer Invoice, Supplier Invoice, Loan
+ * Schedule, Contract/Leasing Schedule, and others via
+ * getUploadParamsFromType()), with genuinely different rules per
+ * type:
+ *   - Customer/Supplier Invoice: real, saved-per-company field
+ *     selection (CustomizedFieldsExportation). A few fields are
+ *     always-on and locked (net_sales_value; sales_value once any
+ *     discount field is picked), a few are hidden from the list
+ *     entirely (invoice_status, net_balance, plus a small global
+ *     hidden set), and 'date' is always forced on.
+ *   - Loan Schedule / Contract Loan Schedule: NOT actually
+ *     customizable — confirmed from the code, every field is forced
+ *     checked AND disabled regardless of what's clicked; saving
+ *     always exports the full fixed field set for these two models.
+ *
+ * Submitting triggers a real Excel file download (not a normal
+ * save-and-redirect). The original used a session flag
+ * ('redirectTo') plus 2-second client-side polling
+ * (GET /removeSessionForRedirect) to redirect the browser to the
+ * upload/import page once the download had started, since a file
+ * response can't also carry an HTTP redirect. Per the project owner's
+ * explicit decision, replaced here with an immediate client-side
+ * redirect right alongside the native file-download form submission
+ * — no polling needed. The 'redirectTo' session flag is no longer
+ * set, since nothing reads it anymore.
+ *
+ * ⚠️ Confirmed real bug, NOT fixed here without a decision first:
+ * customizedTableFieldSave() checks
+ * `getLastSegmentInRequest() == 'customerInvoice'` / `'supplierInvoice'`
+ * (lowercase-first) — but the actual URL segment passed everywhere
+ * else in this app is 'CustomerInvoice' / 'SupplierInvoice'
+ * (PascalCase, matching getUploadParamsFromType()'s array keys). This
+ * is a case-sensitive `==` comparison that can never be true for the
+ * real values in use — the same bug class already found and
+ * documented elsewhere in this codebase (a comparison that looks
+ * intentional but can never match). Net effect: the "always append
+ * these extra fields" block for Customer/Supplier Invoice
+ * (invoice_status, invoice_date/number, collected/paid_amount,
+ * net_balance, customer/supplier name and amount) never actually
+ * runs. Left completely untouched here, since fixing it would change
+ * what columns land in a real exported Excel file people may already
+ * depend on — flagging for a separate, explicit decision.
+ *
+ * ── Frontend migration status (as of this file's last update) ──────
+ *   ✅ customizedTableField() → the page-rendering branch (when
+ *      $view !== 'selected_fields') MIGRATED to Vue + Inertia. Renders
+ *      resources/js/Pages/TemplateFieldSelection/Index.vue. The
+ *      'selected_fields' branch — a plain data-returning helper used
+ *      elsewhere (e.g. SalesGatheringController), not a page —
+ *      UNCHANGED.
+ *   ✅ customizedTableFieldSave() → UNCHANGED except removing the
+ *      now-dead session('redirectTo') line (see above). Financial /
+ *      export logic (field list building, the confirmed bug above,
+ *      the actual Excel generation) untouched.
+ */
 class ExportTable extends Controller
 {
 	/**
 	 * Redirect To the View Of fields For Each Model
+	 *
+	 * ✅ MIGRATED to Vue + Inertia for the page-rendering branch only.
 	 */
 	public  function customizedTableField(Company $company, $model, $view)
 	{
@@ -49,6 +110,7 @@ class ExportTable extends Controller
 		}
 	
 		$columnsWithViewingNames =  $this->columnsFiltration($model, $company, $view, $selected_fields);
+		$isLoanScheduleModel = in_array($model, ['LoanSchedule', 'ContractLoanSchedule'], true);
 		if($model == 'LoanSchedule'){
 			 $columnsWithViewingNames = $loanScheduleExportables;
 		}
@@ -62,11 +124,54 @@ class ExportTable extends Controller
 		if($modelName == 'SupplierInvoice'){
 			unset($columnsWithViewingNames['paid_amount']);
 		}
-		if($modelName)
-		return view('client_view.Exportation.fieldsSelectionToBeExported', compact('columnsWithViewingNames', 'company', 'model', 'view', 'selected_fields','modelName'));
+
+		// Fields never shown as a checkbox row at all — matches
+		// hideExportField() (global hidden set) plus invoice_status /
+		// net_balance, hidden specifically on this page.
+		$alwaysHiddenFields = ['local_or_export', 'sub_category', 'return_reason', 'quantity_status', 'quantity_bonus', 'invoice_status', 'net_balance'];
+
+		$fields = collect($columnsWithViewingNames)
+			->reject(fn ($label, $fieldName) => in_array($fieldName, $alwaysHiddenFields, true))
+			->map(function ($label, $fieldName) use ($selected_fields, $isLoanScheduleModel) {
+				$isLocked = $isLoanScheduleModel
+					|| $fieldName === 'net_sales_value'
+					|| $fieldName === 'invoice_status'
+					|| $fieldName === 'date';
+				$isChecked = $isLoanScheduleModel
+					|| $fieldName === 'net_sales_value'
+					|| $fieldName === 'invoice_status'
+					|| $fieldName === 'date'
+					|| in_array($fieldName, $selected_fields, true);
+				return [
+					'field_name' => $fieldName,
+					'label' => $label,
+					'checked' => $isChecked,
+					'locked' => $isLocked,
+				];
+			})->values();
+
+		return \Inertia\Inertia::render('TemplateFieldSelection/Index', [
+			'company' => ['id' => $company->id],
+			'model' => $model,
+			'modelDisplayName' => camelToTitle($modelName),
+			'view' => $view,
+			'isLoanScheduleModel' => $isLoanScheduleModel,
+			'fields' => $fields,
+			'submitUrl' => route('table.fields.selection.save', ['company' => $company->id, 'model' => $model, 'modelName' => $modelName]),
+			'redirectUrl' => route('salesGatheringImport', ['company' => $company->id, 'model' => $modelName]),
+			'navUrls' => [
+				'home' => route('home', ['company' => $company->id]),
+				'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+				'customers' => route('partners.index', ['company' => $company->id, 'type' => 'customers']),
+				'suppliers' => route('partners.index', ['company' => $company->id, 'type' => 'suppliers']),
+				'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
+			],
+		]);
 	}
 	/**
-	 * Saving Chosen Exportable Fields
+	 * Saving Chosen Exportable Fields — UNCHANGED except removing the
+	 * now-dead session('redirectTo') line (the Vue page redirects
+	 * immediately client-side instead of polling for this flag).
 	 */
 	public  function customizedTableFieldSave(Request $request, Company $company, $model, $modelName)
 	{
@@ -119,7 +224,6 @@ class ExportTable extends Controller
 			if(isset($columnsWithViewingNames['net_balance'])){
 				unset($columnsWithViewingNames['net_balance']);
 			}
-			session()->put('redirectTo', route('salesGatheringImport', ['company' => $company->id,'model'=>$modelName]));
 		if($request->get('model_name') == 'LoanSchedule'){
 			$columnsWithViewingNames = LoanSchedule::getExportableFields();
 		}
@@ -135,32 +239,6 @@ class ExportTable extends Controller
 	/**
 	 * Filtering Fields and returns Exportable Fields
 	 */
-	// public function columnsFiltrationForFirstTime($columns)
-	// {
-	// 	// Columns That Will Be Excluded
-	// 	$columnsToBeExcluded = [
-	// 		"id",
-	// 		"company_id",
-	// 		'invoice_status',
-	// 		"updated_by",
-	// 		"created_by",
-	// 		"created_at",
-	// 		"updated_at",
-	// 		"deleted_at"
-	// 	];
-
-	// 	// Looping Through Columns Needs To Be Excluded
-	// 	foreach ($columnsToBeExcluded as $columnToBeExcluded) {
-	// 		// Check if the Current column included in the exclusion array To Be unset from the main Array Of Columns
-	// 		if (false !== $found = array_search($columnToBeExcluded, $columns)) {
-	// 			unset($columns[$found]);
-	// 		}
-	// 	}
-	// 	$columnsWithViewingNames = $this->DisplayFieldsNames($columns);
-
-
-	// 	return $columnsWithViewingNames;
-	// }
 	public function columnsFiltration($model_name, $company, $view, $selected_fields)
 	{
 		if ($view == 'selected_fields') {
@@ -168,7 +246,6 @@ class ExportTable extends Controller
 			$columnsWithViewingNames = TablesField::where('model_name', $model_name)
 				->whereIn('field_name', $selected_fields)
 				->pluck('view_name', 'field_name')
-				// ->whereNotIn('field_name',['collected_amount'])
 				->toArray();
 			} else {
 				$columnsWithViewingNames = TablesField::where('model_name', $model_name)
@@ -191,10 +268,6 @@ class ExportTable extends Controller
 			} else {
 				$viewingName = ucwords(str_replace('_', ' ', $columnName));
 			}
-			// if (str_contains($columnName,'product_item')) {
-			//     $viewingName = str_replace('Sku', 'Item', $viewingName);
-
-			// }
 
 			$columnsWithViewingNames[$columnName] = $translate === true ?  __($viewingName) : $viewingName;
 		});

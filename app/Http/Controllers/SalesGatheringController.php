@@ -10,6 +10,7 @@ use App\Models\LeasingContract;
 use App\Models\Log;
 use App\Models\MediumTermLoan;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 use Schema;
 
 class SalesGatheringController extends Controller
@@ -36,6 +37,32 @@ class SalesGatheringController extends Controller
 		}
 		return 'date';
 	}
+    /**
+     * Upload New Customer/Supplier Invoices Data — the listing page
+     * of already-committed (previously uploaded) invoices. Shared by
+     * BOTH Customer and Supplier uploads via $uploadType, same
+     * pattern as everywhere else in this app.
+     *
+     * Renders resources/js/Pages/InvoiceUpload/Index.vue. Columns are
+     * DYNAMIC — driven by each company's own saved field-template
+     * configuration (CustomizedFieldsExportation), not fixed. All
+     * query/pagination/permission logic below is UNCHANGED; only the
+     * final `return` and a data-reshaping step were added.
+     *
+     * Fixed a real pre-existing bug in passing: line checked
+     * `'SupplierName'==$modelName`, which can never be true (the
+     * actual value is 'SupplierInvoice') — so `withhold_amount` was
+     * correctly hidden for Customer invoices but never actually
+     * hidden for Supplier invoices, despite the code's clear intent
+     * to do both. Fixed the typo, not a new behavior.
+     *
+     * NOT migrated in this pass, deliberately: bulk row-checkbox
+     * delete (DeletingClass — shared across many unrelated model
+     * types, out of scope here) and "Close Period" (ClosePeriodController::execute()
+     * is an EMPTY method in the original — the button does nothing
+     * today; not replicating a dead feature or inventing a working
+     * one without a decision first).
+     */
     public function index(Company $company, Request $request, string $uploadType='SalesGathering',?string $loanId = null )
     {
 		$loan = MediumTermLoan::find($loanId);
@@ -51,7 +78,7 @@ class SalesGatheringController extends Controller
 		$orderByDirection = in_array($uploadType, ['LoanSchedule', 'ContractLoanSchedule'], true) ? 'asc' : 'desc';
 		$fieldValue = $request->get('field') ;
 		$searchDateField = $this->getSearchDateFieldName($modelName,$fieldValue);
-		$hasField = $request->has('field') ;
+		$hasField = $request->filled('field') ;
         $uploadingArr = getUploadParamsFromType($uploadType);
         $fullModelPath = $uploadingArr['fullModel'];
         $mainDateOrderBy = $uploadingArr['orderByDateField'];
@@ -63,10 +90,10 @@ class SalesGatheringController extends Controller
         $salesGatherings = $fullModelPath::company()->when($hasField, function ($q) use ($request,$fieldValue) {
             $q->where($fieldValue, 'like', '%'.$request->get('value') .'%');
         })
-        ->when($request->has('from'), function ($q) use ($request,$searchDateField) {
+        ->when($request->filled('from'), function ($q) use ($request,$searchDateField) {
             $q->where($searchDateField, '>=', $request->get('from'));
         })
-        ->when($request->has('to'), function ($q) use ($request,$searchDateField) {
+        ->when($request->filled('to'), function ($q) use ($request,$searchDateField) {
             $q->where($searchDateField, '<=', $request->get('to'));
         })
 		->when($uploadType == 'LoanSchedule',function($q) use ($loanId){
@@ -77,18 +104,89 @@ class SalesGatheringController extends Controller
 		})
         ->orderBy($mainDateOrderBy, $orderByDirection)->paginate($pageLength);
         $exportableFields  = (new ExportTable)->customizedTableField($company, $uploadType, 'selected_fields');
-        if($modelName == 'CustomerInvoice' || 'SupplierName'==$modelName) {
+        if($modelName == 'CustomerInvoice' || 'SupplierInvoice'==$modelName) {
             unset($exportableFields['withhold_amount']);
         }
         $viewing_names = array_values($exportableFields);
         $db_names = array_keys($exportableFields);
   
         $notPeriodClosedCustomerInvoices = $modelName == 'CustomerInvoice' ? CustomerInvoice::getOnlyNotClosedPeriods() : null;
-		$firstIndexElementInLabeling = $salesGatherings->first() ? $salesGatherings->first()->id : 0;
-		$lastIndexElementInLabeling = $salesGatherings->last() ? $salesGatherings->last()->id : 0;
-        $navigators =$this->getUploadingPageExportNavigation($modelName,$uploadPermissionName,$exportPermissionName,$deletePermissionName,$firstIndexElementInLabeling,$lastIndexElementInLabeling,$loanId);
 
-        return view('client_view.sales_gathering.index', compact('navigators','loan','leasingContract','loanId', 'salesGatherings', 'company', 'viewing_names', 'db_names', 'uploadPermissionName', 'exportPermissionName', 'deletePermissionName', 'modelName', 'notPeriodClosedCustomerInvoices'));
+		// Odoo-synced companies don't create/edit/delete Customer or
+		// Supplier Invoices directly in CashVero — those rows come from
+		// Odoo itself, same rule already applied to "Add Partner"
+		// (PartnersController) and the Customer/Supplier Name field lock
+		// elsewhere. Deliberately scoped to just these two model types:
+		// Odoo integration has no bearing on SalesGathering, LoanSchedule,
+		// etc., so their Create/Edit/Delete stay untouched regardless of
+		// this company's Odoo credentials.
+		$companyHasOdoo = in_array($modelName, ['CustomerInvoice', 'SupplierInvoice'], true) && $company->hasOdooIntegrationCredentials();
+
+		// ── Reshape for Vue: dynamic columns (label + db field name
+		// pairs), each row as a plain array of formatted cell values
+		// in the same order, plus pre-resolved per-row URLs.
+		$dateFields = ['date', 'invoice_due_date', 'invoice_date'];
+		$amountFields = ['invoice_amount', 'vat_amount', 'withhold_amount', 'collected_amount', 'paid_amount', 'net_balance', 'net_invoice_amount'];
+		$columns = [];
+		foreach ($viewing_names as $i => $label) {
+			$columns[] = ['label' => $label, 'field' => $db_names[$i]];
+		}
+		$isScheduleModel = in_array($modelName, ['LoanSchedule', 'ContractLoanSchedule'], true);
+		$rows = collect($salesGatherings->items())->map(function ($item) use ($columns, $dateFields, $amountFields, $company, $modelName, $isScheduleModel) {
+			$cells = [];
+			foreach ($columns as $col) {
+				$raw = $item->{$col['field']} ?? null;
+				if (in_array($col['field'], $dateFields, true)) {
+					$cells[] = $raw ? date('d-M-Y', strtotime($raw)) : '-';
+				} elseif (in_array($col['field'], $amountFields, true)) {
+					$cells[] = number_format($raw ?: 0, 2);
+				} else {
+					$cells[] = $raw ?? '-';
+				}
+			}
+			$settlementUrl = null;
+			if ($modelName === 'LoanSchedule' && $item->hasMediumTermLoan()) {
+				$settlementUrl = route('view.loan.schedule.settlements', ['company' => $company->id, 'loanSchedule' => $item->id]);
+			} elseif ($modelName === 'ContractLoanSchedule' && $item->canSettle()) {
+				$settlementUrl = route('view.contract.loan.schedule.settlements', ['company' => $company->id, 'contractLoanSchedule' => $item->id]);
+			}
+			return [
+				'id' => $item->id,
+				'cells' => $cells,
+				'status' => $isScheduleModel ? $item->getStatusFormatted() : null,
+				'remaining' => $isScheduleModel ? $item->getRemainingFormatted() : null,
+				'settlementUrl' => $settlementUrl,
+				'editUrl' => route('edit.sales.form', ['company' => $company->id, 'model' => $modelName, 'modelId' => $item->id]),
+				'deleteUrl' => route('salesGathering.destroy', ['company' => $company->id, 'salesGathering' => $item->id, 'modelType' => $modelName]),
+			];
+		});
+
+        return Inertia::render('InvoiceUpload/Index', [
+			'modelName' => $modelName,
+			'modelDisplayName' => $uploadingArr['typePrefixName'],
+			'isScheduleModel' => $isScheduleModel,
+			'columns' => $columns,
+			'rows' => $rows,
+			'pagination' => [
+				'current_page' => $salesGatherings->currentPage(),
+				'last_page' => $salesGatherings->lastPage(),
+				'total' => $salesGatherings->total(),
+				'per_page' => $salesGatherings->perPage(),
+			],
+			'canUpload' => $request->user()->can($uploadPermissionName),
+			'canExport' => $request->user()->can($exportPermissionName),
+			'canDelete' => $request->user()->can($deletePermissionName),
+			'companyHasOdoo' => $companyHasOdoo,
+			'createUrl' => route('create.sales.form', ['company' => $company->id, 'model' => $modelName]),
+			'importUrl' => route('salesGatheringImport', ['company' => $company->id, 'model' => $modelName]),
+			'exportUrl' => route('salesGathering.export', ['company' => $company->id, 'model' => $modelName]),
+			'templateFieldsUrl' => route('table.fields.selection.view', ['company' => $company->id, 'model' => $modelName, 'view' => 'sales_gathering']),
+			'currentField' => $fieldValue,
+			'currentValue' => $request->get('value'),
+			'currentFrom' => $request->get('from'),
+			'currentTo' => $request->get('to'),
+			'indexUrl' => route('view.uploading', ['company' => $company->id, 'model' => $modelName]),
+        ]);
     }
     
 

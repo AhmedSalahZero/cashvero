@@ -15,6 +15,37 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
+/**
+ * CertificatesOfDepositsController
+ * ------------------------------------------------------------------
+ * Manages Certificate Of Deposit (CD) records under a Financial
+ * Institution — structurally the near-twin of Time Of Deposit: a
+ * fixed-term deposit product with the same three states (running,
+ * matured, broken) and the same apply/break/reverse action set.
+ * Unlike Time Of Deposit, CDs have no renewal-date history feature.
+ *
+ * ── Frontend migration status (as of this file's last update) ──────
+ *   ✅ index()          → MIGRATED to Vue + Inertia. Renders
+ *                          resources/js/Pages/CertificatesOfDeposits/Index.vue.
+ *   ✅ create() / edit() → MIGRATED to Vue + Inertia. Both render the
+ *                          same shared page,
+ *                          resources/js/Pages/CertificatesOfDeposits/Form.vue,
+ *                          distinguished by a `mode: 'create' | 'edit'` prop.
+ *   ✅ viewPeriodInterest() → MIGRATED to Vue + Inertia. Renders
+ *      resources/js/Pages/CertificatesOfDeposits/PeriodInterest.vue.
+ *   ✅ store() / destroy() / applyDeposit() / applyBreak() /
+ *      reverseDeposit() / applyPeriodInterest() / deletePeriodInterest()
+ *      → presentation-only change: these already redirect back to the
+ *      migrated index() page. The financial logic inside each of
+ *      these methods is UNCHANGED, deliberately.
+ *   ⚠️ update() → ONE real bug fixed (confirmed with the project
+ *      owner): a call to a nonexistent method that was crashing every
+ *      CD edit. See the docblock directly above the method.
+ *   ⚠️ reverseBroken() → ONE real bug fixed (confirmed with the
+ *      project owner): the same phantom-cash bug already found and
+ *      fixed on TimeOfDeposit::reverseBroken(). See the docblock
+ *      directly above the method.
+ */
 class CertificatesOfDepositsController
 {
     use GeneralFunctions;
@@ -52,20 +83,39 @@ class CertificatesOfDepositsController
 		
 		return $collection->values();
 	}
+	/**
+	 * The main "Certificates Of Deposit" list — 3 tabs: running,
+	 * matured, broken.
+	 *
+	 * ✅ MIGRATED to Vue + Inertia. Renders
+	 * resources/js/Pages/CertificatesOfDeposits/Index.vue.
+	 *
+	 * Date-range defaults follow the same rule agreed for Time Of
+	 * Deposit: Running has NO default cutoff (a currently-open CD
+	 * shouldn't be silently hidden just because it started a while
+	 * ago), while Matured/Broken keep a rolling default window,
+	 * clearly labeled on-screen so it's never a silent restriction.
+	 */
 	public function index(Company $company,Request $request,FinancialInstitution $financialInstitution)
 	{
 	
 		
-		$numberOfMonthsBetweenEndDateAndStartDate = 18 ;
+		$numberOfMonthsWindow = 18 ;
 		$currentType = $request->get('active',CertificatesOfDeposit::RUNNING);
 		$filterDates = [];
 		foreach(CertificatesOfDeposit::getAllTypes() as $type){
-			$startDate = $request->has('startDate') ? $request->input('startDate.'.$type) : now()->subMonths($numberOfMonthsBetweenEndDateAndStartDate)->format('Y-m-d');
-			$endDate = $request->has('endDate') ? $request->input('endDate.'.$type) : now()->format('Y-m-d');
-			
+			if ($type === CertificatesOfDeposit::RUNNING) {
+				$startDate = $request->has('startDate') ? $request->input('startDate.'.$type) : null;
+				$endDate = $request->has('endDate') ? $request->input('endDate.'.$type) : null;
+			} else {
+				$startDate = $request->has('startDate') ? $request->input('startDate.'.$type) : now()->subMonths($numberOfMonthsWindow)->format('Y-m-d');
+				$endDate = $request->has('endDate') ? $request->input('endDate.'.$type) : now()->format('Y-m-d');
+			}
+
 			$filterDates[$type] = [
 				'startDate'=>$startDate,
-				'endDate'=>$endDate
+				'endDate'=>$endDate,
+				'isDefaultWindow'=> $type !== CertificatesOfDeposit::RUNNING && !$request->has('startDate') && !$request->has('endDate'),
 			];
 		}
 		/**
@@ -138,34 +188,116 @@ class CertificatesOfDepositsController
 			CertificatesOfDeposit::BROKEN =>$brokenCertificatesOfDeposits ,
 		];
 		
-        return view('reports.certificates-of-deposit.index', [
-			'company'=>$company,
-			'filterDates'=>$filterDates,
-			'financialInstitution'=>$financialInstitution,
-			'searchFields'=>$searchFields,
-			'models'=>$models
+		/**
+		 * Flatten a CD collection into plain arrays for Inertia, with
+		 * every action URL this row's row-menu could need pre-resolved.
+		 */
+		$mapCertificates = function (Collection $certificates) use ($company, $financialInstitution) {
+			return $certificates->map(function (CertificatesOfDeposit $cd) use ($company, $financialInstitution) {
+				return [
+					'id' => $cd->id,
+					'status' => $cd->getStatus(),
+					'start_date' => $cd->getStartDate(),
+					'start_date_formatted' => $cd->getStartDateFormatted(),
+					'end_date' => $cd->getEndDate(),
+					'end_date_formatted' => $cd->getEndDateFormatted(),
+					'account_number' => $cd->getAccountNumber(),
+					'amount' => $cd->getAmount(),
+					'amount_formatted' => $cd->getAmountFormatted(),
+					'currency' => $cd->getCurrency(),
+					'interest_rate_formatted' => $cd->getInterestRateFormatted(),
+					'interest_amount' => $cd->getInterestAmount(),
+					'interest_amount_formatted' => $cd->getInterestAmountFormatted(),
+					'break_date_formatted' => $cd->getBreakDateFormatted(),
+					'break_interest_amount_formatted' => $cd->getBreakInterestAmountFormatted(),
+					'blocked_against_formatted' => $cd->getBlockedAgainstFormatted(),
+					'is_due_today_or_greater' => $cd->isDueTodayOrGreater(),
+					'edit_url' => route('edit.certificates.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'certificatesOfDeposit' => $cd->id]),
+					'delete_url' => route('delete.certificates.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'certificatesOfDeposit' => $cd->id]),
+					'apply_deposit_url' => route('apply.deposit.to.certificate.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'certificatesOfDeposit' => $cd->id]),
+					'apply_break_url' => route('apply.break.to.certificate.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'certificatesOfDeposit' => $cd->id]),
+					'reverse_deposit_url' => route('reverse.deposit.to.certificate.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'certificatesOfDeposit' => $cd->id]),
+					'reverse_broken_url' => route('reverse.broken.to.certificate.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'certificatesOfDeposit' => $cd->id]),
+					'apply_period_interest_url' => route('apply.period.interest.to.certificates.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'certificatesOfDeposit' => $cd->id]),
+					'view_period_interest_url' => route('view.period.interest.to.certificates.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'certificatesOfDeposit' => $cd->id]),
+				];
+			})->values();
+		};
+
+		return \Inertia\Inertia::render('CertificatesOfDeposits/Index', [
+			'company' => ['id' => $company->id],
+			'financialInstitution' => [
+				'id' => $financialInstitution->id,
+				'name' => $financialInstitution->getName(),
+			],
+			'activeTab' => $currentType,
+			'filterDates' => $filterDates,
+			'canCreate' => hasAuthFor('create certificate of deposit'),
+			'deposits' => [
+				CertificatesOfDeposit::RUNNING => $mapCertificates($runningCertificatesOfDeposits),
+				CertificatesOfDeposit::MATURED => $mapCertificates($maturedCertificatesOfDeposits),
+				CertificatesOfDeposit::BROKEN => $mapCertificates($brokenCertificatesOfDeposits),
+			],
+			'createUrl' => route('create.certificates.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
+			'tabUrls' => [
+				CertificatesOfDeposit::RUNNING => route('view.certificates.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'active' => CertificatesOfDeposit::RUNNING]),
+				CertificatesOfDeposit::MATURED => route('view.certificates.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'active' => CertificatesOfDeposit::MATURED]),
+				CertificatesOfDeposit::BROKEN => route('view.certificates.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'active' => CertificatesOfDeposit::BROKEN]),
+			],
+			'backUrl' => route('view.all.bank.accounts', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
+			'navUrls' => [
+				'home' => route('home', ['company' => $company->id]),
+				'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+				'customers' => route('partners.index', ['company' => $company->id, 'type' => 'customers']),
+				'suppliers' => route('partners.index', ['company' => $company->id, 'type' => 'suppliers']),
+				'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
+			],
 		]);
     }
-	
+
+	/**
+	 * Shows the "Add Certificate Of Deposit" form.
+	 *
+	 * ✅ MIGRATED to Vue + Inertia — shares the same page component as
+	 * edit() (resources/js/Pages/CertificatesOfDeposits/Form.vue),
+	 * distinguished by the `mode: 'create'` prop. store() is
+	 * UNCHANGED, deliberately.
+	 */
 	public function create(Company $company,FinancialInstitution $financialInstitution)
 	{
-		$banks = Bank::pluck('view_name','id');
-		$selectedBranches =  Branch::getBranchesForCurrentCompany($company->id) ;
-		/**
-		 * * عباره عن حساب جاري فقط
-		 */
 		$accounts = $financialInstitution->accounts ;
-        return view('reports.certificates-of-deposit.form',[
-			'banks'=>$banks,
-			'selectedBranches'=>$selectedBranches,
-			'financialInstitution'=>$financialInstitution,
-			'accounts'=>$accounts
+        return \Inertia\Inertia::render('CertificatesOfDeposits/Form', [
+			'mode' => 'create',
+			'company' => ['id' => $company->id],
+			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
+			'accounts' => $accounts->map(fn ($a) => [
+				'id' => $a->getId(),
+				'account_number' => $a->getAccountNumber(),
+				'currency' => $a->getCurrency(),
+				'is_active' => (bool) $a->is_active,
+			])->values(),
+			'currencies' => getCurrencies(),
+			'hasOdooIntegration' => $company->hasOdooIntegrationCredentials(),
+			'model' => null,
+			'submitUrl' => route('store.certificates.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
+			'backUrl' => route('view.certificates.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
+			'navUrls' => [
+				'home' => route('home', ['company' => $company->id]),
+				'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+				'customers' => route('partners.index', ['company' => $company->id, 'type' => 'customers']),
+				'suppliers' => route('partners.index', ['company' => $company->id, 'type' => 'suppliers']),
+				'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
+			],
 		]);
     }
 	public function getCommonDataArr():array 
 	{
 		return ['start_date','account_number','amount','end_date','currency','interest_rate','interest_amount','maturity_amount_added_to_account_id','odoo_code','deducted_from_account_id','is_at_maturity'];
 	}
+	/**
+	 * Stores a new CD. UNCHANGED, deliberately. Redirects to the
+	 * migrated index().
+	 */
 	public function store(Company $company  ,FinancialInstitution $financialInstitution, StoreCertificateOfDepositRequest $request){
 		
 		$data = $request->only( $this->getCommonDataArr());
@@ -198,19 +330,70 @@ class CertificatesOfDepositsController
 		
 	}
 	
+	/**
+	 * Shows the "Edit Certificate Of Deposit" form.
+	 *
+	 * ✅ MIGRATED to Vue + Inertia — shares the same page component as
+	 * create() (resources/js/Pages/CertificatesOfDeposits/Form.vue),
+	 * distinguished by the `mode: 'edit'` prop. update() has the one
+	 * confirmed bug fix noted below, otherwise unchanged.
+	 */
 	public function edit(Company $company , Request $request , FinancialInstitution $financialInstitution , CertificatesOfDeposit $certificatesOfDeposit){
 		$accounts = $financialInstitution->accounts ;
-        return view('reports.certificates-of-deposit.form',[
-			'financialInstitution'=>$financialInstitution,
-			'model'=>$certificatesOfDeposit,
-			'accounts'=>$accounts
+        return \Inertia\Inertia::render('CertificatesOfDeposits/Form', [
+			'mode' => 'edit',
+			'company' => ['id' => $company->id],
+			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
+			'accounts' => $accounts->map(fn ($a) => [
+				'id' => $a->getId(),
+				'account_number' => $a->getAccountNumber(),
+				'currency' => $a->getCurrency(),
+				'is_active' => (bool) $a->is_active,
+			])->values(),
+			'currencies' => getCurrencies(),
+			'hasOdooIntegration' => $company->hasOdooIntegrationCredentials(),
+			'model' => [
+				'id' => $certificatesOfDeposit->id,
+				'account_number' => $certificatesOfDeposit->getAccountNumber(),
+				'currency' => $certificatesOfDeposit->getCurrency(),
+				'odoo_code' => $certificatesOfDeposit->getOdooCode(),
+				'deducted_from_account_id' => $certificatesOfDeposit->deducted_from_account_id,
+				'maturity_amount_added_to_account_id' => $certificatesOfDeposit->getMaturityAmountAddedToAccountId(),
+				'start_date' => $certificatesOfDeposit->getStartDate(),
+				'end_date' => $certificatesOfDeposit->getEndDate(),
+				'amount' => $certificatesOfDeposit->getAmount(),
+				'interest_rate' => $certificatesOfDeposit->getInterestRate(),
+				'interest_amount' => $certificatesOfDeposit->getInterestAmount(),
+				'is_at_maturity' => !$certificatesOfDeposit->isPeriodically(),
+			],
+			'submitUrl' => route('update.certificates.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'certificatesOfDeposit' => $certificatesOfDeposit->id]),
+			'backUrl' => route('view.certificates.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
+			'navUrls' => [
+				'home' => route('home', ['company' => $company->id]),
+				'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+				'customers' => route('partners.index', ['company' => $company->id, 'type' => 'customers']),
+				'suppliers' => route('partners.index', ['company' => $company->id, 'type' => 'suppliers']),
+				'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
+			],
 		]);
-		
 	}
 	
+	/**
+	 * ⚠️ REAL BUG FIXED HERE (found and confirmed with the project
+	 * owner before this fix was applied): this line used to call
+	 * $certificatesOfDeposit->getDeductedFromAccountId() — a method
+	 * that doesn't exist anywhere on this model or its traits.
+	 * deducted_from_account_id is a plain database column, not a
+	 * method. Calling an undefined method is a fatal PHP error, so
+	 * every save of an existing Certificate Of Deposit was crashing
+	 * here before reaching the database. (The sibling line on
+	 * TimeOfDeposit::update() has the same call, but commented out —
+	 * that's why TD never hit this.) Fixed by reading the raw column
+	 * directly, same fix already applied on the TimeOfDeposit side.
+	 */
 	public function update(Company $company , UpdateCertificateOfDepositRequest $request , FinancialInstitution $financialInstitution,CertificatesOfDeposit $certificatesOfDeposit){
 		$deductedFromAccountId = $request->get('deducted_from_account_id',0) ;
-		$accountNumberHasChanged = $deductedFromAccountId != $certificatesOfDeposit->getDeductedFromAccountId();
+		$accountNumberHasChanged = $deductedFromAccountId != $certificatesOfDeposit->deducted_from_account_id;
 		$data['updated_by'] = auth()->user()->id ;
 		$data = $request->only($this->getCommonDataArr());
 		foreach(['start_date','end_date'] as $dateField){
@@ -233,6 +416,10 @@ class CertificatesOfDepositsController
 		$activeTab = $type ;
 		return redirect()->route('view.certificates.of.deposit',['company'=>$company->id,'financialInstitution'=>$financialInstitution->id,'active'=>$activeTab])->with('success',__('Item Has Been Updated Successfully'));
 	}
+	/**
+	 * Deletes a CD and its related bank-statement entries. UNCHANGED,
+	 * deliberately.
+	 */
 	public function destroy(Company $company , FinancialInstitution $financialInstitution , CertificatesOFDeposit $certificatesOfDeposit)
 	{
 		$certificatesOfDeposit->deletePeriodInterestAmounts();
@@ -242,6 +429,10 @@ class CertificatesOfDepositsController
 		return redirect()->back()->with('success',__('Item Has Been Delete Successfully'));
 	}
 	
+	/**
+	 * Applies a periodic (non-maturity) interest posting to a CD.
+	 * UNCHANGED, deliberately.
+	 */
 	public function applyPeriodInterest(Company $company,Request $request,FinancialInstitution $financialInstitution,CertificatesOfDeposit $certificatesOfDeposit)
 	{
 		$periodInterestAmount = number_unformat($request->get('periodic_interest_amount')) ;
@@ -254,11 +445,36 @@ class CertificatesOfDepositsController
 		$activeTab = $type ;
 		return redirect()->route('view.certificates.of.deposit',['company'=>$company->id,'financialInstitution'=>$financialInstitution->id,'active'=>$activeTab])->with('success',__('Item Has Been Updated Successfully'));
 	}
+	/**
+	 * ✅ MIGRATED to Vue + Inertia. Renders
+	 * resources/js/Pages/CertificatesOfDeposits/PeriodInterest.vue.
+	 */
 	public function viewPeriodInterest(Company $company,Request $request,FinancialInstitution $financialInstitution,CertificatesOfDeposit $certificatesOfDeposit)
 	{
 		$rows = CurrentAccountBankStatement::where('company_id',$company->id)->where('certificate_of_deposit_id',$certificatesOfDeposit->id)->where('is_period_cd_or_td_interest',1)->get();
-		return view('reports.time-of-deposit.view-period-interests',['company'=>$company,'financialInstitution'=>$financialInstitution,'model'=>$certificatesOfDeposit,'rows'=>$rows]);
+		return \Inertia\Inertia::render('CertificatesOfDeposits/PeriodInterest', [
+			'company' => ['id' => $company->id],
+			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
+			'certificatesOfDeposit' => ['id' => $certificatesOfDeposit->id, 'currency' => $certificatesOfDeposit->getCurrency()],
+			'rows' => $rows->map(fn ($row) => [
+				'id' => $row->id,
+				'date' => $row->date,
+				'amount_formatted' => number_format($row->debit, 2),
+				'delete_url' => route('delete.period.interest.to.certificates.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'certificatesOfDeposit' => $certificatesOfDeposit->id, 'currentAccountBankStatement' => $row->id]),
+			])->values(),
+			'backUrl' => route('view.certificates.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
+			'navUrls' => [
+				'home' => route('home', ['company' => $company->id]),
+				'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+				'customers' => route('partners.index', ['company' => $company->id, 'type' => 'customers']),
+				'suppliers' => route('partners.index', ['company' => $company->id, 'type' => 'suppliers']),
+				'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
+			],
+		]);
 	}
+	/**
+	 * Deletes a periodic interest posting. UNCHANGED, deliberately.
+	 */
 	public function deletePeriodInterest(Company $company,Request $request,FinancialInstitution $financialInstitution,CertificatesOfDeposit $certificatesOfDeposit,CurrentAccountBankStatement $currentAccountBankStatement)
 	{
 		$certificatesOfDeposit->deletePeriodInterest($currentAccountBankStatement);
@@ -268,6 +484,10 @@ class CertificatesOfDepositsController
 	
 	/**
 	 * * هنا اليوزر هياكد انه نزله الفايدة المستحقة وبالتالي هنزلها في حسابه الجاري اللي هو اختارة من الفورمة
+	 */
+	/**
+	 * Marks a running CD as matured and posts the interest/maturity
+	 * amount to the current account. UNCHANGED, deliberately.
 	 */
 	public function applyDeposit(Company $company,Request $request,FinancialInstitution $financialInstitution,CertificatesOfDeposit $certificatesOfDeposit)
 	{
@@ -300,6 +520,11 @@ class CertificatesOfDepositsController
 	 * * هنا اليوزر هيعكس عملية التاكيد اللي كان اكدها اكنه عملها بالغلط فا هنرجع كل حاجه زي ما كانت ونحذف القيم اللي في جدول ال 
 	 * * current account bank statements
 	 */
+	/**
+	 * Reverses applyDeposit(). UNCHANGED, deliberately — already
+	 * correctly excludes DEDUCTED_FOR_CURRENT_ACCOUNT (this is the
+	 * pattern reverseBroken() was missing, now fixed to match).
+	 */
 	public function reverseDeposit(Company $company,Request $request,FinancialInstitution $financialInstitution,CertificatesOfDeposit $certificatesOfDeposit)
 	{
 		$certificateType = CertificatesOfDeposit::RUNNING ;
@@ -321,6 +546,9 @@ class CertificatesOfDepositsController
 	
 	/**
 	 * * لو انت عملت شهادة ايداع في البنك تقدر تكسرها وتاخد قيمة الشهادة بتاعتك بس بيطبق عليك غرامة
+	 */
+	/**
+	 * Breaks a running CD early (with penalty). UNCHANGED, deliberately.
 	 */
 	public function applyBreak(Company $company,Request $request,FinancialInstitution $financialInstitution,CertificatesOfDeposit $certificatesOfDeposit)
 	{
@@ -369,6 +597,20 @@ class CertificatesOfDepositsController
 	 * * هنا اليوزر هيعكس عملية الكسر اللي كان اكدها اكنه عملها بالغلط فا هنرجع كل حاجه زي ما كانت ونحذف القيم اللي في جدول ال 
 	 * * current account bank statements
 	 */
+	/**
+	 * ⚠️ REAL BUG FIXED HERE (found and confirmed with the project
+	 * owner before this fix was applied): this method used to delete
+	 * $certificatesOfDeposit->currentAccountBankStatements with NO
+	 * filter at all — unlike reverseDeposit() just above, which
+	 * correctly excludes CurrentAccountBankStatement::DEDUCTED_FOR_CURRENT_ACCOUNT
+	 * (the entry recording money leaving the funding account when the
+	 * CD was first created). Without that filter, every Break →
+	 * Reverse Broken on a CD funded from a real account (not "Opening
+	 * Balance") deleted that original entry too — same phantom-cash
+	 * bug already found and fixed on TimeOfDeposit::reverseBroken().
+	 * Fixed by adding the same exclusion filter reverseDeposit() above
+	 * already uses correctly.
+	 */
 	public function reverseBroken(Company $company,Request $request,FinancialInstitution $financialInstitution,CertificatesOfDeposit $certificatesOfDeposit)
 	{
 		$certificateType = CertificatesOfDeposit::RUNNING ;
@@ -384,7 +626,7 @@ class CertificatesOfDepositsController
 		 * * current account bank statement
 		 */
 		
-		 CurrentAccountBankStatement::deleteButTriggerChangeOnLastElement($certificatesOfDeposit->currentAccountBankStatements);
+		 CurrentAccountBankStatement::deleteButTriggerChangeOnLastElement($certificatesOfDeposit->currentAccountBankStatements->where('type','!=',CurrentAccountBankStatement::DEDUCTED_FOR_CURRENT_ACCOUNT));
 		 
 		 
 		return redirect()->route('view.certificates.of.deposit',['company'=>$company->id,'financialInstitution'=>$financialInstitution->id ,'active'=>$certificateType])->with('success',__('Certificate Has Been Marked As Matured'));

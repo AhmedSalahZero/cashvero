@@ -1,0 +1,725 @@
+Folder PATH listing
+Volume serial number is 61F3-EB9C
+D:\MY PROJECTS\CASHVERO\RESOURCES\VIEWS
+³   bank_statement_form.blade.php
+³   bank_statement_result.blade.php
+³   cashflow-report-index.blade.php
+³   charts_header.blade.php
+³   comparing_type_selector.blade.php
+³   contract-cashflow-report-index.blade.php
+³   datatable_css.blade.php
+³   home.blade.php
+³   js_datatable.blade.php
+³   lc_lg_bank_statement_result.blade.php
+³   lg_by_bank_name_form.blade.php
+³   lg_by_bank_name_result.blade.php
+³   lg_by_beneficiary_name_form.blade.php
+³   lg_by_beneficiary_name_result.blade.php
+³   lg_lc_statement_form.blade.php
+³   loan-structure-trs.blade.php
+³   max-option-span.blade.php
+³   nav-item.blade.php
+³   partners_statement_form.blade.php
+³   partners_statement_result.blade.php
+³   projection-out.blade.php
+³   red-notification.blade.php
+³   safe_statement_form.blade.php
+³   safe_statement_result.blade.php
+³   star.blade.php
+³   ul-to-trigger-popup.blade.php
+³   user_comment.blade.php
+³   welcome.blade.php
+³   withdrawal_settlement_report_result.blade.php
+³   _warning__message.blade.php
+³   
+ÃÄÄÄadmin
+³   ³   adjusted-due-date-histories.blade.php
+³   ³   create-excel-by-form.blade.php
+³   ³   
+³   ÃÄÄÄdashboard
+³   ³       avg_min_max_dashboard_table.blade.php
+³   ³       cash.blade.php
+³   ³       details-loan-past-dues-modal.blade.php
+³   ³       details_cash_in_safe_modal.blade.php
+³   ³       details_modal.blade.php
+³   ³       expense.blade.php
+³   ³       expense_modal.blade.php
+³   ³       forecast.blade.php
+³   ³       lg-lc-details.blade.php
+³   ³       
+³   ÃÄÄÄforeign-exchange-rate
+³   ³       foreign-exchange-rate.blade.php
+³   ³       _form.blade.php
+³   ³       
+³   ÃÄÄÄloan-schedule-settlements
+³   ³       index.blade.php
+³   ³       
+³   ÃÄÄÄloan2
+³   ÃÄÄÄmodals
+³   ³       avg-min-max-outliers-date-modals.blade.php
+³   ³       avg-min-max-outliers-date-value-modals.blade.php
+³   ³       r-modals.blade.php
+³   ³       
+³   ÃÄÄÄpositions
+³   ³       crud.blade.php
+³   ³       index.blade.php
+³   ³       
+³   ÃÄÄÄready-made-forms
+³   ÀÄÄÄreports
+³       ³   balances_form.blade.php
+³       ³   cash-flow-main-row.blade.php
+³       ³   cash-flow-report.blade.php
+³       ³   cash-flow-sub-row.blade.php
+³       ³   contract-cash-flow-report.blade.php
+³       ³   customer-statement-report.blade.php
+³       ³   invoice-report-td.blade.php
+³       ³   invoice-report-th.blade.php
+³       ³   invoice-report.blade.php
+³       ³   invoices-aging.blade.php
+³       ³   lglc-report.blade.php
+³       ³   total_net_balance_details.blade.php
+³       ³   
+³       ÀÄÄÄcollection-effectiveness-index
+³               form.blade.php
+³               result.blade.php
+³               
+ÃÄÄÄauth
+³   ³   login.blade.php
+³   ³   register.blade.php
+³   ³   verify.blade.php
+³   ³   
+³   ÀÄÄÄpasswords
+³           confirm.blade.php
+³           email.blade.php
+³           reset.blade.php
+³           
+ÃÄÄÄbank-accounts
+³       index.blade.php
+³       
+ÃÄÄÄbranches
+³       form.blade.php
+³       index.blade.php
+³       repeater-with-all.blade.php
+³       
+ÃÄÄÄbusiness_sectors
+³       form.blade.php
+³       index.blade.php
+³       
+ÃÄÄÄbusiness_units
+³       form.blade.php
+³       index.blade.php
+³       
+ÃÄÄÄbuy-or-sell-currency
+³       form.blade.php
+³       index.blade.php
+³       
+ÃÄÄÄcash-expense-categories
+³       form.blade.php
+³       index.blade.php
+³       
+ÃÄÄÄclient_view
+³   ³   group_of_companies.blade.php
+³   ³   home.blade.php
+³   ³   homePage.blade.php
+³   ³   no_data_found.blade.php
+³   ³   
+³   ÃÄÄÄcustomers_invoices
+³   ÃÄÄÄExportation
+³   ³       fieldsSelectionToBeExported.blade.php
+³   ³       
+³   ÃÄÄÄexports
+³   ³       customer_invoices.blade.php
+³   ³       
+³   ÃÄÄÄprinting
+³   ÃÄÄÄsales_gathering
+³   ³       failed.blade.php
+³   ³       form.blade.php
+³   ³       import.blade.php
+³   ³       importCachedRowForm.blade.php
+³   ³       importRowForm.blade.php
+³   ³       index.blade.php
+³   ³       
+³   ÀÄÄÄsaving_accounts
+³           form.blade.php
+³           index.blade.php
+³           
+ÃÄÄÄcomponents
+³   ³   avg-details.blade.php
+³   ³   back-to-bank-header-btn.blade.php
+³   ³   back-to-factoring-header-btn.blade.php
+³   ³   back-to-leasing-header-btn.blade.php
+³   ³   bank-account-lock-button.blade.php
+³   ³   bar-nav.blade.php
+³   ³   calc-btn.blade.php
+³   ³   calculate-btn.blade.php
+³   ³   calendar-month-year.blade.php
+³   ³   calendar.blade.php
+³   ³   create.blade.php
+³   ³   custom-button-name-to-submit.blade.php
+³   ³   export-branches.blade.php
+³   ³   export-business-sectors.blade.php
+³   ³   export-business-units.blade.php
+³   ³   export-buy-or-sell-currency.blade.php
+³   ³   export-cash-expense.blade.php
+³   ³   export-certificates-of-deposit.blade.php
+³   ³   export-clean-overdraft.blade.php
+³   ³   export-contracts-with-down-payment.blade.php
+³   ³   export-customers.blade.php
+³   ³   export-deductions.blade.php
+³   ³   export-employees.blade.php
+³   ³   export-factoring-contracts.blade.php
+³   ³   export-factoring-transactions.blade.php
+³   ³   export-financial-institution.blade.php
+³   ³   export-fully-secured-overdraft.blade.php
+³   ³   export-internal-money-transfer.blade.php
+³   ³   export-lc-settlement-internal-money-transfer.blade.php
+³   ³   export-leasing-contracts.blade.php
+³   ³   export-letter-of-credit-facility.blade.php
+³   ³   export-letter-of-credit-issuance.blade.php
+³   ³   export-letter-of-guarantee-facility.blade.php
+³   ³   export-letter-of-guarantee-issuance.blade.php
+³   ³   export-loans.blade.php
+³   ³   export-money-payment.blade.php
+³   ³   export-money.blade.php
+³   ³   export-odoo-expenses.blade.php
+³   ³   export-other-partners.blade.php
+³   ³   export-overdraft-against-assignment-of-contract.blade.php
+³   ³   export-overdraft-against-commercial-paper.blade.php
+³   ³   export-sales-channels.blade.php
+³   ³   export-sales-persons.blade.php
+³   ³   export-shareholders.blade.php
+³   ³   export-study.blade.php
+³   ³   export-subsidiary-companies.blade.php
+³   ³   export-suppliers.blade.php
+³   ³   export-time-of-deposit.blade.php
+³   ³   export.blade.php
+³   ³   factoring-statement-tabs.blade.php
+³   ³   filter-by-date.blade.php
+³   ³   filter-by-single-date.blade.php
+³   ³   main-form-title.blade.php
+³   ³   money-card.blade.php
+³   ³   navigators-dropdown.blade.php
+³   ³   navigators.blade.php
+³   ³   next__button.blade.php
+³   ³   quick-nav.blade.php
+³   ³   repeat-right-dot-inputs-with-diff-inputs.blade.php
+³   ³   repeat-right-dot-inputs.blade.php
+³   ³   repeat-with-calc.blade.php
+³   ³   run.blade.php
+³   ³   save-and-next-btn.blade.php
+³   ³   save-btn.blade.php
+³   ³   save-or-back-inside-table.blade.php
+³   ³   save-or-back.blade.php
+³   ³   save-or-continue-btn.blade.php
+³   ³   save-without-ajax-btn.blade.php
+³   ³   save.blade.php
+³   ³   search-unapplied-amounts.blade.php
+³   ³   section-title.blade.php
+³   ³   sectionTitle.blade.php
+³   ³   show-hide-btn.blade.php
+³   ³   submit.blade.php
+³   ³   submitting-by-ajax.blade.php
+³   ³   submitting-with-refresh.blade.php
+³   ³   submitting-with-return.blade.php
+³   ³   submitting.blade.php
+³   ³   table-with-attributes.blade.php
+³   ³   table.blade.php
+³   ³   title.blade.php
+³   ³   tool-tip.blade.php
+³   ³   
+³   ÃÄÄÄform
+³   ³       bg-white.blade.php
+³   ³       body.blade.php
+³   ³       bs-modal.blade.php
+³   ³       date.blade.php
+³   ³       filter-btn.blade.php
+³   ³       header.blade.php
+³   ³       hidden.blade.php
+³   ³       image-uploader.blade.php
+³   ³       input.blade.php
+³   ³       label.blade.php
+³   ³       modal.blade.php
+³   ³       radio.blade.php
+³   ³       row.blade.php
+³   ³       select-with-modal-abb.blade.php
+³   ³       select-with-modal.blade.php
+³   ³       select.blade.php
+³   ³       submit.blade.php
+³   ³       text.blade.php
+³   ³       wrapper.blade.php
+³   ³       
+³   ÃÄÄÄhelpers
+³   ³       repeater.blade.php
+³   ³       
+³   ÃÄÄÄjs
+³   ³       commons.blade.php
+³   ³       
+³   ÃÄÄÄmodal
+³   ³       delete.blade.php
+³   ³       due-invoices.blade.php
+³   ³       execution-percentage.blade.php
+³   ³       expense-custom-collection.blade.php
+³   ³       loan-installment.blade.php
+³   ³       
+³   ÃÄÄÄnav-menu
+³   ³       multi-submenu.blade.php
+³   ³       single-submenu.blade.php
+³   ³       
+³   ÃÄÄÄrepeaters
+³   ÃÄÄÄselect
+³   ³       due-days-selector.blade.php
+³   ³       multi-for-repeater.blade.php
+³   ³       multi-layer-for-repeater.blade.php
+³   ³       multi-with-add.blade.php
+³   ³       multi.blade.php
+³   ³       
+³   ÃÄÄÄstyles
+³   ³       commons.blade.php
+³   ³       
+³   ÃÄÄÄtable-title
+³   ³       title.blade.php
+³   ³       with-end-date.blade.php
+³   ³       with-one-date.blade.php
+³   ³       with-two-dates.blade.php
+³   ³       
+³   ÀÄÄÄtables
+³           basic-view.blade.php
+³           common-table.blade.php
+³           repeater-table-th.blade.php
+³           repeater-table-tr.blade.php
+³           repeater-table.blade.php
+³           
+ÃÄÄÄcontracts
+³       contract-invoice-details.blade.php
+³       form.blade.php
+³       index.blade.php
+³       
+ÃÄÄÄcontracts-down-payment
+³       index.blade.php
+³       settlement_form.blade.php
+³       
+ÃÄÄÄcustomer-opening-balance
+³       form.blade.php
+³       
+ÃÄÄÄcustomers
+³       form.blade.php
+³       index.blade.php
+³       
+ÃÄÄÄdeductions
+³       form.blade.php
+³       index.blade.php
+³       
+ÃÄÄÄemployees
+³       form.blade.php
+³       index.blade.php
+³       
+ÃÄÄÄerrors
+³       401.blade.php
+³       403.blade.php
+³       404.blade.php
+³       419.blade.php
+³       429.blade.php
+³       500.blade.php
+³       503.blade.php
+³       illustrated-layout.blade.php
+³       layout.blade.php
+³       minimal.blade.php
+³       
+ÃÄÄÄfactoring
+³   ÃÄÄÄwith-recourse
+³   ³       form.blade.php
+³   ³       index.blade.php
+³   ³       
+³   ÀÄÄÄwithout-recourse
+³           form.blade.php
+³           index.blade.php
+³           
+ÃÄÄÄfactoring-charges-statement
+³       form.blade.php
+³       result.blade.php
+³       
+ÃÄÄÄfactoring-companies
+³       form.blade.php
+³       
+ÃÄÄÄfactoring-contracts
+³       form.blade.php
+³       index.blade.php
+³       
+ÃÄÄÄfactoring-statement
+³       form.blade.php
+³       result.blade.php
+³       
+ÃÄÄÄfree_subscription
+³       form.blade.php
+³       
+ÃÄÄÄinternal-money-transfer
+³       bank-to-bank-form.blade.php
+³       bank-to-safe-form.blade.php
+³       index.blade.php
+³       safe-to-bank-form.blade.php
+³       safe-to-safe-form.blade.php
+³       
+ÃÄÄÄlayouts
+³   ³   app.blade.php
+³   ³   auth-cashvero.blade.php
+³   ³   authentication_dashboard.blade.php
+³   ³   dashboard.blade.php
+³   ³   footer.blade.php
+³   ³   front.blade.php
+³   ³   LoginDashboard.blade.php
+³   ³   new-topbar.blade.php
+³   ³   topbar.blade.php
+³   ³   
+³   ÀÄÄÄpartials
+³           auth-cashvero-footer.blade.php
+³           auth-cashvero-left.blade.php
+³           auth-cashvero-scripts.blade.php
+³           auth-cashvero-styles.blade.php
+³           money-flow-dark-ready.blade.php
+³           
+ÃÄÄÄlc-settlement-internal-money-transfer
+³       bank-to-letter-of-credit-form.blade.php
+³       index.blade.php
+³       
+ÃÄÄÄleasing-companies
+³       form.blade.php
+³       
+ÃÄÄÄleasing-contracts
+³       form.blade.php
+³       index.blade.php
+³       
+ÃÄÄÄloans
+³       form.blade.php
+³       index.blade.php
+³       
+ÃÄÄÄmails
+³       exception-mail.blade.php
+³       test-delete.blade.php
+³       
+ÃÄÄÄmodals
+³       edit-commissions-fees.blade.php
+³       edit-end-of-month-interest.blade.php
+³       
+ÃÄÄÄnotification-settings
+³       form.blade.php
+³       
+ÃÄÄÄnotifications
+³       index.blade.php
+³       popup.blade.php
+³       
+ÃÄÄÄodoo-expenses
+³       index.blade.php
+³       
+ÃÄÄÄopening-balance
+³       form.blade.php
+³       
+ÃÄÄÄother-odoo-settings
+³       form.blade.php
+³       repeater-with-all.blade.php
+³       
+ÃÄÄÄotherPartners
+³       form.blade.php
+³       index.blade.php
+³       
+ÃÄÄÄoutstanding-breakdown
+³       repeater.blade.php
+³       
+ÃÄÄÄpartners
+³       form.blade.php
+³       index.blade.php
+³       
+ÃÄÄÄprofile
+³       form.blade.php
+³       
+ÃÄÄÄreports
+³   ³   aging_form.blade.php
+³   ³   cash_flow_form.blade.php
+³   ³   contract_cash_flow_form.blade.php
+³   ³   customer_statement_report_form.blade.php
+³   ³   withdrawals_settlement_report_form.blade.php
+³   ³   _integrated_modal.blade.php
+³   ³   _review_modal.blade.php
+³   ³   _user_comment_modal.blade.php
+³   ³   _user_odoo_modal.blade.php
+³   ³   
+³   ÃÄÄÄbank-certificates-of-deposit
+³   ÃÄÄÄcashExpenses
+³   ³       allocate_odoo_expense.blade.php
+³   ³       form.blade.php
+³   ³       index.blade.php
+³   ³       _allocate.blade.php
+³   ³       
+³   ÃÄÄÄcertificates-of-deposit
+³   ³       form.blade.php
+³   ³       index.blade.php
+³   ³       
+³   ÃÄÄÄclean-overdraft
+³   ³       apply-rate.blade.php
+³   ³       form.blade.php
+³   ³       index.blade.php
+³   ³       rate-modal.blade.php
+³   ³       rates-form.blade.php
+³   ³       
+³   ÃÄÄÄconsolidated_cash_flow
+³   ³       index.blade.php
+³   ³       result.blade.php
+³   ³       styles.blade.php
+³   ³       _table.blade.php
+³   ³       
+³   ÃÄÄÄfinancial-institution
+³   ³       add-account.blade.php
+³   ³       dropdown-actions.blade.php
+³   ³       form.blade.php
+³   ³       index.blade.php
+³   ³       repeater.blade.php
+³   ³       
+³   ÃÄÄÄfinancial-institution-account
+³   ³       repeater.blade.php
+³   ³       
+³   ÃÄÄÄfinancial-institution-accounts
+³   ³       edit.blade.php
+³   ³       
+³   ÃÄÄÄfully-secured-overdraft
+³   ³       apply-rate.blade.php
+³   ³       form.blade.php
+³   ³       index.blade.php
+³   ³       rate-modal.blade.php
+³   ³       rates-form.blade.php
+³   ³       
+³   ÃÄÄÄLetterOfCreditFacility
+³   ³       form.blade.php
+³   ³       index.blade.php
+³   ³       repeater.blade.php
+³   ³       
+³   ÃÄÄÄLetterOfCreditIssuance
+³   ³       actions.blade.php
+³   ³       against-cd-form.blade.php
+³   ³       against-td-form.blade.php
+³   ³       cancel-issuance-modal.blade.php
+³   ³       commonJs.blade.php
+³   ³       hundred-percentage-cash-cover-form.blade.php
+³   ³       index.blade.php
+³   ³       lc-facility-form.blade.php
+³   ³       popup-form.blade.php
+³   ³       _contract-inputs.blade.php
+³   ³       
+³   ÃÄÄÄLetterOfGuaranteeFacility
+³   ³       form.blade.php
+³   ³       index.blade.php
+³   ³       repeater.blade.php
+³   ³       
+³   ÃÄÄÄLetterOfGuaranteeIssuance
+³   ³   ³   actions.blade.php
+³   ³   ³   against-cd-form.blade.php
+³   ³   ³   against-td-form.blade.php
+³   ³   ³   commonJs.blade.php
+³   ³   ³   hundred-percentage-cash-cover-form.blade.php
+³   ³   ³   import-section.blade.php
+³   ³   ³   index.blade.php
+³   ³   ³   lg-facility-form.blade.php
+³   ³   ³   
+³   ³   ÀÄÄÄrenewal-date
+³   ³           index.blade.php
+³   ³           _renew_modal.blade.php
+³   ³           
+³   ÃÄÄÄmoneyPayments
+³   ³       down-payments-form.blade.php
+³   ³       edit-cheque-under-collection.blade.php
+³   ³       form.blade.php
+³   ³       index.blade.php
+³   ³       unapplied-contract.blade.php
+³   ³       _dark_theme_critical.blade.php
+³   ³       _dark_theme_styles.blade.php
+³   ³       _down-payments-purchase-orders.blade.php
+³   ³       _edit_opening_balance_cheque.blade.php
+³   ³       
+³   ÃÄÄÄmoneyReceived
+³   ³       down-payments-form.blade.php
+³   ³       edit-cheque-under-collection.blade.php
+³   ³       form.blade.php
+³   ³       index.blade.php
+³   ³       unapplied-contract.blade.php
+³   ³       _down-payments-sales-orders.blade.php
+³   ³       
+³   ÃÄÄÄoverdraft-against-assignment-of-contract
+³   ³       apply-rate.blade.php
+³   ³       form.blade.php
+³   ³       index.blade.php
+³   ³       lending-rate-form.blade.php
+³   ³       rate-modal.blade.php
+³   ³       rates-form.blade.php
+³   ³       
+³   ÃÄÄÄoverdraft-against-commercial-paper
+³   ³       apply-rate.blade.php
+³   ³       form.blade.php
+³   ³       index.blade.php
+³   ³       rate-modal.blade.php
+³   ³       rates-form.blade.php
+³   ³       repeater.blade.php
+³   ³       
+³   ÀÄÄÄtime-of-deposit
+³       ³   form.blade.php
+³       ³   index.blade.php
+³       ³   view-period-interests.blade.php
+³       ³   
+³       ÀÄÄÄrenewal-date
+³               index.blade.php
+³               _apply_periodic_interest.blade.php
+³               _renew_modal.blade.php
+³               
+ÃÄÄÄsales_channels
+³       form.blade.php
+³       index.blade.php
+³       
+ÃÄÄÄsales_persons
+³       form.blade.php
+³       index.blade.php
+³       
+ÃÄÄÄshareholders
+³       form.blade.php
+³       index.blade.php
+³       
+ÃÄÄÄsubsidiaryCompanies
+³       form.blade.php
+³       index.blade.php
+³       
+ÃÄÄÄsuper_admin_view
+³   ÃÄÄÄcompanies
+³   ³       form.blade.php
+³   ³       index.blade.php
+³   ³       
+³   ÃÄÄÄlogs
+³   ³       index.blade.php
+³   ³       user-detail.blade.php
+³   ³       
+³   ÃÄÄÄroles_and_permissions
+³   ³       form.blade.php
+³   ³       index.blade.php
+³   ³       permissions-radio.blade.php
+³   ³       
+³   ÃÄÄÄsections
+³   ³       form.blade.php
+³   ³       index.blade.php
+³   ³       
+³   ÃÄÄÄusers
+³   ³       form.blade.php
+³   ³       index.blade.php
+³   ³       
+³   ÀÄÄÄusers_permissions
+³           form.blade.php
+³           
+ÃÄÄÄsupplier-opening-balance
+³       form.blade.php
+³       
+ÃÄÄÄsuppliers
+³       form.blade.php
+³       index.blade.php
+³       
+ÀÄÄÄvendor
+    ÃÄÄÄlaravel-job-status
+    ³       progress.blade.php
+    ³       
+    ÃÄÄÄlaravelroles
+    ³   ÀÄÄÄlaravelroles
+    ³       ÃÄÄÄcards
+    ³       ³       permissions-card.blade.php
+    ³       ³       roles-card.blade.php
+    ³       ³       
+    ³       ÃÄÄÄcrud
+    ³       ³   ³   dashboard.blade.php
+    ³       ³   ³   
+    ³       ³   ÃÄÄÄpermissions
+    ³       ³   ³   ³   create.blade.php
+    ³       ³   ³   ³   edit.blade.php
+    ³       ³   ³   ³   show.blade.php
+    ³       ³   ³   ³   
+    ³       ³   ³   ÀÄÄÄdeleted
+    ³       ³   ³           index.blade.php
+    ³       ³   ³           
+    ³       ³   ÀÄÄÄroles
+    ³       ³       ³   create.blade.php
+    ³       ³       ³   edit.blade.php
+    ³       ³       ³   show.blade.php
+    ³       ³       ³   
+    ³       ³       ÀÄÄÄdeleted
+    ³       ³               index.blade.php
+    ³       ³               
+    ³       ÃÄÄÄforms
+    ³       ³   ³   create-permission-form.blade.php
+    ³       ³   ³   create-role-form.blade.php
+    ³       ³   ³   delete-sm.blade.php
+    ³       ³   ³   destroy-all-permissions.blade.php
+    ³       ³   ³   destroy-all-roles.blade.php
+    ³       ³   ³   destroy-sm.blade.php
+    ³       ³   ³   edit-permission-form.blade.php
+    ³       ³   ³   edit-role-form.blade.php
+    ³       ³   ³   permission-form.blade.php
+    ³       ³   ³   restore-all-permissions.blade.php
+    ³       ³   ³   restore-all-roles.blade.php
+    ³       ³   ³   restore-item.blade.php
+    ³       ³   ³   role-form.blade.php
+    ³       ³   ³   
+    ³       ³   ÀÄÄÄpartials
+    ³       ³           permission-desc-input.blade.php
+    ³       ³           permission-name-input.blade.php
+    ³       ³           permission-slug-input.blade.php
+    ³       ³           permissions-model-select.blade.php
+    ³       ³           role-desc-input.blade.php
+    ³       ³           role-level-input.blade.php
+    ³       ³           role-name-input.blade.php
+    ³       ³           role-permissions-select.blade.php
+    ³       ³           role-slug-input.blade.php
+    ³       ³           
+    ³       ÃÄÄÄmodals
+    ³       ³       confirm-modal.blade.php
+    ³       ³       
+    ³       ÃÄÄÄpartials
+    ³       ³       bs-visibility-css.blade.php
+    ³       ³       flash-messages.blade.php
+    ³       ³       form-status.blade.php
+    ³       ³       styles.blade.php
+    ³       ³       
+    ³       ÃÄÄÄscripts
+    ³       ³       confirm-modal.blade.php
+    ³       ³       datatables.blade.php
+    ³       ³       form-inputs-helpers.blade.php
+    ³       ³       selectize.blade.php
+    ³       ³       selectizePermission.blade.php
+    ³       ³       tooltips.blade.php
+    ³       ³       
+    ³       ÀÄÄÄtables
+    ³               permission-items-table.blade.php
+    ³               permissions-table.blade.php
+    ³               role-items-table.blade.php
+    ³               roles-table.blade.php
+    ³               
+    ÃÄÄÄmail
+    ³   ÃÄÄÄhtml
+    ³   ³   ³   button.blade.php
+    ³   ³   ³   footer.blade.php
+    ³   ³   ³   header.blade.php
+    ³   ³   ³   layout.blade.php
+    ³   ³   ³   message.blade.php
+    ³   ³   ³   panel.blade.php
+    ³   ³   ³   subcopy.blade.php
+    ³   ³   ³   table.blade.php
+    ³   ³   ³   
+    ³   ³   ÀÄÄÄthemes
+    ³   ³           default.css
+    ³   ³           
+    ³   ÀÄÄÄtext
+    ³           button.blade.php
+    ³           footer.blade.php
+    ³           header.blade.php
+    ³           layout.blade.php
+    ³           message.blade.php
+    ³           panel.blade.php
+    ³           subcopy.blade.php
+    ³           table.blade.php
+    ³           
+    ÀÄÄÄmedia-library
+            image.blade.php
+            placeholderSvg.blade.php
+            responsiveImage.blade.php
+            responsiveImageWithPlaceholder.blade.php
+            

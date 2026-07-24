@@ -12,7 +12,20 @@ trait IsAgingService
     {
         $date = Carbon::make($date);
         $agingDate = Carbon::make($agingDate);
-        $diffInDays = $date->diffInDays($agingDate);
+        // Carbon 3 (this project's Laravel 12) changed diffInDays() to
+        // return a SIGNED value by default instead of Carbon 2's
+        // always-positive count — same bug class as IsInvoice::getAging()
+        // and getDiffBetweenTwoDatesInDays(), but with real consequences
+        // here: getDayInterval() below matches this value against
+        // positive-only ranges ('1-7', '8-15', ...). A negative value
+        // (any "coming due" invoice, where $date is in the future)
+        // can never match a positive range(), so every coming-due
+        // invoice was silently falling through to the "More Than 150"
+        // bucket regardless of its real due date. Forcing absolute
+        // restores the original intended always-positive day count —
+        // the past/coming DIRECTION below is already decided separately
+        // via greaterThan(), untouched by this.
+        $diffInDays = $date->diffInDays($agingDate, true);
         if ($diffInDays == 0) {
             return ['current_due' => $diffInDays];
         }

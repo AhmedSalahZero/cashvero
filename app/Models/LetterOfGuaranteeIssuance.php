@@ -916,6 +916,25 @@ class LetterOfGuaranteeIssuance extends Model
     {
         return count($this->getOdooReferenceNames());
     }
+    /**
+     * ✅ NEW — added on request to power the Odoo error icon (🐛) on
+     * the migrated Index.vue page. Mirrors the exact same logic
+     * already used elsewhere in the app (App\Traits\Models\IsMoney,
+     * used by MoneyReceived/MoneyPayment/etc.) rather than importing
+     * that unrelated trait wholesale. Purely additive — does not
+     * change fullyIntegratedWithOdoo() or anything else.
+     */
+    public function hasOdooError():bool
+    {
+        return !$this->synced_with_odoo && $this->odoo_error_message;
+    }
+    public function getOdooError()
+    {
+        if ($this->hasOdooError()) {
+            return $this->odoo_error_message;
+        }
+        return '';
+    }
     public function formatAnalysisDistribution():array
     {
         $contract = $this->contract;

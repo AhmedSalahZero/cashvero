@@ -18,7 +18,45 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
 
+/**
+ * FactoringWithoutRecourseController
+ * ------------------------------------------------------------------
+ * "Factoring Without Recourse" — the company sells a customer invoice
+ * to a factoring company and the risk transfers immediately: unlike
+ * With Recourse, the invoice is settled right away at creation (see
+ * store()'s Settlement::create() call), and if the customer never
+ * pays, that's the factoring company's problem, not ours. What's
+ * still tracked here afterward: Mark As Settled (an administrative
+ * confirmation step, separate from the automatic invoice settlement
+ * done at creation) and Record Difference Received (any shortfall
+ * between what was disbursed and the invoice's real value, paid back
+ * separately by the factoring company) — both independently
+ * revertible. No Odoo write, no DB triggers.
+ *
+ * ⚠️ Naming note: `is_settled`/`markAsSettled()` here refers to this
+ * feature's own administrative settlement flag — NOT the same concept
+ * as the `Settlement` model row created in store(), which settles the
+ * underlying customer invoice itself. Both are real and both matter,
+ * they're just two different "settled"s. Left exactly as the
+ * original named them.
+ *
+ * ── Frontend migration status ───────────────────────────────────
+ *   index()          → Inertia::render, Pages/FactoringWithoutRecourse/Index.vue
+ *   create()/edit()  → Inertia::render, Pages/Factoring/Form.vue — the SAME shared
+ *                       component used by Factoring With Recourse, distinguished
+ *                       via the `recourseType`/`pageTitle` props (confirmed
+ *                       byte-for-byte identical blade forms apart from labels/routes).
+ *   store()/update() → real Laravel redirects (Inertia-compatible), was raw
+ *                       JSON ({redirectTo}) for the old jQuery/AJAX form.
+ *   destroy()/markAsSettled()/revertSettlement()/markDifferenceReceived()/
+ *   revertDifferenceReceived() → unchanged, already redirect()->back(),
+ *                       Inertia-compatible as-is.
+ *   getContracts()/getInvoiceCurrencies()/getInvoices()/calculate()
+ *                     → unchanged, pure JSON AJAX endpoints for the Vue form's
+ *                       cascading dropdowns — not Inertia visits.
+ */
 class FactoringWithoutRecourseController
 {
     use GeneralFunctions;
@@ -75,18 +113,51 @@ class FactoringWithoutRecourseController
             'received_amount' => __('Received Amount'),
         ];
 
-        return view('factoring.without-recourse.index', [
-            'company' => $company,
-            'transactions' => $transactions,
+        return Inertia::render('FactoringWithoutRecourse/Index', [
+            'company' => ['id' => $company->id, 'name' => $company->getName()],
             'searchFields' => $searchFields,
-            'financialInstitutionBanks' => FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->get(),
-            'accountTypes' => AccountType::onlyCashAccounts()->get(),
+            'financialInstitutionBanks' => FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->get()
+                ->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()])->values(),
+            'accountTypes' => AccountType::onlyCashAccounts()->get()
+                ->map(fn ($a) => ['id' => $a->id, 'name' => $a->getName()])->values(),
+            'canCreate' => hasAuthFor('create supplier payment'),
+            'canUpdate' => hasAuthFor('update supplier payment'),
+            'canDelete' => hasAuthFor('delete supplier payment'),
+            'transactions' => $transactions->values()->map(fn (FactoringTransaction $t) => [
+                'id' => $t->id,
+                'factoring_date_formatted' => $t->getFactoringDateFormatted(),
+                'factoring_company_name' => $t->factoringCompany?->getName(),
+                'customer_name' => $t->customer?->getName(),
+                'invoice_number' => $t->customerInvoice?->invoice_number,
+                'invoice_currency' => $t->invoice_currency,
+                'factoring_amount' => (float) $t->factoring_amount,
+                'received_amount' => (float) $t->received_amount,
+                'is_settled' => (bool) $t->is_settled,
+                'settled_at' => $t->settled_at,
+                'is_difference_received' => (bool) $t->is_difference_received,
+                'difference_received_amount' => (float) $t->difference_received_amount,
+                'difference_amount' => $t->getDifferenceAmount(),
+                'financial_institution_name' => $t->financialInstitution?->getName(),
+                'financial_institution_id' => $t->financial_institution_id,
+                'account_type_id' => $t->account_type_id,
+                'account_number' => $t->account_number,
+                'edit_url' => route('factoring.without-recourse.edit', ['company' => $company->id, 'factoringTransaction' => $t->id]),
+                'mark_as_settled_url' => route('factoring.without-recourse.mark-as-settled', ['company' => $company->id, 'factoringTransaction' => $t->id]),
+                'revert_settlement_url' => route('factoring.without-recourse.revert-settlement', ['company' => $company->id, 'factoringTransaction' => $t->id]),
+                'mark_difference_received_url' => route('factoring.without-recourse.mark-difference-received', ['company' => $company->id, 'factoringTransaction' => $t->id]),
+                'revert_difference_received_url' => route('factoring.without-recourse.revert-difference-received', ['company' => $company->id, 'factoringTransaction' => $t->id]),
+                'delete_url' => route('factoring.without-recourse.destroy', ['company' => $company->id, 'factoringTransaction' => $t->id]),
+            ]),
+            'urls' => [
+                'create' => route('factoring.without-recourse.create', ['company' => $company->id]),
+                'index' => route('factoring.without-recourse.index', ['company' => $company->id]),
+            ],
         ]);
     }
 
     public function create(Company $company)
     {
-        return view('factoring.without-recourse.form', $this->formViewData($company));
+        return Inertia::render('Factoring/Form', $this->formViewData($company));
     }
 
     public function edit(Company $company, FactoringTransaction $factoringTransaction)
@@ -94,19 +165,49 @@ class FactoringWithoutRecourseController
         $this->ensureWithoutRecourseTransaction($company, $factoringTransaction);
 
         $factoringTransaction->load(['customer', 'customerInvoice', 'factoringCompany', 'factoringContract']);
+        $invoice = $factoringTransaction->customerInvoice;
+        $contracts = $this->contractsForCompany(
+            $company,
+            (int) $factoringTransaction->factoring_company_id,
+            $factoringTransaction->factoring_date,
+            (int) $factoringTransaction->factoring_contract_id
+        );
 
-        return view('factoring.without-recourse.form', array_merge(
-            $this->formViewData($company),
-            [
-                'factoringTransaction' => $factoringTransaction,
-                'contracts' => $this->contractsForCompany(
-                    $company,
-                    (int) $factoringTransaction->factoring_company_id,
-                    $factoringTransaction->factoring_date,
-                    (int) $factoringTransaction->factoring_contract_id
-                ),
-            ]
-        ));
+        $viewData = $this->formViewData($company);
+        $viewData['mode'] = 'edit';
+        $viewData['model'] = [
+            'id' => $factoringTransaction->id,
+            'factoring_date' => $factoringTransaction->factoring_date,
+            'factoring_company_id' => $factoringTransaction->factoring_company_id,
+            'factoring_contract_id' => $factoringTransaction->factoring_contract_id,
+            'customer_id' => $factoringTransaction->customer_id,
+            'customer_name' => $factoringTransaction->customer?->getName(),
+            'invoice_currency' => $factoringTransaction->invoice_currency,
+            'customer_invoice_id' => $factoringTransaction->customer_invoice_id,
+            'invoice_number' => $invoice?->invoice_number,
+            'invoice_due_date' => $invoice?->getInvoiceDueDate(),
+            'invoice_amount' => (float) $factoringTransaction->invoice_amount,
+            'factoring_percentage' => (float) $factoringTransaction->factoring_percentage,
+            'factoring_amount' => (float) $factoringTransaction->factoring_amount,
+            'remaining_limit' => $factoringTransaction->factoringContract?->getRemainingLimit($factoringTransaction->id) ?? 0,
+            'contract_interest_rate' => (float) $factoringTransaction->contract_interest_rate,
+            'diff_in_days' => $factoringTransaction->diff_in_days,
+            'factoring_interest_amount' => (float) $factoringTransaction->factoring_interest_amount,
+            'other_charges' => (float) $factoringTransaction->other_charges,
+            'received_amount' => (float) $factoringTransaction->received_amount,
+            'financial_institution_id' => $factoringTransaction->financial_institution_id,
+            'account_type_id' => $factoringTransaction->account_type_id,
+            'account_number' => $factoringTransaction->account_number,
+        ];
+        $viewData['contracts'] = $contracts->map(fn (FactoringContract $contract) => [
+            'id' => $contract->id,
+            'label' => $contract->getContractStartDateFormatted() . ' — ' . $contract->getContractEndDateFormatted()
+                . ' | ' . strtoupper($contract->getCurrency() ?? '')
+                . ' | ' . $contract->getLimitFormatted(),
+        ])->values();
+        $viewData['urls']['update'] = route('factoring.without-recourse.update', ['company' => $company->id, 'factoringTransaction' => $factoringTransaction->id]);
+
+        return Inertia::render('Factoring/Form', $viewData);
     }
 
     public function store(Company $company, StoreFactoringWithoutRecourseRequest $request)
@@ -186,9 +287,8 @@ class FactoringWithoutRecourseController
             return $transaction;
         });
 
-        return response()->json([
-            'redirectTo' => route('factoring.without-recourse.index', ['company' => $company->id]),
-        ]);
+        return redirect()->route('factoring.without-recourse.index', ['company' => $company->id])
+            ->with('success', __('Data Store Successfully'));
     }
 
     public function update(Company $company, FactoringTransaction $factoringTransaction, StoreFactoringWithoutRecourseRequest $request)
@@ -263,9 +363,8 @@ class FactoringWithoutRecourseController
             $this->syncFactoringDisbursementStatement($factoringTransaction, $company, $factoringDate, $receivedAmount, $invoice);
         });
 
-        return response()->json([
-            'redirectTo' => route('factoring.without-recourse.index', ['company' => $company->id]),
-        ]);
+        return redirect()->route('factoring.without-recourse.index', ['company' => $company->id])
+            ->with('success', __('Item Has Been Updated Successfully'));
     }
 
     public function destroy(Company $company, FactoringTransaction $factoringTransaction)
@@ -623,11 +722,34 @@ class FactoringWithoutRecourseController
     protected function formViewData(Company $company): array
     {
         return [
-            'company' => $company,
-            'factoringCompanies' => $company->factoringCompanies()->orderBy('name')->pluck('name', 'id'),
-            'customers' => Partner::onlyCustomers()->where('company_id', $company->id)->orderBy('name')->pluck('name', 'id'),
-            'financialInstitutionBanks' => FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->get(),
-            'accountTypes' => AccountType::onlyCashAccounts()->get(),
+            'mode' => 'create',
+            'model' => null,
+            'contracts' => [],
+            'recourseType' => FactoringTransaction::WITHOUT_RECOURSE,
+            'pageTitle' => 'Factoring Without Recourse',
+            'company' => ['id' => $company->id, 'name' => $company->getName()],
+            'factoringCompanies' => collect($company->factoringCompanies()->orderBy('name')->pluck('name', 'id'))
+                ->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'customers' => collect(Partner::onlyCustomers()->where('company_id', $company->id)->orderBy('name')->pluck('name', 'id'))
+                ->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'financialInstitutionBanks' => FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->get()
+                ->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()])->values(),
+            'accountTypes' => AccountType::onlyCashAccounts()->get()
+                ->map(fn ($a) => ['id' => $a->id, 'name' => $a->getName()])->values(),
+            'urls' => [
+                'store' => route('factoring.without-recourse.store', ['company' => $company->id]),
+                'back' => route('factoring.without-recourse.index', ['company' => $company->id]),
+                'getContracts' => $this->companyScopedUrl($company, 'factoring/without-recourse/contracts'),
+                'getInvoiceCurrencies' => $this->companyScopedUrl($company, 'factoring/without-recourse/currencies'),
+                'getInvoices' => $this->companyScopedUrl($company, 'factoring/without-recourse/invoices'),
+                'calculate' => route('factoring.without-recourse.calculate', ['company' => $company->id]),
+                'getAccountNumbersForType' => $this->companyScopedUrl($company, 'money-received/get-account-numbers-based-on-account-type'),
+            ],
         ];
+    }
+
+    protected function companyScopedUrl(Company $company, string $path): string
+    {
+        return url('/'.app()->getLocale().'/'.$company->id.'/'.ltrim($path, '/'));
     }
 }

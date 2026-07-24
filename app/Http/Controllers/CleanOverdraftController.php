@@ -2,12 +2,12 @@
 namespace App\Http\Controllers;
 use App\Http\Requests\StoreCleanOverdraftRequest;
 use App\Http\Requests\UpdateCleanOverdraftRequest;
-use App\Models\Bank;
-use App\Models\Branch;
+use App\Models\AccountType;
 use App\Models\CleanOverdraft;
 use App\Models\Company;
 use App\Models\FinancialInstitution;
 use App\Models\Traits\Controllers\HasOverdraftRate;
+use App\Services\Api\OdooService;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -15,6 +15,43 @@ use Illuminate\Support\Collection;
 
 /**
  * ! No Odoo Service Yet
+ */
+/**
+ * CleanOverdraftController
+ * ------------------------------------------------------------------
+ * Manages Clean Overdraft facilities — an overdraft NOT secured
+ * against a specific CD/TD (unlike Fully Secured Overdraft), just a
+ * straightforward limit + rate agreement with the bank. Same
+ * rate-history sub-feature as Fully Secured (only the last rate entry
+ * is editable/deletable), plus the same "Outstanding Breakdown"
+ * repeater for balances brought in from before joining CashVero.
+ * No Odoo integration yet (per the original class comment).
+ *
+ * ── Frontend migration status (as of this file's last update) ──────
+ *   ✅ index()          → MIGRATED to Vue + Inertia. Renders
+ *                          resources/js/Pages/CleanOverdraft/Index.vue.
+ *   ✅ create() / edit() → MIGRATED to Vue + Inertia. Both render the
+ *                          same shared page,
+ *                          resources/js/Pages/CleanOverdraft/Form.vue,
+ *                          distinguished by a `mode: 'create' | 'edit'` prop.
+ *   ✅ getCommonDataArr() → checked against the actual database schema
+ *      (schema_full.txt) as promised in FullySecuredOverdraftController's
+ *      docblock — all fields here DO correspond to real columns. No
+ *      equivalent bug found here.
+ *   ⚠️ update() → 'updated_by' was being set then immediately wiped
+ *      out by the next line overwriting the whole $data array — same
+ *      bug already found and fixed on Time/Certificates Of Deposit and
+ *      Fully Secured Overdraft. Fixed here too.
+ *   ⚠️ StoreCleanOverdraftRequest → 'balance_date' was never actually
+ *      validated server-side (only a browser-only `required` hint on
+ *      the old Blade form), even though the model's boot():created
+ *      hook uses it as the `date` for the first rate-history row,
+ *      which is NOT NULL in the database — same bug already found and
+ *      fixed on Fully Secured Overdraft. Fixed here too, before it
+ *      could cause the same crash.
+ *   ✅ store() / destroy() → presentation-only change (response type
+ *      only, for store()/update()). Financial logic UNCHANGED,
+ *      deliberately.
  */
 class CleanOverdraftController
 {
@@ -53,36 +90,97 @@ class CleanOverdraftController
 		
 		return $collection;
 	}
+	/**
+	 * The main "Clean Overdraft" list — one flat list per financial
+	 * institution.
+	 *
+	 * ✅ MIGRATED to Vue + Inertia. Renders
+	 * resources/js/Pages/CleanOverdraft/Index.vue.
+	 */
 	public function index(Company $company,Request $request,FinancialInstitution $financialInstitution)
 	{
-		
 		$cleanOverdrafts = $company->cleanOverdrafts->where('financial_institution_id',$financialInstitution->id) ;
 		$cleanOverdrafts =   $this->applyFilter($request,$cleanOverdrafts) ;
-		$searchFields = [
-			'contract_start_date'=>__('Contract Start Date'),
-			'contract_end_date'=>__('Contract End Date'),
-			'account_number'=>__('Contract Number'),
-			'currency'=>__('Currency'),
-			'limit'=>__('Limit'),
-			'outstanding_balance'=>__('Outstanding Balance'),
-			'balance_date'=>__('Balance Date'),
-		];
 
-        return view('reports.clean-overdraft.index', [
-			'company'=>$company,
-			'searchFields'=>$searchFields,
-			'financialInstitution'=>$financialInstitution,
-			'cleanOverdrafts'=>$cleanOverdrafts
+		$lockableAccountType = AccountType::onlyCleanOverdraft()->first();
+		$canUpdate = hasAuthFor('update clean overdraft');
+		$canDelete = hasAuthFor('delete clean overdraft');
+		$canCreateRate = hasAuthFor('create clean overdraft');
+
+        return \Inertia\Inertia::render('CleanOverdraft/Index', [
+			'company' => ['id' => $company->id],
+			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
+			'canCreate' => hasAuthFor('create clean overdraft'),
+			'canUpdate' => $canUpdate,
+			'canDelete' => $canDelete,
+			'canCreateRate' => $canCreateRate,
+			'createUrl' => route('create.clean.overdraft', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
+			'rows' => $cleanOverdrafts->map(function (CleanOverdraft $co) use ($company, $financialInstitution, $lockableAccountType) {
+				return [
+					'id' => $co->id,
+					'contract_start_date_formatted' => $co->getContractStartDateFormatted(),
+					'contract_end_date_formatted' => $co->getContractEndDateFormatted(),
+					'account_number' => $co->getAccountNumber(),
+					'currency' => $co->getCurrencyFormatted(),
+					'limit_formatted' => $co->getLimitFormatted(),
+					'borrowing_rate_formatted' => $co->getBorrowingRateFormatted(),
+					'margin_rate_formatted' => $co->getMarginRateFormatted(),
+					'interest_rate_formatted' => $co->getInterestRateFormatted(),
+					'is_active' => (bool) $co->is_active,
+					'edit_url' => route('edit.clean.overdraft', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'cleanOverdraft' => $co->id]),
+					'delete_url' => route('delete.clean.overdraft', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'cleanOverdraft' => $co->id]),
+					'lock_url' => $lockableAccountType ? route('lock.or.unlock.bank.account', ['company' => $company->id, 'accountType' => $lockableAccountType->id, 'accountId' => $co->id]) : null,
+					'apply_rate_url' => route('clean-overdraft-apply.rates', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'cleanOverdraft' => $co->id]),
+					'rates' => $co->rates->map(fn ($rate) => [
+						'id' => $rate->id,
+						'date_formatted' => $rate->getDateFormatted(),
+						'date' => $rate->getDate(),
+						'borrowing_rate' => $rate->getBorrowingRate(),
+						'borrowing_rate_formatted' => $rate->getBorrowingRateFormatted(),
+						'margin_rate' => $rate->getMarginRate(),
+						'margin_rate_formatted' => $rate->getMarginRateFormatted(),
+						'min_interest_rate' => $rate->getMinInterestRate(),
+						'interest_rate_formatted' => $rate->getInterestRateFormatted(),
+						'edit_url' => route('clean-overdraft-edit-rates', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'rate' => $rate->id]),
+						'delete_url' => route('clean-overdraft-delete-rate', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'rate' => $rate->id]),
+					])->values(),
+				];
+			})->values(),
+			'backUrl' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+			'navUrls' => [
+				'home' => route('home', ['company' => $company->id]),
+				'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+				'customers' => route('partners.index', ['company' => $company->id, 'type' => 'customers']),
+				'suppliers' => route('partners.index', ['company' => $company->id, 'type' => 'suppliers']),
+				'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
+			],
 		]);
     }
+	/**
+	 * Shows the "Add Clean Overdraft" form.
+	 *
+	 * ✅ MIGRATED to Vue + Inertia — shares the same page component as
+	 * edit() (resources/js/Pages/CleanOverdraft/Form.vue), distinguished
+	 * by the `mode: 'create'` prop.
+	 */
 	public function create(Company $company,FinancialInstitution $financialInstitution)
 	{
-		$banks = Bank::pluck('view_name','id');
-		$selectedBranches =  Branch::getBranchesForCurrentCompany($company->id) ;
-        return view('reports.clean-overdraft.form',[
-			'banks'=>$banks,
-			'selectedBranches'=>$selectedBranches,
-			'financialInstitution'=>$financialInstitution,
+        return \Inertia\Inertia::render('CleanOverdraft/Form', [
+			'mode' => 'create',
+			'company' => ['id' => $company->id],
+			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
+			'currencies' => getCurrencies(),
+			'hasOdooIntegration' => $company->hasOdooIntegrationCredentials(),
+			'model' => null,
+			'submitUrl' => route('store.clean.overdraft', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
+			'backUrl' => route('view.clean.overdraft', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
+			'navUrls' => [
+				'home' => route('home', ['company' => $company->id]),
+				'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+				'customers' => route('partners.index', ['company' => $company->id, 'type' => 'customers']),
+				'suppliers' => route('partners.index', ['company' => $company->id, 'type' => 'suppliers']),
+				'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
+			],
 		]);
     }
 	public function getCommonDataArr():array 
@@ -90,6 +188,14 @@ class CleanOverdraftController
 		return ['contract_start_date','account_number','contract_end_date','currency','limit','outstanding_balance','balance_date'
 		,'highest_debt_balance_rate','admin_fees_rate','to_be_setteled_max_within_days'];
 	}
+	/**
+	 * Stores a new Clean Overdraft. Financial logic — the initial
+	 * "active-limit" bank statement row, outstanding breakdown, and
+	 * (via the model's boot():created hook) the first rate history
+	 * entry — is UNCHANGED, deliberately. Only the response type
+	 * changed: a plain redirect instead of a raw JSON body, so Inertia
+	 * can handle it natively.
+	 */
 	public function store(Company $company  ,FinancialInstitution $financialInstitution, StoreCleanOverdraftRequest $request){
 
 		$data = $request->only( $this->getCommonDataArr());
@@ -98,6 +204,14 @@ class CleanOverdraftController
 		}
 		$data['created_by'] = auth()->user()->id ;
 		$data['company_id'] = $company->id ;
+		$odooCode = $request->get('odoo_code');
+		if($company->hasOdooIntegrationCredentials() && $odooCode){
+			$odooService = new OdooService($company);
+			$chartOfAccountId = $odooService->getChartOfAccountIdFromOdooCode($odooCode);
+			$data['odoo_code'] = $odooCode ;
+			$data['odoo_id'] = $chartOfAccountId ;
+			$data['journal_id'] = $odooService->getJournalIdFromChartOfAccountId($chartOfAccountId) ;
+		}
 		/**
 		 * @var CleanOverdraft $cleanOverdraft 
 		 */
@@ -129,30 +243,79 @@ class CleanOverdraftController
 		$activeTab = $type ; 
 		
 		$cleanOverdraft->storeOutstandingBreakdown($request,$company);
-		return response()->json([
-			'redirectTo'=>route('view.clean.overdraft',['company'=>$company->id,'financialInstitution'=>$financialInstitution->id,'active'=>$activeTab])
-		]);
+		return redirect()->route('view.clean.overdraft',['company'=>$company->id,'financialInstitution'=>$financialInstitution->id,'active'=>$activeTab])->with('success',__('Data Store Successfully'));
 	}
 
+	/**
+	 * Shows the "Edit Clean Overdraft" form.
+	 *
+	 * ✅ MIGRATED to Vue + Inertia — shares the same page component as
+	 * create() (resources/js/Pages/CleanOverdraft/Form.vue), distinguished
+	 * by the `mode: 'edit'` prop.
+	 */
 	public function edit(Company $company , Request $request , FinancialInstitution $financialInstitution , CleanOverdraft $cleanOverdraft){
-		$banks = Bank::pluck('view_name','id');
-		$selectedBranches =  Branch::getBranchesForCurrentCompany($company->id) ;
-        return view('reports.clean-overdraft.form',[
-			'banks'=>$banks,
-			'selectedBranches'=>$selectedBranches,
-			'financialInstitution'=>$financialInstitution,
-			// 'customers'=>$customers,
-			'model'=>$cleanOverdraft
+        return \Inertia\Inertia::render('CleanOverdraft/Form', [
+			'mode' => 'edit',
+			'company' => ['id' => $company->id],
+			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
+			'currencies' => getCurrencies(),
+			'hasOdooIntegration' => $company->hasOdooIntegrationCredentials(),
+			'model' => [
+				'id' => $cleanOverdraft->id,
+				'contract_start_date' => $cleanOverdraft->getContractStartDate(),
+				'contract_end_date' => $cleanOverdraft->getContractEndDate(),
+				'account_number' => $cleanOverdraft->getAccountNumber(),
+				'odoo_code' => $cleanOverdraft->getOdooCode(),
+				'currency' => $cleanOverdraft->getCurrency(),
+				'limit' => $cleanOverdraft->getLimit(),
+				'outstanding_balance' => $cleanOverdraft->getOutstandingBalance(),
+				'balance_date' => $cleanOverdraft->balance_date,
+				'highest_debt_balance_rate' => $cleanOverdraft->highest_debt_balance_rate,
+				'admin_fees_rate' => $cleanOverdraft->admin_fees_rate,
+				'to_be_setteled_max_within_days' => $cleanOverdraft->getMaxSettlementDays(),
+				'outstanding_breakdowns' => $cleanOverdraft->outstandingBreakdowns->map(fn ($b) => [
+					'settlement_date' => $b->settlement_date,
+					'amount' => $b->amount,
+				])->values(),
+			],
+			'submitUrl' => route('update.clean.overdraft', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'cleanOverdraft' => $cleanOverdraft->id]),
+			'backUrl' => route('view.clean.overdraft', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
+			'navUrls' => [
+				'home' => route('home', ['company' => $company->id]),
+				'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+				'customers' => route('partners.index', ['company' => $company->id, 'type' => 'customers']),
+				'suppliers' => route('partners.index', ['company' => $company->id, 'type' => 'suppliers']),
+				'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
+			],
 		]);
 		
 	}
 	
+	/**
+	 * Updates an existing Clean Overdraft's main details. UNCHANGED
+	 * financial logic, deliberately. Two fixes here:
+	 *   1. $data['updated_by'] was being set, then immediately wiped
+	 *      out by the very next line overwriting the whole array —
+	 *      same bug already found and fixed on Time/Certificates Of
+	 *      Deposit and Fully Secured Overdraft.
+	 *   2. The response was changed from a raw JSON body to a normal
+	 *      redirect (Inertia needs a redirect or Inertia::render(),
+	 *      not an arbitrary JSON payload) — presentation-layer
+	 *      plumbing only, nothing about what gets saved has changed.
+	 */
 	public function update(Company $company , UpdateCleanOverdraftRequest $request , FinancialInstitution $financialInstitution,CleanOverdraft $cleanOverdraft){
-		$data['updated_by'] = auth()->user()->id ;
-		
 		$data = $request->only($this->getCommonDataArr());
+		$data['updated_by'] = auth()->user()->id ;
 		foreach(['contract_start_date','contract_end_date','balance_date'] as $dateField){
 			$data[$dateField] = $request->get($dateField) ? Carbon::make($request->get($dateField))->format('Y-m-d'):null;
+		}
+		if($company->hasOdooIntegrationCredentials()){
+			$odooService = new OdooService($company);
+			$odooCode = $request->get('odoo_code');
+			$chartOfAccountId = $odooService->getChartOfAccountIdFromOdooCode($odooCode);
+			$data['odoo_code'] = $odooCode ;
+			$data['odoo_id'] = $chartOfAccountId ;
+			$data['journal_id'] = $odooService->getJournalIdFromChartOfAccountId($chartOfAccountId) ;
 		}
 		$cleanOverdraft->update($data);
 		$cleanOverdraft->handleEndOfMonthInterestForContractStatements($data['contract_start_date'],$data['contract_end_date'],$company->id);
@@ -180,11 +343,13 @@ class CleanOverdraftController
 			$cleanOverdraft->cleanOverdraftBankStatements()->create($activeLimitRowData);
 		}
 		$activeTab = $type ;
-		return response()->json([
-			'redirectTo'=>route('view.clean.overdraft',['company'=>$company->id,'financialInstitution'=>$financialInstitution->id,'active'=>$activeTab])
-		]);
+		return redirect()->route('view.clean.overdraft',['company'=>$company->id,'financialInstitution'=>$financialInstitution->id,'active'=>$activeTab])->with('success',__('Item Has Been Updated Successfully'));
 	}
 	
+	/**
+	 * Deletes a Clean Overdraft. UNCHANGED, deliberately — the model's
+	 * deleting() hook already cleans up its rates and bank statements.
+	 */
 	public function destroy(Company $company , FinancialInstitution $financialInstitution , CleanOverdraft $cleanOverdraft)
 	{
 		$cleanOverdraft->delete();

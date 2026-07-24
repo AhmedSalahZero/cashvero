@@ -1,0 +1,568 @@
+<script setup>
+import { ref, computed, watch, onMounted } from 'vue';
+import { router, Link, usePage } from '@inertiajs/vue3';
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+/*
+ * CashExpense/Form.vue
+ * ------------------------------------------------------------------
+ * One shared page for Add + Edit and all three payment types — Cash
+ * Payment (safe/branch), Payable Cheque, Outgoing Transfer (bank) —
+ * matching the old page's single `type` dropdown that toggled field
+ * groups, rather than InternalMoneyTransfer's per-type-route pattern.
+ *
+ * Scope note (see controller docblock): this covers the core expense
+ * entry, including "Allocating With Customer Contracts" (a repeater:
+ * pick a customer, their contracts load via the same AJAX endpoint
+ * used by the Contracts page's PO Allocation modal, code/amount
+ * auto-fill, you set an allocate amount per contract). Two more
+ * advanced pieces of the old form are still NOT included, both
+ * genuinely optional per StoreCashExpenseRequest — pre-filling from a
+ * specific supplier invoice, and inline "add a new category/expense
+ * name" from the form itself (existing categories only for now — the
+ * old page's version of that used a generic modal component whose
+ * AJAX endpoint isn't a named route).
+ *
+ * The Balance / Net Balance preview works the same way as Buy Or Sell
+ * Currencies / Internal Money Transfer: fed by the selected Account
+ * Number, shown for Outgoing Transfer and Payable Cheque (both are
+ * bank-account-based); Cash Payment doesn't have one (branch/safe
+ * entries here don't carry a running account balance the way a bank
+ * account does).
+ */
+
+const props = defineProps({
+    company: Object,
+    mode: String, // 'create' | 'edit'
+    locale: String,
+    types: Object, // {type: label}
+    currencies: Object, // {code: label}
+    categories: Array, // [{id, name}]
+    categoryNames: Array, // [{id, name, category_id}]
+    branches: Array, // [{id, name}]
+    financialInstitutionBanks: Array, // [{id, name}]
+    accountTypes: Array, // [{id, name}]
+    clientsWithContracts: Array, // [{id, name}]
+    getContractsForCustomerUrl: String,
+    existingAllocations: Array, // [{partner_id, contract_id, contract_code, contract_amount, contract_currency, amount}]
+    model: Object, // null in create mode
+    submitUrl: String,
+    backUrl: String,
+    getBankBalanceUrl: String,
+});
+
+const page = usePage();
+const isEdit = props.mode === 'edit';
+
+const TYPES = {
+    CASH_PAYMENT: 'cash_payment',
+    PAYABLE_CHEQUE: 'payable_cheque',
+    OUTGOING_TRANSFER: 'outgoing-transfer',
+};
+
+const form = ref({
+    type: props.model?.type ?? TYPES.CASH_PAYMENT,
+    payment_date: props.model?.payment_date ?? new Date().toISOString().slice(0, 10),
+    currency: props.model?.currency ?? '',
+    expense_category_id: props.categoryNames.find(n => n.id === props.model?.cash_expense_category_name_id)?.category_id ?? '',
+    cash_expense_category_name_id: props.model?.cash_expense_category_name_id ?? '',
+    user_comment: props.model?.user_comment ?? '',
+    // Cash Payment
+    delivery_branch_id: props.model?.delivery_branch_id ?? '',
+    paid_amount_cash_payment: props.model?.type === TYPES.CASH_PAYMENT ? props.model?.paid_amount : 0,
+    receipt_number: props.model?.receipt_number ?? '',
+    exchange_rate_cash_payment: props.model?.type === TYPES.CASH_PAYMENT ? (props.model?.exchange_rate ?? 1) : 1,
+    // Outgoing Transfer
+    outgoing_transfer_delivery_bank_id: props.model?.outgoing_transfer_delivery_bank_id ?? '',
+    outgoing_transfer_account_type: props.model?.outgoing_transfer_account_type ?? '',
+    outgoing_transfer_account_number: props.model?.outgoing_transfer_account_number ?? '',
+    paid_amount_outgoing_transfer: props.model?.type === TYPES.OUTGOING_TRANSFER ? props.model?.paid_amount : 0,
+    is_bank_charges: props.model?.is_bank_charges ?? false,
+    exchange_rate_outgoing_transfer: props.model?.type === TYPES.OUTGOING_TRANSFER ? (props.model?.exchange_rate ?? 1) : 1,
+    // Payable Cheque
+    payable_cheque_delivery_bank_id: props.model?.payable_cheque_delivery_bank_id ?? '',
+    payable_cheque_account_type: props.model?.payable_cheque_account_type ?? '',
+    payable_cheque_account_number: props.model?.payable_cheque_account_number ?? '',
+    paid_amount_payable_cheque: props.model?.type === TYPES.PAYABLE_CHEQUE ? props.model?.paid_amount : 0,
+    due_date: props.model?.due_date ?? '',
+    cheque_number: props.model?.cheque_number ?? '',
+    exchange_rate_payable_cheque: props.model?.type === TYPES.PAYABLE_CHEQUE ? (props.model?.exchange_rate ?? 1) : 1,
+});
+
+/* ── Category → Expense Name cascade ─────────────────────────────
+   All category names arrive up front (with their parent category id)
+   so this filters client-side — no extra AJAX round trip needed. */
+const filteredCategoryNames = computed(() =>
+    props.categoryNames.filter(n => String(n.category_id) === String(form.value.expense_category_id))
+);
+watch(() => form.value.expense_category_id, () => {
+    if (!filteredCategoryNames.value.some(n => n.id === form.value.cash_expense_category_name_id)) {
+        form.value.cash_expense_category_name_id = filteredCategoryNames.value[0]?.id || '';
+    }
+});
+
+/* ── Cascading: Account Numbers, based on Bank + Account Type + Currency
+   Same AJAX endpoint the old jQuery form used
+   (CashExpenseController@getAccountNumbersForAccountType) — read-only,
+   untouched, just called from Vue via axios instead. */
+const outgoingTransferAccountNumberOptions = ref(props.model?.outgoing_transfer_account_number ? [props.model.outgoing_transfer_account_number] : []);
+const payableChequeAccountNumberOptions = ref(props.model?.payable_cheque_account_number ? [props.model.payable_cheque_account_number] : []);
+
+async function loadAccountNumbers(kind) {
+    const bankId = kind === 'outgoing_transfer' ? form.value.outgoing_transfer_delivery_bank_id : form.value.payable_cheque_delivery_bank_id;
+    const accountTypeId = kind === 'outgoing_transfer' ? form.value.outgoing_transfer_account_type : form.value.payable_cheque_account_type;
+    if (!bankId || !accountTypeId || !form.value.currency) return;
+    const url = `/${props.locale}/${props.company.id}/cash-expense/get-account-numbers-based-on-account-type/${accountTypeId}/${form.value.currency}/${bankId}`;
+    const { data } = await window.axios.get(url);
+    const options = Object.values(data.data || {});
+    if (kind === 'outgoing_transfer') {
+        outgoingTransferAccountNumberOptions.value = options;
+        if (!options.includes(form.value.outgoing_transfer_account_number)) form.value.outgoing_transfer_account_number = options[0] || '';
+    } else {
+        payableChequeAccountNumberOptions.value = options;
+        if (!options.includes(form.value.payable_cheque_account_number)) form.value.payable_cheque_account_number = options[0] || '';
+    }
+}
+watch(() => [form.value.outgoing_transfer_delivery_bank_id, form.value.outgoing_transfer_account_type, form.value.currency], () => loadAccountNumbers('outgoing_transfer'));
+watch(() => [form.value.payable_cheque_delivery_bank_id, form.value.payable_cheque_account_type, form.value.currency], () => loadAccountNumbers('payable_cheque'));
+
+/* ── Balance / Net Balance preview (Outgoing Transfer / Payable Cheque) ─
+   Same pre-existing endpoint used on the other Treasury forms
+   (MoneyReceivedController@updateNetBalanceBasedOnAccountNumber). */
+const bankBalance = ref({ balance: 0, balanceDate: '', netBalance: 0, netBalanceDate: '' });
+async function loadBankBalance() {
+    const isOutgoing = form.value.type === TYPES.OUTGOING_TRANSFER;
+    const isCheque = form.value.type === TYPES.PAYABLE_CHEQUE;
+    if (!isOutgoing && !isCheque) return;
+    const bankId = isOutgoing ? form.value.outgoing_transfer_delivery_bank_id : form.value.payable_cheque_delivery_bank_id;
+    const accountType = isOutgoing ? form.value.outgoing_transfer_account_type : form.value.payable_cheque_account_type;
+    const accountNumber = isOutgoing ? form.value.outgoing_transfer_account_number : form.value.payable_cheque_account_number;
+    if (!bankId || !accountType || !accountNumber) return;
+    const { data } = await window.axios.get(props.getBankBalanceUrl, {
+        params: {
+            accountNumber,
+            accountType,
+            financialInstitutionId: bankId,
+            balanceDate: form.value.payment_date,
+            modelType: 'CashExpense',
+            modelId: props.model?.id || 0,
+        },
+    });
+    bankBalance.value = {
+        balance: data.balance || 0,
+        balanceDate: data.balance_date || '',
+        netBalance: data.net_balance || 0,
+        netBalanceDate: data.net_balance_date || '',
+    };
+}
+watch(() => [
+    form.value.type,
+    form.value.outgoing_transfer_delivery_bank_id, form.value.outgoing_transfer_account_type, form.value.outgoing_transfer_account_number,
+    form.value.payable_cheque_delivery_bank_id, form.value.payable_cheque_account_type, form.value.payable_cheque_account_number,
+    form.value.payment_date,
+], loadBankBalance);
+onMounted(loadBankBalance);
+
+function formatNumber(value) {
+    return Math.round(Number(value) || 0).toLocaleString('en-US');
+}
+
+/* ── Allocating With Customer Contracts ──────────────────────────
+   A repeater: pick a customer, their contracts load via the same
+   AJAX endpoint the Contracts page's PO Allocation modal uses,
+   Contract Code/Amount auto-fill (read-only), you set an Allocate
+   Amount. Saves as contracts: [{contract_id, amount}] via the
+   pre-existing, UNCHANGED saveAllocations(). */
+function emptyAllocationRow() {
+    return { partner_id: '', contract_id: '', contract_code: '', contract_amount: null, contract_currency: '', amount: 0 };
+}
+const allocationRows = ref(
+    props.existingAllocations.length
+        ? props.existingAllocations.map(a => ({ ...a }))
+        : []
+);
+const contractsByPartner = ref({}); // partnerId -> [{id, name, code, amount, currency}]
+
+function addAllocationRow() {
+    allocationRows.value.push(emptyAllocationRow());
+}
+function removeAllocationRow(index) {
+    allocationRows.value.splice(index, 1);
+}
+
+async function loadContractsForPartner(partnerId) {
+    if (!partnerId || contractsByPartner.value[partnerId]) return;
+    const { data } = await window.axios.get(props.getContractsForCustomerUrl, {
+        params: { partnerId, model: 'CashExpense', inEditMode: isEdit ? 1 : 0 },
+    });
+    contractsByPartner.value = { ...contractsByPartner.value, [partnerId]: data.contracts || [] };
+}
+// Pre-load contract options for any partner already selected in a
+// saved allocation row, so the Contract dropdown isn't empty on open.
+allocationRows.value.forEach(row => { if (row.partner_id) loadContractsForPartner(row.partner_id); });
+
+function onAllocationPartnerChange(row) {
+    row.contract_id = '';
+    row.contract_code = '';
+    row.contract_amount = null;
+    row.contract_currency = '';
+    loadContractsForPartner(row.partner_id);
+}
+
+function onAllocationContractChange(row) {
+    const options = contractsByPartner.value[row.partner_id] || [];
+    const selected = options.find(c => String(c.id) === String(row.contract_id));
+    row.contract_code = selected ? selected.code : '';
+    row.contract_amount = selected ? Number(selected.amount) : null;
+    row.contract_currency = selected ? String(selected.currency || '').toUpperCase() : '';
+}
+
+/* ── Error display ────────────────────────────────────────────── */
+function errorFor(field) {
+    return page.props.errors?.[field] ?? null;
+}
+// The old page's own validation rule (AmountCanNotBeGreaterThan
+// EndBalanceAtPaymentDate, server-side, UNCHANGED) fails under this
+// specific key when there isn't enough balance to cover the payment —
+// worth its own clear message instead of the generic "fix the
+// highlighted fields" banner.
+const insufficientBalanceError = computed(() => page.props.errors?.amount_can_not_be_greater_than_end_balance_at_payment_date ?? null);
+const otherErrorCount = computed(() => {
+    const errors = { ...(page.props.errors || {}) };
+    delete errors.amount_can_not_be_greater_than_end_balance_at_payment_date;
+    return Object.keys(errors).length;
+});
+
+/* ── Submit ───────────────────────────────────────────────────── */
+const submitting = ref(false);
+function submit() {
+    submitting.value = true;
+
+    const paidAmount = {};
+    const exchangeRate = {};
+    const deliveryBankId = {};
+    const accountType = {};
+    const accountNumber = {};
+    paidAmount[form.value.type] =
+        form.value.type === TYPES.CASH_PAYMENT ? form.value.paid_amount_cash_payment :
+        form.value.type === TYPES.OUTGOING_TRANSFER ? form.value.paid_amount_outgoing_transfer :
+        form.value.paid_amount_payable_cheque;
+    exchangeRate[form.value.type] =
+        form.value.type === TYPES.CASH_PAYMENT ? form.value.exchange_rate_cash_payment :
+        form.value.type === TYPES.OUTGOING_TRANSFER ? form.value.exchange_rate_outgoing_transfer :
+        form.value.exchange_rate_payable_cheque;
+    if (form.value.type === TYPES.OUTGOING_TRANSFER) {
+        deliveryBankId[TYPES.OUTGOING_TRANSFER] = form.value.outgoing_transfer_delivery_bank_id;
+        accountType[TYPES.OUTGOING_TRANSFER] = form.value.outgoing_transfer_account_type;
+        accountNumber[TYPES.OUTGOING_TRANSFER] = form.value.outgoing_transfer_account_number;
+    } else if (form.value.type === TYPES.PAYABLE_CHEQUE) {
+        deliveryBankId[TYPES.PAYABLE_CHEQUE] = form.value.payable_cheque_delivery_bank_id;
+        accountType[TYPES.PAYABLE_CHEQUE] = form.value.payable_cheque_account_type;
+        accountNumber[TYPES.PAYABLE_CHEQUE] = form.value.payable_cheque_account_number;
+    }
+
+    const payload = {
+        type: form.value.type,
+        payment_date: form.value.payment_date,
+        currency: form.value.currency,
+        cash_expense_category_name_id: form.value.cash_expense_category_name_id,
+        user_comment: form.value.user_comment,
+        paid_amount: paidAmount,
+        exchange_rate: exchangeRate,
+        delivery_branch_id: form.value.type === TYPES.CASH_PAYMENT ? form.value.delivery_branch_id : null,
+        receipt_number: form.value.type === TYPES.CASH_PAYMENT ? form.value.receipt_number : null,
+        delivery_bank_id: deliveryBankId,
+        account_type: accountType,
+        account_number: accountNumber,
+        is_bank_charges: form.value.type === TYPES.OUTGOING_TRANSFER ? form.value.is_bank_charges : false,
+        due_date: form.value.type === TYPES.PAYABLE_CHEQUE ? form.value.due_date : null,
+        cheque_number: form.value.type === TYPES.PAYABLE_CHEQUE ? form.value.cheque_number : null,
+        contracts: allocationRows.value
+            .filter(r => r.contract_id && Number(r.amount) > 0)
+            .map(r => ({ contract_id: r.contract_id, amount: r.amount })),
+        // Pre-fill from a specific supplier invoice isn't built into
+        // this page yet — see docblock. Sending 0 keeps a plain
+        // expense entry working exactly like the old form did when
+        // this was unused.
+        unapplied_amount: 0,
+    };
+
+    if (isEdit) {
+        router.put(props.submitUrl, payload, { onFinish: () => { submitting.value = false; } });
+    } else {
+        router.post(props.submitUrl, payload, { onFinish: () => { submitting.value = false; } });
+    }
+}
+</script>
+
+<template>
+    <AppLayout>
+        <div class="p-6">
+            <div class="flex items-center gap-3 mb-1">
+                <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
+                    ← Back to Cash Expense
+                </Link>
+            </div>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-6">
+                {{ isEdit ? 'Edit' : 'Add' }} Cash Expense
+            </h1>
+
+            <div v-if="insufficientBalanceError" class="mb-4 px-4 py-3 rounded cvr-badge-overdue text-sm font-semibold">
+                No Enough Balance Amount to Process The Payment
+            </div>
+            <div v-else-if="otherErrorCount" class="mb-4 px-4 py-3 rounded cvr-badge-overdue text-sm">
+                Please fix the highlighted field(s) below before saving.
+            </div>
+
+            <form @submit.prevent="submit" class="space-y-6">
+                <div class="cvr-card space-y-4">
+                    <!-- Balance / Net Balance preview -->
+                    <div v-if="form.type === TYPES.OUTGOING_TRANSFER || form.type === TYPES.PAYABLE_CHEQUE" class="flex justify-end">
+                        <div class="cvr-form-grid-2 w-full max-w-md">
+                            <div>
+                                <label class="cvr-form-label">
+                                    Balance <span v-if="bankBalance.balanceDate">[ {{ bankBalance.balanceDate }} ]</span>
+                                </label>
+                                <input :value="formatNumber(bankBalance.balance)" disabled class="cvr-input w-full px-3 py-2 rounded opacity-80" />
+                            </div>
+                            <div>
+                                <label class="cvr-form-label">
+                                    Net Balance <span v-if="bankBalance.netBalanceDate">[ {{ bankBalance.netBalanceDate }} ]</span>
+                                </label>
+                                <input :value="formatNumber(bankBalance.netBalance)" disabled class="cvr-input w-full px-3 py-2 rounded opacity-80" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="cvr-form-grid-4">
+                        <div>
+                            <label class="cvr-form-label">Payment Date *</label>
+                            <input v-model="form.payment_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                        </div>
+                        <div>
+                            <label class="cvr-form-label">Expense Category</label>
+                            <select v-model="form.expense_category_id" class="cvr-input w-full px-3 py-2 rounded">
+                                <option value="">Select</option>
+                                <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="cvr-form-label">Expense Name</label>
+                            <select v-model="form.cash_expense_category_name_id" class="cvr-input w-full px-3 py-2 rounded" :disabled="!form.expense_category_id">
+                                <option value="">Select</option>
+                                <option v-for="n in filteredCategoryNames" :key="n.id" :value="n.id">{{ n.name }}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="cvr-form-label">Type *</label>
+                            <select v-model="form.type" class="cvr-input w-full px-3 py-2 rounded">
+                                <option v-for="(label, key) in types" :key="key" :value="key">{{ label }}</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Cash Payment -->
+                    <div v-if="form.type === TYPES.CASH_PAYMENT" class="cvr-form-grid-4">
+                        <div>
+                            <label class="cvr-form-label">Branch *</label>
+                            <select v-model="form.delivery_branch_id" class="cvr-input w-full px-3 py-2 rounded">
+                                <option value="">Select</option>
+                                <option v-for="b in branches" :key="b.id" :value="b.id">{{ b.name }}</option>
+                            </select>
+                            <p v-if="errorFor('delivery_branch_id')" class="text-xs mt-1 cvr-num-red">{{ errorFor('delivery_branch_id') }}</p>
+                        </div>
+                        <div>
+                            <label class="cvr-form-label">Paid Amount *</label>
+                            <input v-model="form.paid_amount_cash_payment" type="number" step="0.01" class="cvr-input w-full px-3 py-2 rounded" />
+                        </div>
+                        <div>
+                            <label class="cvr-form-label">Currency *</label>
+                            <select v-model="form.currency" class="cvr-input w-full px-3 py-2 rounded">
+                                <option value="">Select</option>
+                                <option v-for="(clabel, code) in currencies" :key="code" :value="code">{{ clabel }}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="cvr-form-label">Receipt Number *</label>
+                            <input v-model="form.receipt_number" type="text" class="cvr-input w-full px-3 py-2 rounded" />
+                            <p v-if="errorFor('receipt_number')" class="text-xs mt-1 cvr-num-red">{{ errorFor('receipt_number') }}</p>
+                        </div>
+                        <div>
+                            <label class="cvr-form-label">Exchange Rate</label>
+                            <input v-model="form.exchange_rate_cash_payment" type="number" step="0.0001" class="cvr-input w-full px-3 py-2 rounded" />
+                        </div>
+                    </div>
+
+                    <!-- Outgoing Transfer -->
+                    <template v-if="form.type === TYPES.OUTGOING_TRANSFER">
+                        <div class="cvr-form-grid-3">
+                            <div>
+                                <label class="cvr-form-label">Currency *</label>
+                                <select v-model="form.currency" class="cvr-input w-full px-3 py-2 rounded">
+                                    <option value="">Select</option>
+                                    <option v-for="(clabel, code) in currencies" :key="code" :value="code">{{ clabel }}</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="cvr-form-label">Paid Amount *</label>
+                                <input v-model="form.paid_amount_outgoing_transfer" type="number" step="0.01" class="cvr-input w-full px-3 py-2 rounded" />
+                            </div>
+                            <div>
+                                <label class="cvr-form-label">Exchange Rate</label>
+                                <input v-model="form.exchange_rate_outgoing_transfer" type="number" step="0.0001" class="cvr-input w-full px-3 py-2 rounded" />
+                            </div>
+                        </div>
+                        <!-- Bank-name field — 6:3:3, bank names run long -->
+                        <div class="cvr-form-grid-6-3-3">
+                            <div>
+                                <label class="cvr-form-label">Payment Bank *</label>
+                                <select v-model="form.outgoing_transfer_delivery_bank_id" class="cvr-input w-full px-3 py-2 rounded">
+                                    <option value="">Select</option>
+                                    <option v-for="bank in financialInstitutionBanks" :key="bank.id" :value="bank.id">{{ bank.name }}</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="cvr-form-label">Account Type *</label>
+                                <select v-model="form.outgoing_transfer_account_type" class="cvr-input w-full px-3 py-2 rounded">
+                                    <option value="">Select</option>
+                                    <option v-for="at in accountTypes" :key="at.id" :value="at.id">{{ at.name }}</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="cvr-form-label">Account Number *</label>
+                                <select v-model="form.outgoing_transfer_account_number" class="cvr-input w-full px-3 py-2 rounded">
+                                    <option value="">Select</option>
+                                    <option v-for="num in outgoingTransferAccountNumberOptions" :key="num" :value="num">{{ num }}</option>
+                                </select>
+                                <p v-if="errorFor('account_number')" class="text-xs mt-1 cvr-num-red">{{ errorFor('account_number') }}</p>
+                            </div>
+                        </div>
+                        <label class="flex items-center gap-2 cvr-text-primary text-sm">
+                            <input type="checkbox" v-model="form.is_bank_charges" />
+                            This transfer is a bank charge
+                        </label>
+                    </template>
+
+                    <!-- Payable Cheque -->
+                    <template v-if="form.type === TYPES.PAYABLE_CHEQUE">
+                        <div class="cvr-form-grid-4">
+                            <div>
+                                <label class="cvr-form-label">Currency *</label>
+                                <select v-model="form.currency" class="cvr-input w-full px-3 py-2 rounded">
+                                    <option value="">Select</option>
+                                    <option v-for="(clabel, code) in currencies" :key="code" :value="code">{{ clabel }}</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="cvr-form-label">Cheque Amount *</label>
+                                <input v-model="form.paid_amount_payable_cheque" type="number" step="0.01" class="cvr-input w-full px-3 py-2 rounded" />
+                            </div>
+                            <div>
+                                <label class="cvr-form-label">Due Date *</label>
+                                <input v-model="form.due_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                                <p v-if="errorFor('due_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('due_date') }}</p>
+                            </div>
+                            <div>
+                                <label class="cvr-form-label">Cheque Number *</label>
+                                <input v-model="form.cheque_number" type="text" class="cvr-input w-full px-3 py-2 rounded" />
+                                <p v-if="errorFor('cheque_number')" class="text-xs mt-1 cvr-num-red">{{ errorFor('cheque_number') }}</p>
+                            </div>
+                        </div>
+                        <!-- Bank-name field — 6:3:3, bank names run long -->
+                        <div class="cvr-form-grid-6-3-3">
+                            <div>
+                                <label class="cvr-form-label">Payment Bank *</label>
+                                <select v-model="form.payable_cheque_delivery_bank_id" class="cvr-input w-full px-3 py-2 rounded">
+                                    <option value="">Select</option>
+                                    <option v-for="bank in financialInstitutionBanks" :key="bank.id" :value="bank.id">{{ bank.name }}</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="cvr-form-label">Account Type *</label>
+                                <select v-model="form.payable_cheque_account_type" class="cvr-input w-full px-3 py-2 rounded">
+                                    <option value="">Select</option>
+                                    <option v-for="at in accountTypes" :key="at.id" :value="at.id">{{ at.name }}</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="cvr-form-label">Account Number *</label>
+                                <select v-model="form.payable_cheque_account_number" class="cvr-input w-full px-3 py-2 rounded">
+                                    <option value="">Select</option>
+                                    <option v-for="num in payableChequeAccountNumberOptions" :key="num" :value="num">{{ num }}</option>
+                                </select>
+                                <p v-if="errorFor('account_number')" class="text-xs mt-1 cvr-num-red">{{ errorFor('account_number') }}</p>
+                            </div>
+                        </div>
+                        <div class="cvr-form-grid-3">
+                            <div>
+                                <label class="cvr-form-label">Exchange Rate</label>
+                                <input v-model="form.exchange_rate_payable_cheque" type="number" step="0.0001" class="cvr-input w-full px-3 py-2 rounded" />
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Allocating With Customer Contracts -->
+                <div class="cvr-card">
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Allocating With Customer Contracts</h2>
+
+                    <table v-if="allocationRows.length" class="min-w-full text-xs mb-3">
+                        <thead class="cvr-table-head">
+                            <tr>
+                                <th class="px-2 py-2 text-left">Customer</th>
+                                <th class="px-2 py-2 text-left">Contract Name</th>
+                                <th class="px-2 py-2 text-left">Contract Code</th>
+                                <th class="px-2 py-2 text-left">Contract Amount</th>
+                                <th class="px-2 py-2 text-left">Allocate Amount</th>
+                                <th class="px-2 py-2"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="(row, index) in allocationRows" :key="index" class="cvr-table-row">
+                                <td class="px-2 py-2">
+                                    <select v-model="row.partner_id" @change="onAllocationPartnerChange(row)" class="cvr-input px-2 py-1 rounded w-full">
+                                        <option value="">Select customer...</option>
+                                        <option v-for="c in clientsWithContracts" :key="c.id" :value="c.id">{{ c.name }}</option>
+                                    </select>
+                                </td>
+                                <td class="px-2 py-2">
+                                    <select v-model="row.contract_id" @change="onAllocationContractChange(row)" class="cvr-input px-2 py-1 rounded w-full" :disabled="!row.partner_id">
+                                        <option value="">Select contract...</option>
+                                        <option v-for="c in (contractsByPartner[row.partner_id] || [])" :key="c.id" :value="c.id">{{ c.name }}</option>
+                                    </select>
+                                </td>
+                                <td class="px-2 py-2 cvr-text-muted">{{ row.contract_code }}</td>
+                                <td class="px-2 py-2 cvr-num">
+                                    <span v-if="row.contract_amount !== null">{{ formatNumber(row.contract_amount) }} {{ row.contract_currency }}</span>
+                                </td>
+                                <td class="px-2 py-2">
+                                    <input v-model="row.amount" type="number" step="0.01" class="cvr-input px-2 py-1 rounded w-28" />
+                                </td>
+                                <td class="px-2 py-2">
+                                    <button type="button" @click="removeAllocationRow(index)" class="cvr-btn-danger px-2 py-1 rounded border text-xs">✕</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p v-else class="text-xs cvr-text-muted mb-3">No contract allocations yet — optional, only needed if this expense should be settled against a customer's contract.</p>
+
+                    <button type="button" @click="addAllocationRow" class="cvr-btn-secondary px-3 py-1.5 rounded border text-xs">
+                        + Add Allocation
+                    </button>
+                </div>
+
+                <div class="cvr-card">
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">User Comment</h2>
+                    <textarea v-model="form.user_comment" rows="3" class="cvr-input w-full px-3 py-2 rounded"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-2">
+                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">Cancel</Link>
+                    <button type="submit" :disabled="submitting" class="cvr-btn-primary px-4 py-2 rounded">
+                        {{ submitting ? 'Saving...' : 'Save' }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </AppLayout>
+</template>

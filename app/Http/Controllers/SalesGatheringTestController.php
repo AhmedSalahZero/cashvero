@@ -33,7 +33,41 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
+use Inertia\Inertia;
 
+/**
+ * SalesGatheringTestController
+ * ------------------------------------------------------------------
+ * The actual upload engine behind "Upload New Customer/Supplier
+ * Invoices Data" — despite the "Test" in its name (legacy naming,
+ * not a testing/staging controller in the QA sense). Two-phase async
+ * flow, both phases backed by queued jobs:
+ *   1. Upload an Excel file → Excel::queueImport() parses it into a
+ *      Cache-backed "preview" (not yet in the real table)
+ *   2. Review the preview, then insertToMainTable() dispatches
+ *      SalesGatheringTestJob to write the real customer_invoices/
+ *      supplier_invoices rows.
+ *
+ * NEW in this migration (confirmed with the project owner):
+ * duplicate detection. Re-uploading invoices that already exist
+ * (same invoice_number + company_id + currency) now gets flagged at
+ * the preview stage AND silently skipped (not inserted, not
+ * replaced) at the actual insert step in SalesGatheringTestJob — see
+ * that job's own docblock for why "replace" was deliberately not
+ * offered (real financial records — collections, deductions,
+ * settlements — reference an invoice by its database id, and
+ * replacing would orphan them).
+ *
+ * ── Frontend migration status (as of this file's last update) ──────
+ *   - import() GET  → ALREADY migrated. Returns Inertia::render(),
+ *                      served by resources/js/Pages/InvoiceUpload/Import.vue
+ *   - import() POST → UNCHANGED. Already returns a plain redirect,
+ *                      which works natively with an Inertia
+ *                      file-upload form (no JSON-response fix needed
+ *                      here, unlike some other write actions in this app).
+ *   - editCachedRow / updateCachedRow / lastUploadFailed → still
+ *      Blade, scoped as a follow-up once the core flow is confirmed working.
+ */
 class SalesGatheringTestController extends Controller
 {
 	
@@ -48,6 +82,11 @@ class SalesGatheringTestController extends Controller
 		]));
 	}
 
+	/**
+	 * import() GET — the upload form + live preview of parsed rows,
+	 * not yet committed. See class docblock for the full two-phase
+	 * flow and the new duplicate-detection behavior.
+	 */
 	public function import(Company $company,string $modelName = 'SalesGathering')
 	{
 		$loanId = request('medium_term_loan_id') ?? request('loanId');
@@ -92,11 +131,86 @@ class SalesGatheringTestController extends Controller
 			foreach ($cacheKeys as $cacheKey) {
 				$salesGatherings = array_merge(Cache::get($cacheKey->key_name) ?: [], $salesGatherings);
 			}
-			$salesGatherings = $this->paginate($salesGatherings);
 			$exportableFields  = (new ExportTable)->customizedTableField($company, $modelName, 'selected_fields');
 			$viewing_names = array_values($exportableFields);
 			$db_names = array_keys($exportableFields);
-			return view('client_view.sales_gathering.import', compact('company', 'salesGatherings', 'viewing_names', 'db_names','modelName','importHeaderText','loanId'));
+
+			// ── NEW: duplicate detection. Only meaningful for
+			// CustomerInvoice/SupplierInvoice (has invoice_number +
+			// currency); other upload types skip this entirely.
+			$duplicateInvoiceNumbers = [];
+			$duplicateCount = 0;
+			if (in_array($modelName, ['CustomerInvoice', 'SupplierInvoice'], true) && count($salesGatherings)) {
+				$invoiceTableName = $uploadParamsType['dbName'];
+				$candidates = collect($salesGatherings)
+					->filter(fn ($row) => !empty($row['invoice_number']))
+					->map(fn ($row) => ($row['invoice_number'] ?? '') . '|' . strtoupper($row['currency'] ?? ''))
+					->unique();
+				if ($candidates->count()) {
+					$existing = DB::table($invoiceTableName)
+						->where('company_id', $company_id)
+						->whereIn('invoice_number', collect($salesGatherings)->pluck('invoice_number')->filter()->unique())
+						->get(['invoice_number', 'currency'])
+						->map(fn ($r) => $r->invoice_number . '|' . strtoupper($r->currency ?? ''))
+						->flip();
+					$duplicateInvoiceNumbers = $candidates->filter(fn ($key) => $existing->has($key))->values()->toArray();
+					$duplicateCount = collect($salesGatherings)->filter(function ($row) use ($duplicateInvoiceNumbers) {
+						$key = ($row['invoice_number'] ?? '') . '|' . strtoupper($row['currency'] ?? '');
+						return in_array($key, $duplicateInvoiceNumbers, true);
+					})->count();
+				}
+			}
+
+			$previewRows = collect($salesGatherings)->take(20)->map(function ($row) use ($db_names, $company, $modelName) {
+				$key = ($row['invoice_number'] ?? '') . '|' . strtoupper($row['currency'] ?? '');
+				return [
+					'id' => $row['id'] ?? null,
+					'cells' => collect($db_names)->map(fn ($name) => $row[$name] ?? '-')->all(),
+					'isDuplicate' => false, // filled client-side against duplicateInvoiceNumbers to avoid computing twice
+					'_dupKey' => $key,
+					'editUrl' => isset($row['id']) ? route('salesGatheringTest.editCachedRow', ['company' => $company->id, 'model' => $modelName, 'rowId' => $row['id']]) : null,
+				];
+			})->values();
+
+			$activeJob = ActiveJob::where('company_id', $company_id)->where('status', 'test_table')->where('model_name', 'SalesGatheringTest')->where('model', $modelName)->first();
+			$activeJobForSaving = ActiveJob::where('company_id', $company_id)->where('status', 'save_to_table')->where('model_name', 'SalesGatheringTest')->where('model', $modelName)->first();
+			$canViewPleaseReviewMessage = !hasFailedRow($company_id, $modelName) && hasCachingCompany($company_id, $modelName) && !$activeJobForSaving && Cache::get(getShowCompletedTestMessageCacheKey($company_id, $modelName)) && !(bool) Cache::get(getCanReloadUploadPageCachingForCompany($company_id, $modelName));
+
+			$currentFileNameLabel = null;
+			if ($company->hasLastCurrentUploadFileForModel($modelName)) {
+				$currentFileNameLabel = 'Current File Name: ' . $company->getCurrentLastFileNameForModel($modelName);
+			} elseif (hasFailedRow($company_id, $modelName)) {
+				$currentFileNameLabel = 'Current Failed File Name: ' . $company->getCurrentLastFileNameForModel($modelName);
+			} elseif ($company->hasLastSuccessfullyUploadFileForModel($modelName)) {
+				$currentFileNameLabel = 'Last Successfully Uploaded File Name: ' . $company->getSuccessLastFileNameForModel($modelName);
+			}
+
+			$redirectUrlAfterSave = in_array($modelName, ['CustomerInvoice', 'SupplierInvoice'], true)
+				? route('view.balances', ['company' => $company->id, 'modelType' => $modelName])
+				: route('view.uploading', ['company' => $company->id, 'model' => $modelName]);
+
+			return Inertia::render('InvoiceUpload/Import', [
+				'modelName' => $modelName,
+				'modelDisplayName' => camelToTitle($modelName),
+				'uploadUrl' => route('salesGatheringImport', ['company' => $company->id, 'model' => $modelName]),
+				'saveDataUrl' => route('salesGatheringTest.insertToMainTable', ['company' => $company->id, 'modelName' => $modelName]),
+				'deleteSelectedUrl' => route('deleteMultiRowsFromCaching', ['company' => $company->id, 'modelName' => $modelName]),
+				'deleteAllUrl' => route('deleteAllCaches', ['company' => $company->id, 'modelType' => $modelName]),
+				'lastUploadFailedUrl' => hasFailedRow($company_id, $modelName) ? route('last.upload.failed', ['company' => $company->id, 'model' => $modelName]) : null,
+				'percentagePollUrl' => url('get-uploading-percentage/' . $company->id . '/' . $modelName),
+				'columns' => collect($viewing_names)->map(fn ($label, $i) => ['label' => $label, 'field' => $db_names[$i]])->values(),
+				'previewRows' => $previewRows,
+				'totalCachedRows' => count($salesGatherings),
+				'duplicateInvoiceNumbers' => $duplicateInvoiceNumbers,
+				'duplicateCount' => $duplicateCount,
+				'isParsing' => (bool) $activeJob,
+				'isSaving' => (bool) $activeJobForSaving,
+				'canReview' => $canViewPleaseReviewMessage,
+				'currentFileNameLabel' => $currentFileNameLabel,
+				'redirectUrlAfterSave' => $redirectUrlAfterSave,
+				'indexUrl' => route('view.uploading', ['company' => $company->id, 'model' => $modelName]),
+				'skippedDuplicateCount' => Cache::get(getSkippedDuplicatesCacheKey($company_id, $modelName), 0),
+			]);
 		} else {
 			// Get The Selected exportable fields returns a pair of ['field_name' => 'viewing name']
 			$exportable_fields = (new ExportTable)->customizedTableField($company, $modelName, 'selected_fields');
@@ -122,6 +236,7 @@ class SalesGatheringTestController extends Controller
 			}
 			$validationCacheKey = generateCacheKeyForValidationRow($company_id,$modelName);
 			Cache::forget($validationCacheKey);
+			Cache::forget(getSkippedDuplicatesCacheKey($company_id, $modelName));
 
 			CachingCompany::where('company_id', $company_id)
 				->where('model', $modelName)
@@ -200,6 +315,17 @@ class SalesGatheringTestController extends Controller
 		return redirect()->back();
 	}
 
+	/**
+	 * Edit one not-yet-saved cached row before committing the import.
+	 * Renders resources/js/Pages/InvoiceUpload/EditCachedRow.vue.
+	 *
+	 * ContractLoanSchedule's Drawee Bank / Account Number cascading
+	 * dropdown (confirmed real, not incidental — picking a bank
+	 * scopes Account Number to just that bank's accounts, a real
+	 * data-integrity guard) is implemented here. The account-number
+	 * lookup itself is the existing, UNCHANGED
+	 * contract.loan.schedule.account.numbers endpoint.
+	 */
 	public function editCachedRow(Company $company, string $modelName, string $rowId)
 	{
 		$row = $this->findCachedImportRow($company->id, $modelName, $rowId);
@@ -212,7 +338,45 @@ class SalesGatheringTestController extends Controller
 			$loanId = request('leasing_contract_id') ?? request('loanId') ?? session('contract_loan_schedule_import_contract_id_' . $company->id);
 		}
 		$exportableFields = (new ExportTable)->customizedTableField($company, $modelName, 'selected_fields');
-		return view('client_view.sales_gathering.importCachedRowForm', compact('company', 'exportableFields', 'modelName', 'row', 'rowId', 'loanId'));
+
+		$dateFields = ['date', 'invoice_due_date', 'invoice_date'];
+		$amountFields = ['invoice_amount', 'vat_amount', 'withhold_amount', 'collected_amount', 'paid_amount', 'net_balance', 'net_invoice_amount', 'beginning_balance', 'schedule_payment', 'cheque_amount', 'interest_amount', 'principle_amount', 'end_balance'];
+		$isContractLoanSchedule = $modelName === 'ContractLoanSchedule';
+		$fields = collect($exportableFields)->map(function ($label, $fieldName) use ($row, $dateFields, $amountFields, $isContractLoanSchedule, $company) {
+			$value = $row[$fieldName] ?? '';
+			$type = 'text';
+			if ($isContractLoanSchedule && $fieldName === 'drawee_bank') {
+				$type = 'bank_select';
+			} elseif ($isContractLoanSchedule && $fieldName === 'account_number') {
+				$type = 'account_number_select';
+			} elseif (in_array($fieldName, $dateFields, true)) {
+				$type = 'date';
+				if ($value) {
+					try { $value = \Carbon\Carbon::parse($value)->format('Y-m-d'); } catch (\Exception $e) {}
+				}
+			} elseif (in_array($fieldName, $amountFields, true)) {
+				$type = 'number';
+			}
+			return [
+				'field' => $fieldName,
+				'label' => $label,
+				'type' => $type,
+				'value' => $value,
+				'options' => $type === 'bank_select' ? getCompanyDraweeBankNames($company->id) : null,
+			];
+		})->values();
+
+		return Inertia::render('InvoiceUpload/EditCachedRow', [
+			'modelName' => $modelName,
+			'modelDisplayName' => camelToTitle($modelName),
+			'fields' => $fields,
+			'accountNumbersUrl' => $isContractLoanSchedule ? route('contract.loan.schedule.account.numbers', ['company' => $company->id]) : null,
+			'updateUrl' => route('salesGatheringTest.updateCachedRow', array_merge(
+				['company' => $company->id, 'model' => $modelName, 'rowId' => $rowId],
+				$modelName == 'ContractLoanSchedule' && $loanId ? ['leasing_contract_id' => $loanId] : ($loanId ? ['medium_term_loan_id' => $loanId] : [])
+			)),
+			'backUrl' => route('salesGatheringImport', ['company' => $company->id, 'model' => $modelName]),
+		]);
 	}
 
 	public function updateCachedRow(Request $request, Company $company, string $modelName, string $rowId)
@@ -309,6 +473,10 @@ class SalesGatheringTestController extends Controller
 			->first();
 		return ($row === null) ? 0 :  1;
 	}
+	/**
+	 * Shows which fields in the last failed upload didn't validate,
+	 * and why. Renders resources/js/Pages/InvoiceUpload/Failed.vue.
+	 */
 	public function lastUploadFailed($companyId,$modelName){
 		$rows = Cache::get(generateCacheKeyForValidationRow($companyId,$modelName),[]);
 		$headers = exportableFields($companyId,$modelName)->fields ;
@@ -316,23 +484,195 @@ class SalesGatheringTestController extends Controller
 			$headers = HArr::removeKeyFromArrayByValue($headers,['net_sales_value']);
 		}
 		$headers = convertIdsToNames($headers);
-		return view('client_view.sales_gathering.failed',[
-			'rows'=>$rows,
-			'headers'=>$headers
+
+		$formattedRows = collect($rows)->map(function ($items, $rowNumber) use ($headers) {
+			$cells = collect($headers)->map(function ($header) use ($items) {
+				$failed = isset($items[$header]['value']);
+				return [
+					'failed' => $failed,
+					'message' => $failed ? ($items[$header]['message'] ?? '-') : null,
+					'value' => $failed ? ($items[$header]['value'] ?? '-') : null,
+				];
+			})->values();
+			return ['rowNumber' => $rowNumber, 'cells' => $cells];
+		})->values();
+
+		return Inertia::render('InvoiceUpload/Failed', [
+			'modelName' => $modelName,
+			'modelDisplayName' => camelToTitle($modelName),
+			'headers' => array_values($headers),
+			'rows' => $formattedRows,
+			'backUrl' => route('salesGatheringImport', ['company' => $companyId, 'model' => $modelName]),
+		]);
+	}
+
+	/**
+	 * Real single-record Customer/Supplier Invoice form — the actual
+	 * scope, once narrowed down from the original 865-line generic
+	 * shared form (which also serves Financial Statements, Expense
+	 * Analysis, Contract Loan Schedule, etc. — none of that applies
+	 * here). Renders resources/js/Pages/InvoiceUpload/InvoiceForm.vue,
+	 * shared for both add and edit (same pattern used throughout
+	 * this migration). The cascading Customer/Supplier → Project Name
+	 * → Sales/Purchase Order dropdowns use the exact same two
+	 * existing, UNCHANGED lookup endpoints the original used
+	 * (get.projects.for.customer.or.supplier, get.po.or.so.from.contract).
+	 */
+	protected function renderInvoiceForm(Company $company, string $modelName, $model)
+	{
+		$isCustomer = $modelName === 'CustomerInvoice';
+		$exportables = getExportableFieldsForModel($company->id, $modelName);
+
+		$dateWords = ['date', 'Date', 'Estimated'];
+		$numericFields = getNumericExportFields();
+		$numericNegativeFields = getNumericWithNegativeAllowedExportFields();
+
+		// Resolve the model's currently-selected cascading IDs (contract/
+		// sales-order/purchase-order), matching the original's hidden
+		// #current-contract-id / #current-sales-order-id lookups exactly.
+		$currentContractId = ($model && $model->contract_name) ? optional(\App\Models\Contract::where('company_id', $company->id)->where('name', $model->contract_name)->first())->id : null;
+		$currentSalesOrderId = ($model && $isCustomer && $model->sales_order_number) ? optional(\App\Models\SalesOrder::where('company_id', $company->id)->where('so_number', $model->sales_order_number)->first())->id : null;
+		$currentPurchaseOrderId = ($model && !$isCustomer && $model->purchases_order_number) ? optional(\App\Models\PurchaseOrder::where('company_id', $company->id)->where('po_number', $model->purchases_order_number)->first())->id : null;
+
+		$fields = collect($exportables)->map(function ($label, $fieldName) use ($model, $isCustomer, $dateWords, $numericFields, $numericNegativeFields, $company, $currentContractId, $currentSalesOrderId, $currentPurchaseOrderId) {
+			$type = 'text';
+			$options = null;
+			$value = $model ? ($model->{$fieldName} ?? null) : null;
+			$submitField = $fieldName;
+
+			if (str_contains($label, 'Customer Name')) {
+				$type = 'customer_select';
+				$submitField = 'customer_id';
+				$options = \App\Models\Partner::where('company_id', $company->id)->where('is_customer', 1)->pluck('name', 'id');
+				$value = $model->customer_id ?? null;
+			} elseif (str_contains($label, 'Supplier Name')) {
+				$type = 'supplier_select';
+				$submitField = 'supplier_id';
+				$options = \App\Models\Partner::where('company_id', $company->id)->where('is_supplier', 1)->pluck('name', 'id');
+				$value = $model->supplier_id ?? null;
+			} elseif (str_contains($label, 'Business Sector')) {
+				$type = 'business_sector_select';
+				$options = \App\Models\CashVeroBusinessSector::where('company_id', $company->id)->pluck('name', 'name');
+				$value = $model->business_sector ?? null;
+			} elseif (str_contains($label, 'Project Name')) {
+				$type = 'project_select';
+				$submitField = 'contract_id';
+				$value = $currentContractId;
+			} elseif (str_contains($label, 'Sales Order Number')) {
+				$type = 'sales_order_select';
+				$submitField = 'sales_order_id';
+				$value = $currentSalesOrderId;
+			} elseif (str_contains($label, 'Purchase') && str_contains($label, 'Order')) {
+				$type = 'purchase_order_select';
+				$submitField = 'purchases_order_id';
+				$value = $currentPurchaseOrderId;
+			} elseif (str_contains($fieldName, 'date') || collect($dateWords)->contains(fn ($w) => str_contains($label, $w))) {
+				$type = 'date';
+				if ($value) {
+					try { $value = \Carbon\Carbon::parse($value)->format('Y-m-d'); } catch (\Exception $e) {}
+				}
+			} elseif (collect($numericFields)->contains($label) || collect($numericNegativeFields)->contains($label)) {
+				$type = 'number';
+			}
+
+			return [
+				'field' => $submitField,
+				'label' => $label,
+				'type' => $type,
+				'value' => $value,
+				'options' => $options,
+			];
+		})->values();
+
+		return Inertia::render('InvoiceUpload/InvoiceForm', [
+			'modelName' => $modelName,
+			'modelDisplayName' => camelToTitle($modelName),
+			'fields' => $fields,
+			'projectsUrl' => route('get.projects.for.customer.or.supplier', ['company' => $company->id]),
+			'poOrSoUrl' => route('get.po.or.so.from.contract', ['company' => $company->id]),
+			'submitUrl' => $model
+				? route('admin.update.analysis', ['company' => $company->id, 'model' => $modelName, 'modelId' => $model->id])
+				: route('admin.store.analysis', ['company' => $company->id, 'model' => $modelName]),
+			'isEdit' => (bool) $model,
+			'backUrl' => route('view.uploading', ['company' => $company->id, 'model' => $modelName]),
 		]);
 	}
 
 	public function createModel(Company $company ,Request $request, string $modelName )
 	{
-		$exportables = getExportableFieldsForModel($company->id,$modelName);
+		if (in_array($modelName, ['CustomerInvoice', 'SupplierInvoice'], true)) {
+			return $this->renderInvoiceForm($company, $modelName, null);
+		}
+		if (in_array($modelName, ['LoanSchedule', 'ContractLoanSchedule'], true)) {
+			return $this->renderScheduleForm($company, $request, $modelName, null);
+		}
+
+		abort(404);
+	}
+
+	/**
+	 * Create / edit a single LoanSchedule or ContractLoanSchedule row.
+	 * Renders resources/js/Pages/InvoiceUpload/ScheduleForm.vue.
+	 */
+	protected function renderScheduleForm(Company $company, Request $request, string $modelName, $model)
+	{
+		$exportables = getExportableFieldsForModel($company->id, $modelName);
+		$isContractLoanSchedule = $modelName === 'ContractLoanSchedule';
+		$dateFields = ['date', 'invoice_due_date', 'invoice_date'];
+		$amountFields = ['invoice_amount', 'vat_amount', 'withhold_amount', 'collected_amount', 'paid_amount', 'net_balance', 'net_invoice_amount', 'beginning_balance', 'schedule_payment', 'cheque_amount', 'interest_amount', 'principle_amount', 'end_balance'];
+
+		$loanId = $request->get('medium_term_loan_id') ?? $request->get('loanId') ?? session('loan_schedule_import_loan_id_' . $company->id);
 		$contractId = $request->get('leasing_contract_id') ?? $request->get('loanId') ?? session('contract_loan_schedule_import_contract_id_' . $company->id);
-	
-		return view('admin.create-excel-by-form',[
-			'pageTitle'=>__('Create'),
-			'type'=>'_create',
-			'exportables'=>$exportables,
-			'modelName'=>$modelName,
-			'leasingContractId' => $modelName === 'ContractLoanSchedule' ? $contractId : null,
+		if ($model) {
+			$loanId = $model->medium_term_loan_id ?? $loanId;
+			$contractId = $model->leasing_contract_id ?? $contractId;
+		}
+
+		$fields = collect($exportables)->map(function ($label, $fieldName) use ($model, $dateFields, $amountFields, $isContractLoanSchedule, $company) {
+			$value = $model ? ($model->{$fieldName} ?? null) : null;
+			if ($isContractLoanSchedule && $fieldName === 'drawee_bank' && $model) {
+				$value = $model->draweeBank?->bank?->view_name ?? null;
+			}
+			$type = 'text';
+			if ($isContractLoanSchedule && $fieldName === 'drawee_bank') {
+				$type = 'bank_select';
+			} elseif ($isContractLoanSchedule && $fieldName === 'account_number') {
+				$type = 'account_number_select';
+			} elseif (in_array($fieldName, $dateFields, true)) {
+				$type = 'date';
+				if ($value) {
+					try { $value = \Carbon\Carbon::parse($value)->format('Y-m-d'); } catch (\Exception $e) {}
+				}
+			} elseif (in_array($fieldName, $amountFields, true)) {
+				$type = 'number';
+				if ($value === null) {
+					$value = 0;
+				}
+			}
+			return [
+				'field' => $fieldName,
+				'label' => $label,
+				'type' => $type,
+				'value' => $value,
+				'options' => $type === 'bank_select' ? getCompanyDraweeBankNames($company->id) : null,
+			];
+		})->values();
+
+		$contextId = $isContractLoanSchedule ? $contractId : $loanId;
+		$backParams = getUploadingRouteParams($company->id, $modelName, $contextId ? (string) $contextId : null);
+
+		return Inertia::render('InvoiceUpload/ScheduleForm', [
+			'modelName' => $modelName,
+			'modelDisplayName' => $isContractLoanSchedule ? __('Contract Leasing Schedule') : camelToTitle($modelName),
+			'fields' => $fields,
+			'accountNumbersUrl' => $isContractLoanSchedule ? route('contract.loan.schedule.account.numbers', ['company' => $company->id]) : null,
+			'submitUrl' => $model
+				? route('admin.update.analysis', ['company' => $company->id, 'model' => $modelName, 'modelId' => $model->id])
+				: route('admin.store.analysis', ['company' => $company->id, 'model' => $modelName]),
+			'isEdit' => (bool) $model,
+			'backUrl' => route('view.uploading', $backParams),
+			'leasingContractId' => $isContractLoanSchedule ? $contractId : null,
+			'mediumTermLoanId' => ! $isContractLoanSchedule ? $loanId : null,
 		]);
 	}
 	protected function removeCommaFromNumbers(array $items):array{
@@ -375,20 +715,17 @@ class SalesGatheringTestController extends Controller
 					}
 
 		if ($modelName === 'ContractLoanSchedule') {
-			$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','company_id','leasing_contract_id','loanId']);
+			$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','company_id','leasing_contract_id','loanId','medium_term_loan_id']);
 			$tableDataArr['company_id'] = $companyId;
 			$tableDataArr = $this->removeCommaFromNumbers($tableDataArr);
 			$tableDataArr = $this->prepareContractLoanScheduleRowForStorage($companyId, $tableDataArr, $request);
 			$model->create($tableDataArr);
-		} else {
-			foreach((array)$request->get('tableIds') as $tableId){
-				foreach((array)$request->get($tableId) as  $tableDataArr){
-						$tableDataArr['company_id']  = $companyId ;
-						$tableDataArr = $this->removeCommaFromNumbers($tableDataArr);
-
-						$modelItem=$model->create($tableDataArr);
-				}
-			}
+		} elseif ($modelName === 'LoanSchedule') {
+			$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','company_id','leasing_contract_id','loanId','medium_term_loan_id']);
+			$tableDataArr['company_id'] = $companyId;
+			$tableDataArr = $this->removeCommaFromNumbers($tableDataArr);
+			$tableDataArr = $this->prepareLoanScheduleRowForStorage($companyId, $tableDataArr, $request);
+			$model->create($tableDataArr);
 		}
 
 		$redirectParams = getUploadingRouteParams(
@@ -422,6 +759,18 @@ class SalesGatheringTestController extends Controller
 			'status' => resolveLoanScheduleStatus($chequeAmount, $chequeAmount, $tableDataArr['date'] ?? null),
 		]);
 	}
+
+	protected function prepareLoanScheduleRowForStorage(int $companyId, array $tableDataArr, Request $request): array
+	{
+		$loanId = $request->get('medium_term_loan_id') ?? $request->get('loanId') ?? session('loan_schedule_import_loan_id_' . $companyId);
+		$schedulePayment = (float) ($tableDataArr['schedule_payment'] ?? 0);
+
+		return array_merge($tableDataArr, [
+			'medium_term_loan_id' => $loanId,
+			'remaining' => $tableDataArr['remaining'] ?? $schedulePayment,
+			'status' => $tableDataArr['status'] ?? resolveLoanScheduleStatus($schedulePayment, $schedulePayment, $tableDataArr['date'] ?? null),
+		]);
+	}
 	
 	
 	
@@ -429,19 +778,20 @@ class SalesGatheringTestController extends Controller
 	
 	public function editModel(Company $company ,Request $request, string $modelName,$modelId )
 	{
-		$exportables = getExportableFieldsForModel($company->id,$modelName);
-		$model = ('\App\Models\\'.$modelName)::find($modelId);
-		$data = [
-			'pageTitle'=>__('Create'),
-			'type'=>'_create',
-			'exportables'=>$exportables,
-			'modelName'=>$modelName,
-			'model'=>$model,
-			'removeRepeater'=>true,
-			'leasingContractId' => $modelName === 'ContractLoanSchedule' ? $model->leasing_contract_id : null,
-		] ;
-		
-		return view('admin.create-excel-by-form',$data);
+		if (in_array($modelName, ['CustomerInvoice', 'SupplierInvoice'], true)) {
+			$model = ('\App\Models\\'.$modelName)::find($modelId);
+			return $this->renderInvoiceForm($company, $modelName, $model);
+		}
+		if (in_array($modelName, ['LoanSchedule', 'ContractLoanSchedule'], true)) {
+			$query = ('\App\Models\\'.$modelName)::query();
+			if ($modelName === 'ContractLoanSchedule') {
+				$query->with('draweeBank.bank');
+			}
+			$model = $query->findOrFail($modelId);
+			return $this->renderScheduleForm($company, $request, $modelName, $model);
+		}
+
+		abort(404);
 	}
 	public function updateModel(Company $company ,Request $request, string $modelName,$modelId )
 	{
@@ -477,20 +827,17 @@ class SalesGatheringTestController extends Controller
 					
 					
 		if ($modelName === 'ContractLoanSchedule') {
-			$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','company_id','leasing_contract_id','loanId']);
+			$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','company_id','leasing_contract_id','loanId','medium_term_loan_id']);
 			$tableDataArr['company_id'] = $companyId;
 			$tableDataArr = $this->removeCommaFromNumbers($tableDataArr);
 			$tableDataArr = $this->prepareContractLoanScheduleRowForStorage($companyId, $tableDataArr, $request);
 			$model->update($tableDataArr);
-		} else {
-			foreach((array)$request->get('tableIds') as $tableId){
-			
-				foreach((array)$request->get($tableId) as  $tableDataArr){
-						$tableDataArr['company_id']  = $companyId ;
-						
-						$model->update($tableDataArr);
-				}
-			}
+		} elseif ($modelName === 'LoanSchedule') {
+			$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','company_id','leasing_contract_id','loanId','medium_term_loan_id']);
+			$tableDataArr['company_id'] = $companyId;
+			$tableDataArr = $this->removeCommaFromNumbers($tableDataArr);
+			$tableDataArr = $this->prepareLoanScheduleRowForStorage($companyId, $tableDataArr, $request);
+			$model->update($tableDataArr);
 		}
 		if($partnerId = $request->get('customer_id')){
 			$partner = Partner::find($partnerId);

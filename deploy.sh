@@ -25,15 +25,11 @@ chmod -R 775 bootstrap/cache
 echo ">>> Running migrations"
 /usr/local/bin/ea-php84 artisan migrate --force
 
-echo ">>> Running SQL scripts"
-/usr/local/bin/ea-php84 artisan run:sql
-
 echo ">>> Linking storage"
 /usr/local/bin/ea-php84 artisan storage:link
 
 echo ">>> Restarting queue workers"
 sudo supervisorctl restart queue-worker:*
-
 
 echo ">>> Maintenance mode OFF"
 /usr/local/bin/ea-php84 artisan up

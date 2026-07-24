@@ -1,7 +1,6 @@
 <?php
 
 namespace App\Http\Controllers;
-
 use App\Http\Requests\StoreDownPaymentSettlementRequest;
 use App\Models\Company;
 use App\Models\Contract;
@@ -15,7 +14,43 @@ use App\Models\SupplierInvoice;
 use App\Services\Api\OdooPayment;
 use App\Traits\Models\HasBasicFilter;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
+/**
+ * DownPaymentContractsController
+ * ------------------------------------------------------------------
+ * Down payments waiting to be settled against invoices. Reached from
+ * the "Down Payment Amount Settlement" button on the Invoice Report
+ * page. Serves BOTH Customer and Supplier via the `$modelType`
+ * parameter ('CustomerInvoice' or 'SupplierInvoice') — one shared
+ * implementation, same pattern as every other Customer/Supplier
+ * shared controller in this app.
+ *
+ * IMPORTANT — settlement logic is SHARED, not this feature's own:
+ * downPaymentSettlements()/storeDownPaymentSettlement() use the exact
+ * same storeNewSettlement() engine as MoneyReceivedController and
+ * MoneyPaymentController (Treasury Operations). It also writes
+ * directly to Odoo when the company has Odoo credentials
+ * (settleAdvanceWithInvoices). Building this was deliberately
+ * deferred until Treasury Operations (Money Payment / Money Received)
+ * was migrated, so the settlement engine's real shape (payload,
+ * validation, Odoo call) was already proven working in Vue first —
+ * that's now done, so this page follows.
+ *
+ * ── Frontend migration status (as of this file's last update) ──────
+ *   - viewContractsWithDownPayments() → ALREADY migrated (read-only,
+ *                                        no risk). Returns
+ *                                        Inertia::render(), served by
+ *                                        resources/js/Pages/Balances/DownPaymentContracts.vue
+ *   - downPaymentSettlements()  → NOW migrated. Inertia::render(),
+ *                                  served by Pages/DownPaymentSettlement/Form.vue
+ *   - storeDownPaymentSettlement() → real Laravel redirect/back()
+ *                                  (Inertia-compatible), was raw JSON
+ *                                  for the old jQuery/AJAX form.
+ *                                  Business logic (storeNewSettlement,
+ *                                  Odoo settleAdvanceWithInvoices)
+ *                                  left completely untouched.
+ */
 class DownPaymentContractsController extends Controller
 {
 	use HasBasicFilter;
@@ -31,7 +66,6 @@ class DownPaymentContractsController extends Controller
 		$partnerName = $partner->getName();
 		$contractsWithDownPayments = $fullMoneyModelName::CONTRACTS_WITH_DOWN_PAYMENTS;
 		$numberOfMonthsBetweenEndDateAndStartDate = 18 ;
-	//	$currentType = $request->get('active',$contractsWithDownPayments);
 		$filterDates = [];
 		foreach([$contractsWithDownPayments] as $type){
 			$startDate = $request->has('startDate') ? $request->input('startDate.'.$type) : now()->subMonths($numberOfMonthsBetweenEndDateAndStartDate)->format('Y-m-d');
@@ -43,9 +77,7 @@ class DownPaymentContractsController extends Controller
 			];
 		}
 		
-		
-		 
-		  /**
+		 /**
 		 * * start of bank to safe internal money transfer 
 		 */
 		$moneyModels = $fullMoneyModelName::whereIn('money_type',[
@@ -62,44 +94,35 @@ class DownPaymentContractsController extends Controller
 		->with('contract')
 		->selectRaw($moneyTableName.'.*,contracts.id as contractId')
 		->get();
-		// $moneyModels = $fullMoneyModelName::whereIn('money_type',[
-		// 	$fullMoneyModelName::DOWN_PAYMENT
-		// 	,$fullMoneyModelName::INVOICE_SETTLEMENT_WITH_DOWN_PAYMENT
-		// ])
-		// ->where($moneyTableName.'.company_id',$company->id)
-		// ->where($moneyTableName.'.partner_id',$partnerId)
-		// ->where($moneyTableName.'.'.$receivingOrPaymentCurrencyColumnName,$currency)
-		// ->leftJoin('contracts','contracts.id','=','contract_id')
-		// ->where(function($q){
-		// 	$q->where('contract_id','=',null)->orWhere('contracts.status','!=',Contract::FINISHED);
-		// })
-		// ->with('contract')
-		// ->selectRaw($moneyTableName.'.*,contracts.id as contractId')
-		// ->get();
-		
-		 $searchFields = [
-			$contractsWithDownPayments=>[
-				'name'=>__('Name'),
-				'start_date'=>__('Start Date'),
-				'end_Date'=>__('End Date'),
-			],
-		];
-	
-		$models = [
-			$contractsWithDownPayments =>$moneyModels ,
-		];
-	
 
-        return view('contracts-down-payment.index', [
-			'company'=>$company,
-			'modelType'=>$modelType,
-			'moneyModelName'=>$moneyModelName,
-			'searchFields'=>$searchFields,
-			'models'=>$models,
-			'title'=>$partnerName . ' ' .__('Down Payment'),
-			'tableTitle'=>__('Down Payment Table') ,
-			// 'financialInstitution'=>$financialInstitution,
-			'filterDates'=>$filterDates
+		// Note: $filterDates is computed above but was never actually
+		// applied as a WHERE clause in the original query either — the
+		// date pickers on this page display those defaults but don't
+		// currently filter results. Preserved exactly as-is (not a
+		// bug we introduced, and not ours to silently "fix" without
+		// a decision from the project owner).
+		$rows = $moneyModels->map(function ($moneyModel) use ($company, $modelType) {
+			return [
+				'id' => $moneyModel->id,
+				'date_formatted' => $moneyModel->getReceivingOrPaymentMoneyDateFormatted(),
+				'down_payment_amount_formatted' => $moneyModel->getDownPaymentAmountFormatted(),
+				'settlement_amount_formatted' => $moneyModel->getTotalSettlementAmountForDownPaymentFormatted(),
+				'net_amount_formatted' => number_format($moneyModel->getTotalSettlementsNetBalanceForDownPayment()),
+				'currency' => $moneyModel->currency,
+				'contract_name' => $moneyModel->getContractName(),
+				'contract_amount_formatted' => $moneyModel->getContractAmountFormatted(),
+				// Still Blade — see class docblock. Left as a plain
+				// link out, same as Adjust Due Date / Money Received
+				// were before their own pages got migrated.
+				'settlement_url' => route('view.down.payment.settlement', ['company' => $company->id, 'downPaymentId' => $moneyModel->id, 'modelType' => $modelType]),
+			];
+		})->values();
+
+        return Inertia::render('Balances/DownPaymentContracts', [
+			'title' => $partnerName . ' ' . __('Down Payment'),
+			'currency' => $currency,
+			'rows' => $rows,
+			'backUrl' => route('view.invoice.report', ['company' => $company->id, 'partnerId' => $partnerId, 'currency' => $currency, 'modelType' => $modelType]),
 		]);
     }
 	public function downPaymentSettlements(Company $company,Request $request, int $downPaymentId ,string $modelType)
@@ -112,12 +135,10 @@ class DownPaymentContractsController extends Controller
 		$contract = $downPayment->contract;
 		$partnerId = $downPayment->getPartnerId();
 		$partnerName = $downPayment->getPartnerName();
-		// $inEditMode = false ;
 		$fullClassName = ('\App\Models\\' . $modelType) ;
         $clientIdColumnName = $fullClassName::CLIENT_ID_COLUMN_NAME ;
         $clientNameColumnName = $fullClassName::CLIENT_NAME_COLUMN_NAME ;
 		$customerNameText = (new $fullClassName)->getClientNameText();
-        $jsFile = $fullClassName::JS_FILE ;
 		$contractCurrency = $downPayment->getCurrency();
 		$currencies = $fullClassName::getCurrencies();
 		$currencies = array_filter($currencies,function($item) use ($contractCurrency){
@@ -132,47 +153,54 @@ class DownPaymentContractsController extends Controller
 		->where('currency','=',$contractCurrency)
 		->where('company_id',$company->id)
 		->where('net_invoice_amount','>',0);
-		// if(!$inEditMode){
-			/**
-			 * ! $inEditMode always returns false 
-			 * * وبالتالي لو بتحاول تعدل مش هيجيب اللي اتقفلت خالص
-			 */
-		//	$invoices->where('net_balance','>',0);
-		// }
-
+		// ⚠️ Same note as the original: $inEditMode always evaluates
+		// to false here, so the ->where('net_balance', '>', 0) filter
+		// was never actually applied — every matching invoice shows
+		// up regardless of remaining balance. Preserved exactly as-is,
+		// not ours to silently "fix" without a decision from the
+		// project owner.
 		$invoices = $invoices->orderBy('invoice_date','asc')->get() ; 
 		
 		$downPaymentAmount =  $downPayment->getDownPaymentAmount();
 		$isDownPaymentFromMoneyPayment = $downPayment->isInvoiceSettlementWithDownPayment();
 		$hasProjectNameColumn = $fullClassName::hasProjectNameColumn();
-		$clientName = (new $fullClassName)->getClientNameText();
-		
-		
-		
-		
-		
-		
-		return view('contracts-down-payment.settlement_form',[
-	//		'modelType'=>$downPaymentModelName,
-			'modelType'=>$modelType,
-		//	'customerNameText'=>$clientName,
-			'hasProjectNameColumn'=>$hasProjectNameColumn,
-			'invoices'=>$invoices ,
-			'downPayment'=>$downPayment,
-			'currencies'=>$currencies,
-			'contract'=>$contract,
-			'model'=>$downPayment,
-			'company'=>$company,
-			'jsFile'=>$jsFile,
-			
-			'customerNameText'=>$customerNameText,
-			'customerNameColumnName'=>$clientNameColumnName,
-			'customerIdColumnName'=>$clientIdColumnName,
-			'partnerId'=>$partnerId ,
-			'partnerName'=>$partnerName,
-			'downPaymentAmount'=>$downPaymentAmount,
-			'isDownPaymentFromMoneyPayment'=>$isDownPaymentFromMoneyPayment
 
+		$rows = $invoices->map(function ($invoice) use ($downPayment, $partnerId, $isDownPaymentFromMoneyPayment, $hasProjectNameColumn) {
+			$totalSettlementAmount = $downPayment->sumSettlementsForInvoice($invoice->id, $partnerId, $isDownPaymentFromMoneyPayment);
+			$totalWithholdAmount = $downPayment->sumWithholdAmountForInvoice($invoice->id, $partnerId, $isDownPaymentFromMoneyPayment);
+
+			return [
+				'invoice_id' => $invoice->id,
+				'project_name' => $hasProjectNameColumn ? $invoice->getProjectName() : null,
+				'invoice_number' => $invoice->getInvoiceNumber(),
+				'invoice_date_formatted' => $invoice->getInvoiceDateFormatted(),
+				'invoice_due_date_formatted' => $invoice->getInvoiceDueDateFormatted(),
+				'currency' => $invoice->getCurrency(),
+				'net_invoice_amount_formatted' => $invoice->getNetInvoiceAmountFormatted(),
+				'collected_amount_formatted' => number_format($invoice->getCollectedOrPaidInEditModeForDownPayment(true, $totalSettlementAmount), 0),
+				'net_balance_formatted' => number_format($invoice->calculateNetBalanceInEditMode(true, $totalSettlementAmount, $totalWithholdAmount), 0),
+				'settlement_amount' => (float) $totalSettlementAmount,
+				'withhold_amount' => (float) $totalWithholdAmount,
+			];
+		})->values();
+
+		return Inertia::render('DownPaymentSettlement/Form', [
+			'modelType' => $modelType,
+			'hasProjectNameColumn' => $hasProjectNameColumn,
+			'company' => ['id' => $company->id, 'name' => $company->getName()],
+			'contractName' => $contract ? $contract->getName() : null,
+			'invoices' => $rows,
+			'currency' => $contractCurrency,
+			'customerNameText' => $customerNameText,
+			'partnerId' => $partnerId,
+			'partnerName' => $partnerName,
+			'downPaymentId' => $downPayment->id,
+			'downPaymentAmountFormatted' => $downPayment->getDownPaymentAmountFormatted(),
+			'downPaymentAmount' => (float) $downPaymentAmount,
+			'urls' => [
+				'store' => route('store.down.payment.settlement', ['company' => $company->id, 'downPaymentId' => $downPaymentId, 'partnerId' => $partnerId, 'modelType' => $modelType]),
+				'back' => route('view.contracts.down.payments', ['company' => $company->id, 'partnerId' => $partnerId, 'modelType' => $modelType, 'currency' => $contractCurrency]),
+			],
 		]);
 	}
 	
@@ -281,28 +309,16 @@ public function storeDownPaymentSettlement(
             //     'is_customer' => $isMoneyReceived,
             //     'error' => $result['message']
             // ]);
-			return response()->json([
-				'success' => false,
-				'message' => 'Odoo settlement failed: ' . $result['message']
-			]);
+			return back()->withErrors(['odoo' => 'Odoo settlement failed: ' . $result['message']])->withInput();
         }
     }
     
-	return response()->json([
-		'success' => true,
-		'redirectTo' => route('view.contracts.down.payments', [
-			'company' => $company->id,
-			'partnerId' => $partnerId,
-			'modelType' => $modelType,
-			'currency' => $downPayment->getCurrency()
-		])
-	]);
-    // return redirect()->route('view.contracts.down.payments', [
-    //     'company' => $company->id,
-    //     'partnerId' => $partnerId,
-    //     'modelType' => $modelType,
-    //     'currency' => $downPayment->getCurrency()
-    // ]);
+	return redirect()->route('view.contracts.down.payments', [
+		'company' => $company->id,
+		'partnerId' => $partnerId,
+		'modelType' => $modelType,
+		'currency' => $downPayment->getCurrency()
+	])->with('success', __('Data Store Successfully'));
 }
 
 

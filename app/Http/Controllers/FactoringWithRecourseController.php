@@ -18,7 +18,36 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
 
+/**
+ * FactoringWithRecourseController
+ * ------------------------------------------------------------------
+ * "Factoring With Recourse" — the company sells a customer invoice to
+ * a factoring company for immediate cash, but stays on the hook: if
+ * the customer never pays, the invoice comes back to the company
+ * (Reject) and must be repaid to the factoring company. If the
+ * customer does pay (Collect), any shortfall between the amount
+ * disbursed and the invoice's real value is recorded too. Both
+ * outcomes are independently revertible. No Odoo write, no DB
+ * triggers — the model itself already documents a real, confirmed,
+ * already-fixed Carbon 3 sign bug in calculateAmounts() (diffInDays).
+ *
+ * ── Frontend migration status ───────────────────────────────────
+ *   index()          → Inertia::render, Pages/FactoringWithRecourse/Index.vue
+ *   create()/edit()  → Inertia::render, Pages/FactoringWithRecourse/Form.vue
+ *                       (shared with Without Recourse via a `recourseType` prop —
+ *                       the original create/edit blade forms are byte-for-byte
+ *                       identical apart from labels/routes)
+ *   store()/update() → real Laravel redirects (Inertia-compatible), was raw
+ *                       JSON ({redirectTo}) for the old jQuery/AJAX form.
+ *   destroy()/markCollected()/revertCollected()/markRejected()/revertRejected()
+ *                     → unchanged, already redirect()->back(), Inertia-compatible
+ *                       as-is (triggered via router.post/delete from Index.vue).
+ *   getContracts()/getInvoiceCurrencies()/getInvoices()/calculate()
+ *                     → unchanged, pure JSON AJAX endpoints called from the
+ *                       Vue form's cascading dropdowns — not Inertia visits.
+ */
 class FactoringWithRecourseController
 {
     use GeneralFunctions;
@@ -75,18 +104,53 @@ class FactoringWithRecourseController
             'received_amount' => __('Received Amount'),
         ];
 
-        return view('factoring.with-recourse.index', [
-            'company' => $company,
-            'transactions' => $transactions,
+        return Inertia::render('FactoringWithRecourse/Index', [
+            'company' => ['id' => $company->id, 'name' => $company->getName()],
             'searchFields' => $searchFields,
-            'financialInstitutionBanks' => FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->get(),
-            'accountTypes' => AccountType::onlyCashAccounts()->get(),
+            'financialInstitutionBanks' => FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->get()
+                ->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()])->values(),
+            'accountTypes' => AccountType::onlyCashAccounts()->get()
+                ->map(fn ($a) => ['id' => $a->id, 'name' => $a->getName()])->values(),
+            'canCreate' => hasAuthFor('create supplier payment'),
+            'canUpdate' => hasAuthFor('update supplier payment'),
+            'canDelete' => hasAuthFor('delete supplier payment'),
+            'transactions' => $transactions->values()->map(fn (FactoringTransaction $t) => [
+                'id' => $t->id,
+                'factoring_date_formatted' => $t->getFactoringDateFormatted(),
+                'factoring_company_name' => $t->factoringCompany?->getName(),
+                'customer_name' => $t->customer?->getName(),
+                'invoice_number' => $t->customerInvoice?->invoice_number,
+                'invoice_currency' => $t->invoice_currency,
+                'factoring_amount' => (float) $t->factoring_amount,
+                'received_amount' => (float) $t->received_amount,
+                'is_collected' => (bool) $t->is_collected,
+                'is_rejected' => (bool) $t->is_rejected,
+                'is_pending' => $t->isPendingWithRecourse(),
+                'collection_date' => $t->collection_date,
+                'rejection_date' => $t->rejection_date,
+                'uncollected_invoice_charges' => (float) $t->uncollected_invoice_charges,
+                'difference_amount' => $t->getCollectionDifferenceAmount(),
+                'financial_institution_name' => $t->financialInstitution?->getName(),
+                'financial_institution_id' => $t->financial_institution_id,
+                'account_type_id' => $t->account_type_id,
+                'account_number' => $t->account_number,
+                'edit_url' => route('factoring.with-recourse.edit', ['company' => $company->id, 'factoringTransaction' => $t->id]),
+                'mark_collected_url' => route('factoring.with-recourse.mark-collected', ['company' => $company->id, 'factoringTransaction' => $t->id]),
+                'revert_collected_url' => route('factoring.with-recourse.revert-collected', ['company' => $company->id, 'factoringTransaction' => $t->id]),
+                'mark_rejected_url' => route('factoring.with-recourse.mark-rejected', ['company' => $company->id, 'factoringTransaction' => $t->id]),
+                'revert_rejected_url' => route('factoring.with-recourse.revert-rejected', ['company' => $company->id, 'factoringTransaction' => $t->id]),
+                'delete_url' => route('factoring.with-recourse.destroy', ['company' => $company->id, 'factoringTransaction' => $t->id]),
+            ]),
+            'urls' => [
+                'create' => route('factoring.with-recourse.create', ['company' => $company->id]),
+                'index' => route('factoring.with-recourse.index', ['company' => $company->id]),
+            ],
         ]);
     }
 
     public function create(Company $company)
     {
-        return view('factoring.with-recourse.form', $this->formViewData($company));
+        return Inertia::render('Factoring/Form', $this->formViewData($company));
     }
 
     public function edit(Company $company, FactoringTransaction $factoringTransaction)
@@ -94,19 +158,50 @@ class FactoringWithRecourseController
         $this->ensureWithRecourseTransaction($company, $factoringTransaction);
 
         $factoringTransaction->load(['customer', 'customerInvoice', 'factoringCompany', 'factoringContract']);
+        $invoice = $factoringTransaction->customerInvoice;
+        $contracts = $this->contractsForCompany(
+            $company,
+            (int) $factoringTransaction->factoring_company_id,
+            $factoringTransaction->factoring_date,
+            (int) $factoringTransaction->factoring_contract_id
+        );
 
-        return view('factoring.with-recourse.form', array_merge(
-            $this->formViewData($company),
-            [
-                'factoringTransaction' => $factoringTransaction,
-                'contracts' => $this->contractsForCompany(
-                    $company,
-                    (int) $factoringTransaction->factoring_company_id,
-                    $factoringTransaction->factoring_date,
-                    (int) $factoringTransaction->factoring_contract_id
-                ),
-            ]
-        ));
+        $viewData = $this->formViewData($company);
+        $viewData['mode'] = 'edit';
+        $viewData['model'] = [
+            'id' => $factoringTransaction->id,
+            'factoring_date' => $factoringTransaction->factoring_date,
+            'factoring_company_id' => $factoringTransaction->factoring_company_id,
+            'factoring_contract_id' => $factoringTransaction->factoring_contract_id,
+            'customer_id' => $factoringTransaction->customer_id,
+            'customer_name' => $factoringTransaction->customer?->getName(),
+            'invoice_currency' => $factoringTransaction->invoice_currency,
+            'customer_invoice_id' => $factoringTransaction->customer_invoice_id,
+            'invoice_number' => $invoice?->invoice_number,
+            'invoice_due_date' => $invoice?->getInvoiceDueDate(),
+            'invoice_amount' => (float) $factoringTransaction->invoice_amount,
+            'factoring_percentage' => (float) $factoringTransaction->factoring_percentage,
+            'factoring_amount' => (float) $factoringTransaction->factoring_amount,
+            'remaining_limit' => $factoringTransaction->factoringContract?->getRemainingLimit($factoringTransaction->id) ?? 0,
+            'contract_interest_rate' => (float) $factoringTransaction->contract_interest_rate,
+            'diff_in_days' => $factoringTransaction->diff_in_days,
+            'factoring_interest_amount' => (float) $factoringTransaction->factoring_interest_amount,
+            'other_charges' => (float) $factoringTransaction->other_charges,
+            'received_amount' => (float) $factoringTransaction->received_amount,
+            'financial_institution_id' => $factoringTransaction->financial_institution_id,
+            'account_type_id' => $factoringTransaction->account_type_id,
+            'account_number' => $factoringTransaction->account_number,
+            'is_pending' => $factoringTransaction->isPendingWithRecourse(),
+        ];
+        $viewData['contracts'] = $contracts->map(fn (FactoringContract $contract) => [
+            'id' => $contract->id,
+            'label' => $contract->getContractStartDateFormatted() . ' — ' . $contract->getContractEndDateFormatted()
+                . ' | ' . strtoupper($contract->getCurrency() ?? '')
+                . ' | ' . $contract->getLimitFormatted(),
+        ])->values();
+        $viewData['urls']['update'] = route('factoring.with-recourse.update', ['company' => $company->id, 'factoringTransaction' => $factoringTransaction->id]);
+
+        return Inertia::render('Factoring/Form', $viewData);
     }
 
     public function store(Company $company, StoreFactoringWithRecourseRequest $request)
@@ -172,9 +267,8 @@ class FactoringWithRecourseController
             $this->syncFactoringDisbursementStatement($transaction, $company, $factoringDate, $receivedAmount, $invoice);
         });
 
-        return response()->json([
-            'redirectTo' => route('factoring.with-recourse.index', ['company' => $company->id]),
-        ]);
+        return redirect()->route('factoring.with-recourse.index', ['company' => $company->id])
+            ->with('success', __('Data Store Successfully'));
     }
 
     public function update(Company $company, FactoringTransaction $factoringTransaction, StoreFactoringWithRecourseRequest $request)
@@ -242,9 +336,8 @@ class FactoringWithRecourseController
             $this->syncFactoringDisbursementStatement($factoringTransaction, $company, $factoringDate, $receivedAmount, $invoice);
         });
 
-        return response()->json([
-            'redirectTo' => route('factoring.with-recourse.index', ['company' => $company->id]),
-        ]);
+        return redirect()->route('factoring.with-recourse.index', ['company' => $company->id])
+            ->with('success', __('Item Has Been Updated Successfully'));
     }
 
     public function destroy(Company $company, FactoringTransaction $factoringTransaction)
@@ -679,11 +772,34 @@ class FactoringWithRecourseController
     protected function formViewData(Company $company): array
     {
         return [
-            'company' => $company,
-            'factoringCompanies' => $company->factoringCompanies()->orderBy('name')->pluck('name', 'id'),
-            'customers' => Partner::onlyCustomers()->where('company_id', $company->id)->orderBy('name')->pluck('name', 'id'),
-            'financialInstitutionBanks' => FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->get(),
-            'accountTypes' => AccountType::onlyCashAccounts()->get(),
+            'mode' => 'create',
+            'model' => null,
+            'contracts' => [],
+            'recourseType' => FactoringTransaction::WITH_RECOURSE,
+            'pageTitle' => 'Factoring With Recourse',
+            'company' => ['id' => $company->id, 'name' => $company->getName()],
+            'factoringCompanies' => collect($company->factoringCompanies()->orderBy('name')->pluck('name', 'id'))
+                ->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'customers' => collect(Partner::onlyCustomers()->where('company_id', $company->id)->orderBy('name')->pluck('name', 'id'))
+                ->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
+            'financialInstitutionBanks' => FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->get()
+                ->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()])->values(),
+            'accountTypes' => AccountType::onlyCashAccounts()->get()
+                ->map(fn ($a) => ['id' => $a->id, 'name' => $a->getName()])->values(),
+            'urls' => [
+                'store' => route('factoring.with-recourse.store', ['company' => $company->id]),
+                'back' => route('factoring.with-recourse.index', ['company' => $company->id]),
+                'getContracts' => $this->companyScopedUrl($company, 'factoring/with-recourse/contracts'),
+                'getInvoiceCurrencies' => $this->companyScopedUrl($company, 'factoring/with-recourse/currencies'),
+                'getInvoices' => $this->companyScopedUrl($company, 'factoring/with-recourse/invoices'),
+                'calculate' => route('factoring.with-recourse.calculate', ['company' => $company->id]),
+                'getAccountNumbersForType' => $this->companyScopedUrl($company, 'money-received/get-account-numbers-based-on-account-type'),
+            ],
         ];
+    }
+
+    protected function companyScopedUrl(Company $company, string $path): string
+    {
+        return url('/'.app()->getLocale().'/'.$company->id.'/'.ltrim($path, '/'));
     }
 }

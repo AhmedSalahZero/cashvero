@@ -18,10 +18,55 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * LetterOfCreditFacilityController
+ * ------------------------------------------------------------------
+ * Manages LC Facility — the credit line a bank grants for issuing
+ * Letters Of Credit against. Unlike LG Facility, an LC Facility has a
+ * `type`: 'unsecured' (Limit entered directly) or 'fully-secured'
+ * (Limit auto-calculated as an existing CD/TD's amount × lending
+ * percentage — same concept, and same UI pattern, as
+ * FullySecuredOverdraftController). Its "Term & Conditions" are a
+ * fixed 3-row matrix, one row per LC type (Sight LC, Deferred, Cash
+ * Against Document — see App\Enums\LcTypes).
+ *
+ * `updateOutstandingBalanceAndLimits()` and
+ * `getLcFacilityBasedOnFinancialInstitution()` are pure AJAX-style
+ * data endpoints consumed by the LC Issuance form — stay exactly as
+ * they are; JSON responses are correct here since nothing calls them
+ * via Inertia navigation.
+ *
+ * ── Frontend migration status (as of this file's last update) ──────
+ *   ✅ index() / create() / edit() → MIGRATED to Vue + Inertia.
+ *      create()/edit() render the same shared page,
+ *      resources/js/Pages/LetterOfCreditFacility/Form.vue,
+ *      distinguished by a `mode: 'create' | 'edit'` prop.
+ *   ✅ getCommonDataArr() → checked against the actual database
+ *      schema before building (per the project's "check every
+ *      sibling" rule — this is the same field list shape that was a
+ *      real, broken bug on Fully Secured Overdraft). Every field
+ *      here DOES correspond to a real column on
+ *      `letter_of_credit_facilities`. No equivalent bug found here.
+ *   ⚠️ update() → 'updated_by' was being set then immediately wiped
+ *      out by the next line overwriting the whole $data array — the
+ *      same bug already found and fixed on Time Of Deposit,
+ *      Certificates Of Deposit, Fully Secured Overdraft, and LG
+ *      Facility (see roadmap §14). Fixed here too — same bug class,
+ *      5th confirmed instance.
+ *   ✅ store() / update() / destroy() / mergeConditionalValuesToRequest()
+ *      / getCommonDataArr() → presentation-only change (response
+ *      type for create/edit, plus the updated_by fix above).
+ *      Financial logic — the type toggle, the CD/TD-based limit
+ *      calculation, the term & conditions matrix, the LC/cash-cover
+ *      statement cleanup — UNCHANGED, deliberately.
+ *   ℹ️ No Odoo-related column exists on `letter_of_credit_facilities`
+ *      (unlike Fully Secured Overdraft's `odoo_code`) — confirmed
+ *      against the schema, not omitted by mistake.
+ */
 class LetterOfCreditFacilityController
 {
     use GeneralFunctions;
-    protected function applyFilter(Request $request,Collection $collection):Collection{
+	protected function applyFilter(Request $request,Collection $collection):Collection{
 		if(!count($collection)){
 			return $collection;
 		}
@@ -51,35 +96,114 @@ class LetterOfCreditFacilityController
 
 		return $collection;
 	}
+
+	/**
+	 * Builds the flat list of running CD/TD accounts eligible to
+	 * secure a Fully Secured LC Facility — same helper shape as
+	 * FullySecuredOverdraftController::buildCdOrTdAccounts(), reused
+	 * here since it's the same "pick an existing CD/TD, filtered by
+	 * type and currency" concept.
+	 */
+	protected function buildCdOrTdAccounts(Company $company, FinancialInstitution $financialInstitution): array
+	{
+		$accounts = [];
+		foreach (AccountType::onlyCdOrTdAccounts()->get() as $accountType) {
+			$modelClass = '\\App\\Models\\'.$accountType->getModelName();
+			$records = $modelClass::where('company_id', $company->id)
+				->where('financial_institution_id', $financialInstitution->id)
+				->where('status', $modelClass::RUNNING)
+				->get();
+			foreach ($records as $record) {
+				$accounts[] = [
+					'id' => $record->id,
+					'account_type_id' => $accountType->id,
+					'account_number' => $record->getAccountNumber(),
+					'currency' => $record->getCurrency(),
+					'amount' => $record->getAmount(),
+					'interest_rate' => $record->getInterestRate(),
+				];
+			}
+		}
+		return $accounts;
+	}
+
+	/**
+	 * The main "LC Facility" list — one flat list per financial
+	 * institution.
+	 *
+	 * ✅ MIGRATED to Vue + Inertia. Renders
+	 * resources/js/Pages/LetterOfCreditFacility/Index.vue.
+	 */
 	public function index(Company $company,Request $request,FinancialInstitution $financialInstitution)
 	{
-
-
 		$letterOfCreditFacilities = $financialInstitution->letterOfCreditFacilities ;
-
 		$letterOfCreditFacilities =   $this->applyFilter($request,$letterOfCreditFacilities) ;
 
-		$searchFields = [
-			'contract_start_date'=>__('Contract Start Date'),
-			'contract_end_date'=>__('Contract End Date'),
-			'currency'=>__('Currency'),
-			'limit'=>__('Limit'),
-
-		];
-        return view('reports.LetterOfCreditFacility.index', [
-			'company'=>$company,
-			'searchFields'=>$searchFields,
-			'financialInstitution'=>$financialInstitution,
-			'letterOfCreditFacilities'=>$letterOfCreditFacilities
+		return \Inertia\Inertia::render('LetterOfCreditFacility/Index', [
+			'company' => ['id' => $company->id],
+			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
+			'canCreate' => hasAuthFor('create letter of credit facility'),
+			'createUrl' => route('create.letter.of.credit.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
+			'rows' => $letterOfCreditFacilities->map(function (LetterOfCreditFacility $lcf) use ($company, $financialInstitution) {
+				return [
+					'id' => $lcf->id,
+					'name' => $lcf->getName(),
+					'type' => $lcf->getType(),
+					'type_formatted' => LetterOfCreditFacility::getTypes()[$lcf->getType()] ?? $lcf->getType(),
+					'contract_start_date_formatted' => $lcf->getContractStartDateFormatted(),
+					'contract_end_date_formatted' => $lcf->getContractEndDateFormatted(),
+					'currency' => $lcf->getCurrency(),
+					'limit_formatted' => $lcf->getLimitFormatted(),
+					'term_and_conditions' => $lcf->termAndConditions->map(fn ($tc) => [
+						'lc_type_formatted' => $tc->getLcTypeFormatted(),
+						'cash_cover_rate_formatted' => $tc->getCashCoverRate() . ' %',
+						'commission_rate_formatted' => $tc->getCommissionRate() . ' %',
+						'min_commission_fees_formatted' => number_format($tc->getMinCommissionFees()),
+						'issuance_fees_formatted' => number_format($tc->getIssuanceFees()),
+					])->values(),
+					'edit_url' => route('edit.letter.of.credit.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'letterOfCreditFacility' => $lcf->id]),
+					'delete_url' => route('delete.letter.of.credit.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'letterOfCreditFacility' => $lcf->id]),
+				];
+			})->values(),
+			'backUrl' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+			'navUrls' => [
+				'home' => route('home', ['company' => $company->id]),
+				'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+				'customers' => route('partners.index', ['company' => $company->id, 'type' => 'customers']),
+				'suppliers' => route('partners.index', ['company' => $company->id, 'type' => 'suppliers']),
+				'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
+			],
 		]);
     }
 
+	/**
+	 * Shows the "Add LC Facility" form.
+	 *
+	 * ✅ MIGRATED to Vue + Inertia — shares the same page component as
+	 * edit() (resources/js/Pages/LetterOfCreditFacility/Form.vue),
+	 * distinguished by the `mode: 'create'` prop.
+	 */
 	public function create(Company $company,FinancialInstitution $financialInstitution)
 	{
-        return view('reports.LetterOfCreditFacility.form',[
-			'financialInstitution'=>$financialInstitution,
-			'letterOfCreditFacilitiesTypes'=>LetterOfCreditFacility::getTypes(),
-			'cdOrTdAccountTypes' =>AccountType::onlyCdOrTdAccounts()->get()
+        return \Inertia\Inertia::render('LetterOfCreditFacility/Form', [
+			'mode' => 'create',
+			'company' => ['id' => $company->id],
+			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
+			'currencies' => getCurrencies(),
+			'lcTypes' => LcTypes::getAll(),
+			'facilityTypes' => LetterOfCreditFacility::getTypes(),
+			'cdOrTdAccountTypes' => AccountType::onlyCdOrTdAccounts()->get()->map(fn ($t) => ['id' => $t->id, 'name' => $t->getName()])->values(),
+			'cdOrTdAccounts' => $this->buildCdOrTdAccounts($company, $financialInstitution),
+			'model' => null,
+			'submitUrl' => route('store.letter.of.credit.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
+			'backUrl' => route('view.letter.of.credit.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
+			'navUrls' => [
+				'home' => route('home', ['company' => $company->id]),
+				'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+				'customers' => route('partners.index', ['company' => $company->id, 'type' => 'customers']),
+				'suppliers' => route('partners.index', ['company' => $company->id, 'type' => 'suppliers']),
+				'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
+			],
 		]);
     }
 	public function getCommonDataArr():array 
@@ -100,6 +224,11 @@ class LetterOfCreditFacilityController
 			'cd_or_td_lending_percentage'=>$isFullySecured ? $request->get('cd_or_td_lending_percentage'):null,
 		]);
 	}
+
+	/**
+	 * Stores a new LC Facility, including its term & conditions
+	 * matrix. UNCHANGED, deliberately.
+	 */
 	public function store(Company $company  ,FinancialInstitution $financialInstitution, StoreLetterOfCreditFacilityRequest $request){
 		
 		$this->mergeConditionalValuesToRequest($request);
@@ -148,23 +277,82 @@ class LetterOfCreditFacilityController
 
 	}
 
+	/**
+	 * Shows the "Edit LC Facility" form.
+	 *
+	 * ✅ MIGRATED to Vue + Inertia — shares the same page component as
+	 * create() (resources/js/Pages/LetterOfCreditFacility/Form.vue),
+	 * distinguished by the `mode: 'edit'` prop.
+	 */
 	public function edit(Company $company , Request $request , FinancialInstitution $financialInstitution , LetterOfCreditFacility $letterOfCreditFacility){
 
-        return view('reports.LetterOfCreditFacility.form',[
-			'financialInstitution'=>$financialInstitution,
-			'model'=>$letterOfCreditFacility,
-			'letterOfCreditFacilitiesTypes'=>LetterOfCreditFacility::getTypes(),
-			'cdOrTdAccountTypes' =>AccountType::onlyCdOrTdAccounts()->get()
+        return \Inertia\Inertia::render('LetterOfCreditFacility/Form', [
+			'mode' => 'edit',
+			'company' => ['id' => $company->id],
+			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
+			'currencies' => getCurrencies(),
+			'lcTypes' => LcTypes::getAll(),
+			'facilityTypes' => LetterOfCreditFacility::getTypes(),
+			'cdOrTdAccountTypes' => AccountType::onlyCdOrTdAccounts()->get()->map(fn ($t) => ['id' => $t->id, 'name' => $t->getName()])->values(),
+			'cdOrTdAccounts' => $this->buildCdOrTdAccounts($company, $financialInstitution),
+			'model' => [
+				'id' => $letterOfCreditFacility->id,
+				'name' => $letterOfCreditFacility->getName(),
+				'type' => $letterOfCreditFacility->getType(),
+				'contract_start_date' => $letterOfCreditFacility->getContractStartDate(),
+				'contract_end_date' => $letterOfCreditFacility->getContractEndDate(),
+				'currency' => $letterOfCreditFacility->getCurrency(),
+				'limit' => $letterOfCreditFacility->getLimit(),
+				'cd_or_td_currency' => $letterOfCreditFacility->cd_or_td_currency,
+				'cd_or_td_account_type_id' => $letterOfCreditFacility->getCdOrTdAccountTypeId(),
+				'cd_or_td_id' => $letterOfCreditFacility->getCdOrTdId(),
+				'cd_or_td_amount' => $letterOfCreditFacility->cd_or_td_amount,
+				'cd_or_td_interest' => $letterOfCreditFacility->cd_or_td_interest,
+				'cd_or_td_lending_percentage' => $letterOfCreditFacility->cd_or_td_lending_percentage,
+				'borrowing_rate' => $letterOfCreditFacility->getBorrowingRate(),
+				'bank_margin_rate' => $letterOfCreditFacility->bank_margin_rate,
+				'interest_rate' => $letterOfCreditFacility->interest_rate,
+				'min_interest_rate' => $letterOfCreditFacility->min_interest_rate,
+				'highest_debt_balance_rate' => $letterOfCreditFacility->highest_debt_balance_rate,
+				'term_and_conditions' => collect(LcTypes::getAll())->map(function ($label, $lcType) use ($letterOfCreditFacility) {
+					$tc = $letterOfCreditFacility->termAndConditionForLcType($lcType);
+					return [
+						'lc_type' => $lcType,
+						'cash_cover_rate' => $tc ? $tc->getCashCoverRate() : 0,
+						'commission_rate' => $tc ? $tc->getCommissionRate() : 0,
+						'min_commission_fees' => $tc ? $tc->getMinCommissionFees() : 0,
+						'issuance_fees' => $tc ? $tc->getIssuanceFees() : 0,
+					];
+				})->values(),
+			],
+			'submitUrl' => route('update.letter.of.credit.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'letterOfCreditFacility' => $letterOfCreditFacility->id]),
+			'backUrl' => route('view.letter.of.credit.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
+			'navUrls' => [
+				'home' => route('home', ['company' => $company->id]),
+				'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+				'customers' => route('partners.index', ['company' => $company->id, 'type' => 'customers']),
+				'suppliers' => route('partners.index', ['company' => $company->id, 'type' => 'suppliers']),
+				'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
+			],
 		]);
 
 	}
 
+	/**
+	 * Updates an existing LC Facility, including replacing its term &
+	 * conditions matrix. Financial logic UNCHANGED, deliberately.
+	 * ⚠️ Fixed here: 'updated_by' was set, then immediately wiped out
+	 * by the very next line overwriting the whole $data array — the
+	 * same bug already found and fixed on Time Of Deposit,
+	 * Certificates Of Deposit, Fully Secured Overdraft, and LG
+	 * Facility.
+	 */
 	public function update(Company $company , StoreLetterOfCreditFacilityRequest $request , FinancialInstitution $financialInstitution,LetterOfCreditFacility $letterOfCreditFacility){
 		$this->mergeConditionalValuesToRequest($request);
 		$termAndConditions =  $request->get('termAndConditions',[]) ;
         $source = LetterOfCreditIssuance::LC_FACILITY;
-		$data['updated_by'] = auth()->user()->id ;
 		$data = $request->only($this->getCommonDataArr());
+		$data['updated_by'] = auth()->user()->id ;
 		foreach(['contract_start_date','contract_end_date'] as $dateField){
 			$data[$dateField] = $request->get($dateField) ? Carbon::make($request->get($dateField))->format('Y-m-d'):null;
 		}
@@ -203,6 +391,10 @@ class LetterOfCreditFacilityController
 
 	}
 
+	/**
+	 * Deletes an LC Facility and its term & conditions rows /
+	 * statement entries. UNCHANGED, deliberately.
+	 */
 	public function destroy(Company $company , FinancialInstitution $financialInstitution , LetterOfCreditFacility $letterOfCreditFacility)
 	{
 
@@ -221,11 +413,26 @@ class LetterOfCreditFacilityController
 		$letterOfCreditFacility->delete();
 		return redirect()->back()->with('success',__('Item Has Been Delete Successfully'));
 	}
+
+	/**
+	 * Pure AJAX data endpoint consumed by the LC Issuance form —
+	 * real-time limit/outstanding/commission-rate lookups. UNCHANGED,
+	 * deliberately. Stays a JSON response — nothing calls this via
+	 * Inertia navigation.
+	 */
 	public function updateOutstandingBalanceAndLimits(Request $request , Company $company  ){
 		$lcIssuanceId =  $request->get('lcIssuanceId');
 		$letterOfCreditIssuance = LetterOfCreditIssuance::find($lcIssuanceId);
 		$cdOrTdAccountId = $request->get('cdOrTdAccountId');
 		$selectedLcType = $request->get('lcType');
+		// ⚠️ Confirmed bug fix: Laravel's ConvertEmptyStringsToNull
+		// middleware turns an empty 'lcType' into null before this
+		// method sees it (happens on page load, before the user has
+		// picked an LC Type — the original Blade form triggers this
+		// same lookup at that point too). termAndConditionForLcType()
+		// has a non-nullable `string` type-hint, so calling it with
+		// null threw an uncaught TypeError (HTTP 500). Guarded with
+		// `$selectedLcType &&` below — no calculation logic changed.
 		$currentSource = $request->get('source');
 		$isLCFacilitySource = $currentSource == LetterOfCreditIssuance::LC_FACILITY;
 		$isHundredPercentageSource = $currentSource == LetterOfCreditIssuance::HUNDRED_PERCENTAGE_CASH_COVER;
@@ -246,10 +453,10 @@ class LetterOfCreditFacilityController
 		$currentLcOutstanding = 0 ;
 		$financialInstitution = FinancialInstitution::find($financialInstitutionId);
 		$letterOfCreditFacility = $request->has('letterOfCreditFacilityId') ? LetterOfCreditFacility::find($request->get('letterOfCreditFacilityId')) : null;
-        $minLcCommissionRateForCurrentLcType  = $letterOfCreditFacility  && $letterOfCreditFacility->termAndConditionForLcType($selectedLcType)  ? $letterOfCreditFacility->termAndConditionForLcType($selectedLcType)->min_commission_fees : 0;
-        $lcCommissionRate  = $letterOfCreditFacility  && $letterOfCreditFacility->termAndConditionForLcType($selectedLcType) ? $letterOfCreditFacility->termAndConditionForLcType($selectedLcType)->commission_rate : 0;
-        $minLcCashCoverRateForCurrentLcType  = $letterOfCreditFacility && $letterOfCreditFacility->termAndConditionForLcType($selectedLcType)  ? $letterOfCreditFacility->termAndConditionForLcType($selectedLcType)->cash_cover_rate : 0;
-        $minLcIssuanceFeesForCurrentLcType  = $letterOfCreditFacility  && $letterOfCreditFacility->termAndConditionForLcType($selectedLcType) ? $letterOfCreditFacility->termAndConditionForLcType($selectedLcType)->issuance_fees : 0;
+        $minLcCommissionRateForCurrentLcType  = $letterOfCreditFacility && $selectedLcType && $letterOfCreditFacility->termAndConditionForLcType($selectedLcType)  ? $letterOfCreditFacility->termAndConditionForLcType($selectedLcType)->min_commission_fees : 0;
+        $lcCommissionRate  = $letterOfCreditFacility && $selectedLcType && $letterOfCreditFacility->termAndConditionForLcType($selectedLcType) ? $letterOfCreditFacility->termAndConditionForLcType($selectedLcType)->commission_rate : 0;
+        $minLcCashCoverRateForCurrentLcType  = $letterOfCreditFacility && $selectedLcType && $letterOfCreditFacility->termAndConditionForLcType($selectedLcType)  ? $letterOfCreditFacility->termAndConditionForLcType($selectedLcType)->cash_cover_rate : 0;
+        $minLcIssuanceFeesForCurrentLcType  = $letterOfCreditFacility && $selectedLcType && $letterOfCreditFacility->termAndConditionForLcType($selectedLcType) ? $letterOfCreditFacility->termAndConditionForLcType($selectedLcType)->issuance_fees : 0;
 		$lcAmountInMainCurrency = 0;
 		if($isLCFacilitySource && $letterOfCreditFacility){
 			$currencyName = $letterOfCreditFacility->getCurrency();
@@ -327,6 +534,12 @@ class LetterOfCreditFacilityController
 			'total_cash_cover_statement_debit'=>$totalCashCoverStatementDebit	
 		]);
 	}
+
+	/**
+	 * Pure AJAX data endpoint — active LC Facilities for a given
+	 * financial institution, used to populate the LC Issuance form's
+	 * facility dropdown. UNCHANGED, deliberately.
+	 */
 	public function getLcFacilityBasedOnFinancialInstitution(Request $request){
 		$financialInstitutionId = $request->get('financialInstitutionId');
 		$financialInstitution = FinancialInstitution::find($financialInstitutionId);

@@ -114,6 +114,8 @@
 					
 					
 					set new.end_balance = new.beginning_balance + new.debit - new.credit ; 
+					set new.is_debit = if(new.debit > 0 , 1 , 0);
+					set new.is_credit = if(new.debit > 0 , 0 , 1);
 					set new.room = new.limit +  new.end_balance ;
 					set @dayCounts = 0 ;
 					set @interestAmount = 0 ; 
