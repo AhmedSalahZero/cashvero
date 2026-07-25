@@ -15,6 +15,7 @@
   "dependencies": {
     "@amcharts/amcharts4": "^4.10.40",
     "@inertiajs/vue3": "^3.0.3",
+    "@lucide/vue": "^1.26.0",
     "@primeuix/themes": "^2.0.2",
     "@univerjs/core": "^0.25.1",
     "@univerjs/design": "^0.25.1",

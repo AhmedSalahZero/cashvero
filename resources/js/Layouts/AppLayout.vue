@@ -3,6 +3,7 @@ import { Link, usePage, router } from '@inertiajs/vue3';
 import { ref, computed, onMounted, watch } from 'vue';
 import { useTheme } from '@/composables/useTheme';
 import ToastStack from '@/Components/ToastStack.vue';
+import NavIcon from '@/Components/NavIcon.vue';
 
 const { theme, toggleTheme } = useTheme();
 const page = usePage();
@@ -201,7 +202,7 @@ watch(() => page.props.flash?.token, () => {
                     class="cvr-nav-item flex items-center gap-2 py-2 rounded text-sm mb-2"
                     :class="[sidebarExpanded ? 'px-3' : 'px-0 justify-center', { 'cvr-nav-item-active': isActiveLink(menu.home.link) }]"
                 >
-                    <span>{{ menu.home.icon }}</span>
+                    <NavIcon :name="menu.home.icon" :size="18" />
                     <span v-if="sidebarExpanded" class="truncate">Home</span>
                 </Link>
 
@@ -215,10 +216,14 @@ watch(() => page.props.flash?.token, () => {
                             :title="!sidebarExpanded ? menu[key].title : ''"
                         >
                             <span class="flex items-center gap-2 truncate">
-                                <span>{{ menu[key].icon }}</span>
+                                <NavIcon :name="menu[key].icon" :size="18" />
                                 <span v-if="sidebarExpanded" class="truncate">{{ menu[key].title }}</span>
                             </span>
-                            <span v-if="sidebarExpanded" class="text-xs opacity-70">{{ isSectionExpanded(key) ? '▾' : '▸' }}</span>
+                            <NavIcon
+                                v-if="sidebarExpanded"
+                                :name="isSectionExpanded(key) ? 'chevron-down' : 'chevron-right'"
+                                :size="14"
+                            />
                         </button>
 
                         <div v-if="isSectionExpanded(key) && sidebarExpanded" class="pl-2 mt-0.5 space-y-0.5">
@@ -230,7 +235,7 @@ watch(() => page.props.flash?.token, () => {
                                         @click="openAction(sub)"
                                         class="cvr-nav-sub-item w-full text-left flex items-center gap-2 py-1.5 px-3 rounded text-xs"
                                     >
-                                        <span>{{ sub.icon }}</span>
+                                        <NavIcon :name="sub.icon" :size="14" />
                                         <span class="truncate">{{ sub.title }}</span>
                                     </button>
                                     <!-- Migrated page → real Inertia Link -->
@@ -240,7 +245,7 @@ watch(() => page.props.flash?.token, () => {
                                         class="cvr-nav-sub-item flex items-center gap-2 py-1.5 px-3 rounded text-xs"
                                         :class="{ 'cvr-nav-item-active': isActiveLink(sub.link) }"
                                     >
-                                        <span>{{ sub.icon }}</span>
+                                        <NavIcon :name="sub.icon" :size="14" />
                                         <span class="truncate">{{ sub.title }}</span>
                                     </Link>
                                     <!-- Still-Blade page → plain full-page link -->
@@ -249,7 +254,7 @@ watch(() => page.props.flash?.token, () => {
                                         :href="sub.link"
                                         class="cvr-nav-sub-item flex items-center gap-2 py-1.5 px-3 rounded text-xs"
                                     >
-                                        <span>{{ sub.icon }}</span>
+                                        <NavIcon :name="sub.icon" :size="14" />
                                         <span class="truncate">{{ sub.title }}</span>
                                     </a>
                                 </template>
@@ -272,7 +277,7 @@ watch(() => page.props.flash?.token, () => {
                     class="cvr-action-btn"
                     title="Toggle sidebar"
                 >
-                    ☰
+                    <NavIcon name="menu" :size="18" />
                 </button>
 
                 <div class="flex items-center gap-3">
@@ -283,7 +288,7 @@ watch(() => page.props.flash?.token, () => {
                             class="cvr-action-btn"
                             title="Manage Companies & Users"
                         >
-                            🛠️
+                            <NavIcon name="wrench" :size="18" />
                         </button>
                         <div
                             v-if="adminMenuOpen"
@@ -292,16 +297,18 @@ watch(() => page.props.flash?.token, () => {
                             <Link
                                 :href="superAdminUrls.companies"
                                 @click="adminMenuOpen = false"
-                                class="block w-full text-left px-4 py-2 text-sm cvr-text-secondary cvr-table-row"
+                                class="flex items-center gap-2 w-full text-left px-4 py-2 text-sm cvr-text-secondary cvr-table-row"
                             >
-                                🏢 Companies
+                                <NavIcon name="building-2" :size="16" />
+                                Companies
                             </Link>
                             <Link
                                 :href="superAdminUrls.users"
                                 @click="adminMenuOpen = false"
-                                class="block w-full text-left px-4 py-2 text-sm cvr-text-secondary cvr-table-row"
+                                class="flex items-center gap-2 w-full text-left px-4 py-2 text-sm cvr-text-secondary cvr-table-row"
                             >
-                                👤 Users
+                                <NavIcon name="user" :size="16" />
+                                Users
                             </Link>
                         </div>
                     </div>
@@ -313,7 +320,7 @@ watch(() => page.props.flash?.token, () => {
                             class="cvr-action-btn relative"
                             title="Notifications"
                         >
-                            🔔
+                            <NavIcon name="bell" :size="18" />
                             <span
                                 v-if="totalNotificationCount > 0"
                                 class="absolute -top-1 -right-1 text-[0.6rem] leading-none rounded-full px-1.5 py-0.5 cvr-badge-overdue font-bold"
@@ -351,9 +358,10 @@ watch(() => page.props.flash?.token, () => {
 
                     <button
                         @click="toggleTheme"
-                        class="text-xs px-3 py-1.5 rounded cvr-btn-secondary border"
+                        class="text-xs px-3 py-1.5 rounded cvr-btn-secondary border inline-flex items-center gap-1.5"
                     >
-                        {{ theme === 'dark' ? '☀ Light' : '🌙 Dark' }}
+                        <NavIcon :name="theme === 'dark' ? 'sun' : 'moon'" :size="14" />
+                        {{ theme === 'dark' ? 'Light' : 'Dark' }}
                     </button>
                     <div class="relative">
                         <button @click="userMenuOpen = !userMenuOpen" class="flex items-center gap-2">
@@ -369,9 +377,10 @@ watch(() => page.props.flash?.token, () => {
                             </div>
                             <button
                                 @click="logout"
-                                class="block w-full text-left px-4 py-2 text-sm cvr-text-secondary cvr-table-row"
+                                class="flex items-center gap-2 w-full text-left px-4 py-2 text-sm cvr-text-secondary cvr-table-row"
                             >
-                                🚪 Logout
+                                <NavIcon name="log-out" :size="16" />
+                                Logout
                             </button>
                         </div>
                     </div>
