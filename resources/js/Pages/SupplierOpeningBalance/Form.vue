@@ -34,7 +34,8 @@ const props = defineProps({
 
 const page = usePage();
 const currencyOptions = Object.entries(props.currencies || {});
-const date = ref(props.model?.date ?? new Date().toISOString().slice(0, 10));
+// Read-only — always the company's own Opening Balance Date.
+const date = ref(props.model?.date ?? props.company?.opening_balance_date ?? new Date().toISOString().slice(0, 10));
 let nextRowKey = 1;
 
 /* ── Contract/sales-order lookups ────────────────────────────────── */
@@ -172,7 +173,8 @@ const errors = computed(() => page.props.errors || {});
                     <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">Opening Balance Date</h2>
                 </div>
                 <div class="max-w-xs">
-                    <input v-model="date" type="date" required class="cvr-input w-full px-3 py-2 rounded-lg text-sm" />
+                    <input v-model="date" type="date" readonly disabled class="cvr-input w-full px-3 py-2 rounded-lg text-sm cvr-text-muted cursor-not-allowed" />
+                    <p class="text-xs mt-1 cvr-text-muted">Set on the company itself — this date can only be changed by editing the company.</p>
                 </div>
             </div>
 

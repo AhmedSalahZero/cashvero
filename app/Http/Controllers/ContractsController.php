@@ -352,10 +352,55 @@ class ContractsController
 		return \Inertia\Inertia::render('Contracts/Form', $this->buildFormProps($company, $type, $contract));
 	}
 	public function update(Company $company , StoreContractRequest $request , Contract $contract,string $type){
+			/**
+			 * Confirmed business rule (project owner, 2026-07-24): a contract voluntarily losing
+			 * its collateral status (moving from RUNNING_AND_AGAINST back to plain RUNNING —
+			 * not the natural "finished" transition, which is a different, already-handled
+			 * case) must be blocked if the facility's available room is less than the limit
+			 * this contract itself contributed there, since that gap means real transactions
+			 * already rely on the room this contract provided.
+			 */
+			$wasCollateral = $contract->status === Contract::RUNNING_AND_AGAINST;
+			$movingToPlainRunning = $request->get('status') === Contract::RUNNING;
+			if ($wasCollateral && $movingToPlainRunning) {
+				$collateralContribution = $contract->getActiveOverdraftAgainstAssignmentOfContractLimitContribution();
+				if ($collateralContribution) {
+					$collateralRule = new \App\Rules\OverdraftCollateralRemovalRule(
+						'overdraft_against_assignment_of_contract_bank_statements',
+						'overdraft_against_assignment_of_contract_id',
+						$collateralContribution['facility_id'],
+						$company->id,
+						$collateralContribution['amount']
+					);
+					if (!$collateralRule->passes('status', null)) {
+						return redirect()->back()->with('fail', $collateralRule->message());
+					}
+				}
+			}
 			$contract->storeBasicForm($request);
 			return redirect()->route('contracts.index',['company'=>$company->id,'type'=>$type]);
 	}
 	public function destroy(Company $company , Request $request , Contract $contract,string $type){
+		/**
+		 * Confirmed business rule (project owner, 2026-07-24): deleting a contract that's
+		 * currently collateral must be blocked under the same condition as removing its
+		 * collateral status above — see the matching check and explanation in update().
+		 */
+		if ($contract->status === Contract::RUNNING_AND_AGAINST) {
+			$collateralContribution = $contract->getActiveOverdraftAgainstAssignmentOfContractLimitContribution();
+			if ($collateralContribution) {
+				$collateralRule = new \App\Rules\OverdraftCollateralRemovalRule(
+					'overdraft_against_assignment_of_contract_bank_statements',
+					'overdraft_against_assignment_of_contract_id',
+					$collateralContribution['facility_id'],
+					$company->id,
+					$collateralContribution['amount']
+				);
+				if (!$collateralRule->passes('status', null)) {
+					return redirect()->back()->with('fail', $collateralRule->message());
+				}
+			}
+		}
 		$contract->delete();
 		return redirect()->route('contracts.index',['company'=>$company->id,'type'=>$type]);  
 	}	

@@ -804,18 +804,27 @@ class MoneyPayment extends Model implements IHaveCreditOverdraftStatement
 		}
         $this->unlinkNonCustomerOrSupplierOdooExpense();
         $oldType = $this->getType();
-        if ($this->account_bank_statement_line_id) {
+        /**
+         * Fixed 2026-07-24 (Stage 3 audit finding #2 — identical copy-pasted bug to
+         * MoneyReceived::deleteRelations()): $OdooPaymentService is only ever assigned when the
+         * company has Odoo credentials. Every call on it below is now guarded so a company
+         * without Odoo integration (or a historical record with a leftover
+         * account_bank_statement_line_id from before Odoo was disconnected) no longer crashes
+         * with "Call to a member function ... on null" when deleting — it simply skips the
+         * Odoo-unlink step it has nothing to unlink from anyway.
+         */
+        if ($this->account_bank_statement_line_id && $OdooPaymentService) {
             $OdooPaymentService->unlinkBankCollection($this->account_bank_statement_line_id);
         }
         $this->settlements->each(function ($settlement) use ($OdooPaymentService) {
 			
-            if ($settlement->account_bank_statement_line_id) {
+            if ($settlement->account_bank_statement_line_id && $OdooPaymentService) {
                 $OdooPaymentService->unlinkBankCollection($settlement->account_bank_statement_line_id);
             }
-			elseif($settlement->odoo_move_id && $settlement->invoice && $settlement->invoice->odoo_id){
+			elseif($OdooPaymentService && $settlement->odoo_move_id && $settlement->invoice && $settlement->invoice->odoo_id){
 				$OdooPaymentService->unlink($settlement->odoo_move_id);
 			}
-			elseif($settlement->odoo_id){
+			elseif($OdooPaymentService && $settlement->odoo_id){
 				$OdooPaymentService->cancelPayments($settlement->odoo_id);
 			}
 			// if($settlement->odoo_move_id && $settlement->invoice->odoo_id){

@@ -313,6 +313,14 @@ class CashExpenseController
 		$paidAmount = $request->input('paid_amount.'.$moneyType ,0) ;
 		$paidAmount = unformat_number($paidAmount);
 		
+		// ⚠️ REAL BUG FIXED HERE (2026-07-24 audit, Stage 5): an explicit
+		// zero (or unformat-to-zero) exchange rate previously caused a
+		// live division-by-zero on Cash Expense save.
+		if (! is_numeric($exchangeRate) || (float) $exchangeRate <= 0) {
+			throw \Illuminate\Validation\ValidationException::withMessages([
+				'exchange_rate.'.$moneyType => [__('Exchange rate must be greater than zero.')],
+			]);
+		}
 
 		$paidAmountInPayingCurrency = $paidAmount / $exchangeRate ;
 		

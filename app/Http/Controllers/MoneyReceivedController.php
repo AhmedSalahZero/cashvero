@@ -683,6 +683,14 @@ class MoneyReceivedController
         $contractId = is_numeric($contractId) ? $contractId : null;
         $partnerId = $request->get('customer_id');
         $customer = Partner::find($partnerId);
+        // ⚠️ REAL BUG FIXED HERE (2026-07-24 audit, Stage 5): Partner::find
+        // can return null (stale dropdown / deleted partner / bad input);
+        // previously crashed with "property id on null".
+        if (! $customer) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'customer_id' => [__('Selected partner was not found.')],
+            ]);
+        }
         $customerId = $customer->id;
 		$isDownPaymentOverContract = $request->get('down_payment_type') == MoneyReceived::DOWN_PAYMENT_OVER_CONTRACT;
         $receivedBankName = $request->get('receiving_branch_id') ;
@@ -1085,6 +1093,35 @@ class MoneyReceivedController
              */
             $moneyReceived = MoneyReceived::find($moneyReceivedId) ;
             $isOpening = $moneyReceived->isOpenBalance();
+            /**
+             * Confirmed business rule (project owner, 2026-07-24): moving an already
+             * under-collection cheque to a different account is an administrative correction,
+             * not a real-world event — treated the same as a voluntary return to safe. Blocked
+             * if the OLD facility's available room is less than the limit this cheque itself
+             * contributed there, since that gap means real transactions already rely on the
+             * room this cheque provided on that facility.
+             */
+            $oldCheque = $moneyReceived->cheque;
+            $isAccountActuallyChanging = $oldCheque->status === Cheque::UNDER_COLLECTION
+                && ((string) $oldCheque->account_type !== (string) $data['account_type'] || (string) $oldCheque->account_number !== (string) $data['account_number']);
+            if ($isAccountActuallyChanging) {
+                $oldAccountTypeModel = AccountType::find($oldCheque->account_type);
+                if ($oldAccountTypeModel && $oldAccountTypeModel->isOverdraftAgainstCommercialPaperAccount()) {
+                    $collateralContribution = $oldCheque->getActiveOverdraftAgainstCommercialPaperLimitContribution();
+                    if ($collateralContribution) {
+                        $collateralRule = new \App\Rules\OverdraftCollateralRemovalRule(
+                            'overdraft_against_commercial_paper_bank_statements',
+                            'overdraft_against_commercial_paper_id',
+                            $collateralContribution['facility_id'],
+                            $company->id,
+                            $collateralContribution['amount']
+                        );
+                        if (!$collateralRule->passes('account_number', null)) {
+                            return redirect()->back()->with('fail', $collateralRule->message());
+                        }
+                    }
+                }
+            }
             $data['expected_collection_date'] = $moneyReceived->cheque->calculateChequeExpectedCollectionDate($data['deposit_date'], $data['clearance_days']);
             $moneyReceived->cheque->update(array_merge($data, ['updated_at'=>now()]));
             if (!$isOpening) {
@@ -1238,6 +1275,25 @@ class MoneyReceivedController
             $OdooPaymentService = new OdooPayment($company);
         }
         $isOpeningBalance = $moneyReceived->isOpenBalance();
+        /**
+         * Confirmed business rule (project owner, 2026-07-24): a cheque returning to the safe
+         * (a VOLUNTARY action, not a rejection) must be blocked if the facility's available room
+         * is less than the limit this cheque itself contributed — that gap means real
+         * transactions already rely on the room this cheque provided.
+         */
+        $collateralContribution = $moneyReceived->cheque->getActiveOverdraftAgainstCommercialPaperLimitContribution();
+        if ($collateralContribution) {
+            $collateralRule = new \App\Rules\OverdraftCollateralRemovalRule(
+                'overdraft_against_commercial_paper_bank_statements',
+                'overdraft_against_commercial_paper_id',
+                $collateralContribution['facility_id'],
+                $company->id,
+                $collateralContribution['amount']
+            );
+            if (!$collateralRule->passes('status', null)) {
+                return redirect()->back()->with('fail', $collateralRule->message());
+            }
+        }
         $moneyReceived->cheque->update([
             'status'=>Cheque::IN_SAFE,
             'deposit_date'=>null ,

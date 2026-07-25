@@ -690,6 +690,17 @@ class CashExpense extends Model  implements IHaveCreditOverdraftStatement
 	{
 		$amount = $this->getAmount();
 		$result = [];
+		/**
+		 * Fixed 2026-07-24 (Stage 3 audit finding #2.1, confirmed with project owner): a
+		 * zero-amount Cash Expense has no real monetary basis to split across contracts — "60%
+		 * of zero" isn't a meaningful analytic distribution. Skip it entirely and return no
+		 * distribution at all, rather than crash (the previous, unguarded division by zero) or
+		 * fabricate one (0% to every contract, or an even split) that wouldn't reflect anything
+		 * real.
+		 */
+		if (!$amount) {
+			return $result;
+		}
 		foreach($this->contracts as $contract){
 			$projectAccountId = $contract->project_account_id  ;
 			/** @phpstan-ignore-next-line */

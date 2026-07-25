@@ -1,7 +1,7 @@
 <script setup>
-import { ref } from 'vue';
-import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { Link, router, usePage } from '@inertiajs/vue3';
+import { ref } from 'vue';
 
 const props = defineProps({
     mode: String, // 'create' | 'edit'
@@ -9,6 +9,7 @@ const props = defineProps({
     systemOptions: Array, // ['cash-vero'] today, built generically
     currencies: Object,
     languages: Array, // [{code, name}] — hardcoded to en/ar, matches the original
+    defaultOpeningBalanceDate: String, // '2025-01-01' — used only in create mode
     submitUrl: String,
     backUrl: String,
 });
@@ -22,6 +23,7 @@ const form = ref({
         ar: props.model?.name?.ar ?? '',
     },
     main_functional_currency: props.model?.main_functional_currency ?? 'egp',
+    opening_balance_date: props.model?.opening_balance_date ?? props.defaultOpeningBalanceDate ?? '2025-01-01',
     systems: props.model?.systems?.length ? [...props.model.systems] : (props.systemOptions[0] ? [props.systemOptions[0]] : []),
     odoo_db_url: props.model?.odoo_db_url ?? '',
     odoo_db_name: props.model?.odoo_db_name ?? '',
@@ -63,6 +65,7 @@ function submit() {
     const payload = {
         name: form.value.name,
         main_functional_currency: form.value.main_functional_currency,
+        opening_balance_date: form.value.opening_balance_date,
         systems: form.value.systems,
         odoo_db_url: form.value.odoo_db_url,
         odoo_db_name: form.value.odoo_db_name,
@@ -138,6 +141,14 @@ function submit() {
                             <label class="cvr-form-label">Company Image</label>
                             <input type="file" @change="onImageChange" class="cvr-input w-full px-3 py-2 rounded" />
                             <img v-if="model?.image_url" :src="model.image_url" class="w-20 h-20 object-cover rounded mt-2" alt="current image" />
+                        </div>
+                        <div>
+                            <label class="cvr-form-label">Opening Balance Date *</label>
+                            <input v-model="form.opening_balance_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                            <p v-if="errorFor('opening_balance_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('opening_balance_date') }}</p>
+                            <p class="text-xs mt-1 cvr-text-muted">
+                                This is the reference date for all opening balances (Safe, Customers, Suppliers) and the earliest allowed balance date on any bank account for this company.
+                            </p>
                         </div>
                     </div>
                 </div>

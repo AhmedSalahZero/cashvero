@@ -43,7 +43,12 @@ class OutstandingBreakdownRule implements ImplicitRule
 			return false ;
 		}
 		$amounts = HArr::unformatValues(array_column($value,'amount')) ;
-		return array_sum($amounts) == $this->totalOutstandingBalance;
+		// ±1 tolerance band, matching the pattern already proven elsewhere in this codebase
+		// (see UnappliedAmountForContractAsDownPaymentRule's non-down-payment branch), instead
+		// of exact float equality — avoids rejecting a genuinely correct submission over
+		// floating-point rounding dust.
+		$diff = array_sum($amounts) - $this->totalOutstandingBalance;
+		return $diff >= -1 && $diff <= 1;
 		
 		
     }

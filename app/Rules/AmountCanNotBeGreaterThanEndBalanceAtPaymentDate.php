@@ -9,6 +9,16 @@ use App\Models\MoneyPayment;
 use Carbon\Carbon;
 use Illuminate\Contracts\Validation\ImplicitRule;
 
+/**
+ * ARCHITECTURE NOTE (Stage 1 audit finding, 2026-07-24, not fixed here): this Rule instantiates
+ * a full HTTP Controller (`MoneyReceivedController`/`MoneyPaymentController`) directly to reuse
+ * one of its methods, instead of calling a shared service/model method. This only works because
+ * the current global `Request()` happens to carry the route bindings these controller methods
+ * read internally — reusing this Rule from any other context (an Artisan command, a queued job,
+ * a future API endpoint, a test) would fail in a confusing way rather than a clean no-op. Left
+ * as-is for now (fixing it means touching the Controller too, out of scope for a Rules-only
+ * pass) — tracked for whenever Controllers get their own dedicated audit stage.
+ */
 class AmountCanNotBeGreaterThanEndBalanceAtPaymentDate implements ImplicitRule
 {
     /**

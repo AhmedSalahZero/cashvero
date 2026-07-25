@@ -1665,9 +1665,24 @@ if (!function_exists('getFixedLoanTypes')) {
         ];
     }
 }
+/**
+ * REAL BUG FIXED HERE (same Carbon 3 sign-bug class found and fixed
+ * throughout this codebase -- see getDiffBetweenTwoDatesInDays()
+ * above, TimeOfDeposit, Cheque, FactoringTransaction, the LG renewal
+ * commission calculation, Odoo contract sync, and
+ * TdRenewalDateHistory::getDuration()).
+ *
+ * NOTE: as of this fix, this specific helper has zero call sites
+ * anywhere in the codebase -- it was dead code. Fixed anyway (rather
+ * than removed) so it is not a live trap for whoever wires it up
+ * next; $absolute = true restores the always-positive guarantee this
+ * function's name implies. Consider removing this function and
+ * standardizing on getDiffBetweenTwoDatesInDays() instead, since the
+ * two near-identical names are themselves a source of confusion.
+ */
 function getDifferenceBetweenTwoDatesInDays(Carbon $firstDate, Carbon $secondDate)
 {
-    return $secondDate->diffInDays($firstDate);
+    return $secondDate->diffInDays($firstDate, true);
 }
 function getBankStatementReviewed($stdClass)
 {

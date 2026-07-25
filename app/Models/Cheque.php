@@ -451,7 +451,9 @@ class Cheque extends Model
                 if ($model->isUnderCollection() && $oldStatus == self::COLLECTED) {
                     $negativeOverdraftAgainstCommercialPaperLimit = $model->overdraftAgainstCommercialPaperLimits->where('limit', '<', 0)->first();
                     $negativeOverdraftAgainstCommercialPaperLimit ? $negativeOverdraftAgainstCommercialPaperLimit->update(['is_active' => 0]) : null ;
-                    $negativeOverdraftAgainstCommercialPaperLimit ? DB::table('overdraft_against_commercial_paper_limits')->where('id', $negativeOverdraftAgainstCommercialPaperLimit->id)->delete() : null ;
+                    // Fixed 2026-07-24 (Stage 3 audit Critical finding #1) — see the matching fix
+                    // and full explanation in deleteOverdraftAgainstCommercialPapersLimits() below.
+                    $negativeOverdraftAgainstCommercialPaperLimit ? $negativeOverdraftAgainstCommercialPaperLimit->delete() : null ;
                     $negativeOverdraftAgainstCommercialPaperLimit ? self::deleteLimitUpdateRowFromStatement($negativeOverdraftAgainstCommercialPaperLimit) : null ;
 
                     return ;
@@ -538,9 +540,44 @@ class Cheque extends Model
     {
         $this->overdraftAgainstCommercialPaperLimits->each(function ($overdraftAgainstCommercialPaperLimit) {
             $overdraftAgainstCommercialPaperLimit->update(['is_active' => 0]);
-            DB::table('overdraft_against_commercial_paper_limits')->where('id', $overdraftAgainstCommercialPaperLimit->id)->delete();
+            /**
+             * Fixed 2026-07-24 (Stage 3 audit Critical finding #1): was a raw DB::table()
+             * delete, which silently skipped this model's own deleting() hook — the hook that
+             * keeps the parent overdraft facility's oldest_date in sync. oldest_date is read
+             * directly by this facility's bank-statement trigger to decide how far back to
+             * reverse-and-resettle whenever a new transaction posts, so leaving it stale here
+             * was a real, live calculation risk, not just housekeeping. Now goes through
+             * Eloquent so that hook actually runs.
+             */
+            $overdraftAgainstCommercialPaperLimit->delete();
 			self::deleteLimitUpdateRowFromStatement($overdraftAgainstCommercialPaperLimit);
         });
+    }
+
+    /**
+     * The cheque's current, active, positive contribution to its overdraft facility's practical
+     * limit (if any) — null if this cheque isn't currently collateral for a facility. Used by
+     * OverdraftCollateralRemovalRule to check whether removing this cheque's collateral status
+     * would leave the facility over its practical limit. Added 2026-07-24.
+     *
+     * @return array{facility_id: int, amount: float}|null
+     */
+    public function getActiveOverdraftAgainstCommercialPaperLimitContribution(): ?array
+    {
+        $activeLimit = $this->overdraftAgainstCommercialPaperLimits()
+            ->where('is_active', 1)
+            ->where('limit', '>', 0)
+            ->orderByDesc('full_date')
+            ->first();
+
+        if (!$activeLimit) {
+            return null;
+        }
+
+        return [
+            'facility_id' => (int) $activeLimit->overdraft_against_commercial_paper_id,
+            'amount' => (float) $activeLimit->limit,
+        ];
     }
 
     public function overdraftAgainstCommercialPaperLimits()

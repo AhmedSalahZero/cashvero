@@ -281,7 +281,7 @@ class OpeningBalancesController
         }
 
         return \Inertia\Inertia::render('OpeningBalance/Form', [
-            'company' => ['id' => $company->id],
+            'company' => ['id' => $company->id, 'opening_balance_date' => $company->opening_balance_date],
             'submitUrl' => $model
                 ? route('opening-balance.update', ['company' => $company->id, 'opening_balance' => $model->id])
                 : route('opening-balance.store', ['company' => $company->id]),
@@ -301,8 +301,11 @@ class OpeningBalancesController
 
     public function store(StoreOpeningBalanceRequest $request, Company $company)
     {
-        $openingBalanceDate = $request->get('date');
-        $openingBalanceDate = Carbon::make($openingBalanceDate)->format('Y-m-d');
+        // The date field is read-only in the form now — it always mirrors
+        // the company's own Opening Balance Date (set on company
+        // creation), so the source of truth is the company record, not
+        // whatever the request happens to send.
+        $openingBalanceDate = Carbon::make($company->opening_balance_date)->format('Y-m-d');
         $openingBalance = OpeningBalance::create([
             'date' => $openingBalanceDate,
             'company_id' => $company->id
@@ -449,9 +452,10 @@ class OpeningBalancesController
 
     public function update(Company $company, StoreOpeningBalanceRequest $request, OpeningBalance $openingBalance)
     {
-        $openingBalanceDate = $request->get('date') ;
-        $openingBalanceDate = Carbon::make($openingBalanceDate)->format('Y-m-d');
-        
+        // Same as store() — read-only field, always mirrors the company's
+        // Opening Balance Date rather than trusting the request.
+        $openingBalanceDate = Carbon::make($company->opening_balance_date)->format('Y-m-d');
+
         $openingBalance->update([
             'date' => $openingBalanceDate,
         ]);

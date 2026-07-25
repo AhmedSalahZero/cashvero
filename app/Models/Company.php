@@ -29,6 +29,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property int $id
  * @property int|null $odoo_id
  * @property string|null $odoo_integration_start_date
+ * @property string|null $opening_balance_date
  * @property string|null $labeling_logo
  * @property string|null $labeling_report_title
  * @property string|null $labeling_stamp
@@ -270,6 +271,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\Models\Company whereOdooDbUrl($value)
  * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\Models\Company whereOdooId($value)
  * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\Models\Company whereOdooIntegrationStartDate($value)
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\Models\Company whereOpeningBalanceDate($value)
  * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\Models\Company wherePrintLabelingType($value)
  * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\Models\Company whereQrcodeHeight($value)
  * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\Models\Company whereQrcodeWidth($value)
@@ -931,10 +933,34 @@ class Company extends Model implements HasMedia
         return in_array(CASH_VERO, $this->getSystemsNames())
         || (auth()->check() && auth()->user()->isSuperAdmin());
     }
+    /**
+     * ⚠️ REAL BUG FIXED HERE (2026-07-25): same root cause and same fix
+     * as UsersAndPermissionsController::update() — `HAuth::getPermissions()`
+     * is the source of truth for what CAN be assigned, but syncing that
+     * list into the actual `permissions` table is a separate, manual
+     * step (`refresh:permissions` Artisan command). If a permission was
+     * added to that list without re-running that command, editing a
+     * company's Systems here would throw
+     * Spatie\Permission\Exceptions\PermissionDoesNotExist the same way
+     * saving a user's individual permissions did.
+     *
+     * Fixed the same way: firstOrCreate any permission name about to be
+     * assigned, before calling syncPermissions(). Purely additive — only
+     * ever creates the specific permission name(s) actually needed here,
+     * never deletes or touches any other permission or any other user.
+     */
     public function syncPermissionForAllUser(array $systemsToPreserve, array $newSystemsToBeAdded):void
     {
         $permissionsNamesToBePreserve = array_column(HAuth::getPermissions($systemsToPreserve), 'name');
         $permissionsNamesToBeAdded = array_column(HAuth::getPermissions($newSystemsToBeAdded), 'name');
+
+        foreach ($permissionsNamesToBeAdded as $permissionName) {
+            \Spatie\Permission\Models\Permission::firstOrCreate([
+                'name' => $permissionName,
+                'guard_name' => 'web',
+            ]);
+        }
+
         foreach ($this->users as $user) {
             $currentUserPermissions = array_values(array_intersect($user->permissions->pluck('name')->toArray(), $permissionsNamesToBePreserve));
             $permissions = array_merge($currentUserPermissions, $permissionsNamesToBeAdded);

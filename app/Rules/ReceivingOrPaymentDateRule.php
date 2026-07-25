@@ -43,7 +43,21 @@ class ReceivingOrPaymentDateRule implements Rule
      */
     public function passes($attribute, $value)
     {
-		
+		/**
+		 * Pure business rule (confirmed with project owner, 2026-07-24): no Money Received,
+		 * Money Payment, or down-payment variant of either may be dated later than today.
+		 * "Today" means the server's current calendar date only — no timezone shifting, no
+		 * time-of-day component, no grace period. Checked first, for every money type
+		 * (including cheque, which falls through the two branches below untouched), before the
+		 * existing lower-bound (opening balance date) checks.
+		 */
+		$transactionDate = Carbon::make($value)->startOfDay();
+		$today = Carbon::now()->startOfDay();
+		if ($transactionDate->greaterThan($today)) {
+			$this->failed_message = __('Transaction Date Can Not Be Greater Than Today');
+			return false ;
+		}
+
         if(in_array($this->money_type ,$this->money_type_validation_for_bank_types)){
 			if(!$this->account_type_id || ! $this->account_number){
 				return true ;

@@ -119,7 +119,7 @@ class ForeignExchangeRateController
                 'from_currency' => $rate->getFromCurrency(),
                 'to_currency' => $rate->getToCurrency(),
                 'exchange_rate_formatted' => number_format($exchangeRate, 4),
-                'reciprocal_exchange_rate_formatted' => number_format(1 / $exchangeRate, 4),
+                'reciprocal_exchange_rate_formatted' => number_format($exchangeRate ? 1 / $exchangeRate : 0, 4),
                 'is_editable' => $latestRate && $rate->id === $latestRate->id,
                 'edit_url' => route('edit.foreign.exchange.rate', ['company' => $rate->company_id, 'foreignExchangeRate' => $rate->id]),
                 'delete_url' => route('delete.foreign.exchange.rate', ['company' => $rate->company_id, 'foreignExchangeRate' => $rate->id]),
@@ -249,6 +249,10 @@ class ForeignExchangeRateController
                                 ->orderByDesc('date')
                                 ->first() ;
             $secondExchangeRate = $exchangeRateRow2 ? $exchangeRateRow2->exchange_rate : 1;
+            // Guard stored zero rates — same class of bug as CashExpenseController.
+            if (! $secondExchangeRate || (float) $secondExchangeRate == 0) {
+                return response()->json(['exchange_rate' => 0]);
+            }
             return response()->json([
        	     'exchange_rate'=>$firstExchangeRate/$secondExchangeRate
   		      ]);
@@ -273,7 +277,7 @@ class ForeignExchangeRateController
         // }
         $exchangeRate = $exchangeRateRow ? $exchangeRateRow->exchange_rate : 1;
         if ($isReverse) {
-            $exchangeRate = 1/$exchangeRate;
+            $exchangeRate = ($exchangeRate && (float) $exchangeRate != 0) ? 1/$exchangeRate : 0;
         }
         return response()->json([
             'exchange_rate'=>$exchangeRate

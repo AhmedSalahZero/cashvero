@@ -2,7 +2,6 @@
 namespace App\Traits;
 
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 trait IsBankStatement
@@ -26,10 +25,9 @@ trait IsBankStatement
 				'debit'=>$debit 
 			] ;
 			$updatedData = array_merge($updatedData , $additionUpdateData);
-			$row = DB::table($this->getTable())->where('id',$this->id)->first();
 			$isEndOfMonthRow = false ;
-			if(isset($row->interest_type)){
-				$isEndOfMonthRow =  $row->interest_type=='end_of_month' || $row->interest_type =='end_of_month_final';
+			if(isset($this->interest_type)){
+				$isEndOfMonthRow =  $this->interest_type=='end_of_month' || $this->interest_type =='end_of_month_final';
 			}
 			if($isEndOfMonthRow){
 				if(Request()->has('is_end_of_month_final')){
@@ -39,7 +37,14 @@ trait IsBankStatement
 				}
 			}
 			
-			DB::table($this->getTable())->where('id',$this->id)->update($updatedData);
+			// ⚠️ REAL BUG FIXED HERE (2026-07-24 audit, Stage 4):
+			// previously used DB::table()->update() which skipped this
+			// row's own Eloquent updating/updated hooks (e.g. beginning-
+			// balance end-of-month interest re-sync on
+			// CurrentAccountBankStatement). Balance cascade below is
+			// unchanged — it still re-triggers updateNextRows via the
+			// next affected row.
+			$this->update($updatedData);
 			$query = 
 			$modelName::where('date','>=',$minDate);
 			foreach($this->getForeignKeyNamesThatUsedInFilter() as $columnName){

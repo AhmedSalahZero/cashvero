@@ -191,7 +191,30 @@ class LetterOfGuaranteeIssuanceRenewalDateController
 	{
 		$lgRenewalDateHistoryId = $lgRenewalDateHistory->id;
 		$lgCommissionInterval = $letterOfGuaranteeIssuance->getLgCommissionInterval();
-		$lgDurationMonths = Carbon::make($expiryDate)->diffInMonths(Carbon::make($renewalDate));
+		/**
+		 * ⚠️ REAL BUG FIXED HERE (same Carbon 3 sign-bug class already
+		 * found and fixed on TimeOfDeposit::calculateInterestAmount(),
+		 * Cheque::calculateChequeExpectedCollectionDate(), and
+		 * FactoringTransaction's interest calculation).
+		 *
+		 * $expiryDate (the OLD expiry, almost always the EARLIER date)
+		 * was the base, $renewalDate (the new, later expiry) was the
+		 * argument. Under Carbon 2 diffInMonths() always returned a
+		 * positive count regardless of argument order; Carbon 3
+		 * (shipped with this project's Laravel 12) made it signed by
+		 * default, so this returned a NEGATIVE month-count in the
+		 * normal renewal case, not an edge case. That negative count
+		 * fed directly into $numberOfIterationsForQuarter below
+		 * (ceil($lgDurationMonths / 3)), which controls how many real
+		 * quarterly LG commission-fee entries get posted to the bank
+		 * statement ledger on renewal — a negative/zero iteration
+		 * count meant real commission charges could be silently
+		 * under-posted or skipped entirely. Fixed by forcing
+		 * $absolute = true, restoring the always-positive guarantee
+		 * this code was written expecting, regardless of Carbon
+		 * version.
+		 */
+		$lgDurationMonths = Carbon::make($expiryDate)->diffInMonths(Carbon::make($renewalDate), true);
 	
 		$numberOfIterationsForQuarter = ceil($lgDurationMonths / 3); 
 		$issuanceDate = $expiryDate;

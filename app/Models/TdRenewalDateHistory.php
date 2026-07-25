@@ -95,9 +95,19 @@ class TdRenewalDateHistory extends Model
 		$date = $this->getRenewalDate();
 		return $date ? Carbon::make($date)->format('m/d/Y') : null;
 	}
+	/**
+	 * REAL BUG FIXED HERE (same Carbon 3 sign-bug class already found
+	 * and fixed on TimeOfDeposit, Cheque, FactoringTransaction, the
+	 * LG renewal commission calculation, and Odoo contract sync).
+	 *
+	 * getRenewalDate() (the earlier date) was the base, getExpiryDate()
+	 * (normally the later date) was the argument -- exactly the order
+	 * that returns a NEGATIVE day-count under Carbon 3's
+	 * signed-by-default diffInDays(). Fixed by forcing $absolute = true.
+	 */
 	public function getDuration()
 	{
-		return Carbon::make($this->getRenewalDate())->diffInDays($this->getExpiryDate());
+		return Carbon::make($this->getRenewalDate())->diffInDays($this->getExpiryDate(), true);
 	}
 	public function getInterestRate()
 	{

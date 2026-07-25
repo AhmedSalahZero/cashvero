@@ -36,7 +36,7 @@ function submit() {
 
 <template>
     <AppLayout>
-        <div class="p-6 max-w-5xl mx-auto">
+        <div class="p-6 mx-auto">
             <h1 class="text-xl font-semibold cvr-text-primary mb-2">Consolidated Cash Flow Report</h1>
             <p class="text-sm cvr-text-muted mb-1">Note: the report period must include today (same rule as the main cash flow report).</p>
             <p class="text-sm cvr-text-muted mb-6">Tip: select only the contracts you need (up to 50 per run). Monthly interval is faster than daily for long periods.</p>

@@ -3,10 +3,19 @@
  * Statements/LgByBeneficiaryName/Index.vue
  * ------------------------------------------------------------------
  * Served by LgByBeneficiaryNameReportController@index. Filter form:
- * a renewal-date cutoff ("renewal date >= this"), Currency, then
- * Beneficiaries of that currency (cascading multi-select, reloaded via
+ * Status, Currency, then Beneficiaries of that currency (cascading
+ * multi-select, reloaded via
  * LetterOfGuaranteeIssuanceController@getBeneficiaryNameByCurrency —
- * an existing, untouched, shared endpoint), and Status.
+ * an existing, untouched, shared endpoint).
+ *
+ * ⚠️ REAL BUG FIXED HERE (2026-07-25, confirmed with project owner) —
+ * same fix, same rationale, as LgByBankName/Index.vue: a date used to
+ * be required no matter which Status was picked, even though
+ * "Running" and "Expired" are both fully defined by
+ * LetterOfGuaranteeIssuance::getStatus() without needing one at all.
+ * A date only means something for Cancelled (their real
+ * cancellation_date) and All (as the floor for which cancelled LGs to
+ * include). Status is also now the first field.
  */
 import { computed, ref, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
@@ -20,10 +29,17 @@ const props = defineProps({
     urls: Object, // { result, beneficiariesByCurrency }
 });
 
+const status = ref('running');
 const startDate = ref(new Date().toISOString().slice(0, 10));
 const currency = ref(props.selectedCurrency || '');
-const status = ref('running');
 const selectedBeneficiaryIds = ref([]);
+
+// Only Cancelled and All actually use the date — Running/Expired are
+// fully defined by status + today's date, no user input needed.
+const needsDate = computed(() => status.value === 'cancelled' || status.value === 'all');
+const dateLabel = computed(() => status.value === 'cancelled'
+    ? 'Cancelled From Date *'
+    : 'Cancelled LGs From Date *');
 
 const beneficiaryOptions = ref([]);
 const loadingBeneficiaries = ref(false);
@@ -49,14 +65,19 @@ async function loadBeneficiaries() {
 }
 watch(currency, loadBeneficiaries, { immediate: true });
 
-const canSubmit = computed(() => startDate.value && currency.value && status.value && selectedBeneficiaryIds.value.length > 0);
+const canSubmit = computed(() =>
+    status.value
+    && currency.value
+    && selectedBeneficiaryIds.value.length > 0
+    && (!needsDate.value || startDate.value)
+);
 
 function submit() {
     if (!canSubmit.value) return;
     router.get(props.urls.result, {
-        start_date: startDate.value,
-        currency_name: currency.value,
         status: status.value,
+        start_date: needsDate.value ? startDate.value : null,
+        currency_name: currency.value,
         beneficiary_id: selectedBeneficiaryIds.value,
     });
 }
@@ -67,14 +88,19 @@ function submit() {
         <div class="p-6">
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">LG By Beneficiary Name</h1>
             <p class="text-sm cvr-text-muted mb-6">
-                Letters of Guarantee for one or more beneficiaries, renewing on or after a chosen date.
+                Letters of Guarantee for one or more beneficiaries, filtered by status.
             </p>
 
             <div class="cvr-card-bg cvr-border border rounded-lg p-5">
                 <div class="cvr-form-grid-3 mb-5">
                     <div>
-                        <label class="cvr-form-label">Renewal Date (≥) *</label>
-                        <input v-model="startDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                        <label class="cvr-form-label">Status *</label>
+                        <select v-model="status" class="cvr-input w-full px-3 py-2 rounded">
+                            <option value="running">Running</option>
+                            <option value="expired">Expired</option>
+                            <option value="cancelled">Cancelled</option>
+                            <option value="all">All</option>
+                        </select>
                     </div>
                     <div>
                         <label class="cvr-form-label">Currency *</label>
@@ -83,12 +109,12 @@ function submit() {
                             <option v-for="(label, code) in currencies" :key="code" :value="code">{{ String(label).toUpperCase() }}</option>
                         </select>
                     </div>
-                    <div>
-                        <label class="cvr-form-label">Status *</label>
-                        <select v-model="status" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="running">Running</option>
-                            <option value="all">All</option>
-                        </select>
+                    <div v-if="needsDate">
+                        <label class="cvr-form-label">{{ dateLabel }}</label>
+                        <input v-model="startDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                        <p class="text-xs mt-1 cvr-text-muted">
+                            {{ status === 'cancelled' ? 'Cancelled LGs from this date through today.' : 'Every Running and Expired LG, plus Cancelled LGs from this date through today.' }}
+                        </p>
                     </div>
                 </div>
 
@@ -116,7 +142,7 @@ function submit() {
                     View Report
                 </button>
                 <ul v-if="!canSubmit" class="text-xs mt-2 space-y-0.5" style="color: var(--cvr-danger-text);">
-                    <li v-if="!startDate">— Renewal Date is not set.</li>
+                    <li v-if="needsDate && !startDate">— {{ status === 'cancelled' ? 'Cancelled From Date' : 'From Date' }} is not set.</li>
                     <li v-if="!currency">— Currency is not selected.</li>
                     <li v-if="selectedBeneficiaryIds.length === 0">— No beneficiary is selected yet (open the dropdown and pick at least one, or Select All).</li>
                 </ul>

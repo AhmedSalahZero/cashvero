@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
@@ -26,6 +26,31 @@ const tabsData = ref({ ...props.tabs });
 const activeTab = ref(props.activeLgType);
 const currentTab = computed(() => tabsData.value[activeTab.value] || { rows: [], current_page: 1, last_page: 1, total: 0, loaded: false });
 const tabLoading = ref(false);
+
+/**
+ * ⚠️ REAL BUG FIXED HERE (2026-07-25, confirmed with project owner):
+ * `tabsData` above was only ever initialized from `props.tabs` once,
+ * at setup(). Actions like Cancel and Back To Running redirect back to
+ * this same page with fresh props via `router.post(...)`, but an
+ * Inertia visit to the *same* page component does not re-run setup() —
+ * it just updates `props` reactively. That one-time snapshot never
+ * picked up the new status, so the row kept showing its old status
+ * until a full manual browser reload re-ran setup() from scratch.
+ * This watcher re-syncs local state on every fresh visit instead.
+ * Already-loaded tabs are preserved if the fresh response only sent a
+ * `loaded:false` placeholder for them (the controller only re-queries
+ * the active tab — see the note above).
+ */
+watch(() => props.tabs, (newTabs) => {
+    for (const [type, data] of Object.entries(newTabs || {})) {
+        if (data?.loaded || !tabsData.value[type]?.loaded) {
+            tabsData.value[type] = data;
+        }
+    }
+});
+watch(() => props.activeLgType, (type) => {
+    if (type) activeTab.value = type;
+});
 
 async function fetchTab(type, extra = {}) {
     tabLoading.value = true;
@@ -203,8 +228,8 @@ const odooErrorTarget = ref(null);
                             </td>
                             <td class="px-3 py-3 cvr-text-secondary max-w-[10rem] break-words">{{ row.bank_name }}</td>
                             <td class="px-3 py-3 cvr-text-secondary">{{ row.lg_code }}</td>
-                            <td class="px-3 py-3 cvr-num">{{ row.lg_amount_formatted }}</td>
-                            <td v-if="activeTab === 'advanced-payment-lgs'" class="px-3 py-3 cvr-num-green">{{ row.lg_current_amount_formatted }}</td>
+                            <td class="px-3 py-3 cvr-num">{{ row.lg_amount_formatted }} <span class="cvr-text-muted">{{ row.lg_currency }}</span></td>
+                            <td v-if="activeTab === 'advanced-payment-lgs'" class="px-3 py-3 cvr-num-green">{{ row.lg_current_amount_formatted }} <span class="cvr-text-muted">{{ row.lg_currency }}</span></td>
                             <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.issuance_date_formatted }}</td>
                             <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.renewal_date_formatted }}</td>
                             <td class="px-3 py-3">
@@ -212,7 +237,7 @@ const odooErrorTarget = ref(null);
                                     <button v-if="row.has_comment" @click="commentTarget = row" class="cvr-action-btn" title="User Comment">💬</button>
                                     <button v-if="row.fully_integrated_with_odoo" @click="odooTarget = row" class="cvr-action-btn" title="Odoo References">👍</button>
                                     <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn" style="color: #EF4444;" title="Odoo Error">🐛</button>
-                                    <a :href="row.renewal_date_url" class="cvr-action-btn" title="Renewal">🔄</a>
+                                    <Link :href="row.renewal_date_url" class="cvr-action-btn" title="Renewal">🔄</Link>
 
                                     <button v-if="row.is_running || row.is_expired" @click="openCancel(row)" class="cvr-action-btn" title="Cancel Letter">🚫</button>
                                     <button v-if="row.is_running && row.is_advanced_payment" @click="openAdvancedPayment(row)" class="cvr-action-btn" title="Amount To Be Decreased">⚖️</button>
@@ -261,7 +286,7 @@ const odooErrorTarget = ref(null);
                         </div>
                         <div>
                             <label class="cvr-form-label">LG Current Amount</label>
-                            <input disabled :value="cancelTarget.lg_current_amount_formatted" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input disabled :value="`${cancelTarget.lg_current_amount_formatted} ${cancelTarget.lg_currency || ''}`" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Cancellation Date *</label>
@@ -288,7 +313,7 @@ const odooErrorTarget = ref(null);
                         </div>
                         <div>
                             <label class="cvr-form-label">LG Amount</label>
-                            <input disabled :value="backToRunningTarget.lg_amount_formatted" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input disabled :value="`${backToRunningTarget.lg_amount_formatted} ${backToRunningTarget.lg_currency || ''}`" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
                     <div class="flex justify-end gap-2">
@@ -311,7 +336,7 @@ const odooErrorTarget = ref(null);
                         </div>
                         <div>
                             <label class="cvr-form-label">LG Amount</label>
-                            <input disabled :value="advancedPaymentTarget.lg_amount_formatted" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input disabled :value="`${advancedPaymentTarget.lg_amount_formatted} ${advancedPaymentTarget.lg_currency || ''}`" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Date *</label>

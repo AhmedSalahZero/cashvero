@@ -115,6 +115,12 @@ class Partner extends Model
 		
         return $this->getName();
     }
+    /**
+     * Both `onlyCompany` and `onlyForCompany` are genuinely used across the codebase (confirmed
+     * via a full search, Stage 3 audit finding #3.2, 2026-07-24) — neither name is safe to
+     * remove. Consolidated to a single implementation so there's exactly one place the
+     * company-scoping logic lives, rather than two copies that could quietly drift apart.
+     */
     public function scopeOnlyCompany(Builder $query, $companyId)
     {
         return $query->where('company_id', $companyId);
@@ -143,7 +149,7 @@ class Partner extends Model
     }
     public function scopeOnlyForCompany(Builder $query, $companyId)
     {
-        return $query->where('company_id', $companyId);
+        return $this->scopeOnlyCompany($query, $companyId);
     }
     public function scopeOnlyCustomers(Builder $query)
     {

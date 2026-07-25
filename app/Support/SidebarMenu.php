@@ -85,7 +85,17 @@ class SidebarMenu
 
             'financial-institutions' => self::section(__('Financial Institutions & Cash Account'), '🏦', [
                 self::item(__('Financial Institutions'), $user->can('view financial institutions'), route('view.financial.institutions', ['company' => $companyId]), inertia: true, icon: '🏛️'),
-                self::item(__('Safe Accounts'), $user->can('view branches'), route('branches.index', ['company' => $companyId]), icon: '🗄️'),
+                // NEW (2026-07-25, project-owner requested): 5 read-only
+                // roll-up pages — see FinancialInstitutionFacilitiesController's
+                // docblock. Reuse the same 'view financial institutions'
+                // permission since these are just alternate read-only
+                // views over the same underlying data, not a new feature
+                // area needing its own permission to seed.
+                self::item(__('Bank Accounts'), $user->can('view financial institutions'), route('financial-institution-facilities.bank-accounts', ['company' => $companyId]), inertia: true, icon: '🏦'),
+                self::item(__('ODA & MTL Facilities'), $user->can('view financial institutions'), route('financial-institution-facilities.oda-mtl', ['company' => $companyId]), inertia: true, icon: '📉'),
+                self::item(__('LG & LC Facilities'), $user->can('view financial institutions'), route('financial-institution-facilities.lg-lc', ['company' => $companyId]), inertia: true, icon: '📜'),
+                self::item(__('Leasing Facilities'), $user->can('view financial institutions'), route('financial-institution-facilities.leasing', ['company' => $companyId]), inertia: true, icon: '🚛'),
+                self::item(__('Factoring Facilities'), $user->can('view financial institutions'), route('financial-institution-facilities.factoring', ['company' => $companyId]), inertia: true, icon: '🧾'),
             ]),
 
             'customers' => self::section(__('Customers Section'), '👥', [
@@ -139,6 +149,14 @@ class SidebarMenu
             ]),
 
             'general-settings' => self::section(__('General Settings'), '⚙️', [
+                // Moved here from "Financial Institutions & Cash Account"
+                // (confirmed with project owner, 2026-07-25): a Safe Account
+                // only has a name and a currency — no financial-institution
+                // logic (no balance, no interest, no Odoo sync) — so it's a
+                // pure general-setting master list, same as Business Sectors
+                // or Sales Channels. Route/permission unchanged (still
+                // BranchesController / 'view branches').
+                self::item(__('Safe Accounts'), $user->can('view branches'), route('branches.index', ['company' => $companyId]), icon: '🗄️'),
                 self::item(__('Partners'), true, route('partners.index', ['company' => $companyId]), inertia: true, icon: '🤝'),
                 self::item(__('Subsidiary Companies'), $user->can('view subsidiary companies'), route('partners.index', ['company' => $companyId, 'type' => 'subsidiary-companies']), inertia: true, icon: '🏢'),
                 self::item(__('Cash Expenses'), $user->can('view cash expense categories'), route('cash.expense.category.index', ['company' => $companyId]), inertia: true, icon: '💳'),

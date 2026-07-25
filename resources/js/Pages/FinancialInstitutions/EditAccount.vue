@@ -149,6 +149,7 @@ function submit() {
                         <div>
                             <label class="cvr-form-label">Balance Date *</label>
                             <input v-model="form.balance_date" required type="date" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
+                            <p v-if="fieldError('balance_date')" class="text-xs mt-1" style="color: var(--cvr-danger-text);">{{ fieldError('balance_date') }}</p>
                         </div>
                         <div>
                             <label class="cvr-form-label">Currency *</label>

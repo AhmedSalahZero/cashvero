@@ -173,7 +173,12 @@
     /* ── Layout ───────────────────────────────────────────────────── */
     --cvr-sidebar-width:     240px;
     --cvr-sidebar-collapsed: 64px;
-    --cvr-header-height:     60px;
+    /* Was 60px — didn't match the header's real Tailwind height
+       (h-14 = 3.5rem = 56px) and, until the 2026-07-25 toast
+       positioning fix, wasn't actually applied anywhere, so the
+       mismatch was silent. Corrected and now wired up (see
+       AppLayout.vue's <header> and ToastStack.vue). */
+    --cvr-header-height:     56px;
 }
 
 /* ══════════════════════════════════════════════════════════════════

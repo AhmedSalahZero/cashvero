@@ -189,7 +189,7 @@ watch(() => page.props.flash?.token, () => {
                 <span v-if="sidebarExpanded" class="font-bold text-xl tracking-tight whitespace-nowrap" style="color: var(--cvr-nav-text-active);">
                     Cash<span style="color: var(--cvr-amber-bright);">Vero</span>
                 </span>
-                <span v-else class="font-bold text-lg" style="color: var(--cvr-amber-bright);">CF</span>
+                <span v-else class="font-bold text-lg" style="color: var(--cvr-amber-bright);">CV</span>
             </div>
 
             <nav class="flex-1 overflow-y-auto py-3 space-y-1" :class="sidebarExpanded ? 'px-2' : 'px-2'">
@@ -265,7 +265,7 @@ watch(() => page.props.flash?.token, () => {
             <!-- Top bar -->
             <header
                 class="h-14 flex items-center justify-between px-6 flex-shrink-0 relative"
-                style="background-color: var(--cvr-bg-surface); border-bottom: 1px solid var(--cvr-border);"
+                style="background-color: var(--cvr-bg-surface); border-bottom: 1px solid var(--cvr-border); height: var(--cvr-header-height);"
             >
                 <button
                     @click="toggleSidebar"

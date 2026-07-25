@@ -59,7 +59,9 @@ const accumulatedTotal = computed(() => {
             <div class="flex items-center justify-between mb-4">
                 <div>
                     <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ title }}</h1>
-                    <Link :href="urls.index" class="text-sm cvr-text-muted hover:underline">← Back to Consolidated Cash Flow</Link>
+                    <Link :href="urls.index" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
+                    ← Back to Consolidated Cash Flow
+                </Link>
                 </div>
                 <div class="flex items-center gap-2">
                     <a :href="urls.exportExcel" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">Export Excel</a>

@@ -13,6 +13,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 const props = defineProps({
     company: Object,
     currency: String,
+    status: String,
     startDate: String,
     kpis: Object,
     paginator: Object,
@@ -21,9 +22,39 @@ const props = defineProps({
 
 const rows = computed(() => props.paginator?.data || []);
 
+const statusLabel = computed(() => ({
+    running: 'Running',
+    expired: 'Expired',
+    cancelled: 'Cancelled',
+    all: 'All',
+}[props.status] || props.status));
+
+// Only Cancelled/All actually carry a meaningful date — Running/Expired
+// are fully defined by status alone (see LgByBankNameReportController).
+const subtitle = computed(() => {
+    if (props.status === 'cancelled') return `Cancelled from ${props.startDate}`;
+    if (props.status === 'all') return `All statuses · cancelled from ${props.startDate}`;
+    return statusLabel.value;
+});
+
 function formatAmount(value) {
     return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+
+// Status column only makes sense when 'All' is picked — for every other
+// filter every row already shares the same status, so the column would
+// just repeat itself.
+const showStatusColumn = computed(() => props.status === 'all');
+const rowStatusLabel = (row) => ({
+    running: 'Running',
+    expired: 'Expired',
+    cancelled: 'Cancelled',
+}[row.status] || row.status);
+const rowStatusClass = (row) => ({
+    running: 'cvr-num-green font-medium',
+    expired: 'cvr-num font-medium',
+    cancelled: 'cvr-num-red font-medium',
+}[row.status] || 'cvr-text-secondary');
 
 function goToPage(url) {
     if (!url) return;
@@ -41,7 +72,7 @@ function goToPage(url) {
             <div class="flex items-start justify-between flex-wrap gap-2 mb-1">
                 <h1 class="text-xl font-semibold cvr-text-primary">
                     LG Report By Bank Name
-                    <span class="cvr-text-secondary font-normal">— renewing ≥ {{ startDate }} · {{ String(currency).toUpperCase() }}</span>
+                    <span class="cvr-text-secondary font-normal">— {{ subtitle }} · {{ String(currency).toUpperCase() }}</span>
                 </h1>
                 <a :href="urls.exportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
                     ⬇️ Export to Excel
@@ -76,7 +107,7 @@ function goToPage(url) {
 
             <!-- Heavy list table — sticky header, horizontal + vertical scroll -->
             <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
-                <div class="overflow-auto" style="max-height: 70vh;">
+                <div class="overflow-auto" style="max-height: 150vh;">
                     <table class="min-w-full text-sm">
                         <thead class="cvr-table-head sticky top-0 z-10">
                             <tr>
@@ -87,6 +118,7 @@ function goToPage(url) {
                                 <th class="px-3 py-3 text-left">Transaction Name</th>
                                 <th class="px-3 py-3 text-center">LG Code</th>
                                 <th class="px-3 py-3 text-left">Source</th>
+                                <th v-if="showStatusColumn" class="px-3 py-3 text-center">Status</th>
                                 <th class="px-3 py-3 text-right">Amount</th>
                                 <th class="px-3 py-3 text-center">Renewal Date</th>
                                 <th class="px-3 py-3 text-right">Cash Cover</th>
@@ -104,13 +136,14 @@ function goToPage(url) {
                                 <td class="px-3 py-2.5 text-left cvr-text-secondary">{{ row.transactionName }}</td>
                                 <td class="px-3 py-2.5 text-center cvr-text-secondary">{{ row.lgCode }}</td>
                                 <td class="px-3 py-2.5 text-left cvr-text-secondary">{{ row.source }}</td>
+                                <td v-if="showStatusColumn" class="px-3 py-2.5 text-center" :class="rowStatusClass(row)">{{ rowStatusLabel(row) }}</td>
                                 <td class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(row.lgAmount) }}</td>
                                 <td class="px-3 py-2.5 text-center" :class="row.renewalDate === 'cancelled' ? 'cvr-num-red font-medium' : 'cvr-text-secondary'">{{ row.renewalDate }}</td>
                                 <td class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(row.cashCoverAmount) }}</td>
                                 <td class="px-3 py-2.5 text-right cvr-num">{{ row.lgCommissionRate }}</td>
                             </tr>
                             <tr v-if="rows.length === 0">
-                                <td colspan="11" class="px-4 py-8 text-center cvr-text-muted">No Letters of Guarantee found for these filters.</td>
+                                <td :colspan="showStatusColumn ? 12 : 11" class="px-4 py-8 text-center cvr-text-muted">No Letters of Guarantee found for these filters.</td>
                             </tr>
                         </tbody>
                     </table>

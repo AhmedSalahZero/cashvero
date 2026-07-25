@@ -134,6 +134,19 @@ Route::middleware([])->group(function () {
                      */
                     Route::get('financial-institutions/{financialInstitution}/bank-accounts', 'FinancialInstitutionController@viewAllAccounts')->name('view.all.bank.accounts');
 
+                    /**
+                     * * NEW (2026-07-25, project-owner requested): 5
+                     * * read-only roll-up pages, one per facility type,
+                     * * flattening data across ALL banks/companies —
+                     * * see FinancialInstitutionFacilitiesController's
+                     * * docblock for full rationale.
+                     */
+                    Route::get('financial-institution-facilities/bank-accounts', 'FinancialInstitutionFacilitiesController@bankAccounts')->name('financial-institution-facilities.bank-accounts');
+                    Route::get('financial-institution-facilities/oda-mtl', 'FinancialInstitutionFacilitiesController@odaAndMtlFacilities')->name('financial-institution-facilities.oda-mtl');
+                    Route::get('financial-institution-facilities/lg-lc', 'FinancialInstitutionFacilitiesController@lgLcFacilities')->name('financial-institution-facilities.lg-lc');
+                    Route::get('financial-institution-facilities/leasing', 'FinancialInstitutionFacilitiesController@leasingFacilities')->name('financial-institution-facilities.leasing');
+                    Route::get('financial-institution-facilities/factoring', 'FinancialInstitutionFacilitiesController@factoringFacilities')->name('financial-institution-facilities.factoring');
+
                     Route::post('add-new-partner', 'AddNewCustomerController@addNew')->name('add.new.partner');
                     Route::post('add-new-partner/{type}', 'AddNewCustomerController@addNew2')->name('add.new.partner.type');
                     Route::get('opening-balance/manage', 'OpeningBalancesController@manage')->name('opening-balance.manage');

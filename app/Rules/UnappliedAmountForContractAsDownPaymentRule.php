@@ -41,7 +41,11 @@ class UnappliedAmountForContractAsDownPaymentRule implements ImplicitRule
 		$totalPaidAmountForContract = HArr::sumFormattedArr(array_column($value,$receivedAmountOrPaidAmountKeyName));
 		if($this->is_down_payment){
 			$this->failed_message  = __('Total Paid Amount Must Equal To Total Down Payment');
-			return $this->paid_amount == $totalPaidAmountForContract;
+			// ±1 tolerance band, matching the non-down-payment branch below (which already used
+			// this pattern), instead of exact float equality — avoids rejecting a genuinely
+			// correct submission over floating-point rounding dust.
+			$downPaymentDiff = $this->paid_amount - $totalPaidAmountForContract;
+			return $downPaymentDiff >= -1 && $downPaymentDiff <= 1;
 		}
 		if($this->total_unapplied_amount <= 0 ){
 			return true ;

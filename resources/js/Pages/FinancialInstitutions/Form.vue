@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { router, Link } from '@inertiajs/vue3';
+import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
 const props = defineProps({
@@ -14,7 +14,22 @@ const props = defineProps({
     navUrls: Object,
 });
 
+const page = usePage();
 const isEditMode = computed(() => props.model !== null);
+
+/*
+ * ⚠️ Real gap found and fixed here (2026-07-25): this form previously had
+ * NO error-display wiring at all — not usePage(), not a single error
+ * lookup — even though the backend already had a real validation rule
+ * (AccountMustHaveAtLeastOneMainCurrencyRule) that could fail here. A
+ * failed save just silently did nothing, with no indication why. Fixed
+ * to match the same pattern AddAccount.vue already uses correctly.
+ * Server errors for repeater rows come back keyed like
+ * "accounts.0.balance_date" — mapped back to each row's own field.
+ */
+function errorFor(index, field) {
+    return page.props.errors?.[`accounts.${index}.${field}`] ?? null;
+}
 
 /* ── Main institution fields ─────────────────────────────────── */
 const form = ref({
@@ -90,6 +105,10 @@ function submit() {
                 </h1>
             </div>
 
+            <div v-if="Object.keys(page.props.errors || {}).length" class="mb-4 px-4 py-3 rounded cvr-badge-overdue text-sm">
+                Please fix the highlighted field(s) below before saving.
+            </div>
+
             <form @submit.prevent="submit" class="space-y-6">
                 <!-- Institution details -->
                 <div class="cvr-card">
@@ -128,7 +147,17 @@ function submit() {
                         <div class="cvr-form-grid-4">
                             <div>
                                 <label class="cvr-form-label">Account Number *</label>
-                                <input v-model="row.account_number" required type="text" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
+                                <input
+                                    v-model="row.account_number"
+                                    required
+                                    type="text"
+                                    class="cvr-input w-full px-2 py-1.5 rounded text-sm"
+                                    :class="{ 'border-2': errorFor(index, 'account_number') }"
+                                    :style="errorFor(index, 'account_number') ? { borderColor: 'var(--cvr-danger)' } : {}"
+                                />
+                                <p v-if="errorFor(index, 'account_number')" class="text-xs mt-1" style="color: var(--cvr-danger-text);">
+                                    {{ errorFor(index, 'account_number') }}
+                                </p>
                             </div>
                             <div v-if="hasOdooIntegration">
                                 <label class="cvr-form-label">Odoo Code *</label>
@@ -144,7 +173,16 @@ function submit() {
                             </div>
                             <div>
                                 <label class="cvr-form-label">Balance Date</label>
-                                <input v-model="row.balance_date" type="date" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
+                                <input
+                                    v-model="row.balance_date"
+                                    type="date"
+                                    class="cvr-input w-full px-2 py-1.5 rounded text-sm"
+                                    :class="{ 'border-2': errorFor(index, 'balance_date') }"
+                                    :style="errorFor(index, 'balance_date') ? { borderColor: 'var(--cvr-danger)' } : {}"
+                                />
+                                <p v-if="errorFor(index, 'balance_date')" class="text-xs mt-1" style="color: var(--cvr-danger-text);">
+                                    {{ errorFor(index, 'balance_date') }}
+                                </p>
                             </div>
                             <div>
                                 <label class="cvr-form-label">Currency *</label>

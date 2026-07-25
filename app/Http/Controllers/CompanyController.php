@@ -102,6 +102,10 @@ class CompanyController extends Controller
      */
     public function store(Request $request)
     {
+        $request->validate([
+            'opening_balance_date' => 'required|date',
+        ]);
+
         toastr()->success('Created Successfully');
         $companySection = Company::create($request->except(['image', 'systems', 'is_api']));
         foreach ($request->get('systems') as $systemName) {
@@ -138,6 +142,7 @@ class CompanyController extends Controller
                     'ar' => $companySection->name['ar'] ?? '',
                 ],
                 'main_functional_currency' => $companySection->main_functional_currency,
+                'opening_balance_date' => $companySection->opening_balance_date,
                 'odoo_db_url' => $companySection->odoo_db_url,
                 'odoo_db_name' => $companySection->odoo_db_name,
                 'odoo_integration_start_date' => $companySection->odoo_integration_start_date,
@@ -150,6 +155,7 @@ class CompanyController extends Controller
                     'odoo_db_password' => $u->odoo_db_password,
                 ])->values(),
             ] : null,
+            'defaultOpeningBalanceDate' => '2025-01-01',
             'systemOptions' => CompanySystem::getAllSystemNames(),
             'currencies' => getCurrencies(),
             'languages' => [
@@ -168,6 +174,10 @@ class CompanyController extends Controller
      */
     public function update(Request $request, Company $companySection)
     {
+        $request->validate([
+            'opening_balance_date' => 'required|date',
+        ]);
+
         toastr()->success('Updated Successfully');
         $oldSystems = $companySection->getSystemsNames();
         $newSystems = $request->get('systems');

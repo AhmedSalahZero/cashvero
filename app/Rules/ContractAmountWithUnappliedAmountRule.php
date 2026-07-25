@@ -21,6 +21,11 @@ class ContractAmountWithUnappliedAmountRule implements ImplicitRule
     /**
      * Determine if the validation rule passes.
      *
+     * Note: previously returned `$this->contract_id` directly (a raw int) rather than a real
+     * boolean. Laravel's validator treats that loosely-truthy value as pass/fail, and it worked
+     * in practice only because real contract IDs are always positive integers. Made explicit
+     * here since a method contracted to return a boolean should actually return one.
+     *
      * @param  string  $attribute
      * @param  mixed  $value
      * @return bool
@@ -31,7 +36,7 @@ class ContractAmountWithUnappliedAmountRule implements ImplicitRule
 			return true ;
 		}
 		
-        return  $this->contract_id;
+        return (bool) $this->contract_id;
 		
     }
 

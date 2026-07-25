@@ -12,13 +12,16 @@ class HeadersExport implements WithHeadings, WithColumnFormatting
 {
     use Exportable;
 
-    public $company_id;
-
     public $heads;
 
+    /**
+     * @param mixed $company_id Accepted for call-site compatibility, but intentionally unused —
+     *                          company scoping already happens before the heads array reaches
+     *                          this class (confirmed, Stage 2 audit finding #3.2, 2026-07-24).
+     * @param array $heads
+     */
     public function __construct($company_id, $heads = [])
     {
-        $this->company_id = $company_id;
         $this->heads = $heads;
     }
 

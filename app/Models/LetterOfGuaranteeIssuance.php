@@ -962,8 +962,8 @@ class LetterOfGuaranteeIssuance extends Model
         $odooLetterOfGuaranteeIssuance = null ;
         foreach ([$journalEntryIdColumnName] as $journalColumnName) {
             $currentJournalEntryId = $this->{$journalColumnName};
-            $odooLetterOfGuaranteeIssuance = new LetterOfGuaranteeService($company);
-            if ($currentJournalEntryId) {
+            if ($currentJournalEntryId && $company->hasOdooIntegrationCredentials()) {
+                $odooLetterOfGuaranteeIssuance = new LetterOfGuaranteeService($company);
                 $odooLetterOfGuaranteeIssuance->unlink($currentJournalEntryId);
             }
         }

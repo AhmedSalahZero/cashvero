@@ -21,6 +21,23 @@
  * static banner didn't), can be dismissed early, and multiple toasts
  * stack vertically instead of one replacing another mid-display.
  *
+ * ⚠️ REAL BUG FIXED HERE (2026-07-25, "no data found" toast reported
+ * almost invisible in both light and dark mode): the actual problem
+ * was never the toast's colors — it was position. `top-4` (16px from
+ * the browser viewport top) placed every toast directly on top of
+ * AppLayout's header bar (`h-14` = 56px tall), which sits right at the
+ * top of the page. The toast was rendering squeezed in among the
+ * header's own icons/badges/username, on top of the header's own
+ * background color — not on the page background its
+ * --cvr-danger-bg/--cvr-danger-text colors were actually designed to
+ * be read against. Fixed by pushing the stack below the header
+ * (56px + a gap) so it renders where it was always meant to: over the
+ * normal page background, clear of any other UI. (Found in passing:
+ * there's also an unused `--cvr-header-height: 60px` CSS variable
+ * that was never actually wired to the header anywhere and doesn't
+ * even match its real height — not used here to avoid inheriting that
+ * mismatch; the real 56px header height is used directly instead.)
+ *
  * Usage: the parent (AppLayout.vue) owns the `toasts` array and calls
  * `dismiss(id)` — this component is purely presentational.
  */
@@ -31,7 +48,7 @@ const emit = defineEmits(['dismiss']);
 </script>
 
 <template>
-    <div class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-full max-w-sm pointer-events-none">
+    <div class="fixed right-4 z-50 flex flex-col gap-2 w-full max-w-sm pointer-events-none" style="top: calc(var(--cvr-header-height) + 1rem);">
         <TransitionGroup name="cvr-toast">
             <div
                 v-for="toast in toasts"

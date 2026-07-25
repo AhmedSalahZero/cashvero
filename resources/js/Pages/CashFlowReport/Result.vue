@@ -267,6 +267,33 @@ function exportExcel() {
             }
         }
     }
+
+    /* Projected Other Cash In/Out items (see saveProjectionTab above) were previously omitted
+       from the Excel export entirely — confirmed via the Stage 2 audit follow-up discussion,
+       2026-07-24 — even though they're real, saved data (CashProjection records) visible on
+       screen in their own tabs. CashProjection has no currency column (confirmed against the
+       model), so these aren't tied to any one currency the way the rows above are; they're
+       appended once, as their own labeled section, to whichever currency is being exported —
+       matching how they're already shown on screen, independent of the currency tabs.
+       Presentation-only: this does NOT fold these amounts into Total Cash Inflow/Outflow, Net
+       Cash, or Accumulated Net Cash — whether they should count toward those is a separate
+       business-logic question, not decided here, so those totals are left exactly as before. */
+    const blankPeriodValues = new Array(periodLabels.value.length).fill(0);
+    if (projectionRows.in.length) {
+        rows.push({ label: 'Projected Other Cash In Items', type: 'section', values: blankPeriodValues, total: 0 });
+        for (const row of projectionRows.in) {
+            const total = row.amounts.reduce((s, v) => s + (Number(v) || 0), 0);
+            rows.push({ label: row.name || '(unnamed)', type: 'row', values: row.amounts, total });
+        }
+    }
+    if (projectionRows.out.length) {
+        rows.push({ label: 'Projected Other Cash Out Items', type: 'section', values: blankPeriodValues, total: 0 });
+        for (const row of projectionRows.out) {
+            const total = row.amounts.reduce((s, v) => s + (Number(v) || 0), 0);
+            rows.push({ label: row.name || '(unnamed)', type: 'row', values: row.amounts, total });
+        }
+    }
+
     exportPayloadJson.value = JSON.stringify({
         title: `${props.title} — ${activeTab.value}`,
         currency: activeTab.value,
@@ -430,7 +457,9 @@ async function saveProjectionTab(type) {
             <div class="flex items-center justify-between mb-4">
                 <div>
                     <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ title }}</h1>
-                    <Link :href="urls.index" class="text-sm cvr-text-muted hover:underline">← Back to Cash Flow Report</Link>
+                    <Link :href="urls.index" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
+                        ← Back to Cash Flow Report
+                    </Link>
                 </div>
                 <div class="flex items-center gap-2">
                     <button @click="exportExcel" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">Export Excel</button>

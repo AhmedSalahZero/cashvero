@@ -43,9 +43,43 @@ class UsersAndPermissionsController extends Controller
         ]);
     }
 
+    /**
+     * ⚠️ REAL BUG FIXED HERE (2026-07-25): `HAuth::getPermissions()` is
+     * the single source of truth for which permission checkboxes render
+     * on this form (see edit() above) — but syncing that list into the
+     * actual `permissions` table is a separate, manual step (the
+     * `refresh:permissions` Artisan command). Whenever a new permission
+     * is added to that list without also re-running that command, its
+     * checkbox still renders fine (edit()'s `$user->can(...)` check
+     * degrades gracefully to `false` for an unknown permission) — but
+     * saving it here used to throw
+     * Spatie\Permission\Exceptions\PermissionDoesNotExist, since
+     * syncPermissions() requires every name to already exist as a real
+     * row.
+     *
+     * Fixed by ensuring each submitted permission name exists
+     * (firstOrCreate — creates it if missing, no-ops if it already
+     * exists) before syncing. Deliberately NOT using the
+     * `refresh:permissions` command as the fix: that command deletes
+     * ALL permissions and ALL user/role permission assignments across
+     * every company, then rebuilds everyone back to defaults — it
+     * would silently wipe out any custom permission grants any admin
+     * has ever configured, system-wide. This fix only ever creates the
+     * specific permission name(s) actually being saved, and never
+     * deletes or touches anything else.
+     */
     public function update(Request $request, User $user)
     {
-        $user->syncPermissions(array_keys((array) $request->permissions));
+        $permissionNames = array_keys((array) $request->permissions);
+
+        foreach ($permissionNames as $permissionName) {
+            \Spatie\Permission\Models\Permission::firstOrCreate([
+                'name' => $permissionName,
+                'guard_name' => 'web',
+            ]);
+        }
+
+        $user->syncPermissions($permissionNames);
         toastr()->success(__('updated Successfully'));
 
         return redirect()->back();

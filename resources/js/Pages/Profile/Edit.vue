@@ -15,9 +15,9 @@
  * and switches to multipart/form-data + method-spoofing
  * automatically — no manual FormData handling needed).
  */
-import { ref } from 'vue';
-import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { router, usePage } from '@inertiajs/vue3';
+import { ref } from 'vue';
 
 const props = defineProps({
     user: Object, // { name, email, avatar_url, odoo_username, odoo_db_password }

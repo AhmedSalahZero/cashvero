@@ -253,7 +253,18 @@ class OdooService
 				'start_date'=>$currentProjectStartDate,
 				'end_date'=>$currentProjectEndDate,
 				'company_id'=>$companyId,
-				'duration'=>Carbon::make($currentProjectEndDate)->diffInMonths($currentProjectStartDate)
+				/**
+			 * REAL BUG FIXED HERE (same Carbon 3 sign-bug class already
+			 * found and fixed in TimeOfDeposit, Cheque, FactoringTransaction,
+			 * and LetterOfGuaranteeIssuanceRenewalDateController).
+			 *
+			 * $currentProjectEndDate (normally the LATER date) was the
+			 * base, $currentProjectStartDate (the earlier date) was the
+			 * argument -- exactly the order that returns a NEGATIVE
+			 * month-count under Carbon 3's signed-by-default diffInMonths(),
+			 * on every Odoo-synced contract. Fixed by forcing $absolute = true.
+			 */
+			'duration'=>Carbon::make($currentProjectEndDate)->diffInMonths($currentProjectStartDate, true)
 			];
 			if($oldProject){
 				$projectFormatted['id'] = $oldProject->id;
@@ -290,7 +301,7 @@ class OdooService
 						'execution_percentage_'.$currentOrderIndex=>100,
 						'start_date_'.$currentOrderIndex=>$currentProjectStartDate,
 						'end_date_'.$currentOrderIndex=>$currentProjectEndDate,
-			//			'execution_days_'.$currentOrderIndex=>Carbon::make($currentProjectEndDate)->diffInMonths($currentProjectStartDate),
+			//			'execution_days_'.$currentOrderIndex=>Carbon::make($currentProjectEndDate)->diffInMonths($currentProjectStartDate, true), // Carbon 3 sign-bug fix applied here too, in case this line is ever re-enabled
 						'collection_days_'.$currentOrderIndex=>0,
 						'company_id'=>$companyId
 						

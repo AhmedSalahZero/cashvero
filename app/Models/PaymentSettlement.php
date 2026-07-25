@@ -70,9 +70,16 @@ class PaymentSettlement extends Model
 		});
 		
 	}
+	/**
+	 * Fixed 2026-07-24 (Stage 3 audit finding #2.2): previously resolved against
+	 * `MoneyReceived::class` — a copy-paste-and-rename slip, since this table/method mirrors
+	 * `Settlement::moneyReceived()`. Confirmed dormant at the time of the fix (no call site
+	 * anywhere in the codebase actually invoked this relation), so this closes a landmine before
+	 * it's ever wired up rather than after.
+	 */
 	public function moneyPayment()
 	{
-		return $this->belongsTo(MoneyReceived::class , 'money_payment_id','id');
+		return $this->belongsTo(MoneyPayment::class , 'money_payment_id','id');
 	}
 	
 	public function supplierInvoice()

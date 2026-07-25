@@ -272,7 +272,17 @@ class CashFlowReportController
 			$defaultEndDate = $request->get('cash_end_date',now()->addMonth()->format('Y-m-d'));
 			$formStartDate =Carbon::make($request->get('start_date',$defaultStartDate))->format('Y-m-d'); 
 			$formEndDate =Carbon::make($request->get('end_date',$defaultEndDate))->format('Y-m-d');
-			if(!now()->between($formStartDate,$formEndDate)){
+			// Real fix (confirmed with project owner, 2026-07-25): this rule
+			// used to apply to BOTH the Company Cash Flow and the Contract
+			// Cash Flow report, since they share this same result() method.
+			// For a contract that finished months ago, that forced the user
+			// to artificially stretch the date range just to include today,
+			// producing a report padded with extra all-zero columns just to
+			// satisfy the check. Scoped to $isContract === false only — the
+			// Company Cash Flow report (a live cash-position view) keeps the
+			// original rule unchanged; a Contract Cash Flow report can now
+			// be run over any historical period regardless of today's date.
+			if(!$isContract && !now()->between($formStartDate,$formEndDate)){
 				return redirect()->back()->with('fail',__('Kindly the date of Today must be included within the report duration'));
 			}
 		}

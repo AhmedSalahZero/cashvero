@@ -106,6 +106,33 @@ class Contract extends Model
 	const RUNNING_AND_AGAINST = 'running_and_against';
 	const FINISHED = 'finished';
 	
+    /**
+     * The contract's current, active, positive contribution to its overdraft facility's
+     * practical limit (if any) — null if this contract isn't currently collateral for a
+     * facility. Used by OverdraftCollateralRemovalRule to check whether removing this contract's
+     * collateral status (or deleting it) would leave the facility over its practical limit.
+     * Added 2026-07-24.
+     *
+     * @return array{facility_id: int, amount: float}|null
+     */
+    public function getActiveOverdraftAgainstAssignmentOfContractLimitContribution(): ?array
+    {
+        $activeLimit = $this->overdraftAgainstAssignmentOfContractLimits()
+            ->where('is_active', 1)
+            ->where('limit', '>', 0)
+            ->orderByDesc('full_date')
+            ->first();
+
+        if (!$activeLimit) {
+            return null;
+        }
+
+        return [
+            'facility_id' => (int) $activeLimit->overdraft_against_assignment_of_contract_id,
+            'amount' => (float) $activeLimit->limit,
+        ];
+    }
+
 	public function overdraftAgainstAssignmentOfContractLimits()
     {
         return $this->hasMany(OverdraftAgainstAssignmentOfContractLimit::class, 'contract_id', 'id');
@@ -114,7 +141,16 @@ class Contract extends Model
     {
         $this->overdraftAgainstAssignmentOfContractLimits->each(function ($overdraftAgainstAssignmentOfContractLimit) {
             $overdraftAgainstAssignmentOfContractLimit->update(['is_active' => 0]);
-            DB::table('overdraft_against_assignment_of_contract_limits')->where('id', $overdraftAgainstAssignmentOfContractLimit->id)->delete();
+            /**
+             * Fixed 2026-07-24 (Stage 3 audit Critical finding #1): was a raw DB::table()
+             * delete, which silently skipped this model's own deleting() hook — the hook that
+             * keeps the parent overdraft facility's oldest_date in sync. oldest_date is read
+             * directly by this facility's bank-statement trigger to decide how far back to
+             * reverse-and-resettle whenever a new transaction posts, so leaving it stale here
+             * was a real, live calculation risk, not just housekeeping. Now goes through
+             * Eloquent so that hook actually runs.
+             */
+            $overdraftAgainstAssignmentOfContractLimit->delete();
 			self::deleteLimitUpdateRowFromStatement($overdraftAgainstAssignmentOfContractLimit);
         });
     }
@@ -191,7 +227,9 @@ class Contract extends Model
                 if ($model->isRunningAndAgainst() && $oldStatus == self::FINISHED) {
                     $negativeOverdraftAgainstAssignmentOfContractLimit = $model->overdraftAgainstAssignmentOfContractLimits->where('limit', '<', 0)->first();
                     $negativeOverdraftAgainstAssignmentOfContractLimit ? $negativeOverdraftAgainstAssignmentOfContractLimit->update(['is_active' => 0]) : null ;
-                    $negativeOverdraftAgainstAssignmentOfContractLimit ? DB::table('overdraft_against_assignment_of_contract_limits')->where('id', $negativeOverdraftAgainstAssignmentOfContractLimit->id)->delete() : null ;
+                    // Fixed 2026-07-24 (Stage 3 audit Critical finding #1) — see the matching fix
+                    // and full explanation in deleteOverdraftAgainstAssignmentOfContractsLimits() above.
+                    $negativeOverdraftAgainstAssignmentOfContractLimit ? $negativeOverdraftAgainstAssignmentOfContractLimit->delete() : null ;
 					$negativeOverdraftAgainstAssignmentOfContractLimit ? self::deleteLimitUpdateRowFromStatement($negativeOverdraftAgainstAssignmentOfContractLimit) : null ;
                     return ;
                 }

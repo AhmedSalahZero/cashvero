@@ -25,14 +25,20 @@ class TwoNumericsAreEqual implements ImplicitRule
     /**
      * Determine if the validation rule passes.
      *
+     * Uses a ±1 tolerance band rather than exact equality, matching the pattern already proven
+     * elsewhere in this codebase (see UnappliedAmountForContractAsDownPaymentRule's non-down-
+     * payment branch). Summed financial amounts can differ from an exact float comparison by a
+     * tiny rounding amount even when they are correct in real-world terms; a strict `==` on
+     * floats can reject a genuinely correct submission for that reason alone.
+     *
      * @param  string  $attribute
      * @param  mixed  $value
      * @return bool
      */
     public function passes($attribute, $value)
     {
-	
-        return $this->firstNo == $this->secondNo;
+		$diff = $this->firstNo - $this->secondNo;
+        return $diff >= -1 && $diff <= 1;
     }
 
     /**

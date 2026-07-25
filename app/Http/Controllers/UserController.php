@@ -52,11 +52,24 @@ use Spatie\Permission\Models\Permission;
  *      `role` as required — previously missing entirely, so a blank
  *      role reached Spatie's assignRole() and threw a raw exception
  *      rather than a clean validation message.
- *   ⚠️ update() → still ends in `redirect()->back()` and still has no
- *      `role` required validation — the same 2 issues store() had.
- *      Left UNCHANGED for now since only the create flow was
- *      reported; flagging in case the project owner wants edit
- *      matched too.
+ *   ✅ update() → `role` required validation now added, matching
+ *      store(). (`redirect()->back()` left as-is — unlike store()'s
+ *      redirect issue, landing back on the edit form after a save
+ *      isn't a broken/empty page, so not treated as a bug.)
+ *   ✅ store() / update() / destroy() → REAL BUG FIXED (2026-07-24
+ *      audit, confirmed with the project owner): none of these three
+ *      previously had any authorization check verifying the acting
+ *      user was actually allowed to assign the submitted role (or,
+ *      for destroy(), remove a user holding their current role) — a
+ *      genuine privilege-escalation gap, since the UI-level
+ *      `v-if="isSuperAdmin"` link-hiding in AppLayout.vue was the
+ *      only thing standing between any authenticated user and being
+ *      able to grant themselves Super Admin. Fixed by extracting the
+ *      rule set that already existed correctly (but display-only) in
+ *      getCommonViewVars() into authUserCanAssignRole(), and actually
+ *      enforcing it. destroy() was also previously an empty no-op
+ *      method — implemented as a soft delete; see its own docblock
+ *      for what was deliberately left conservative.
  */
 class UserController extends Controller
 {
@@ -102,23 +115,71 @@ class UserController extends Controller
         return \Inertia\Inertia::render('SuperAdmin/Users/Form', $this->getCommonViewVars(null, $company));
     }
 
+    /**
+     * ⚠️ REAL BUG FIXED HERE (2026-07-24 audit, confirmed with the
+     * project owner as a genuine privilege-escalation gap — see the
+     * full writeup in the audit report; summarized version here).
+     *
+     * This exact rule set already existed, correctly, in
+     * getCommonViewVars() below — but it was ONLY ever used to decide
+     * which options to *display* in the role dropdown (a client-side
+     * convenience), never to verify that a *submitted* role was one
+     * the acting user was actually allowed to assign. store() and
+     * update() applied whatever role was posted with no check at all,
+     * meaning any authenticated user who could reach those two routes
+     * directly (bypassing the UI, which only ever shows the allowed
+     * options) could assign ANY role — including Super Admin — to any
+     * user, and update() could additionally reassign any user's
+     * company access, also with no check.
+     *
+     * Extracted here as the single, authoritative source of truth for
+     * "is $authUser allowed to assign $role" so getCommonViewVars()'s
+     * display logic and store()/update()'s enforcement can never drift
+     * apart from each other again — the same "one source of truth,
+     * not two things that can disagree" principle this whole codebase
+     * already uses correctly in other places (e.g. BankStatementController
+     * sharing one row-mapping method between its screen and its export).
+     *
+     * Business rule is UNCHANGED from what getCommonViewVars() already
+     * encoded — nothing new invented here, just made authoritative:
+     *   - Super Admin role: only assignable by an existing Super Admin,
+     *     or left in place if the user being edited already has it.
+     *   - Company Admin / Manager / User roles: assignable by anyone
+     *     holding the matching 'create company admin' / 'create manager'
+     *     / 'create user' permission, or left in place if the user
+     *     being edited already has that role.
+     */
+    protected function authUserCanAssignRole(User $authUser, ?string $role, ?User $existingUser): bool
+    {
+        if (! $role) {
+            return false;
+        }
+        if ($role === User::SUPER_ADMIN) {
+            return $authUser->isSuperAdmin() || ($existingUser && $existingUser->hasRole(User::SUPER_ADMIN));
+        }
+        if ($role === User::COMPANY_ADMIN) {
+            return $authUser->can('create company admin') || ($existingUser && $existingUser->hasRole(User::COMPANY_ADMIN));
+        }
+        if ($role === User::MANAGER) {
+            return $authUser->can('create manager') || ($existingUser && $existingUser->hasRole(User::MANAGER));
+        }
+        if ($role === User::USER) {
+            return $authUser->can('create user') || ($existingUser && $existingUser->hasRole(User::USER));
+        }
+
+        return false;
+    }
+
     protected function getCommonViewVars(?User $user, ?Company $company): array
     {
         $companies = $company ? Company::where('id', $company->id)->get() : Company::all();
         $authUser = auth()->user();
 
         $roleOptions = [];
-        if ($authUser->isSuperAdmin() || ($user && $user->hasRole(User::SUPER_ADMIN))) {
-            $roleOptions[] = ['value' => User::SUPER_ADMIN, 'label' => 'Super Admin'];
-        }
-        if ($authUser->can('create company admin') || ($user && $user->hasRole(User::COMPANY_ADMIN))) {
-            $roleOptions[] = ['value' => User::COMPANY_ADMIN, 'label' => 'Company Admin'];
-        }
-        if ($authUser->can('create manager') || ($user && $user->hasRole(User::MANAGER))) {
-            $roleOptions[] = ['value' => User::MANAGER, 'label' => 'Manager'];
-        }
-        if ($authUser->can('create user') || ($user && $user->hasRole(User::USER))) {
-            $roleOptions[] = ['value' => User::USER, 'label' => 'User'];
+        foreach ([User::SUPER_ADMIN => 'Super Admin', User::COMPANY_ADMIN => 'Company Admin', User::MANAGER => 'Manager', User::USER => 'User'] as $roleValue => $roleLabel) {
+            if ($this->authUserCanAssignRole($authUser, $roleValue, $user)) {
+                $roleOptions[] = ['value' => $roleValue, 'label' => $roleLabel];
+            }
         }
 
         return [
@@ -161,6 +222,14 @@ class UserController extends Controller
      * validation message. Added `'role' => 'required'`, matching the
      * `*` the Vue form already (visually, but not functionally) marks
      * it with.
+     *
+     * ⚠️ REAL BUG FIXED HERE (2026-07-24 audit): no check previously
+     * verified the acting user was actually allowed to assign the
+     * submitted role — see authUserCanAssignRole()'s docblock above
+     * for the full explanation. A user with no user-management
+     * permission at all could not previously be stopped from POSTing
+     * role=super-admin directly. Fixed with a 403 abort before any
+     * write happens.
      */
     public function store(Request $request, ?Company $company = null)
     {
@@ -172,6 +241,7 @@ class UserController extends Controller
             'email' => 'unique:users,email',
             'role' => 'required',
         ]);
+        abort_unless($this->authUserCanAssignRole($user, $request->input('role'), null), 403);
         $request['password'] = Hash::make($request->password);
         $request['subscription'] = 'subscripted';
 
@@ -207,10 +277,51 @@ class UserController extends Controller
     }
 
     /**
-     * Updates a User. UNCHANGED, deliberately.
+     * Updates a User.
+     *
+     * ⚠️ REAL BUG FIXED HERE (2026-07-24 audit, confirmed with the
+     * project owner as a genuine privilege-escalation gap). This
+     * method previously had NO authorization check at all — any
+     * authenticated user who could reach this route (e.g. by copying
+     * the request the real super-admin UI sends and replaying it
+     * directly, since the UI only *hides* the link for non-super-admins
+     * rather than the server enforcing anything) could reassign any
+     * user's role, including granting themselves or anyone else
+     * Super Admin, and could reassign any user's company access —
+     * entirely from raw request input. The class's own previous
+     * docblock said "UNCHANGED, deliberately" — that referred to a
+     * different, lower-severity gap (missing 'role' required
+     * validation, matching store()'s already-fixed issue) and did not
+     * knowingly accept this authorization gap; it simply hadn't been
+     * surfaced yet at the time that note was written.
+     *
+     * Fixed with the same check now used by store() and by
+     * getCommonViewVars()'s role-options display — see
+     * authUserCanAssignRole()'s docblock above for the full
+     * explanation of why this one check is now the single source of
+     * truth for all three.
+     *
+     * NOT changed in this fix, flagged for a separate decision:
+     * company assignment (`$user->companies()->sync(...)`) still has
+     * no scoping check of its own — when this route is reached without
+     * a {company} context, getCommonViewVars() already offers every
+     * company in the system as a valid option to any user who passes
+     * the role check above (including a Company-Admin-permission
+     * holder who is not a full Super Admin), so such a user could
+     * still reassign a target user's company access more broadly than
+     * their own company scope. Worth a deliberate decision on the
+     * intended company-scoping policy for non-super-admin callers
+     * before this route is exposed to anyone other than true Super
+     * Admins in practice.
      */
     public function update(Request $request, User $user)
     {
+        $authUser = auth()->user();
+        $request->validate([
+            'role' => 'required',
+        ]);
+        abort_unless($this->authUserCanAssignRole($authUser, $request->input('role'), $user), 403);
+
         $user->update($request->except('avatar', 'companies'));
         $user->companies()->sync($request->companies);
         @count($user->roles) == 0 ?: $user->removeRole($user->roles[0]->name);
@@ -225,7 +336,46 @@ class UserController extends Controller
     {
     }
 
+    /**
+     * ⚠️ REAL BUG FIXED HERE (2026-07-24 audit): this was previously
+     * an empty method — the delete-user route existed and presumably
+     * looked like it worked from the UI, but calling it did nothing
+     * at all.
+     *
+     * Implemented as a soft delete using the `deleted_at` column
+     * already present on the `users` table, gated by the same
+     * role-assignment authorization used by store()/update() (a
+     * reasonable proxy for "is this acting user senior enough to
+     * remove a user holding this role" — same business rule, not a
+     * new one), plus a guard against a user deleting their own
+     * account.
+     *
+     * NOTE — deliberately conservative: the `users` model does not
+     * currently use Eloquent's SoftDeletes trait, so this sets
+     * `deleted_at` directly rather than calling `$user->delete()`.
+     * That means existing reads elsewhere in the app (e.g. plain
+     * `User::find()` calls) will NOT automatically exclude a
+     * soft-deleted user unless SoftDeletes is adopted on the model
+     * more broadly — a separate, larger decision with wider ripple
+     * effects across the codebase than this one fix should make
+     * unilaterally. Flagging clearly rather than silently assuming
+     * that adoption.
+     */
     public function destroy($id)
     {
+        $authUser = auth()->user();
+        $user = User::findOrFail($id);
+
+        if ($authUser->id === $user->id) {
+            abort(403, __('You cannot delete your own account.'));
+        }
+
+        $targetRole = $user->roles[0]->name ?? null;
+        abort_unless($this->authUserCanAssignRole($authUser, $targetRole, $user), 403);
+
+        $user->deleted_at = now();
+        $user->save();
+
+        return redirect()->back();
     }
 }

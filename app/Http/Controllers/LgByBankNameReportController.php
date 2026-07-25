@@ -74,21 +74,94 @@ class LgByBankNameReportController
         $startDate = $request->get('start_date');
         $currencyName = $request->get('currency_name');
         $bankIds = $request->get('bank_id', []);
-        $status = $request->get('status');
+        $status = $request->get('status', 'running');
 
         $results = DB::table('letter_of_guarantee_issuances')
             ->where('letter_of_guarantee_issuances.company_id', $company->id)
-            ->where('lg_currency', $currencyName)
-            ->whereIn('financial_institution_id', $bankIds)
-            ->when($status == 'running', function ($q) {
-                $q->where('status', 'running');
+            ->where('letter_of_guarantee_issuances.lg_currency', $currencyName)
+            ->whereIn('letter_of_guarantee_issuances.financial_institution_id', $bankIds)
+            /**
+             * ⚠️ REAL BUG FIXED HERE (2026-07-25, confirmed with project
+             * owner): a Renewal Date used to be required and applied
+             * unconditionally, regardless of which Status was chosen —
+             * so picking "Running" (which by definition already means
+             * "renewal date is in the future," per
+             * LetterOfGuaranteeIssuance::getStatus()) still forced the
+             * user to enter one anyway, and it silently filtered out any
+             * running LG whose renewal date happened to fall before it.
+             *
+             * "Expired" was never a real stored `status` value at all —
+             * getStatus() computes it purely from
+             * renewal_date <= now() when status isn't 'cancelled' — so
+             * the report never had a way to ask for it. "Cancelled" as
+             * its own selectable status, bounded by the real
+             * cancellation date, didn't exist either.
+             *
+             * ⚠️ CORRECTED 2026-07-25 (first pass of this fix wrongly
+             * assumed a `cancellation_date` COLUMN on this table — it
+             * doesn't exist; confirmed against the live schema, and this
+             * also means LetterOfGuaranteeIssuanceController::cancel()'s
+             * own `update(['cancellation_date' => ...])` call is a
+             * SEPARATE, pre-existing bug that needs its own fix — see
+             * the note flagged to the project owner). The real
+             * cancellation date lives on the `letter_of_guarantee_statements`
+             * row created at the moment of cancellation
+             * (type = 'for-cancellation', see
+             * HasLetterOfGuaranteeStatements::handleLetterOfGuaranteeStatement()) —
+             * joined in below as `cancellation_statement`. Confirmed
+             * exactly one such row ever exists per LG (created once by
+             * cancel(), only removed on a reversal), so this join can't
+             * duplicate rows. Every column reference below is now fully
+             * table-qualified — this joined table shares several column
+             * names with letter_of_guarantee_issuances (lg_type, source,
+             * financial_institution_id), which would otherwise throw an
+             * "ambiguous column" SQL error.
+             */
+            ->leftJoin('letter_of_guarantee_statements as cancellation_statement', function ($join) {
+                $join->on('cancellation_statement.letter_of_guarantee_issuance_id', '=', 'letter_of_guarantee_issuances.id')
+                    ->where('cancellation_statement.type', '=', 'for-cancellation');
             })
-            ->where('renewal_date', '>=', $startDate)
+            ->where(function ($q) use ($status, $startDate) {
+                if ($status === 'running') {
+                    $q->where('letter_of_guarantee_issuances.status', '!=', 'cancelled')
+                        ->where('letter_of_guarantee_issuances.renewal_date', '>', now());
+                } elseif ($status === 'expired') {
+                    $q->where('letter_of_guarantee_issuances.status', '!=', 'cancelled')
+                        ->where('letter_of_guarantee_issuances.renewal_date', '<=', now());
+                } elseif ($status === 'cancelled') {
+                    $q->where('letter_of_guarantee_issuances.status', 'cancelled')
+                        ->where(function ($dateQ) use ($startDate) {
+                            // NULL-safe (2026-07-25, confirmed with project owner): a
+                            // cancelled LG can end up with no matching cancellation_statement
+                            // row if a previous cancel() attempt threw partway through (see
+                            // the transaction fix in LetterOfGuaranteeIssuanceController::cancel()).
+                            // Without this, such an LG's cancellation_statement.date is NULL,
+                            // and `NULL >= $startDate` is always false in SQL — it silently
+                            // never appears in this report, no matter which date is picked or
+                            // which lg_type it is. Treat a missing statement as "always include"
+                            // rather than hide it.
+                            $dateQ->where('cancellation_statement.date', '>=', $startDate)
+                                ->orWhereNull('cancellation_statement.date');
+                        });
+                } else {
+                    // 'all' — every running/expired LG, plus cancelled
+                    // ones from the chosen date onward (or with no
+                    // statement row at all — see the NULL-safe note above).
+                    $q->where('letter_of_guarantee_issuances.status', '!=', 'cancelled')
+                        ->orWhere(function ($cancelledQ) use ($startDate) {
+                            $cancelledQ->where('letter_of_guarantee_issuances.status', 'cancelled')
+                                ->where(function ($dateQ) use ($startDate) {
+                                    $dateQ->where('cancellation_statement.date', '>=', $startDate)
+                                        ->orWhereNull('cancellation_statement.date');
+                                });
+                        });
+                }
+            })
             ->join('partners', 'partners.id', '=', 'letter_of_guarantee_issuances.partner_id')
             ->join('financial_institutions', 'financial_institutions.id', '=', 'letter_of_guarantee_issuances.financial_institution_id')
             ->join('banks', 'banks.id', '=', 'financial_institutions.bank_id')
             ->selectRaw(
-                'letter_of_guarantee_issuances.id as id , partner_id , partners.name as partner_name , lg_type , transaction_name,lg_code, source ,banks.name_en as financial_institution_name , lg_amount , case when status = \'cancelled\' then \'cancelled\' else (DATE_FORMAT(renewal_date,\'%d-%m-%Y\')) end as renewal_date , cash_cover_amount,lg_commission_rate '
+                'letter_of_guarantee_issuances.id as id , letter_of_guarantee_issuances.partner_id as partner_id , partners.name as partner_name , letter_of_guarantee_issuances.lg_type as lg_type , letter_of_guarantee_issuances.transaction_name as transaction_name, letter_of_guarantee_issuances.lg_code as lg_code, letter_of_guarantee_issuances.source as source ,banks.name_en as financial_institution_name , letter_of_guarantee_issuances.lg_amount as lg_amount , case when letter_of_guarantee_issuances.status = \'cancelled\' then \'cancelled\' else (DATE_FORMAT(letter_of_guarantee_issuances.renewal_date,\'%d-%m-%Y\')) end as renewal_date , letter_of_guarantee_issuances.cash_cover_amount as cash_cover_amount, letter_of_guarantee_issuances.lg_commission_rate as lg_commission_rate , case when letter_of_guarantee_issuances.status = \'cancelled\' then \'cancelled\' when letter_of_guarantee_issuances.renewal_date <= NOW() then \'expired\' else \'running\' end as lg_status '
             )->get();
 
         if (! count($results)) {
@@ -124,7 +197,8 @@ class LgByBankNameReportController
         return \Inertia\Inertia::render('Statements/LgByBankName/Result', [
             'company' => ['id' => $company->id],
             'currency' => $data['currency'],
-            'startDate' => Carbon::make($data['startDate'])->format('d-m-Y'),
+            'status' => $request->get('status', 'running'),
+            'startDate' => $data['startDate'] ? Carbon::make($data['startDate'])->format('d-m-Y') : null,
             'kpis' => $kpis,
             'paginator' => $paginator->toArray(),
             'urls' => [

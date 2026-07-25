@@ -38,6 +38,7 @@ trait LgListReportRows
             'renewalDate' => $row->renewal_date, // already formatted (or "cancelled") by the SQL query itself
             'cashCoverAmount' => (float) ($row->cash_cover_amount ?? 0),
             'lgCommissionRate' => $row->lg_commission_rate,
+            'status' => $row->lg_status ?? null, // 'running' | 'expired' | 'cancelled' — computed in fetchRows()
         ];
     }
 }

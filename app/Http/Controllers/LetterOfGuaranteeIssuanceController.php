@@ -25,6 +25,7 @@ use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 // (Left exactly as it was — a pre-existing, fully commented-out
 // applyFilter() method. Not something introduced or removed here.)
@@ -124,6 +125,7 @@ class LetterOfGuaranteeIssuanceController
                     'transaction_reference' => $lg->getTransactionReference(),
                     'lg_amount_formatted' => $lg->getLgAmountFormatted(),
                     'lg_current_amount_formatted' => $lg->getLgCurrentAmountFormatted(),
+                    'lg_currency' => $lg->getLgCurrency(),
                     'purchase_order_date_formatted' => $lg->getPurchaseOrderDateFormatted(),
                     'issuance_date_formatted' => $lg->getIssuanceDateFormatted(),
                     'renewal_date_formatted' => $lg->getRenewalDateFormatted(),
@@ -991,55 +993,72 @@ class LetterOfGuaranteeIssuanceController
     public function cancel(Company $company, Request $request, LetterOfGuaranteeIssuance $letterOfGuaranteeIssuance, string $source)
     {
         /**
-         * @var LetterOfGuaranteeIssuance $letterOfGuaranteeIssuance
+         * ⚠️ WRAPPED IN A TRANSACTION (2026-07-25, confirmed with project
+         * owner): previously the `status => cancelled` update below was its
+         * own committed query, separate from everything after it (the Odoo
+         * call, the for-cancellation statement row the reports rely on, the
+         * cash-cover refund). If anything after the update threw — e.g. the
+         * "Missing company Odoo DB URL/Name" bug already fixed elsewhere in
+         * this file — the LG was left stuck with status = 'cancelled' but
+         * none of the follow-up records, which is exactly what silently
+         * dropped some Bid Bonds out of the LG-by-name reports (their
+         * cancellation_statement join had nothing to match). Wrapping the
+         * whole method in DB::transaction() means any failure now rolls
+         * back the status change too, instead of leaving a half-cancelled
+         * LG behind.
          */
-        $letterOfGuaranteeIssuanceStatus = LetterOfGuaranteeIssuance::CANCELLED ;
+        return DB::transaction(function () use ($company, $request, $letterOfGuaranteeIssuance, $source) {
+            /**
+             * @var LetterOfGuaranteeIssuance $letterOfGuaranteeIssuance
+             */
+            $letterOfGuaranteeIssuanceStatus = LetterOfGuaranteeIssuance::CANCELLED ;
 
-        /**
-         * * هنشيل قيم ال
-         * * letter of guarantee statement
-         */
-        $financialInstitutionId = $letterOfGuaranteeIssuance->financial_institution_id ;
-    //    $financialInstitution = FinancialInstitution::find($financialInstitutionId);
-        
-        $cancellationDate = Carbon::make($request->get('cancellation_date', now()->format('Y-m-d')))->format('Y-m-d') ;
-        
-        $letterOfGuaranteeIssuance->update([
-           'status' => $letterOfGuaranteeIssuanceStatus,
-           'cancellation_date'=>$cancellationDate
-        ]);
-        $letterOfGuaranteeFacility = $letterOfGuaranteeIssuance->letterOfGuaranteeFacility;
-        $lgType = $letterOfGuaranteeIssuance->getLgType();
-        // $isAdvancedPayment =  $letterOfGuaranteeIssuance->isAdvancedPayment() ;
-        //	$cashCoverRate = $letterOfGuaranteeIssuance->getCashCoverRate() / 100;
-        $amount = $letterOfGuaranteeIssuance->getCancellationAmount();
-        $cashCoverAmount = $letterOfGuaranteeIssuance->getCashCoverCancellationAmount();
-    
-        $letterOfGuaranteeFacilityId = $letterOfGuaranteeFacility ? $letterOfGuaranteeFacility->id : null ;
-        $partnerName = $letterOfGuaranteeIssuance->getBeneficiaryName();
-        $transactionName = $letterOfGuaranteeIssuance->getTransactionName();
-        $lgCode = $letterOfGuaranteeIssuance->getLgCode();
-        // $isOpeningBalance = $letterOfGuaranteeIssuance->isOpeningBalance();
-        
-        $financialInstitutionAccount = FinancialInstitutionAccount::find($letterOfGuaranteeIssuance->getCashCoverDeductedFromAccountId());
-        $ref = $letterOfGuaranteeIssuance->generateCancelRef();
-        $message = $letterOfGuaranteeIssuance->generateCancelMessage();
-        $cashCoverAmount = $letterOfGuaranteeIssuance->getCashCoverCancellationAmount();
-		//////////////////////ddddddddd
-        $letterOfGuaranteeIssuance->cancelOdooLg($cancellationDate, $cashCoverAmount, $ref, $message,null,'cancel_journal_entry_id');
-        $commentEn = LetterOfGuaranteeStatement::generateCancelComment('en', $lgType, $partnerName, $transactionName, $lgCode);
-        $commentAr = LetterOfGuaranteeStatement::generateCancelComment('ar', $lgType, $partnerName, $transactionName, $lgCode);
-        $letterOfGuaranteeIssuance->handleLetterOfGuaranteeStatement($financialInstitutionId, $source, $letterOfGuaranteeFacilityId, $lgType, $company->id, $cancellationDate, 0, $amount, 0, $letterOfGuaranteeIssuance->getLgCurrency(), 0, $letterOfGuaranteeIssuance->getCdOrTdId(), LetterOfGuaranteeIssuance::FOR_CANCELLATION, $commentEn, $commentAr);
-        $letterOfGuaranteeIssuance->handleLetterOfGuaranteeCashCoverStatement($financialInstitutionId, $source, $letterOfGuaranteeFacilityId, $lgType, $company->id, $cancellationDate, 0, 0, $cashCoverAmount, $letterOfGuaranteeIssuance->getLgCurrency(), 0, LetterOfGuaranteeIssuance::FOR_CANCELLATION);
-        if ($financialInstitutionAccount) {
-            $financialInstitutionAccountId = $financialInstitutionAccount->id;
-            $debitCommentEn = CurrentAccountBankStatement::generateRefundLgCashCoverComment('en', $partnerName, $transactionName, $lgCode);
-            ;
-            $debitCommentAr = CurrentAccountBankStatement::generateRefundLgCashCoverComment('ar', $partnerName, $transactionName, $lgCode);
-            ;
-            $letterOfGuaranteeIssuance->storeCurrentAccountDebitBankStatement($cancellationDate, $cashCoverAmount, $financialInstitutionAccountId, 0, $letterOfGuaranteeIssuance->id, $debitCommentEn, $debitCommentAr);
-        }
-        return redirect()->route('view.letter.of.guarantee.issuance', ['company'=>$company->id,'active'=>$request->get('lg_type', $letterOfGuaranteeIssuance->getLgType())])->with('success', __('Data Store Successfully'));
+            /**
+             * * هنشيل قيم ال
+             * * letter of guarantee statement
+             */
+            $financialInstitutionId = $letterOfGuaranteeIssuance->financial_institution_id ;
+        //    $financialInstitution = FinancialInstitution::find($financialInstitutionId);
+
+            $cancellationDate = Carbon::make($request->get('cancellation_date', now()->format('Y-m-d')))->format('Y-m-d') ;
+
+            $letterOfGuaranteeIssuance->update([
+               'status' => $letterOfGuaranteeIssuanceStatus,
+               'cancellation_date'=>$cancellationDate
+            ]);
+            $letterOfGuaranteeFacility = $letterOfGuaranteeIssuance->letterOfGuaranteeFacility;
+            $lgType = $letterOfGuaranteeIssuance->getLgType();
+            // $isAdvancedPayment =  $letterOfGuaranteeIssuance->isAdvancedPayment() ;
+            //	$cashCoverRate = $letterOfGuaranteeIssuance->getCashCoverRate() / 100;
+            $amount = $letterOfGuaranteeIssuance->getCancellationAmount();
+            $cashCoverAmount = $letterOfGuaranteeIssuance->getCashCoverCancellationAmount();
+
+            $letterOfGuaranteeFacilityId = $letterOfGuaranteeFacility ? $letterOfGuaranteeFacility->id : null ;
+            $partnerName = $letterOfGuaranteeIssuance->getBeneficiaryName();
+            $transactionName = $letterOfGuaranteeIssuance->getTransactionName();
+            $lgCode = $letterOfGuaranteeIssuance->getLgCode();
+            // $isOpeningBalance = $letterOfGuaranteeIssuance->isOpeningBalance();
+
+            $financialInstitutionAccount = FinancialInstitutionAccount::find($letterOfGuaranteeIssuance->getCashCoverDeductedFromAccountId());
+            $ref = $letterOfGuaranteeIssuance->generateCancelRef();
+            $message = $letterOfGuaranteeIssuance->generateCancelMessage();
+            $cashCoverAmount = $letterOfGuaranteeIssuance->getCashCoverCancellationAmount();
+    		//////////////////////ddddddddd
+            $letterOfGuaranteeIssuance->cancelOdooLg($cancellationDate, $cashCoverAmount, $ref, $message,null,'cancel_journal_entry_id');
+            $commentEn = LetterOfGuaranteeStatement::generateCancelComment('en', $lgType, $partnerName, $transactionName, $lgCode);
+            $commentAr = LetterOfGuaranteeStatement::generateCancelComment('ar', $lgType, $partnerName, $transactionName, $lgCode);
+            $letterOfGuaranteeIssuance->handleLetterOfGuaranteeStatement($financialInstitutionId, $source, $letterOfGuaranteeFacilityId, $lgType, $company->id, $cancellationDate, 0, $amount, 0, $letterOfGuaranteeIssuance->getLgCurrency(), 0, $letterOfGuaranteeIssuance->getCdOrTdId(), LetterOfGuaranteeIssuance::FOR_CANCELLATION, $commentEn, $commentAr);
+            $letterOfGuaranteeIssuance->handleLetterOfGuaranteeCashCoverStatement($financialInstitutionId, $source, $letterOfGuaranteeFacilityId, $lgType, $company->id, $cancellationDate, 0, 0, $cashCoverAmount, $letterOfGuaranteeIssuance->getLgCurrency(), 0, LetterOfGuaranteeIssuance::FOR_CANCELLATION);
+            if ($financialInstitutionAccount) {
+                $financialInstitutionAccountId = $financialInstitutionAccount->id;
+                $debitCommentEn = CurrentAccountBankStatement::generateRefundLgCashCoverComment('en', $partnerName, $transactionName, $lgCode);
+                ;
+                $debitCommentAr = CurrentAccountBankStatement::generateRefundLgCashCoverComment('ar', $partnerName, $transactionName, $lgCode);
+                ;
+                $letterOfGuaranteeIssuance->storeCurrentAccountDebitBankStatement($cancellationDate, $cashCoverAmount, $financialInstitutionAccountId, 0, $letterOfGuaranteeIssuance->id, $debitCommentEn, $debitCommentAr);
+            }
+            return redirect()->route('view.letter.of.guarantee.issuance', ['company'=>$company->id,'active'=>$request->get('lg_type', $letterOfGuaranteeIssuance->getLgType())])->with('success', __('Data Store Successfully'));
+        });
     }
     
     
