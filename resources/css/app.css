@@ -786,6 +786,20 @@ body {
     border-inline-start: 2px solid var(--cvr-nav-active-border);
     color: var(--cvr-nav-text-active);
 }
+/* Lucide icons inherit via currentColor; muted inside sidebar items,
+   brighten on hover/active so hierarchy reads without emoji-style noise. */
+.cvr-nav-icon-svg {
+    color: currentColor;
+    transition: color 0.15s ease;
+}
+aside .cvr-nav-item .cvr-nav-icon-svg,
+aside .cvr-nav-sub-item .cvr-nav-icon-svg {
+    color: var(--cvr-nav-icon);
+}
+aside .cvr-nav-item:hover .cvr-nav-icon-svg,
+aside .cvr-nav-item.cvr-nav-item-active .cvr-nav-icon-svg {
+    color: var(--cvr-nav-text-active);
+}
 /* Main section headers (Dashboard, Statements, Reports, ...) —
    distinctly colored from sub-items so the hierarchy reads instantly */
 .cvr-nav-section-title {
@@ -793,13 +807,22 @@ body {
     transition: var(--cvr-transition);
 }
 .cvr-nav-section-title:hover { color: var(--cvr-nav-section-text-hover); }
+aside .cvr-nav-section-title .cvr-nav-icon-svg {
+    color: inherit;
+}
 /* Sub-items under each section */
 .cvr-nav-sub-item { color: var(--cvr-nav-sub-text); transition: var(--cvr-transition); }
 .cvr-nav-sub-item:hover {
     background-color: var(--cvr-nav-bg-hover);
     color: var(--cvr-nav-sub-text-hover);
 }
+aside .cvr-nav-sub-item:hover .cvr-nav-icon-svg {
+    color: var(--cvr-nav-sub-text-hover);
+}
 .cvr-nav-sub-item.cvr-nav-item-active { color: var(--cvr-nav-text-active); }
+aside .cvr-nav-sub-item.cvr-nav-item-active .cvr-nav-icon-svg {
+    color: var(--cvr-nav-active-border);
+}
 /* ══════════════════════════════════════════════════════════════════
    DASHBOARD (Cash Status / LG & LC Status / Cash Forecast)
    ─────────────────────────────────────────────────────────────────

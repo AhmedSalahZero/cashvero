@@ -132,7 +132,7 @@ const icon = computed(() => ICONS[props.name] ?? Circle);
         :is="icon"
         :size="Number(size)"
         :stroke-width="Number(strokeWidth)"
-        class="shrink-0 opacity-80"
+        class="cvr-nav-icon-svg shrink-0"
         aria-hidden="true"
     />
 </template>
