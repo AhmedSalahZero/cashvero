@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\StatementCascade;
+
 use App\Helpers\HDate;
 use App\Traits\IsBankStatement;
 use Illuminate\Database\Eloquent\Model;
@@ -67,15 +69,12 @@ class OverdraftAgainstCommercialPaperLimit extends Model
 		 */
 		$tableName = (new self)->getTable();
 
-		 DB::table($tableName)
+		 StatementCascade::touchRows(
+			DB::table($tableName)
 		->where('full_date','>=',$minDate)
-		->orderByRaw('full_date asc  , id asc')
-		->where('overdraft_against_commercial_paper_id',$model->overdraft_against_commercial_paper_id)
-		->each(function($overdraftAgainstCommercialPaperLimit) use($tableName){
-			DB::table($tableName)->where('id',$overdraftAgainstCommercialPaperLimit->id)->update([
-				'updated_at'=>now(),
-			]);
-		});
+		->where('overdraft_against_commercial_paper_id',$model->overdraft_against_commercial_paper_id),
+			'full_date asc  , id asc'
+		);
 		return $minDate;
 	}
 		public function getChequeActualCollectionOrDepositDate()

@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\StatementCascade;
+
 use App\Helpers\HDate;
 use App\Interfaces\Models\Interfaces\IHaveStatement;
 use App\Traits\IsBankStatement;
@@ -88,15 +90,12 @@ class LoanStatement extends Model  implements IHaveStatement
 		 * * ودا غلط مفروض التاريخ الاقل ما بين التاريخ الجديد و القديم للعنصر بحيث دايما يبدا يحدث من عنده
 		 */
 
-		 DB::table('loan_statements')
+		 StatementCascade::touchRows(
+			DB::table('loan_statements')
 		->where('date','>=',$minDate)
-		->orderByRaw('date asc , id asc')
-		->where('financial_institution_account_id',$model->financial_institution_account_id)
-		->each(function($loanStatement){
-			DB::table('loan_statements')->where('id',$loanStatement->id)->update([
-				'updated_at'=>now()
-			]);
-		});
+		->where('financial_institution_account_id',$model->financial_institution_account_id),
+			'date asc , id asc'
+		);
 		
 		return $minDate;
 

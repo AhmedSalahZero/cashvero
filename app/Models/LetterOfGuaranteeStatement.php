@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\StatementCascade;
+
 use App\Enums\LgTypes;
 use App\Helpers\HDate;
 use App\Traits\IsBankStatement;
@@ -103,19 +105,16 @@ class LetterOfGuaranteeStatement extends Model
 		 * * ودا غلط مفروض التاريخ الاقل ما بين التاريخ الجديد و القديم للعنصر بحيث دايما يبدا يحدث من عنده
 		 */
 
-		 DB::table((new self)->getTable())
+		 StatementCascade::touchRows(
+			DB::table((new self)->getTable())
 		->where('date','>=',$minDate)
-		->orderByRaw('date asc , id asc')
 		->where('financial_institution_id',$model->financial_institution_id)
 		->where('source',$model->source)
 		->where('lg_facility_id',$model->lg_facility_id)
 		->where('cd_or_td_id',$model->cd_or_td_id)
-		->where('lg_type',$model->lg_type)
-		->each(function($letterOfGuaranteeStatement){
-			DB::table((new self)->getTable())->where('id',$letterOfGuaranteeStatement->id)->update([
-				'updated_at'=>now()
-			]);
-		});
+		->where('lg_type',$model->lg_type),
+			'date asc , id asc'
+		);
 		
 		return $minDate;
 

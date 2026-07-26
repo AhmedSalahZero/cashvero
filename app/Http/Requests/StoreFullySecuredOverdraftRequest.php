@@ -48,6 +48,9 @@ class StoreFullySecuredOverdraftRequest extends FormRequest
 			'cd_or_td_lending_percentage'=>'required|gt:0',
 			'limit'=>['required','gt:0'],
 			'interest_rate'=>['sometimes','required','gt:0'],
+			// ⚠️ REAL BUG FIXED HERE (2026-07-26 audit Stage 4 §3.1):
+			// negative outstanding_balance previously wiped breakdowns silently.
+			'outstanding_balance'=>['nullable','numeric','gte:0'],
 			'outstanding_breakdowns'=>[new OutstandingBreakdownRule($this->outstanding_balance?:0,$this->contract_start_date)]
         ];
     }

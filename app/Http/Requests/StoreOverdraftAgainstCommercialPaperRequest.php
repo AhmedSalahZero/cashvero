@@ -46,6 +46,9 @@ class StoreOverdraftAgainstCommercialPaperRequest extends FormRequest
 			'interest_rate'=>['sometimes','required','gt:0'],
 	//		'infos'=>[new LendingRateRule()],
 			'max_lending_limit_per_customer'=>'required|gt:0',
+			// ⚠️ REAL BUG FIXED HERE (2026-07-26 audit Stage 4 §3.1):
+			// negative outstanding_balance previously wiped breakdowns silently.
+			'outstanding_balance'=>['nullable','numeric','gte:0'],
 			'outstanding_breakdowns'=>[new OutstandingBreakdownRule($this->outstanding_balance?:0,$this->contract_start_date)],
         ];
     }

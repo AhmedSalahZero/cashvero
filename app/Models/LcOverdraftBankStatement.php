@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\StatementCascade;
+
 use App\Helpers\HDate;
 use App\Models\LcSettlementInternalMoneyTransfer;
 use App\Traits\IsBankStatement;
@@ -107,15 +109,12 @@ class LcOverdraftBankStatement extends Model
 		 * * ودا غلط مفروض التاريخ الاقل ما بين التاريخ الجديد و القديم للعنصر بحيث دايما يبدا يحدث من عنده
 		 */
 		$tableName = (new self)->getTable();
-		 DB::table($tableName)
+		 StatementCascade::touchRows(
+			DB::table($tableName)
 		->where('date','>=',$minDate)
-		->orderByRaw('date asc , priority asc , id asc')
-		->where($tableName.'.lc_facility_id',$model->lc_facility_id)
-		->each(function($lcOverdraftBankStatement) use($tableName){
-			DB::table($tableName)->where('id',$lcOverdraftBankStatement->id)->update([
-				'updated_at'=>now()
-			]);
-		});
+		->where($tableName.'.lc_facility_id',$model->lc_facility_id),
+			'date asc , priority asc , id asc'
+		);
 		
 		return $minDate;
 

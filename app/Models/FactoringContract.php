@@ -146,7 +146,14 @@ class FactoringContract extends Model
 
     public function storeOutstandingBreakdown(Request $request, Company $company): void
     {
-        $outstandingBalance = $request->get('outstanding_balance', 0);
+        $outstandingBalance = number_unformat($request->get('outstanding_balance', 0));
+        // Defense-in-depth with StoreFactoringContractRequest's gte:0 —
+        // never wipe breakdowns on a negative outstanding balance.
+        if ($outstandingBalance < 0) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'outstanding_balance' => [__('Outstanding balance cannot be negative.')],
+            ]);
+        }
         $this->outstandingBreakdowns()->delete();
 
         if ($outstandingBalance >= 0) {

@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\StatementCascade;
+
 use App\Helpers\HDate;
 use App\Traits\IsBankStatement;
 use App\Traits\Models\HasDeleteButTriggerChangeOnLastElement;
@@ -88,15 +90,12 @@ class CashInSafeStatement extends Model
 		 * * ودا غلط مفروض التاريخ الاقل ما بين التاريخ الجديد و القديم للعنصر بحيث دايما يبدا يحدث من عنده
 		 */
 
-		 DB::table('cash_in_safe_statements')
+		 StatementCascade::touchRows(
+			DB::table('cash_in_safe_statements')
 		->where('date','>=',$minDate)
-		->orderByRaw('date asc , id asc')
-		->where('branch_id',$model->branch_id)
-		->each(function($cashInSafeStatement){
-			DB::table('cash_in_safe_statements')->where('id',$cashInSafeStatement->id)->update([
-				'updated_at'=>now()
-			]);
-		});
+		->where('branch_id',$model->branch_id),
+			'date asc , id asc'
+		);
 		
 		return $minDate;
 

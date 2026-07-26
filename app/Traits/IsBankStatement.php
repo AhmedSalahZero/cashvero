@@ -2,6 +2,7 @@
 namespace App\Traits;
 
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 trait IsBankStatement
@@ -16,7 +17,6 @@ trait IsBankStatement
 			
 			$time  = Carbon::make($currentFullDate)->format('H:i:s');
 			$newFullDateTime = date('Y-m-d H:i:s', strtotime("$date $time")) ;
-			// $minDateTime = min($currentFullDate ,$newFullDateTime );
 			$minDate = min($currentDate , $date);
 			$updatedData = [
 				'date'=>$date,
@@ -44,19 +44,25 @@ trait IsBankStatement
 			// CurrentAccountBankStatement). Balance cascade below is
 			// unchanged — it still re-triggers updateNextRows via the
 			// next affected row.
-			$this->update($updatedData);
-			$query = 
-			$modelName::where('date','>=',$minDate);
-			foreach($this->getForeignKeyNamesThatUsedInFilter() as $columnName){
-				$query->where($columnName,$this->{$columnName});
-			}
-			$query
-			// ->where('id','!=',$this->id)
-			->orderByRaw($orderBy)
-			->first()
-			->update([
-				'updated_at'=>now()
-			]);
+			//
+			// ⚠️ REAL BUG FIXED HERE (2026-07-26 audit): wrap the
+			// subsequent-row touch in a transaction + lockForUpdate so
+			// concurrent editors cannot interleave cascades.
+			DB::transaction(function () use ($updatedData, $modelName, $minDate, $orderBy) {
+				$this->update($updatedData);
+
+				$query = $modelName::where('date', '>=', $minDate);
+				foreach ($this->getForeignKeyNamesThatUsedInFilter() as $columnName) {
+					$query->where($columnName, $this->{$columnName});
+				}
+
+				$row = $query->orderByRaw($orderBy)->lockForUpdate()->first();
+				if ($row) {
+					$row->update([
+						'updated_at' => now(),
+					]);
+				}
+			});
 			
 	}
 }

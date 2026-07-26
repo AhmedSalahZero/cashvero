@@ -591,9 +591,24 @@ class Contract extends Model
 	}
 	public static function updateLimitUpdateRowFromStatement($overdraftAgainstAssignmentOfContractLimit,$fullDate)
 	{
-		DB::table('overdraft_against_assignment_of_contract_bank_statements')->where('type', 'limit_update')->where('overdraft_against_assignment_of_contract_limit_id',$overdraftAgainstAssignmentOfContractLimit->id)->where('overdraft_against_assignment_of_contract_id',$overdraftAgainstAssignmentOfContractLimit->overdraft_against_assignment_of_contract_id)->update([
-			'date'=>Carbon::make($fullDate)->format('Y-m-d'),
-			'full_date'=>$fullDate
+		// Fixed 2026-07-26: was a raw DB::table()->update() that moved the
+		// limit_update marker without firing BankStatement::updated →
+		// updateNextRows(). Neighbors that used the marker as their previous
+		// row kept stale days_count / interest_amount. Eloquent update lets
+		// updateNextRows cascade (with min(old,new) date) so they recalculate.
+		$row = OverdraftAgainstAssignmentOfContractBankStatement::query()
+			->where('type', 'limit_update')
+			->where('overdraft_against_assignment_of_contract_limit_id', $overdraftAgainstAssignmentOfContractLimit->id)
+			->where('overdraft_against_assignment_of_contract_id', $overdraftAgainstAssignmentOfContractLimit->overdraft_against_assignment_of_contract_id)
+			->first();
+
+		if (! $row) {
+			return;
+		}
+
+		$row->update([
+			'date' => Carbon::make($fullDate)->format('Y-m-d'),
+			'full_date' => $fullDate,
 		]);
 	}
 	

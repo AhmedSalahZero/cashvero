@@ -2,13 +2,6 @@
 
 namespace App\Traits;
 
-use App\Category_product;
-use App\Channel;
-use App\Product;
-use App\RevenueStreamType;
-use App\SalesItems\DurationYears;
-use App\Sector;
-use App\Zone;
 use Carbon\Carbon;
 
 trait GeneralFunctions

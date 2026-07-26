@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\StatementCascade;
+
 use App\Helpers\HDate;
 use App\Traits\IsBankStatement;
 use App\Traits\Models\HasDeleteButTriggerChangeOnLastElement;
@@ -78,18 +80,15 @@ class LetterOfGuaranteeCashCoverStatement extends Model
 		 * * ودا غلط مفروض التاريخ الاقل ما بين التاريخ الجديد و القديم للعنصر بحيث دايما يبدا يحدث من عنده
 		 */
 
-		 DB::table('letter_of_guarantee_cash_cover_statements')
+		 StatementCascade::touchRows(
+			DB::table('letter_of_guarantee_cash_cover_statements')
 		->where('date','>=',$minDate)
-		->orderByRaw('date asc , id asc')
 		->where('financial_institution_id',$model->financial_institution_id)
 		->where('source',$model->source)
 		->where('lg_facility_id',$model->lg_facility_id)
-		->where('lg_type',$model->lg_type)
-		->each(function($letterOfGuaranteeCashCoverStatement){
-			DB::table('letter_of_guarantee_cash_cover_statements')->where('id',$letterOfGuaranteeCashCoverStatement->id)->update([
-				'updated_at'=>now()
-			]);
-		});
+		->where('lg_type',$model->lg_type),
+			'date asc , id asc'
+		);
 		
 		return $minDate;
 

@@ -38,44 +38,39 @@ trait HasOdooMoneyTransfer
         $inboundReferenceColumnName ='inbound_odoo_reference';
         $outboundReferenceColumnName =  'outbound_odoo_reference';
         if ($this->{$outboundJournalColumnName}) {
-            $receiveResult = $internalMoneyTransferService->unlink($this->{$outboundJournalColumnName});
+            $internalMoneyTransferService->unlink($this->{$outboundJournalColumnName});
         }
         $sendMoneyResult = $internalMoneyTransferService->sendMoneyTo($isBreakDeposit,$date, $amountInCurrency, $amountInMainFunctionalCurrencyInSend, $odooCurrencyId, $outJournalId, $outBankOdooId,$sendMessage,$userComment);
         $this->{$outboundStatementColumnName} = $sendMoneyResult['account_bank_statement_line_id'] ;
         $this->{$outboundJournalColumnName} = $sendMoneyResult['journal_entry_id'] ;
         $this->{$outboundReferenceColumnName} = $sendMoneyResult['reference'] ;
-        /**
-         * ! Need To Be Channged
-         */
-        $this->synced_with_odoo = $sendMoneyResult['synced_with_odoo'];
-        $this->odoo_error_message = $sendMoneyResult['odoo_error_message'];
-            
-            
+
         if ($this->{$inboundJournalColumnName}) {
-            $receiveResult = $internalMoneyTransferService->unlink($this->{$inboundJournalColumnName});
+            $internalMoneyTransferService->unlink($this->{$inboundJournalColumnName});
         }
         $receiveResult = $internalMoneyTransferService->storeReceiveMoneyTo($isBreakDeposit,$date, $receivedOdooAmount, $amountInMainFunctionalCurrencyInReceive, $receiveOdooCurrencyId, $inJournalId, $inBankOdooId,$receiveMessage,$userComment);
         $this->{$inboundStatementColumnName} = $receiveResult['account_bank_statement_line_id'] ;
         $this->{$inboundJournalColumnName} = $receiveResult['journal_entry_id'] ;
         $this->{$inboundReferenceColumnName} = $receiveResult['reference'] ;
-        /**
-         * ! Need To Be Channged
-         */
-        $this->synced_with_odoo = $receiveResult['synced_with_odoo'];
-        $this->odoo_error_message = $receiveResult['odoo_error_message'];
+
+        // Fixed 2026-07-26: was overwriting send-leg status with receive-leg only
+        // (! Need To Be Changed). Overall sync requires both legs; surface both errors.
+        $sendSynced = (bool) ($sendMoneyResult['synced_with_odoo'] ?? false);
+        $receiveSynced = (bool) ($receiveResult['synced_with_odoo'] ?? false);
+        $this->synced_with_odoo = $sendSynced && $receiveSynced;
+        $odooErrors = array_values(array_filter([
+            $sendMoneyResult['odoo_error_message'] ?? null,
+            $receiveResult['odoo_error_message'] ?? null,
+        ]));
+        $this->odoo_error_message = $odooErrors ? implode(' | ', $odooErrors) : null;
 
         $this->save();
     }
     
     public function handleOdooTransfer()
     {
-        /**
-         * @var BuyOrSellCurrency
-         */
+        /** @var Company $company */
         $company = $this->company;
-        /**
-         * @var Company $company
-         */
         $transferDate = $this->getTransferDate();
         if ($company->hasOdooIntegrationCredentials() && $company->withinIntegrationDate($transferDate)) {
             $fromAccountTypeId = $this->from_account_type_id;

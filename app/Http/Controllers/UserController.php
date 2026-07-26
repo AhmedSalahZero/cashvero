@@ -170,10 +170,83 @@ class UserController extends Controller
         return false;
     }
 
+    /**
+     * Company IDs the acting user may assign. null = unrestricted (Super Admin).
+     *
+     * @return list<int>|null
+     */
+    protected function authUserAssignableCompanyIds(User $authUser): ?array
+    {
+        if ($authUser->isSuperAdmin()) {
+            return null;
+        }
+
+        return $authUser->companies->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
+    }
+
+    /**
+     * Owner policy (2026-07-26): only Super Admin freely picks any company.
+     * Non–Super Admin is limited to their own companies; with a single company
+     * they cannot change the target user's company assignment at all.
+     */
+    protected function authUserCanEditCompanyAssignment(User $authUser): bool
+    {
+        if ($authUser->isSuperAdmin()) {
+            return true;
+        }
+
+        return $authUser->companies->count() > 1;
+    }
+
+    /**
+     * Resolve the company IDs that will actually be written on store/update.
+     *
+     * @param  array<int|string>|null  $submitted
+     * @return list<int>
+     */
+    protected function resolveCompanyIdsForWrite(User $authUser, ?array $submitted, ?User $existingUser): array
+    {
+        $assignable = $this->authUserAssignableCompanyIds($authUser);
+        $submittedIds = array_values(array_unique(array_map('intval', (array) $submitted)));
+
+        // Super Admin: any submitted set (still require at least one).
+        if ($assignable === null) {
+            return $submittedIds;
+        }
+
+        // Single-company non–Super Admin: cannot change assignment.
+        if (! $this->authUserCanEditCompanyAssignment($authUser)) {
+            if ($existingUser) {
+                return $existingUser->companies->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
+            }
+
+            return $assignable;
+        }
+
+        // Multi-company non–Super Admin: only within their own companies.
+        $forbidden = array_diff($submittedIds, $assignable);
+        abort_unless($forbidden === [], 403, __('You can only assign companies you belong to.'));
+
+        return array_values(array_intersect($submittedIds, $assignable));
+    }
+
     protected function getCommonViewVars(?User $user, ?Company $company): array
     {
-        $companies = $company ? Company::where('id', $company->id)->get() : Company::all();
         $authUser = auth()->user();
+        $assignableIds = $this->authUserAssignableCompanyIds($authUser);
+        $canEditCompanies = $this->authUserCanEditCompanyAssignment($authUser);
+
+        if ($company) {
+            abort_unless(
+                $assignableIds === null || in_array((int) $company->id, $assignableIds, true),
+                403
+            );
+            $companies = Company::where('id', $company->id)->get();
+        } elseif ($assignableIds === null) {
+            $companies = Company::all();
+        } else {
+            $companies = Company::whereIn('id', $assignableIds)->get();
+        }
 
         $roleOptions = [];
         foreach ([User::SUPER_ADMIN => 'Super Admin', User::COMPANY_ADMIN => 'Company Admin', User::MANAGER => 'Manager', User::USER => 'User'] as $roleValue => $roleLabel) {
@@ -181,6 +254,10 @@ class UserController extends Controller
                 $roleOptions[] = ['value' => $roleValue, 'label' => $roleLabel];
             }
         }
+
+        $defaultCompanyIds = $user
+            ? $user->companies->pluck('id')->map(fn ($id) => (int) $id)->values()->all()
+            : ($canEditCompanies ? [] : $companies->pluck('id')->map(fn ($id) => (int) $id)->values()->all());
 
         return [
             'mode' => $user ? 'edit' : 'create',
@@ -191,10 +268,13 @@ class UserController extends Controller
                 'email' => $user->email,
                 'avatar_url' => $user->getFirstMediaUrl() ?: null,
                 'max_users' => $user->max_users ?? 10,
-                'company_ids' => $user->companies->pluck('id')->values(),
+                'company_ids' => $defaultCompanyIds,
                 'role' => $user->roles[0]->name ?? '',
-            ] : null,
+            ] : [
+                'company_ids' => $defaultCompanyIds,
+            ],
             'companies' => $companies->map(fn (Company $c) => ['id' => $c->id, 'name' => $c->name['en'] ?? ($c->name[array_key_first($c->name ?? ['' => ''])] ?? '')])->values(),
+            'canEditCompanies' => $canEditCompanies,
             'roleOptions' => $roleOptions,
             'submitUrl' => $user
                 ? ($company ? route('user.update', ['user' => $user->id, 'company' => $company->id]) : route('user.update', ['user' => $user->id]))
@@ -230,6 +310,10 @@ class UserController extends Controller
      * permission at all could not previously be stopped from POSTing
      * role=super-admin directly. Fixed with a 403 abort before any
      * write happens.
+     *
+     * Company assignment scoped 2026-07-26 (owner policy): Super Admin
+     * only may assign any company; others are limited to their own
+     * companies, and a single-company admin cannot change assignment.
      */
     public function store(Request $request, ?Company $company = null)
     {
@@ -242,6 +326,8 @@ class UserController extends Controller
             'role' => 'required',
         ]);
         abort_unless($this->authUserCanAssignRole($user, $request->input('role'), null), 403);
+        $companyIds = $this->resolveCompanyIdsForWrite($user, $request->input('companies'), null);
+        abort_unless(count($companyIds) > 0, 422, __('Select at least one company.'));
         $request['password'] = Hash::make($request->password);
         $request['subscription'] = 'subscripted';
 
@@ -251,7 +337,7 @@ class UserController extends Controller
                 ['created_by' => auth()->user()->id]
             ),
         );
-        $newUser->companies()->attach($request->companies);
+        $newUser->companies()->attach($companyIds);
         $newUser->assignRole($request->role);
 
         app()->make(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
@@ -301,18 +387,10 @@ class UserController extends Controller
      * explanation of why this one check is now the single source of
      * truth for all three.
      *
-     * NOT changed in this fix, flagged for a separate decision:
-     * company assignment (`$user->companies()->sync(...)`) still has
-     * no scoping check of its own — when this route is reached without
-     * a {company} context, getCommonViewVars() already offers every
-     * company in the system as a valid option to any user who passes
-     * the role check above (including a Company-Admin-permission
-     * holder who is not a full Super Admin), so such a user could
-     * still reassign a target user's company access more broadly than
-     * their own company scope. Worth a deliberate decision on the
-     * intended company-scoping policy for non-super-admin callers
-     * before this route is exposed to anyone other than true Super
-     * Admins in practice.
+     * Company assignment scoped 2026-07-26 (owner policy): Super Admin
+     * only may assign any company; others are limited to their own
+     * companies, and a single-company admin cannot change assignment
+     * (existing pivot rows are preserved).
      */
     public function update(Request $request, User $user)
     {
@@ -322,8 +400,11 @@ class UserController extends Controller
         ]);
         abort_unless($this->authUserCanAssignRole($authUser, $request->input('role'), $user), 403);
 
+        $companyIds = $this->resolveCompanyIdsForWrite($authUser, $request->input('companies'), $user);
+        abort_unless(count($companyIds) > 0, 422, __('Select at least one company.'));
+
         $user->update($request->except('avatar', 'companies'));
-        $user->companies()->sync($request->companies);
+        $user->companies()->sync($companyIds);
         @count($user->roles) == 0 ?: $user->removeRole($user->roles[0]->name);
 
         $user->assignRole($request->role);

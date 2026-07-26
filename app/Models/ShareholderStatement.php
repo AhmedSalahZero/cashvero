@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\StatementCascade;
+
 use App\Helpers\HDate;
 use App\Interfaces\Models\Interfaces\IHaveStatement;
 use App\Traits\IsBankStatement;
@@ -89,15 +91,14 @@ class ShareholderStatement extends Model  implements IHaveStatement
 		 * * ودا غلط مفروض التاريخ الاقل ما بين التاريخ الجديد و القديم للعنصر بحيث دايما يبدا يحدث من عنده
 		 */
 
-		 DB::table('shareholder_statements')
+		 StatementCascade::touchRows(
+			DB::table('shareholder_statements')
 		->where('date','>=',$minDate)
-		->orderByRaw('date asc , id asc')
-		// ->where('financial_institution_account_id',$model->financial_institution_account_id)
-		->each(function($shareholderStatement){
-			DB::table('shareholder_statements')->where('id',$shareholderStatement->id)->update([
-				'updated_at'=>now()
-			]);
-		});
+		->where('company_id',$model->company_id)
+		->where('partner_id',$model->partner_id)
+		->where('currency_name',$model->currency_name),
+			'date asc , id asc'
+		);
 		
 		return $minDate;
 

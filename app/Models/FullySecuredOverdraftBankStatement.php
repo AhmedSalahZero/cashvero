@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\StatementCascade;
+
 use App\Helpers\HDate;
 use App\Traits\IsBankStatement;
 use App\Traits\Models\HasDeleteButTriggerChangeOnLastElement;
@@ -108,15 +110,12 @@ class FullySecuredOverdraftBankStatement extends Model
 		 * * ودا غلط مفروض التاريخ الاقل ما بين التاريخ الجديد و القديم للعنصر بحيث دايما يبدا يحدث من عنده
 		 */
 		$tableName = (new self)->getTable();
-		 DB::table($tableName)
+		 StatementCascade::touchRows(
+			DB::table($tableName)
 		->where('date','>=',$minDate)
-		->orderByRaw('date asc , priority asc , id asc')
-		->where('fully_secured_overdraft_id',$model->fully_secured_overdraft_id)
-		->each(function($fullySecuredOverdraftBankStatement) use($tableName){
-			DB::table($tableName)->where('id',$fullySecuredOverdraftBankStatement->id)->update([
-				'updated_at'=>now()
-			]);
-		});
+		->where('fully_secured_overdraft_id',$model->fully_secured_overdraft_id),
+			'date asc , priority asc , id asc'
+		);
 		
 		return $minDate;
 

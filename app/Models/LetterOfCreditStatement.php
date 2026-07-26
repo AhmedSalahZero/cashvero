@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\StatementCascade;
+
 use App\Enums\LcTypes;
 use App\Helpers\HDate;
 use App\Traits\IsBankStatement;
@@ -83,19 +85,16 @@ class LetterOfCreditStatement extends Model
 		 * * مع انهم كان مفروض يتعدلوا بس انت قولتله عدلي العناصر اللي التاريخ بتاعها اكبر من او يساوي التاريخ الجديد
 		 * * ودا غلط مفروض التاريخ الاقل ما بين التاريخ الجديد و القديم للعنصر بحيث دايما يبدا يحدث من عنده
 		 */
-		 DB::table('letter_of_credit_statements')
+		 StatementCascade::touchRows(
+			DB::table('letter_of_credit_statements')
 		->where('date','>=',$minDate)
-		->orderByRaw('date asc , id asc')
 		->where('financial_institution_id',$model->financial_institution_id)
 		->where('source',$model->source)
 		->where('lc_facility_id',$model->lc_facility_id)
 		->where('cd_or_td_id',$model->cd_or_td_id)
-		->where('lc_type',$model->lc_type)
-		->each(function($letterOfCreditStatement){
-			DB::table('letter_of_credit_statements')->where('id',$letterOfCreditStatement->id)->update([
-				'updated_at'=>now()
-			]);
-		});
+		->where('lc_type',$model->lc_type),
+			'date asc , id asc'
+		);
 		
 		return $minDate;
 

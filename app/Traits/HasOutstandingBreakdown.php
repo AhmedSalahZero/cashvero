@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\OutstandingBreakdown;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 
 trait HasOutstandingBreakdown
@@ -27,7 +28,16 @@ trait HasOutstandingBreakdown
 	public function storeOutstandingBreakdown(Request $request , Company $company)
 	{
 		$balanceDate = $request->get('balance_date');
-		$outstandingBalance = $request->get('outstanding_balance',0);
+		$outstandingBalance = number_unformat($request->get('outstanding_balance', 0));
+		// ⚠️ REAL BUG FIXED HERE (2026-07-26 audit Stage 4 §3.1, confirmed
+		// with project owner): negative outstanding must be rejected — never
+		// delete existing breakdowns then rebuild nothing. Form requests
+		// also enforce gte:0; this is defense-in-depth.
+		if ($outstandingBalance < 0) {
+			throw ValidationException::withMessages([
+				'outstanding_balance' => [__('Outstanding balance cannot be negative.')],
+			]);
+		}
 		$this->outstandingBreakdowns()->delete();
 		$this->bankStatements()->where('type','outstanding_balance')->delete();
 		if($outstandingBalance >= 0) {

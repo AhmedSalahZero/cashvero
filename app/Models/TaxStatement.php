@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\StatementCascade;
+
 use App\Helpers\HDate;
 use App\Interfaces\Models\Interfaces\IHaveStatement;
 use App\Traits\IsBankStatement;
@@ -89,15 +91,14 @@ class TaxStatement extends Model  implements IHaveStatement
 		 * * ودا غلط مفروض التاريخ الاقل ما بين التاريخ الجديد و القديم للعنصر بحيث دايما يبدا يحدث من عنده
 		 */
 
-		 DB::table('tax_statements')
+		 StatementCascade::touchRows(
+			DB::table('tax_statements')
 		->where('full_date','>=',$minDate)
-		->orderByRaw('full_date asc , id asc')
-		// ->where('financial_institution_account_id',$model->financial_institution_account_id)
-		->each(function($taxStatement){
-			DB::table('tax_statements')->where('id',$taxStatement->id)->update([
-				'updated_at'=>now()
-			]);
-		});
+		->where('company_id',$model->company_id)
+		->where('partner_id',$model->partner_id)
+		->where('currency_name',$model->currency_name),
+			'full_date asc , id asc'
+		);
 		
 		return $minDate;
 

@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\StatementCascade;
+
 use App\Helpers\HDate;
 use App\Traits\IsBankStatement;
 use App\Traits\Models\HasDeleteButTriggerChangeOnLastElement;
@@ -96,7 +98,11 @@ class OverdraftAgainstAssignmentOfContractBankStatement extends Model
 	public $oldFullDate = null;
 	public static function updateNextRows(self $model):string 
 	{
-		$minDate  = $model->date ;
+		// In the `updated` hook getRawOriginal() still holds the pre-save
+		// value (syncOriginal runs later in finishSave). Use min(old, new)
+		// so moving a row later still recalculates the rows left behind.
+		$oldDate = $model->getRawOriginal('date') ?: $model->date;
+		$minDate = min((string) $model->date, (string) $oldDate);
 		DB::table('overdraft_against_assignment_of_contracts')->where('id',$model->overdraft_against_assignment_of_contract_id)->update([
 			'oldest_date'=>$minDate,
 		]);
@@ -110,17 +116,12 @@ class OverdraftAgainstAssignmentOfContractBankStatement extends Model
 		 * * ودا غلط مفروض التاريخ الاقل ما بين التاريخ الجديد و القديم للعنصر بحيث دايما يبدا يحدث من عنده
 		 */
 		$tableName = (new self)->getTable();
-		 DB::table($tableName)
+		 StatementCascade::touchRows(
+			DB::table($tableName)
 		->where('date','>=',$minDate)
-		->orderByRaw('date asc , priority asc , id asc')
-		->where('overdraft_against_assignment_of_contract_id',$model->overdraft_against_assignment_of_contract_id)
-		->each(function($odAgainstAssignmentOfContractBankStatement) use($tableName){
-			DB::table($tableName)->where('id',$odAgainstAssignmentOfContractBankStatement->id) 
-			->update([
-				'updated_at'=>now(),
-				// 'credit'=>0 
-			]);
-		});
+		->where('overdraft_against_assignment_of_contract_id',$model->overdraft_against_assignment_of_contract_id),
+			'date asc , priority asc , id asc'
+		);
 		
 		return $minDate;
 

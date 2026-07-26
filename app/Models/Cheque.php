@@ -422,9 +422,24 @@ class Cheque extends Model
 	}
 	public static function updateLimitUpdateRowFromStatement($overdraftAgainstCommercialPaperLimit,$fullDate)
 	{
-		DB::table('overdraft_against_commercial_paper_bank_statements')->where('type', 'limit_update')->where('overdraft_against_commercial_paper_limit_id',$overdraftAgainstCommercialPaperLimit->id)->where('overdraft_against_commercial_paper_id',$overdraftAgainstCommercialPaperLimit->overdraft_against_commercial_paper_id)->update([
-			'date'=>Carbon::make($fullDate)->format('Y-m-d'),
-			'full_date'=>$fullDate
+		// Fixed 2026-07-26: was a raw DB::table()->update() that moved the
+		// limit_update marker without firing BankStatement::updated →
+		// updateNextRows(). Neighbors that used the marker as their previous
+		// row kept stale days_count / interest_amount. Eloquent update lets
+		// updateNextRows cascade (with min(old,new) date) so they recalculate.
+		$row = OverdraftAgainstCommercialPaperBankStatement::query()
+			->where('type', 'limit_update')
+			->where('overdraft_against_commercial_paper_limit_id', $overdraftAgainstCommercialPaperLimit->id)
+			->where('overdraft_against_commercial_paper_id', $overdraftAgainstCommercialPaperLimit->overdraft_against_commercial_paper_id)
+			->first();
+
+		if (! $row) {
+			return;
+		}
+
+		$row->update([
+			'date' => Carbon::make($fullDate)->format('Y-m-d'),
+			'full_date' => $fullDate,
 		]);
 	}
     protected static function booted(): void

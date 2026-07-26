@@ -6,8 +6,9 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 const props = defineProps({
     mode: String, // 'create' | 'edit'
     company: Object, // null if not scoped to a company
-    model: Object, // null in create mode
-    companies: Array, // [{id, name}]
+    model: Object, // null-ish fields in create; always has company_ids when locked
+    companies: Array, // [{id, name}] — already scoped server-side
+    canEditCompanies: { type: Boolean, default: true },
     roleOptions: Array, // [{value, label}] — already gated server-side
     submitUrl: String,
     backUrl: String,
@@ -36,6 +37,9 @@ function onAvatarChange(event) {
 const showMaxUsers = computed(() => form.value.role === 'company-admin');
 
 function toggleCompany(id, checked) {
+    if (!props.canEditCompanies) {
+        return;
+    }
     if (checked) {
         if (!form.value.companies.includes(id)) form.value.companies.push(id);
     } else {
@@ -121,19 +125,24 @@ function submit() {
 
                 <div class="cvr-card">
                     <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Assign Companies To This User</h2>
+                    <p v-if="!canEditCompanies" class="text-xs cvr-text-secondary mb-3">
+                        Company assignment is locked to your company. Only a Super Admin can change it.
+                    </p>
                     <div class="cvr-form-grid-2">
                         <div>
                             <label class="cvr-form-label">Select Companies — (Multi Selection) *</label>
                             <div class="space-y-1 max-h-48 overflow-y-auto">
-                                <label v-for="c in companies" :key="c.id" class="flex items-center gap-2">
+                                <label v-for="c in companies" :key="c.id" class="flex items-center gap-2" :class="{ 'opacity-60': !canEditCompanies }">
                                     <input
                                         type="checkbox"
                                         :checked="form.companies.includes(c.id)"
+                                        :disabled="!canEditCompanies"
                                         @change="toggleCompany(c.id, $event.target.checked)"
                                     />
                                     <span class="cvr-text-secondary text-sm">{{ c.name }}</span>
                                 </label>
                             </div>
+                            <p v-if="errorFor('companies')" class="text-xs mt-1 cvr-num-red">{{ errorFor('companies') }}</p>
                         </div>
                         <div>
                             <label class="cvr-form-label">Role *</label>

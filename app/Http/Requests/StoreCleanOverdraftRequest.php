@@ -41,6 +41,11 @@ class StoreCleanOverdraftRequest extends FormRequest
 			'balance_date'=>'required|date',
 			'limit'=>['required','gt:0'],
 			'interest_rate'=>['sometimes','required','gt:0'],
+			// ⚠️ REAL BUG FIXED HERE (2026-07-26 audit Stage 4 §3.1):
+			// a negative outstanding_balance used to pass validation, then
+			// HasOutstandingBreakdown silently wiped the existing
+			// breakdown/statement rows and rebuilt nothing.
+			'outstanding_balance'=>['nullable','numeric','gte:0'],
 			'outstanding_breakdowns'=>[new OutstandingBreakdownRule($this->outstanding_balance?:0,$this->contract_start_date)]
         ];
     }

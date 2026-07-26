@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\StatementCascade;
+
 use App\Helpers\HDate;
 use App\Interfaces\Models\Interfaces\IHaveStatement;
 use App\Traits\IsBankStatement;
@@ -86,14 +88,14 @@ class OtherPartnerStatement extends Model  implements IHaveStatement
 		 * * ودا غلط مفروض التاريخ الاقل ما بين التاريخ الجديد و القديم للعنصر بحيث دايما يبدا يحدث من عنده
 		 */
 
-		 DB::table('other_partner_statements')
+		 StatementCascade::touchRows(
+			DB::table('other_partner_statements')
 		->where('date','>=',$minDate)
-		->orderByRaw('date asc , id asc')
-		->each(function($otherPartnerStatement){
-			DB::table('other_partner_statements')->where('id',$otherPartnerStatement->id)->update([
-				'updated_at'=>now()
-			]);
-		});
+		->where('company_id',$model->company_id)
+		->where('partner_id',$model->partner_id)
+		->where('currency_name',$model->currency_name),
+			'date asc , id asc'
+		);
 		
 		return $minDate;
 
