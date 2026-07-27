@@ -93,7 +93,7 @@ final class CashFlowContractDetailPeriodBatchLoader
                     ->orWhere('money_received.down_payment_type', '=', 'general');
             })
             ->whereBetween($dateColumn, [$periodStart, $periodEnd])
-            ->selectRaw('money_received.received_amount, money_received.receiving_currency, '.$dateColumn.' as movement_date, customer_invoices.invoice_number');
+            ->selectRaw('money_received.receiving_currency, '.$dateColumn.' as movement_date, customer_invoices.invoice_number, settlements.settlement_amount as received_amount');
 
         foreach ($query->cursor() as $row) {
             self::accumulateContractMoneyReceivedRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodsByWeekKey, $resultKey, $totalCashInFlowKey, $row, (string) $row->invoice_number);
@@ -124,7 +124,7 @@ final class CashFlowContractDetailPeriodBatchLoader
                     ->orWhere('money_received.down_payment_type', '=', 'general');
             })
             ->whereBetween('money_received.receiving_date', [$periodStart, $periodEnd])
-            ->selectRaw('money_received.received_amount, money_received.receiving_currency, money_received.receiving_date as movement_date, customer_invoices.invoice_number');
+            ->selectRaw('money_received.receiving_currency, money_received.receiving_date as movement_date, customer_invoices.invoice_number, settlements.settlement_amount as received_amount');
 
         foreach ($query->cursor() as $row) {
             self::accumulateContractMoneyReceivedRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodsByWeekKey, $resultKey, $totalCashInFlowKey, $row, (string) $row->invoice_number);

@@ -20,6 +20,9 @@ class UsersAndPermissionsController extends Controller
 {
     public function edit(User $user, ?Company $company = null)
     {
+        // Reached from Super Admin Users list; keep server in sync with UI gate.
+        abort_unless(request()->user()?->isSuperAdmin(), 403);
+
         $groups = [];
         foreach (\App\Helpers\HAuth::getPermissions($user->getSystemsNames()) as $permissionArr) {
             $groups[$permissionArr['group']][] = [
@@ -70,6 +73,10 @@ class UsersAndPermissionsController extends Controller
      */
     public function update(Request $request, User $user)
     {
+        // update() previously had no isCashManagement / role gate while edit()
+        // lived behind Super Admin UI — enforce Super Admin on the write path too.
+        abort_unless($request->user()?->isSuperAdmin(), 403);
+
         $permissionNames = array_keys((array) $request->permissions);
 
         foreach ($permissionNames as $permissionName) {

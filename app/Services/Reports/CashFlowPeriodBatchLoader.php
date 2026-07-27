@@ -16,6 +16,8 @@ use Illuminate\Support\Facades\DB;
  * then buckets amounts into week/month/day columns in PHP.
  *
  * Column map (aligned with CashFlowReportController):
+ * - money_received settlements: receiving_date/currency + settlements.settlement_amount
+ *   (not full received_amount — avoids N× overstatement when one receipt settles N invoices)
  * - money_received: receiving_date, receiving_currency, received_amount; cheques: expected/actual_collection_date, due_date
  * - money_payments: delivery_date, payment_currency; payable_cheques: actual_payment_date, due_date, status
  * - settlement_allocations: allocation_amount, contract_id
@@ -101,7 +103,9 @@ final class CashFlowPeriodBatchLoader
         $dateColumn = self::qualifiedMoneyReceivedDateColumn($dateColumnName, $chequeStatus !== null);
         $query
             ->whereBetween($dateColumn, [$periodStart, $periodEnd])
-            ->selectRaw('customer_invoices.contract_code as contract_code, money_received.received_amount, money_received.receiving_currency, '.$dateColumn.' as movement_date');
+            // Use settlement_amount (not full received_amount) so a receipt split
+            // across N invoices is not counted N times — mirrors payments' allocation_amount.
+            ->selectRaw('customer_invoices.contract_code as contract_code, settlements.settlement_amount as received_amount, money_received.receiving_currency, '.$dateColumn.' as movement_date');
 
         foreach ($query->cursor() as $row) {
             $code = (string) $row->contract_code;
@@ -120,6 +124,7 @@ final class CashFlowPeriodBatchLoader
                 $foreignExchangeRates,
             );
             $amount = (float) $row->received_amount * (float) $exchangeRate;
+			
             $result = &$resultsByContractCode[$code];
             $result['customers'][$currentTypeText]['total'][$weekKey] = ($result['customers'][$currentTypeText]['total'][$weekKey] ?? 0) + $amount;
             $result['customers'][$totalCashInFlowKey]['total'][$weekKey] = ($result['customers'][$totalCashInFlowKey]['total'][$weekKey] ?? 0) + $amount;

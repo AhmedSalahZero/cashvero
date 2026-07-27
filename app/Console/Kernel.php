@@ -24,9 +24,8 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule)
     {
 		
-		// $schedule->job(new CheckDueAndPastedInvoicesJob)->name('check_due_date')->dailyAt('00:01')->withoutOverlapping();
-		$schedule->job(new ImportOdooInvoicesJob)->name('import_odd_invoices')->dailyAt('00:01')->withoutOverlapping();
-		$schedule->job(new CurrentAccountBankStatementActiveJob)->name('current_account_bank_statement_active')->dailyAt('00:01')->withoutOverlapping();
+		//$schedule->job(new ImportOdooInvoicesJob)->name('import_odd_invoices')->dailyAt('00:01')->withoutOverlapping();
+		//$schedule->job(new CurrentAccountBankStatementActiveJob)->name('current_account_bank_statement_active')->dailyAt('00:01')->withoutOverlapping();
 		
     }
 

@@ -34,7 +34,10 @@ class RemoveCompanyController extends Controller
     
     public function __invoke(Request $request)
     {
-	
+        // UI is Super-Admin-only; enforce the same gate on the server
+        // so a forged POST from any authenticated session cannot wipe a company.
+        abort_unless($request->user()?->isSuperAdmin(), 403);
+
         $company_id = $request->get('company_id') ;
      
         $company = Company::where('id',$company_id)->firstOrFail();

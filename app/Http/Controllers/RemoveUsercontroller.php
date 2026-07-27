@@ -31,6 +31,10 @@ class RemoveUsercontroller extends Controller
 
     public function __invoke(Request $request)
     {
+        // UI is Super-Admin-only; enforce the same gate on the server
+        // so a forged POST from any authenticated session cannot delete users.
+        abort_unless($request->user()?->isSuperAdmin(), 403);
+
         $user_id = $request->get('user_id') ;
      
         $user = User::where('id',$user_id)->firstOrFail();
