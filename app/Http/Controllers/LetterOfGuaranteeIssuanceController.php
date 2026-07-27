@@ -880,7 +880,7 @@ class LetterOfGuaranteeIssuanceController
     {
         if ($letterOfGuaranteeIssuance->renewalDateHistories->count()  > 1) {
 			if ($request->header('X-Inertia')) {
-				return redirect()->route('view.letter.of.guarantee.issuance', ['company'=>$company->id,'active'=>$request->get('lg_type', $letterOfGuaranteeIssuance->getLgType())]);
+				return redirect()->route('view.letter.of.guarantee.issuance', ['company'=>$company->id,'active'=>$request->get('lg_type', $letterOfGuaranteeIssuance->getLgType())])->with('fail', __('This item can no longer be edited.'));
 			}
 			return response()->json(['redirectTo'=>route('view.letter.of.guarantee.issuance', ['company'=>$company->id,'active'=>$request->get('lg_type', $letterOfGuaranteeIssuance->getLgType())])]);
             // return redirect()->route('view.letter.of.guarantee.issuance', ['company'=>$company->id,'active'=>$request->get('lg_type', $letterOfGuaranteeIssuance->getLgType())])->with('success', __('Data Store Successfully'));

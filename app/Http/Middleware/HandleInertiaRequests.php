@@ -62,6 +62,7 @@ class HandleInertiaRequests extends Middleware
              * every other link passed down from a controller in this
              * app.
              */
+            'profileUrl' => route('profile.edit'),
             'logoutUrl' => route('logout'),
             /**
              * Only present for a super admin — the topbar's
@@ -104,18 +105,33 @@ class HandleInertiaRequests extends Middleware
              *    so AppLayout.vue can watch it instead and never miss
              *    or double up a toast.
              */
+            /**
+             * Bridge Laravel session flashes into BOTH channels:
+             * 1. props.flash — kept for any page still watching it
+             * 2. Inertia::flash() — native v3 page.flash / inertia:flash event
+             *
+             * Controllers overwhelmingly use redirect()->with('success'|'fail').
+             * php-flasher used to steal 'success' via flash_bag (now disabled
+             * in config/flasher.php); with that fixed, these keys survive to
+             * the redirected GET and are shared here.
+             */
             'flash' => Inertia::always(function () use ($request) {
                 $success = $request->session()->get('success');
-                // Reads both 'fail' and 'error' — the app overwhelmingly
-                // flashes failures under session('fail') (53 controller
-                // call sites vs. exactly 1 real use of 'error'), so
-                // 'fail' takes priority; kept from the original fix here.
                 $error = $request->session()->get('fail') ?? $request->session()->get('error');
+                $token = ($success || $error) ? uniqid('', true) : null;
+
+                if ($success || $error) {
+                    Inertia::flash(array_filter([
+                        'success' => $success,
+                        'error' => $error,
+                        'token' => $token,
+                    ], fn ($v) => $v !== null && $v !== ''));
+                }
 
                 return [
                     'success' => $success,
                     'error' => $error,
-                    'token' => ($success || $error) ? uniqid('', true) : null,
+                    'token' => $token,
                 ];
             }),
             /**

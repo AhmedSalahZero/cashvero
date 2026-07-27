@@ -1,6 +1,6 @@
 <script setup>
 import { Link, usePage, router } from '@inertiajs/vue3';
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useTheme } from '@/composables/useTheme';
 import ToastStack from '@/Components/ToastStack.vue';
 import NavIcon from '@/Components/NavIcon.vue';
@@ -11,6 +11,7 @@ const page = usePage();
 const userName = computed(() => page.props.auth?.user?.name || 'User');
 const userInitial = computed(() => userName.value.charAt(0).toUpperCase());
 const isSuperAdmin = computed(() => !!page.props.auth?.isSuperAdmin);
+const profileUrl = computed(() => page.props.profileUrl);
 const logoutUrl = computed(() => page.props.logoutUrl);
 const superAdminUrls = computed(() => page.props.superAdminUrls);
 
@@ -137,28 +138,24 @@ async function openNotificationDetail(sub) {
 }
 
 /*
- * Flash success/error messages — now a real toast queue instead of a
- * single static banner (see ToastStack.vue's own docblock for why:
- * replaces the original app's mismatched SweetAlert2 + toastr.js
- * pair with one component matching this project's design tokens).
- * `immediate: true` so a flash already present on first page load
- * (e.g. right after a form submit's redirect) shows immediately,
- * same as the banner it replaces did via its old v-if.
+ * Flash success/error toasts.
  *
- * ⚠️ Watches flash.token (a fresh value from the server every single
- * time a message is actually flashed — see HandleInertiaRequests),
- * NOT flash.success/flash.error directly. Watching the message text
- * itself meant two actions in a row that happened to flash the exact
- * same wording (e.g. "Deleted Successfully" twice) looked like no
- * change at all to Vue, so the second toast silently never fired —
- * which, combined with flash previously not being marked
- * Inertia::always() (see that fix too), is what produced both the
- * "doesn't appear until I navigate away" and "old and new appear
- * together" reports: undelivered toasts piling up until some later
- * visit finally surfaced more than one at once.
+ * Root cause of the delayed-toast bug (2026-07-27): php-flasher's
+ * SessionMiddleware was stealing session('success') on every redirect
+ * (flash_bag mapping → flasher::envelopes + session()->forget). That is
+ * now disabled in config/flasher.php. On top of that we:
+ *
+ * 1. Listen to Inertia v3's native `flash` event (page.flash), which is
+ *    what HandleInertiaRequests bridges session flashes into.
+ * 2. Keep watching props.flash.token as a fallback for any response that
+ *    only populates the shared prop.
+ * 3. Deduplicate by token so the two channels never double-toast.
+ * 4. Clear consumed native flash after handling so partial reloads don't
+ *    re-fire it (inertiajs/inertia#3015).
  */
 const toasts = ref([]);
 let toastSeed = 0;
+let lastHandledToken = null;
 function pushToast(type, message, duration = 5000) {
     const id = ++toastSeed;
     toasts.value.push({ id, type, message, duration });
@@ -167,10 +164,26 @@ function pushToast(type, message, duration = 5000) {
 function dismissToast(id) {
     toasts.value = toasts.value.filter(t => t.id !== id);
 }
+function handleFlashPayload(flash) {
+    if (!flash) return;
+    const token = flash.token || `${flash.success || ''}|${flash.error || ''}`;
+    if (!flash.success && !flash.error) return;
+    if (token && token === lastHandledToken) return;
+    lastHandledToken = token;
+    if (flash.success) pushToast('success', flash.success);
+    if (flash.error) pushToast('error', flash.error);
+}
+const removeFlashListener = router.on('flash', (event) => {
+    handleFlashPayload(event.detail.flash);
+    router.flash(() => ({}));
+});
+onUnmounted(() => removeFlashListener());
 watch(() => page.props.flash?.token, () => {
-    if (page.props.flash?.success) pushToast('success', page.props.flash.success);
-    if (page.props.flash?.error) pushToast('error', page.props.flash.error);
+    handleFlashPayload(page.props.flash);
 }, { immediate: true });
+if (page.flash?.success || page.flash?.error) {
+    handleFlashPayload(page.flash);
+}
 </script>
 
 <template>
@@ -375,6 +388,14 @@ watch(() => page.props.flash?.token, () => {
                             <div class="px-4 py-2 text-sm font-medium cvr-text-primary border-b" style="border-color: var(--cvr-border);">
                                 {{ userName }}
                             </div>
+                            <Link
+                                :href="profileUrl"
+                                @click="userMenuOpen = false"
+                                class="flex items-center gap-2 w-full text-left px-4 py-2 text-sm cvr-text-secondary cvr-table-row"
+                            >
+                                <NavIcon name="user" :size="16" />
+                                Profile
+                            </Link>
                             <button
                                 @click="logout"
                                 class="flex items-center gap-2 w-full text-left px-4 py-2 text-sm cvr-text-secondary cvr-table-row"

@@ -16,8 +16,8 @@ use Illuminate\Support\Facades\DB;
  * then buckets amounts into week/month/day columns in PHP.
  *
  * Column map (aligned with CashFlowReportController):
- * - money_received settlements: receiving_date/currency + settlements.settlement_amount
- *   (not full received_amount — avoids N× overstatement when one receipt settles N invoices)
+ * - money_received settlements: receiving_date/currency + settlement_amount converted
+ *   to receiving currency before report FX conversion to avoid fan-out and FX drift
  * - money_received: receiving_date, receiving_currency, received_amount; cheques: expected/actual_collection_date, due_date
  * - money_payments: delivery_date, payment_currency; payable_cheques: actual_payment_date, due_date, status
  * - settlement_allocations: allocation_amount, contract_id
@@ -97,15 +97,16 @@ final class CashFlowPeriodBatchLoader
             ->join('customer_invoices', 'customer_invoices.id', '=', 'settlements.invoice_id')
             ->whereIn('customer_invoices.contract_code', $contractCodes)
             ->where(function ($q) {
-                $q->whereNull('down_payment_type')->orWhere('down_payment_type', '=', 'general');
+                $q->whereNull('money_received.down_payment_type')->orWhere('money_received.down_payment_type', '=', 'general');
             })
             ->where('money_received.type', '=', $moneyType);
         $dateColumn = self::qualifiedMoneyReceivedDateColumn($dateColumnName, $chequeStatus !== null);
+        $settlementAmountExpression = self::settlementAmountInReceivingCurrencySql();
         $query
             ->whereBetween($dateColumn, [$periodStart, $periodEnd])
-            // Use settlement_amount (not full received_amount) so a receipt split
-            // across N invoices is not counted N times — mirrors payments' allocation_amount.
-            ->selectRaw('customer_invoices.contract_code as contract_code, settlements.settlement_amount as received_amount, money_received.receiving_currency, '.$dateColumn.' as movement_date');
+            // Use each settlement's share, converted to receiving currency when
+            // needed, so a receipt split across N invoices is not counted N times.
+            ->selectRaw('customer_invoices.contract_code as contract_code, '.$settlementAmountExpression.' as received_amount, money_received.receiving_currency, '.$dateColumn.' as movement_date');
 
         foreach ($query->cursor() as $row) {
             $code = (string) $row->contract_code;
@@ -124,7 +125,6 @@ final class CashFlowPeriodBatchLoader
                 $foreignExchangeRates,
             );
             $amount = (float) $row->received_amount * (float) $exchangeRate;
-			
             $result = &$resultsByContractCode[$code];
             $result['customers'][$currentTypeText]['total'][$weekKey] = ($result['customers'][$currentTypeText]['total'][$weekKey] ?? 0) + $amount;
             $result['customers'][$totalCashInFlowKey]['total'][$weekKey] = ($result['customers'][$totalCashInFlowKey]['total'][$weekKey] ?? 0) + $amount;
@@ -350,6 +350,16 @@ final class CashFlowPeriodBatchLoader
         }
 
         return 'money_received.'.$dateColumnName;
+    }
+
+    private static function settlementAmountInReceivingCurrencySql(): string
+    {
+        return 'CASE
+            WHEN money_received.currency IS NULL
+                OR money_received.currency = money_received.receiving_currency
+            THEN settlements.settlement_amount
+            ELSE settlements.settlement_amount * money_received.exchange_rate
+        END';
     }
 
     private static function qualifiedMoneyPaymentDateColumn(string $moneyType, string $dateFieldName, bool $usesPayableChequeJoin): string

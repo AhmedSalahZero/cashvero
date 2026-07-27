@@ -506,14 +506,14 @@ class CashExpenseController
 			}
 
 		}
-		if($request->ajax()){
+		if($request->ajax() && ! $request->header('X-Inertia')){
 			return response()->json([
 				'status'=>true ,
 				'msg'=>__('Good'),
 				'pageLink'=>route('view.cash.expense',['company'=>$company->id,'active'=>CashExpense::PAYABLE_CHEQUE])
 			]);
 		}
-		return redirect()->route('view.cash.expense',['company'=>$company->id,'active'=>CashExpense::PAYABLE_CHEQUE]);
+		return redirect()->route('view.cash.expense',['company'=>$company->id,'active'=>CashExpense::PAYABLE_CHEQUE])->with('success', __('Item Has Been Updated Successfully'));
 
 	}
 	public function markOutgoingTransfersAsPaid(Company $company,Request $request)
@@ -531,14 +531,14 @@ class CashExpenseController
 			}
 
 		}
-		if($request->ajax()){
+		if($request->ajax() && ! $request->header('X-Inertia')){
 			return response()->json([
 				'status'=>true ,
 				'msg'=>__('Good'),
 				'pageLink'=>route('view.cash.expense',['company'=>$company->id,'active'=>CashExpense::OUTGOING_TRANSFER])
 			]);
 		}
-		return redirect()->route('view.cash.expense',['company'=>$company->id,'active'=>CashExpense::OUTGOING_TRANSFER]);
+		return redirect()->route('view.cash.expense',['company'=>$company->id,'active'=>CashExpense::OUTGOING_TRANSFER])->with('success', __('Item Has Been Updated Successfully'));
 
 	}
 

@@ -46,7 +46,7 @@ class DeleteMultiRowsFromCaching extends Controller
        });
 	  
 	   
-	   if($request->ajax()){
+	   if($request->ajax() && ! $request->header('X-Inertia')){
 		return response()->json([
 			'status'=>true ,
 		]);

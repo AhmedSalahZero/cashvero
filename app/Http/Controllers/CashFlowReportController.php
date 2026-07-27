@@ -851,6 +851,10 @@ class CashFlowReportController
 			
 		
 	
+		if ($request->header('X-Inertia')) {
+			return redirect()->back()->with('success', __('Updated Successfully'));
+		}
+
 		return response()->json([
 			'status'=>true ,
 			'message'=>'',
@@ -942,6 +946,10 @@ class CashFlowReportController
 			}
 			$this->refreshDueInvoicesAndSettlements($company,$request,$currencyName,$isContract,$contractCode);
 		}
+		if ($request->header('X-Inertia')) {
+			return redirect()->back()->with('success', __('Updated Successfully'));
+		}
+
 		return response()->json([
 			'status'=>true ,
 			'message'=>'',
@@ -992,10 +1000,12 @@ class CashFlowReportController
 			$model->update([
 				'report_data'=>json_encode($oldReportData)
 			]);
-			return redirect()->route($redirectRouteName,['company'=>$company->id,'cashflowReport'=>$model->id,'returnResultAsArray'=>'view']);
+			return redirect()
+				->route($redirectRouteName,['company'=>$company->id,'cashflowReport'=>$model->id,'returnResultAsArray'=>'view'])
+				->with('success', __('Updated Successfully'));
 			
 		}
-		return redirect()->back()->with('without_resetting',1);
+		return redirect()->back()->with('without_resetting',1)->with('success', __('Updated Successfully'));
 			
 	}
 

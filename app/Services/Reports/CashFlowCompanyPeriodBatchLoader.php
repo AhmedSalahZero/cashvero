@@ -75,7 +75,14 @@ final class CashFlowCompanyPeriodBatchLoader
         string $resultKey,
         string $totalCashInFlowKey,
     ): void {
+        if ($chequeStatus === Cheque::COLLECTED) {
+            self::applyCollectedChequeMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, $resultKey, $totalCashInFlowKey);
+
+            return;
+        }
+
         $dateColumn = $chequeStatus === Cheque::COLLECTED ? 'cheques.actual_collection_date' : 'cheques.expected_collection_date';
+        $settlementAmountExpression = self::settlementAmountInReceivingCurrencySql();
 
         $query = DB::table('money_received')
             ->join('cheques', 'cheques.money_received_id', '=', 'money_received.id')
@@ -89,10 +96,42 @@ final class CashFlowCompanyPeriodBatchLoader
                     ->orWhere('money_received.down_payment_type', '=', 'general');
             })
             ->whereBetween($dateColumn, [$periodStart, $periodEnd])
-            ->selectRaw('customer_invoices.contract_code as contract_code, settlements.settlement_amount as received_amount, money_received.receiving_currency, '.$dateColumn.' as movement_date, customer_invoices.invoice_number');
+            ->selectRaw('customer_invoices.contract_code as contract_code, '.$settlementAmountExpression.' as received_amount, money_received.receiving_currency, '.$dateColumn.' as movement_date, customer_invoices.invoice_number');
 
         foreach ($query->cursor() as $row) {
             self::accumulateMoneyReceivedRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodsByWeekKey, $resultKey, $totalCashInFlowKey, $row, true);
+        }
+    }
+
+    private static function applyCollectedChequeMovements(
+        array &$result,
+        Collection $foreignExchangeRates,
+        string $mainFunctionalCurrency,
+        int $companyId,
+        string $periodStart,
+        string $periodEnd,
+        array $periodsByWeekKey,
+        string $resultKey,
+        string $totalCashInFlowKey,
+    ): void {
+        $settlementAmountExpression = self::settlementAmountInReceivingCurrencySql();
+        $query = DB::table('money_received')
+            ->join('cheques', 'cheques.money_received_id', '=', 'money_received.id')
+            ->join('settlements', 'money_received.id', '=', 'settlements.money_received_id')
+            ->join('partners', 'partners.id', '=', 'money_received.partner_id')
+            ->where('money_received.company_id', $companyId)
+            ->where('cheques.status', Cheque::COLLECTED)
+            ->where('money_received.type', MoneyReceived::CHEQUE)
+            ->where(function ($q) {
+                $q->whereNull('money_received.down_payment_type')
+                    ->orWhere('money_received.down_payment_type', '=', 'general');
+            })
+            ->whereBetween('cheques.actual_collection_date', [$periodStart, $periodEnd])
+            ->groupByRaw('money_received.id, money_received.receiving_currency, cheques.actual_collection_date, cheques.cheque_number, partners.name')
+            ->selectRaw('money_received.id as money_received_id, money_received.receiving_currency, cheques.actual_collection_date as movement_date, cheques.cheque_number, '.partner_display_name_sql('partners', 'partner_name').', sum('.$settlementAmountExpression.') as received_amount');
+
+        foreach ($query->cursor() as $row) {
+            self::accumulateCollectedChequeRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodsByWeekKey, $resultKey, $totalCashInFlowKey, $row);
         }
     }
 
@@ -106,6 +145,7 @@ final class CashFlowCompanyPeriodBatchLoader
         array $periodsByWeekKey,
         string $totalCashInFlowKey,
     ): void {
+        $settlementAmountExpression = self::settlementAmountInReceivingCurrencySql();
         $query = DB::table('money_received')
             ->join('cheques', 'cheques.money_received_id', '=', 'money_received.id')
             ->join('settlements', 'money_received.id', '=', 'settlements.money_received_id')
@@ -118,7 +158,7 @@ final class CashFlowCompanyPeriodBatchLoader
                     ->orWhere('money_received.down_payment_type', '=', 'general');
             })
             ->whereBetween('cheques.due_date', [$periodStart, $periodEnd])
-            ->selectRaw('customer_invoices.contract_code as contract_code, settlements.settlement_amount as received_amount, money_received.receiving_currency, cheques.due_date as movement_date, customer_invoices.invoice_number');
+            ->selectRaw('customer_invoices.contract_code as contract_code, '.$settlementAmountExpression.' as received_amount, money_received.receiving_currency, cheques.due_date as movement_date, customer_invoices.invoice_number');
 
         foreach ($query->cursor() as $row) {
             self::accumulateMoneyReceivedRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodsByWeekKey, __('Cheques In Safe'), $totalCashInFlowKey, $row, true);
@@ -137,6 +177,12 @@ final class CashFlowCompanyPeriodBatchLoader
         string $resultKey,
         string $totalCashInFlowKey,
     ): void {
+        if ($moneyType === MoneyReceived::INCOMING_TRANSFER) {
+            self::applyIncomingTransferMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, $resultKey, $totalCashInFlowKey);
+
+            return;
+        }
+
         $query = DB::table('money_received')
             ->join('partners', 'partners.id', '=', 'money_received.partner_id')
             ->where('money_received.company_id', $companyId)
@@ -146,6 +192,31 @@ final class CashFlowCompanyPeriodBatchLoader
 
         foreach ($query->cursor() as $row) {
             self::accumulateMoneyReceivedRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodsByWeekKey, $resultKey, $totalCashInFlowKey, $row, false);
+        }
+    }
+
+    private static function applyIncomingTransferMovements(
+        array &$result,
+        Collection $foreignExchangeRates,
+        string $mainFunctionalCurrency,
+        int $companyId,
+        string $periodStart,
+        string $periodEnd,
+        array $periodsByWeekKey,
+        string $resultKey,
+        string $totalCashInFlowKey,
+    ): void {
+        $query = DB::table('money_received')
+            ->join('partners', 'partners.id', '=', 'money_received.partner_id')
+            ->leftJoin('incoming_transfers', 'incoming_transfers.money_received_id', '=', 'money_received.id')
+            ->leftJoin('financial_institutions', 'financial_institutions.id', '=', 'incoming_transfers.receiving_bank_id')
+            ->where('money_received.company_id', $companyId)
+            ->where('money_received.type', MoneyReceived::INCOMING_TRANSFER)
+            ->whereBetween('money_received.receiving_date', [$periodStart, $periodEnd])
+            ->selectRaw('money_received.id as money_received_id, money_received.received_amount, money_received.receiving_currency, money_received.receiving_date as movement_date, '.partner_display_name_sql('partners', 'partner_name').', financial_institutions.name as bank_name');
+
+        foreach ($query->cursor() as $row) {
+            self::accumulateIncomingTransferRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodsByWeekKey, $resultKey, $totalCashInFlowKey, $row);
         }
     }
 
@@ -192,6 +263,124 @@ final class CashFlowCompanyPeriodBatchLoader
         }
 
         $result['customers'][$typeKey][$label]['weeks'][$weekKey] += $amount;
+        $result['customers'][$typeKey]['total'][$weekKey] += $amount;
+        $result['customers'][$totalCashInFlowKey]['total'][$weekKey] += $amount;
+    }
+
+    private static function accumulateCollectedChequeRow(
+        array &$result,
+        Collection $foreignExchangeRates,
+        string $mainFunctionalCurrency,
+        int $companyId,
+        array $periodsByWeekKey,
+        string $typeKey,
+        string $totalCashInFlowKey,
+        object $row,
+    ): void {
+        $weekKey = CashFlowWeekBucketer::resolveWeekKey((string) $row->movement_date, $periodsByWeekKey);
+        if ($weekKey === null) {
+            return;
+        }
+
+        $exchangeRate = ForeignExchangeRate::getExchangeRateAt(
+            (string) $row->receiving_currency,
+            $mainFunctionalCurrency,
+            (string) $row->movement_date,
+            $companyId,
+            $foreignExchangeRates,
+        );
+
+        $amount = (float) $row->received_amount * $exchangeRate;
+        $subRowKey = 'money_received_'.$row->money_received_id;
+        $label = (string) ($row->partner_name ?: __('Unknown Customer'));
+
+        if (! isset($result['customers'][$typeKey][$subRowKey])) {
+            $result['customers'][$typeKey][$subRowKey] = [
+                'weeks' => [],
+                'total' => [],
+                'label' => $label,
+                'checks_collected_info' => [
+                    'customer_name' => $label,
+                    'cheque_number' => (string) ($row->cheque_number ?? ''),
+                    'amount' => $amount,
+                    'movement_date' => (string) $row->movement_date,
+                ],
+            ];
+        }
+        if (! isset($result['customers'][$typeKey][$subRowKey]['weeks'][$weekKey])) {
+            $result['customers'][$typeKey][$subRowKey]['weeks'][$weekKey] = 0;
+        }
+        if (! isset($result['customers'][$typeKey][$subRowKey]['total'][$weekKey])) {
+            $result['customers'][$typeKey][$subRowKey]['total'][$weekKey] = 0;
+        }
+        if (! isset($result['customers'][$typeKey]['total'][$weekKey])) {
+            $result['customers'][$typeKey]['total'][$weekKey] = 0;
+        }
+        if (! isset($result['customers'][$totalCashInFlowKey]['total'][$weekKey])) {
+            $result['customers'][$totalCashInFlowKey]['total'][$weekKey] = 0;
+        }
+
+        $result['customers'][$typeKey][$subRowKey]['weeks'][$weekKey] += $amount;
+        $result['customers'][$typeKey][$subRowKey]['total'][$weekKey] += $amount;
+        $result['customers'][$typeKey]['total'][$weekKey] += $amount;
+        $result['customers'][$totalCashInFlowKey]['total'][$weekKey] += $amount;
+    }
+
+    private static function accumulateIncomingTransferRow(
+        array &$result,
+        Collection $foreignExchangeRates,
+        string $mainFunctionalCurrency,
+        int $companyId,
+        array $periodsByWeekKey,
+        string $typeKey,
+        string $totalCashInFlowKey,
+        object $row,
+    ): void {
+        $weekKey = CashFlowWeekBucketer::resolveWeekKey((string) $row->movement_date, $periodsByWeekKey);
+        if ($weekKey === null) {
+            return;
+        }
+
+        $exchangeRate = ForeignExchangeRate::getExchangeRateAt(
+            (string) $row->receiving_currency,
+            $mainFunctionalCurrency,
+            (string) $row->movement_date,
+            $companyId,
+            $foreignExchangeRates,
+        );
+
+        $amount = (float) $row->received_amount * $exchangeRate;
+        $subRowKey = 'money_received_'.$row->money_received_id;
+        $label = (string) ($row->partner_name ?: __('Unknown Customer'));
+
+        if (! isset($result['customers'][$typeKey][$subRowKey])) {
+            $result['customers'][$typeKey][$subRowKey] = [
+                'weeks' => [],
+                'total' => [],
+                'label' => $label,
+                'incoming_transfer_info' => [
+                    'customer_name' => $label,
+                    'bank_name' => (string) ($row->bank_name ?? __('N/A')),
+                    'amount' => $amount,
+                    'movement_date' => (string) $row->movement_date,
+                ],
+            ];
+        }
+        if (! isset($result['customers'][$typeKey][$subRowKey]['weeks'][$weekKey])) {
+            $result['customers'][$typeKey][$subRowKey]['weeks'][$weekKey] = 0;
+        }
+        if (! isset($result['customers'][$typeKey][$subRowKey]['total'][$weekKey])) {
+            $result['customers'][$typeKey][$subRowKey]['total'][$weekKey] = 0;
+        }
+        if (! isset($result['customers'][$typeKey]['total'][$weekKey])) {
+            $result['customers'][$typeKey]['total'][$weekKey] = 0;
+        }
+        if (! isset($result['customers'][$totalCashInFlowKey]['total'][$weekKey])) {
+            $result['customers'][$totalCashInFlowKey]['total'][$weekKey] = 0;
+        }
+
+        $result['customers'][$typeKey][$subRowKey]['weeks'][$weekKey] += $amount;
+        $result['customers'][$typeKey][$subRowKey]['total'][$weekKey] += $amount;
         $result['customers'][$typeKey]['total'][$weekKey] += $amount;
         $result['customers'][$totalCashInFlowKey]['total'][$weekKey] += $amount;
     }
@@ -681,5 +870,15 @@ final class CashFlowCompanyPeriodBatchLoader
         }
 
         return 'cash_expenses.'.$dateField;
+    }
+
+    private static function settlementAmountInReceivingCurrencySql(): string
+    {
+        return 'CASE
+            WHEN money_received.currency IS NULL
+                OR money_received.currency = money_received.receiving_currency
+            THEN settlements.settlement_amount
+            ELSE settlements.settlement_amount * money_received.exchange_rate
+        END';
     }
 }

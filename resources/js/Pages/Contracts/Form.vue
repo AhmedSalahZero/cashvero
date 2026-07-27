@@ -108,8 +108,9 @@ async function submitNewPartner() {
             form.value.partner_id = data.customer.id;
             showAddPartnerModal.value = false;
             newPartnerName.value = '';
+            router.flash({ success: 'Partner added successfully', token: String(Date.now()) });
         } else {
-            alert(data.message || 'Could not add partner.');
+            router.flash({ error: data.message || 'Could not add partner.', token: String(Date.now()) });
         }
     } finally {
         addingPartner.value = false;

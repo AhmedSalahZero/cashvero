@@ -27,9 +27,7 @@ class DeletingClass
     {
 
         if ($request->rows === null || count($request->rows) == 0) {
-            toastr()->error('No Rows Were Selected');
-
-            return redirect()->back();
+            return redirect()->back()->with('fail', __('No Rows Were Selected'));
         }
 
         $model_name = 'App\\Models\\' . $model;
@@ -49,13 +47,11 @@ class DeletingClass
             $all_model_data->each->delete();
         }
       
-        if ($request->ajax()) {
+        if ($request->ajax() && ! $request->header('X-Inertia')) {
             return response()->json([
                 'status' => true
             ]);
         }
-        toastr()->success('Deleted Selected Rows Successfully');
-
-        return redirect()->back();
+        return redirect()->back()->with('success', __('Deleted Selected Rows Successfully'));
     }
 }

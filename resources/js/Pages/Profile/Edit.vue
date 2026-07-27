@@ -26,6 +26,7 @@ const props = defineProps({
 });
 
 const page = usePage();
+const hasOdooCredentials = props.hasOdooCredentials;
 
 const name = ref(props.user.name);
 const email = ref(props.user.email);
@@ -57,7 +58,10 @@ function submit() {
     }
     if (avatarFile.value) payload.avatar = avatarFile.value;
 
-    router.put(props.submitUrl, payload, { onFinish: () => { submitting.value = false; } });
+    router.put(props.submitUrl, payload, {
+        preserveScroll: true,
+        onFinish: () => { submitting.value = false; },
+    });
 }
 </script>
 

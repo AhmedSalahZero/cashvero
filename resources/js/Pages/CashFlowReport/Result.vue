@@ -186,7 +186,15 @@ function buildSubRow(local, mainReportKey, parentKeyName, subKey, customerDue, s
     const lgBreakdown = parentKeyName === 'Cancelled LGs Cash Cover'
         ? weekKeys.value.map(weekKey => props.letterOfGuaranteeModelData?.[subKey]?.weeks?.[weekKey] || [])
         : null;
-    return { key: subKey, cells, total: currentSubTotal, lgBreakdown };
+    return {
+        key: subKey,
+        label: subData.label || subKey,
+        cells,
+        total: currentSubTotal,
+        lgBreakdown,
+        checksCollectedInfo: subData.checks_collected_info || null,
+        incomingTransferInfo: subData.incoming_transfer_info || null,
+    };
 }
 
 const tablesByCurrency = computed(() => {
@@ -303,17 +311,16 @@ function exportExcel() {
     nextTick(() => exportFormRef.value?.submit());
 }
 
-/* ── AJAX helper matching the rest of this migration's convention ── */
-async function postForm(url, body) {
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrfToken },
-        body: JSON.stringify(body),
+/* ── Form helper — Inertia POST so flash toasts arrive on the same visit ── */
+function postForm(url, body) {
+    return new Promise((resolve) => {
+        router.post(url, body, {
+            preserveScroll: true,
+            onSuccess: () => resolve({ ok: true }),
+            onError: () => resolve({ ok: false }),
+            onFinish: () => {},
+        });
     });
-    let data = null;
-    try { data = await res.json(); } catch (e) { /* ignore */ }
-    return { ok: res.ok, data };
 }
 
 /* ── Past Due Invoices modal (Customer & Supplier share this) ─────
@@ -354,9 +361,8 @@ async function submitDueInvoiceModal() {
         payload.week_start_date[row.id] = dueInvoiceForm[row.id]?.week_start_date ?? '';
     }
     const result = await postForm(props.urls.adjustCustomerDueInvoices, payload);
-    if (result.ok && result.data?.status) {
+    if (result.ok) {
         dueInvoiceModal.value = null;
-        router.reload();
     }
 }
 
@@ -387,9 +393,8 @@ async function submitLoanInstallmentModal() {
         payload.week_start_date[row.id] = loanInstallmentForm[row.id]?.week_start_date ?? '';
     }
     const result = await postForm(props.urls.adjustLoanPastDueInstallments, payload);
-    if (result.ok && result.data?.status) {
+    if (result.ok) {
         loanInstallmentModal.value = false;
-        router.reload();
     }
 }
 
@@ -397,6 +402,16 @@ async function submitLoanInstallmentModal() {
 const lgBreakdownModal = ref(null); // { label, weekKey, items }
 function openLgBreakdown(subKey, weekKey, items) {
     lgBreakdownModal.value = { label: subKey, weekKey, items: items || [] };
+}
+
+const checksCollectedModal = ref(null);
+function openChecksCollectedModal(subRow) {
+    checksCollectedModal.value = subRow?.checksCollectedInfo || null;
+}
+
+const incomingTransferModal = ref(null);
+function openIncomingTransferModal(subRow) {
+    incomingTransferModal.value = subRow?.incomingTransferInfo || null;
 }
 
 /* ── Projected Cash In / Out repeater tabs ───────────────────────
@@ -425,29 +440,26 @@ function removeProjectionRow(type, index) {
     projectionRows[type].splice(index, 1);
 }
 const savingProjection = ref(false);
-async function saveProjectionTab(type) {
+function saveProjectionTab(type) {
     savingProjection.value = true;
     const tableId = `projection-${type}id`;
-    const payload = new FormData();
-    payload.append('tableIds[]', tableId);
-    payload.append('dates[]', JSON.stringify(props.dates));
-    payload.append('type', type);
-    payload.append('cashFlowReportId', props.cashflowReport?.id || 0);
-    payload.append('is_contract', isContract.value ? 1 : 0);
-    projectionRows[type].forEach((row, i) => {
-        payload.append(`${tableId}[${i}][id]`, row.id);
-        payload.append(`${tableId}[${i}][type]`, type);
-        payload.append(`${tableId}[${i}][name]`, row.name);
-        row.amounts.forEach(a => payload.append(`${tableId}[${i}][amounts][]`, a));
+    const payload = {
+        'tableIds': [tableId],
+        'dates': [JSON.stringify(props.dates)],
+        type,
+        cashFlowReportId: props.cashflowReport?.id || 0,
+        is_contract: isContract.value ? 1 : 0,
+        [tableId]: projectionRows[type].map(row => ({
+            id: row.id,
+            type,
+            name: row.name,
+            amounts: row.amounts,
+        })),
+    };
+    router.post(props.urls.saveProjection, payload, {
+        preserveScroll: true,
+        onFinish: () => { savingProjection.value = false; },
     });
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
-    await fetch(props.urls.saveProjection, {
-        method: 'POST',
-        headers: { 'X-CSRF-TOKEN': csrfToken, 'X-Requested-With': 'XMLHttpRequest' },
-        body: payload,
-    });
-    savingProjection.value = false;
-    router.reload();
 }
 </script>
 
@@ -529,7 +541,27 @@ async function saveProjectionTab(type) {
                                 <td class="px-2 py-2 text-center cvr-num font-semibold whitespace-nowrap">{{ fmt(row.total) }}</td>
                             </tr>
                             <tr v-if="row.hasSubRows && expandedRows.has(row.key)" v-for="sub in row.subRows" :key="row.key + ':' + sub.key" class="cvr-subrow">
-                                <td class="px-2 py-2 pl-8 whitespace-nowrap text-xs">{{ sub.key }}</td>
+                                <td class="px-2 py-2 pl-8 whitespace-nowrap text-xs">
+                                    {{ sub.label }}
+                                    <button
+                                        v-if="row.name === 'Checks Collected' && sub.checksCollectedInfo"
+                                        @click.stop="openChecksCollectedModal(sub)"
+                                        type="button"
+                                        class="ml-1 text-xs cvr-btn-secondary px-1.5 py-0.5 rounded border"
+                                        title="Details"
+                                    >
+                                        i
+                                    </button>
+                                    <button
+                                        v-if="row.name === 'Incoming Transfers' && sub.incomingTransferInfo"
+                                        @click.stop="openIncomingTransferModal(sub)"
+                                        type="button"
+                                        class="ml-1 text-xs cvr-btn-secondary px-1.5 py-0.5 rounded border"
+                                        title="Details"
+                                    >
+                                        i
+                                    </button>
+                                </td>
                                 <td v-for="(cell, i) in sub.cells" :key="i" class="px-2 py-2 text-center cvr-num whitespace-nowrap text-xs">
                                     {{ fmt(cell) }}
                                     <i v-if="row.name === 'Cancelled LGs Cash Cover' && cell"
@@ -710,6 +742,66 @@ async function saveProjectionTab(type) {
                     </table>
                     <div class="flex justify-end">
                         <button @click="lgBreakdownModal = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Checks Collected modal -->
+            <div v-if="checksCollectedModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-lg">
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Cheque Details</h2>
+                    <table class="min-w-full text-sm mb-4">
+                        <tbody>
+                            <tr class="cvr-table-row">
+                                <td class="px-2 py-2 font-semibold">Customer Name</td>
+                                <td class="px-2 py-2">{{ checksCollectedModal.customer_name }}</td>
+                            </tr>
+                            <tr class="cvr-table-row">
+                                <td class="px-2 py-2 font-semibold">Cheque Number</td>
+                                <td class="px-2 py-2">{{ checksCollectedModal.cheque_number || '—' }}</td>
+                            </tr>
+                            <tr class="cvr-table-row">
+                                <td class="px-2 py-2 font-semibold">Collection Date</td>
+                                <td class="px-2 py-2">{{ checksCollectedModal.movement_date }}</td>
+                            </tr>
+                            <tr class="cvr-table-row">
+                                <td class="px-2 py-2 font-semibold">Amount</td>
+                                <td class="px-2 py-2 text-right cvr-num">{{ fmt(checksCollectedModal.amount) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="flex justify-end">
+                        <button @click="checksCollectedModal = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Incoming Transfers modal -->
+            <div v-if="incomingTransferModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-lg">
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Incoming Transfer Details</h2>
+                    <table class="min-w-full text-sm mb-4">
+                        <tbody>
+                            <tr class="cvr-table-row">
+                                <td class="px-2 py-2 font-semibold">Customer Name</td>
+                                <td class="px-2 py-2">{{ incomingTransferModal.customer_name }}</td>
+                            </tr>
+                            <tr class="cvr-table-row">
+                                <td class="px-2 py-2 font-semibold">Bank Name</td>
+                                <td class="px-2 py-2">{{ incomingTransferModal.bank_name || '—' }}</td>
+                            </tr>
+                            <tr class="cvr-table-row">
+                                <td class="px-2 py-2 font-semibold">Transfer Date</td>
+                                <td class="px-2 py-2">{{ incomingTransferModal.movement_date }}</td>
+                            </tr>
+                            <tr class="cvr-table-row">
+                                <td class="px-2 py-2 font-semibold">Amount</td>
+                                <td class="px-2 py-2 text-right cvr-num">{{ fmt(incomingTransferModal.amount) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="flex justify-end">
+                        <button @click="incomingTransferModal = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
                     </div>
                 </div>
             </div>

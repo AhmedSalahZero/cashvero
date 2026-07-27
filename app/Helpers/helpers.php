@@ -2120,6 +2120,27 @@ function getTableNamesThatHasColumn(string $columnName, ?string $connectionName 
 
 }
 
+/**
+ * Flash a success message for both Inertia (native page.flash) and any
+ * remaining Blade/session consumers. Prefer this (or redirect()->with)
+ * over toastr()/flash() on migrated pages.
+ */
+function flash_success(string $message): void
+{
+    session()->flash('success', $message);
+    \Inertia\Inertia::flash('success', $message);
+}
+
+/**
+ * Flash a failure/error message for both Inertia and session consumers.
+ * Uses session key 'fail' to match the rest of this app's convention.
+ */
+function flash_fail(string $message): void
+{
+    session()->flash('fail', $message);
+    \Inertia\Inertia::flash('error', $message);
+}
+
 
 
 
