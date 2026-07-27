@@ -112,17 +112,17 @@ const accumulatedTotal = computed(() => {
                                     <span v-if="block.contract_code" class="opacity-80 font-normal ml-1">[{{ block.contract_code }}]</span>
                                 </td>
                             </tr>
-                            <tr class="cvr-table-row">
+                            <tr class="cvr-table-row cvr-summary-row">
                                 <td class="px-2 py-2 whitespace-nowrap">Total Cash Inflow</td>
                                 <td v-for="wk in weekKeys" :key="wk" class="px-2 py-2 text-center cvr-num whitespace-nowrap">{{ fmt(block.cash_inflow?.[wk]) }}</td>
                                 <td class="px-2 py-2 text-center cvr-num font-semibold whitespace-nowrap">{{ fmt(rowTotal(block.cash_inflow)) }}</td>
                             </tr>
-                            <tr class="cvr-table-row">
+                            <tr class="cvr-table-row cvr-summary-row">
                                 <td class="px-2 py-2 whitespace-nowrap">Total Cash Outflow</td>
                                 <td v-for="wk in weekKeys" :key="wk" class="px-2 py-2 text-center cvr-num whitespace-nowrap">{{ fmt(block.cash_outflow?.[wk]) }}</td>
                                 <td class="px-2 py-2 text-center cvr-num font-semibold whitespace-nowrap">{{ fmt(rowTotal(block.cash_outflow)) }}</td>
                             </tr>
-                            <tr class="cvr-table-row">
+                            <tr class="cvr-table-row cvr-summary-row">
                                 <td class="px-2 py-2 whitespace-nowrap font-medium">Net Cash (+/-)</td>
                                 <td v-for="wk in weekKeys" :key="wk" class="px-2 py-2 text-center font-medium whitespace-nowrap" :class="netClass(block.net_cash?.[wk])">{{ fmt(block.net_cash?.[wk]) }}</td>
                                 <td class="px-2 py-2 text-center font-semibold whitespace-nowrap" :class="netClass(rowTotal(block.net_cash))">{{ fmt(rowTotal(block.net_cash)) }}</td>
@@ -146,22 +146,22 @@ const accumulatedTotal = computed(() => {
                         <tr class="cvr-table-head">
                             <td :colspan="weekKeys.length + 2" class="px-2 py-2 font-semibold">Section C — Grand total (contracts only, bank rows excluded)</td>
                         </tr>
-                        <tr class="cvr-table-row">
+                        <tr class="cvr-table-row cvr-summary-row">
                             <td class="px-2 py-2 whitespace-nowrap">Total Cash Inflow</td>
                             <td v-for="wk in weekKeys" :key="wk" class="px-2 py-2 text-center cvr-num whitespace-nowrap">{{ fmt(grandTotal.cash_inflow?.[wk]) }}</td>
                             <td class="px-2 py-2 text-center cvr-num font-semibold whitespace-nowrap">{{ fmt(rowTotal(grandTotal.cash_inflow)) }}</td>
                         </tr>
-                        <tr class="cvr-table-row">
+                        <tr class="cvr-table-row cvr-summary-row">
                             <td class="px-2 py-2 whitespace-nowrap">Total Cash Outflow</td>
                             <td v-for="wk in weekKeys" :key="wk" class="px-2 py-2 text-center cvr-num whitespace-nowrap">{{ fmt(grandTotal.cash_outflow?.[wk]) }}</td>
                             <td class="px-2 py-2 text-center cvr-num font-semibold whitespace-nowrap">{{ fmt(rowTotal(grandTotal.cash_outflow)) }}</td>
                         </tr>
-                        <tr class="cvr-table-row">
+                        <tr class="cvr-table-row cvr-summary-row">
                             <td class="px-2 py-2 whitespace-nowrap font-medium">Net Cash (+/-)</td>
                             <td v-for="wk in weekKeys" :key="wk" class="px-2 py-2 text-center font-medium whitespace-nowrap" :class="netClass(grandTotal.net_cash?.[wk])">{{ fmt(grandTotal.net_cash?.[wk]) }}</td>
                             <td class="px-2 py-2 text-center font-semibold whitespace-nowrap" :class="netClass(rowTotal(grandTotal.net_cash))">{{ fmt(rowTotal(grandTotal.net_cash)) }}</td>
                         </tr>
-                        <tr class="cvr-table-row" style="font-weight:600">
+                        <tr class="cvr-table-row cvr-summary-row">
                             <td class="px-2 py-2 whitespace-nowrap">Accumulated Net Cash (+/-)</td>
                             <td v-for="wk in weekKeys" :key="wk" class="px-2 py-2 text-center whitespace-nowrap" :class="netClass(grandTotal.accumulated_net?.[wk])">{{ fmt(grandTotal.accumulated_net?.[wk]) }}</td>
                             <td class="px-2 py-2 text-center whitespace-nowrap" :class="netClass(accumulatedTotal)">{{ fmt(accumulatedTotal) }}</td>

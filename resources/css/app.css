@@ -84,6 +84,12 @@
     --cvr-subrow-bg:       rgba(56, 191, 248, 0.267);
     --cvr-subrow-bg-hover: rgba(56, 189, 248, 0.16);
 
+    /* ── Cash Flow summary rows (Inflow/Outflow/Net/Accumulated) ──
+       Soft slate tint so totals stand out from ordinary line items.
+       Light mode uses Excel-aligned #E8ECF1. */
+    --cvr-summary-row-bg:       rgba(232, 236, 241, 0.12);
+    --cvr-summary-row-bg-hover: rgba(232, 236, 241, 0.18);
+
     /* ── Primary Accent — Emerald (cash / growth) ────────────────── */
     --cvr-green:           #1D9A6C;
     --cvr-green-bright:    #2FC48A;
@@ -233,6 +239,10 @@
     --cvr-subrow-bg:       rgba(15, 157, 92, 0.10);
     --cvr-subrow-bg-hover: rgba(15, 157, 92, 0.18);
 
+    /* ── Cash Flow summary rows — Excel #E8ECF1 in light mode ─────── */
+    --cvr-summary-row-bg:       #E8ECF1;
+    --cvr-summary-row-bg-hover: #DDE2E9;
+
     --cvr-green:           #0F9D5C;
     --cvr-green-bright:    #12B56C;
     --cvr-green-hover:     #0C7F4A;
@@ -367,6 +377,16 @@ body {
     transition: var(--cvr-transition);
 }
 .cvr-table-row:hover { background-color: var(--cvr-bg-hover); }
+
+/* Cash Flow summary totals (Inflow/Outflow/Net/Accumulated) — a
+   muted slate fill so they read as roll-ups, not ordinary line items. */
+.cvr-summary-row {
+    background-color: var(--cvr-summary-row-bg);
+    font-weight: 600;
+}
+.cvr-summary-row:hover {
+    background-color: var(--cvr-summary-row-bg-hover);
+}
 
 /* Expanded breakdown rows (e.g. Cash Flow Report sub-rows) — a
    distinct tint from ordinary rows so drill-down detail is visually

@@ -199,6 +199,7 @@ final class CashFlowContractDetailPeriodBatchLoader
             ->join('partners', 'partners.id', '=', 'money_received.partner_id')
             ->leftJoin('incoming_transfers', 'incoming_transfers.money_received_id', '=', 'money_received.id')
             ->leftJoin('financial_institutions', 'financial_institutions.id', '=', 'incoming_transfers.receiving_bank_id')
+            ->leftJoin('banks', 'banks.id', '=', 'financial_institutions.bank_id')
             ->where('money_received.company_id', $companyId)
             ->where('money_received.type', MoneyReceived::INCOMING_TRANSFER)
             ->where('customer_invoices.contract_code', $contractCode)
@@ -207,8 +208,8 @@ final class CashFlowContractDetailPeriodBatchLoader
                     ->orWhere('money_received.down_payment_type', '=', 'general');
             })
             ->whereBetween('money_received.receiving_date', [$periodStart, $periodEnd])
-            ->groupByRaw('money_received.id, money_received.receiving_currency, money_received.receiving_date, partners.name, financial_institutions.name')
-            ->selectRaw('money_received.id as money_received_id, money_received.receiving_currency, money_received.receiving_date as movement_date, partners.name as customer_name, financial_institutions.name as bank_name, sum('.$settlementAmountExpression.') as received_amount');
+            ->groupByRaw('money_received.id, money_received.receiving_currency, money_received.receiving_date, partners.name, financial_institutions.type, financial_institutions.name, banks.view_name, banks.name_en, banks.name_ar')
+            ->selectRaw('money_received.id as money_received_id, money_received.receiving_currency, money_received.receiving_date as movement_date, partners.name as customer_name, '.financial_institution_display_name_sql().', sum('.$settlementAmountExpression.') as received_amount');
 
         foreach ($query->cursor() as $row) {
             self::accumulateContractIncomingTransferRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodsByWeekKey, $resultKey, $totalCashInFlowKey, $row);

@@ -1135,6 +1135,21 @@ function partner_display_name_sql(string $tableAlias = 'partners', string $as = 
     return "'' as {$as}";
 }
 
+/**
+ * SQL expression matching FinancialInstitution::getName():
+ * bank-type institutions use banks.view_name (with name_en/name_ar fallback);
+ * other types use financial_institutions.name.
+ */
+function financial_institution_display_name_sql(
+    string $fiAlias = 'financial_institutions',
+    string $bankAlias = 'banks',
+    string $as = 'bank_name'
+): string {
+    $bankName = "COALESCE(NULLIF({$bankAlias}.view_name, ''), NULLIF({$bankAlias}.name_en, ''), NULLIF({$bankAlias}.name_ar, ''))";
+
+    return "CASE WHEN {$fiAlias}.type = 'bank' THEN {$bankName} ELSE {$fiAlias}.name END as {$as}";
+}
+
 function getAddNewFieldRule($fieldName)
 {
     return Rule::requiredIf(Request()->get($fieldName) == 'Add New');

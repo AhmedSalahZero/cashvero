@@ -210,10 +210,11 @@ final class CashFlowCompanyPeriodBatchLoader
             ->join('partners', 'partners.id', '=', 'money_received.partner_id')
             ->leftJoin('incoming_transfers', 'incoming_transfers.money_received_id', '=', 'money_received.id')
             ->leftJoin('financial_institutions', 'financial_institutions.id', '=', 'incoming_transfers.receiving_bank_id')
+            ->leftJoin('banks', 'banks.id', '=', 'financial_institutions.bank_id')
             ->where('money_received.company_id', $companyId)
             ->where('money_received.type', MoneyReceived::INCOMING_TRANSFER)
             ->whereBetween('money_received.receiving_date', [$periodStart, $periodEnd])
-            ->selectRaw('money_received.id as money_received_id, money_received.received_amount, money_received.receiving_currency, money_received.receiving_date as movement_date, '.partner_display_name_sql('partners', 'partner_name').', financial_institutions.name as bank_name');
+            ->selectRaw('money_received.id as money_received_id, money_received.received_amount, money_received.receiving_currency, money_received.receiving_date as movement_date, '.partner_display_name_sql('partners', 'partner_name').', '.financial_institution_display_name_sql());
 
         foreach ($query->cursor() as $row) {
             self::accumulateIncomingTransferRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodsByWeekKey, $resultKey, $totalCashInFlowKey, $row);

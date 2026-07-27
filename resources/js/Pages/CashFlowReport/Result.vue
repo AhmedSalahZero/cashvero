@@ -39,7 +39,10 @@ const NO_SUBROW_NAMES = new Set([
     'Customers Past Due Invoices', 'Suppliers Past Due Invoices', 'Loan Past Due Installments',
     'Net Cash (+/-)', 'Accumulated Net Cash (+/-)', 'Total Cash Inflow', 'Total Cash Outflow',
 ]);
-const HIGHLIGHT_NAMES = new Set(['Total Cash Inflow', 'Total Cash Outflow', 'Total Cash']);
+const HIGHLIGHT_NAMES = new Set([
+    'Total Cash Inflow', 'Total Cash Outflow', 'Total Cash',
+    'Net Cash (+/-)', 'Accumulated Net Cash (+/-)',
+]);
 
 function sumAllRowsAtWeek(allTotals, weekKey) {
     return Object.values(allTotals).reduce((s, weekMap) => s + (Number(weekMap[weekKey]) || 0), 0);
@@ -529,7 +532,7 @@ function saveProjectionTab(type) {
                     </thead>
                     <tbody>
                         <template v-for="row in tablesByCurrency[c]" :key="row.key">
-                            <tr class="cvr-table-row cursor-pointer" :class="{ 'font-semibold': row.highlight }" @click="row.hasSubRows && toggleRow(row.key)">
+                            <tr class="cvr-table-row cursor-pointer" :class="{ 'font-semibold cvr-summary-row': row.highlight }" @click="row.hasSubRows && toggleRow(row.key)">
                                 <td class="px-2 py-2 whitespace-nowrap">
                                     <span v-if="row.hasSubRows">{{ expandedRows.has(row.key) ? '−' : '+' }}</span>
                                     {{ row.name }}
