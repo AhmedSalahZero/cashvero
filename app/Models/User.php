@@ -252,8 +252,22 @@ class User extends Authenticatable implements HasMedia
 	}	
 	public static function getUsersWithRoles(?Company $company,?string $roleName = null)
 	{
+		return static::getUsersWithRolesQuery($company, $roleName)->get();
+	}
+
+	/**
+	 * Same visibility rules as getUsersWithRoles(), left unfetched so the
+	 * caller can paginate. Every filter here was already a whereHas, so
+	 * paging costs nothing in fidelity — the role gates still run in SQL.
+	 *
+	 * `companies` is eager-loaded alongside `roles` because the users list
+	 * renders each user's companies; without it that column was one extra
+	 * query per row.
+	 */
+	public static function getUsersWithRolesQuery(?Company $company,?string $roleName = null)
+	{
 		$authUser = auth()->user();
-		return User::with('roles')->when($company,function($q) use ($company,$authUser,$roleName){
+		return User::with(['roles', 'companies'])->when($company,function($q) use ($company,$authUser,$roleName){
 			$q
 			->whereHas('companies',function($q) use($company){
 				$q->where('companies.id',$company->id);
@@ -287,7 +301,7 @@ class User extends Authenticatable implements HasMedia
 				$q->where('companies.id',$company->id);
 			});
 		})
-		->get();
+		->orderBy('users.id');
 	}
 	public function getOdooDBUserName()
     {

@@ -8,7 +8,7 @@ use App\Exports\Statements\LgListReportExport;
 use App\Models\Company;
 use App\Traits\GeneralFunctions;
 use App\Traits\LgListReportRows;
-use App\Traits\PaginatesRawCollections;
+use App\Traits\PaginatesStatementQueries;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -39,7 +39,9 @@ class LgByBankNameReportController
 {
     use GeneralFunctions;
     use LgListReportRows;
-    use PaginatesRawCollections;
+    use PaginatesStatementQueries;
+
+    private const ROWS_PER_PAGE = 50;
 
     /**
      * Filter form: Renewal Date, Currency, Banks (cascading multi-select),
@@ -76,7 +78,7 @@ class LgByBankNameReportController
         $bankIds = $request->get('bank_id', []);
         $status = $request->get('status', 'running');
 
-        $results = DB::table('letter_of_guarantee_issuances')
+        $freshQuery = fn () => DB::table('letter_of_guarantee_issuances')
             ->where('letter_of_guarantee_issuances.company_id', $company->id)
             ->where('letter_of_guarantee_issuances.lg_currency', $currencyName)
             ->whereIn('letter_of_guarantee_issuances.financial_institution_id', $bankIds)
@@ -162,13 +164,20 @@ class LgByBankNameReportController
             ->join('banks', 'banks.id', '=', 'financial_institutions.bank_id')
             ->selectRaw(
                 'letter_of_guarantee_issuances.id as id , letter_of_guarantee_issuances.partner_id as partner_id , partners.name as partner_name , letter_of_guarantee_issuances.lg_type as lg_type , letter_of_guarantee_issuances.transaction_name as transaction_name, letter_of_guarantee_issuances.lg_code as lg_code, letter_of_guarantee_issuances.source as source ,banks.name_en as financial_institution_name , letter_of_guarantee_issuances.lg_amount as lg_amount , case when letter_of_guarantee_issuances.status = \'cancelled\' then \'cancelled\' else (DATE_FORMAT(letter_of_guarantee_issuances.renewal_date,\'%d-%m-%Y\')) end as renewal_date , letter_of_guarantee_issuances.cash_cover_amount as cash_cover_amount, letter_of_guarantee_issuances.lg_commission_rate as lg_commission_rate , case when letter_of_guarantee_issuances.status = \'cancelled\' then \'cancelled\' when letter_of_guarantee_issuances.renewal_date <= NOW() then \'expired\' else \'running\' end as lg_status '
-            )->get();
+            )
+            // Without an ORDER BY, MySQL is free to return these rows in any
+            // order it likes, and it does not have to pick the same one
+            // twice. That is harmless for a single fetch but fatal for
+            // LIMIT/OFFSET paging: the same LG could appear on two pages
+            // while another never appears at all. Ordering by id makes the
+            // sequence total and stable.
+            ->orderBy('letter_of_guarantee_issuances.id');
 
-        if (! count($results)) {
+        if (! $freshQuery()->exists()) {
             return null;
         }
 
-        return ['results' => $results, 'currency' => $currencyName, 'startDate' => $startDate];
+        return ['query' => $freshQuery, 'currency' => $currencyName, 'startDate' => $startDate];
     }
 
     /**
@@ -181,17 +190,24 @@ class LgByBankNameReportController
         if (is_null($data)) {
             return redirect()->back()->with('fail', __('No Data Found'));
         }
-        $results = $data['results'];
         $lgsTypes = LgTypes::getAll();
         $lgsSources = LgSources::getAll();
 
+        // Grand totals still cover the FULL report, not the current page.
+        // They are SQL SUMs over the same WHERE clause now, so a large
+        // report no longer has to be read into PHP just to be added up.
+        $paginator = $this->paginateStatement($data['query'], self::ROWS_PER_PAGE);
+        $sums = $this->statementSums($data['query'], [
+            'total_lg_amount' => 'letter_of_guarantee_issuances.lg_amount',
+            'total_cash_cover' => 'letter_of_guarantee_issuances.cash_cover_amount',
+        ]);
+
         $kpis = [
-            'totalLgAmount' => (float) $results->sum('lg_amount'),
-            'totalCashCoverAmount' => (float) $results->sum('cash_cover_amount'),
-            'transactionCount' => $results->count(),
+            'totalLgAmount' => $sums['total_lg_amount'],
+            'totalCashCoverAmount' => $sums['total_cash_cover'],
+            'transactionCount' => $paginator->total(),
         ];
 
-        $paginator = $this->paginateCollection($results, 50, $request);
         $paginator->getCollection()->transform(fn ($row) => $this->mapLgListRow($row, $lgsTypes, $lgsSources));
 
         return \Inertia\Inertia::render('Statements/LgByBankName/Result', [
@@ -227,7 +243,8 @@ class LgByBankNameReportController
 
         $headings = ['#', 'Bank Name', 'Beneficiary Name', 'LG Type', 'Transaction Name', 'LG Code', 'Source', 'Amount', 'Renewal Date', 'Cash Cover', 'Commission Rate %'];
 
-        $rows = $data['results']->values()->map(function ($row, $index) use ($lgsTypes, $lgsSources) {
+        // The workbook is the whole report, not the page on screen.
+        $rows = $data['query']()->get()->values()->map(function ($row, $index) use ($lgsTypes, $lgsSources) {
             $mapped = $this->mapLgListRow($row, $lgsTypes, $lgsSources);
 
             return [

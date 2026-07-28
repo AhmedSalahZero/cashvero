@@ -109,6 +109,7 @@ class LetterOfGuaranteeIssuanceController
         return [
             'current_page' => $paginator->currentPage(),
             'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
             'total' => $paginator->total(),
             'loaded' => true,
             'rows' => collect($paginator->items())->map(function (LetterOfGuaranteeIssuance $lg) use ($company) {
@@ -185,7 +186,8 @@ class LetterOfGuaranteeIssuanceController
         });
 
         $paginationPerPage = GeneralFunctions::getPaginationLimit();
-        return $query->paginate($paginationPerPage, ['*'], 'bankToLcSettlementInternalMoneyTransfersPage');
+
+        return $query->paginate($paginationPerPage);
     }
 
     public function index(Company $company, Request $request)
@@ -205,7 +207,7 @@ class LetterOfGuaranteeIssuanceController
             } else {
                 // Not queried at all yet — Vue fetches this via
                 // tabData() the first time the user actually clicks it.
-                $tabs[$type] = ['current_page' => 1, 'last_page' => 1, 'total' => null, 'loaded' => false, 'rows' => []];
+                $tabs[$type] = ['current_page' => 1, 'last_page' => 1, 'per_page' => GeneralFunctions::getPaginationLimit(), 'total' => null, 'loaded' => false, 'rows' => []];
             }
         }
 

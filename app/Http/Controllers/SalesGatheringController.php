@@ -102,7 +102,7 @@ class SalesGatheringController extends Controller
 		->when($uploadType == 'ContractLoanSchedule',function($q) use ($loanId){
 			$q->where('leasing_contract_id',$loanId);
 		})
-        ->orderBy($mainDateOrderBy, $orderByDirection)->paginate($pageLength);
+        ->orderBy($mainDateOrderBy, $orderByDirection)->paginate($pageLength)->withQueryString();
         $exportableFields  = (new ExportTable)->customizedTableField($company, $uploadType, 'selected_fields');
         if($modelName == 'CustomerInvoice' || 'SupplierInvoice'==$modelName) {
             unset($exportableFields['withhold_amount']);

@@ -6,9 +6,10 @@ use App\Exports\Statements\PartnersStatementExport;
 use App\Models\Company;
 use App\Models\Partner;
 use App\Traits\GeneralFunctions;
-use App\Traits\PaginatesRawCollections;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -48,33 +49,34 @@ use Illuminate\Support\Facades\DB;
  *                           the same cascading-dropdown pattern used elsewhere
  *                           (e.g. BankStatementController@getAccountNumbers).
  *   - result()            → ✅ Migrated to Inertia (Statements/PartnersStatement/Result).
- *                           Query logic (fetchStatementGroups()) is UNCHANGED
- *                           from the original controller except the two
- *                           confirmed bug fixes above. Real GET instead of
- *                           POST — safe here, since nothing else references
- *                           result.partners.statement except this page's own
- *                           (now-superseded) Blade form.
+ *                           Real GET instead of POST. Pagination is at the
+ *                           PARTNER level (10 groups/page): one SQL query
+ *                           finds partners with rows, those IDs are paginated,
+ *                           and only the current page's partners are loaded
+ *                           via a single whereIn — not N full-table gets.
+ *                           KPI totals still cover every selected partner
+ *                           with activity (SQL aggregates + last end_balance
+ *                           per partner), never just the page on screen.
  *   - exportExcel()       → ✅ New (project-owner requested). Styled via the
  *                           new App\Exports\Statements\PartnersStatementExport
  *                           — a dedicated class (not the shared
  *                           AbstractStatementExport base), since this report's
  *                           grouped-by-many-partners shape and totals don't fit
  *                           that single-ledger contract. Same visual language
- *                           (colors, banding, header style) by hand.
+ *                           (colors, banding, header style) by hand. Export
+ *                           uses one whereIn for all active partners.
  *
  * Pagination note: unlike Bank/Safe/Cash Expense Statement, rows here
  * are naturally grouped by partner (each partner's own transactions
- * must stay together, not be split mid-group across pages). So
- * PaginatesRawCollections is applied at the PARTNER level (10 partner
- * groups per page), not the individual-row level — a person who
- * selects many partners still gets real server-side pagination, and
- * every rendered partner's full transaction list is always complete,
- * never truncated mid-group.
+ * must stay together, not be split mid-group across pages). Partner
+ * IDs are paginated (10 per page); every rendered partner's full
+ * transaction list is always complete, never truncated mid-group.
  */
 class PartnersStatementController
 {
     use GeneralFunctions;
-    use PaginatesRawCollections;
+
+    private const PARTNERS_PER_PAGE = 10;
 
     private const PARTNER_TYPES = [
         'is_subsidiary_company' => 'Subsidiary Company',
@@ -133,55 +135,178 @@ class PartnersStatementController
     }
 
     /**
-     * Builds the raw, grouped-by-partner result set for the current
-     * filters. Query per partner (fetchStatementGroups()) is UNCHANGED from
-     * the original controller except the confirmed `.company_id` typo fix
-     * (see class docblock, bug #1).
+     * Shared filter resolution for result() and exportExcel(). Returns null
+     * when the partner type is unknown or no partner_id list was sent.
      *
-     * Returns null when no partner has any matching transactions.
+     * @return array{table: string, currency: string, startDate: mixed, endDate: mixed, partnerIds: array<int>}|null
      */
-    private function fetchStatementGroups(Company $company, Request $request): ?array
+    private function resolveFilters(Company $company, Request $request): ?array
     {
-        $startDate = $request->get('start_date');
-        $endDate = $request->get('end_date');
         $partnerType = $request->get('partner_type');
-        $currency = $request->get('currency');
-        $partnerIds = (array) $request->get('partner_id', []);
-
         $statementTableName = self::STATEMENT_TABLE_BY_TYPE[$partnerType] ?? null;
         if (! $statementTableName) {
             return null;
         }
 
-        $groups = [];
-        foreach ($partnerIds as $partnerId) {
-            $partner = Partner::find($partnerId);
-            if (! $partner) {
-                continue;
-            }
-            $currentResult = DB::table($statementTableName)
-                ->where('company_id', $company->id) // fixed: was '.company_id' (leading-dot typo, see class docblock)
-                ->where('currency_name', $currency)
-                ->where('partner_id', $partnerId)
-                ->where('date', '>=', $startDate)
-                ->where('date', '<=', $endDate)
-                ->orderByRaw('full_date asc , created_at asc')
-                ->get();
+        $partnerIds = array_values(array_filter(
+            array_map('intval', (array) $request->get('partner_id', [])),
+            fn (int $id) => $id > 0
+        ));
 
-            if (count($currentResult)) {
-                $groups[] = [
-                    'partnerId' => $partner->id,
-                    'partnerName' => $partner->getName(),
-                    'rows' => $currentResult,
-                ];
-            }
-        }
-
-        if (! count($groups)) {
+        if (! count($partnerIds)) {
             return null;
         }
 
-        return ['groups' => $groups, 'currency' => $currency];
+        return [
+            'table' => $statementTableName,
+            'currency' => $request->get('currency'),
+            'startDate' => $request->get('start_date'),
+            'endDate' => $request->get('end_date'),
+            'partnerIds' => $partnerIds,
+            'companyId' => $company->id,
+        ];
+    }
+
+    /**
+     * Base query for one statement table under the current filters.
+     * Callers add select/order/group as needed — never share one builder
+     * across aggregate + fetch (paginate/sum mutate the instance).
+     *
+     * @param  array{table: string, currency: mixed, startDate: mixed, endDate: mixed, partnerIds: array<int>, companyId: int}  $filters
+     * @param  array<int>|null  $limitPartnerIds  when set, further restrict to this page's partners
+     */
+    private function statementQuery(array $filters, ?array $limitPartnerIds = null)
+    {
+        $partnerIds = $limitPartnerIds ?? $filters['partnerIds'];
+
+        return DB::table($filters['table'])
+            ->where('company_id', $filters['companyId'])
+            ->where('currency_name', $filters['currency'])
+            ->whereIn('partner_id', $partnerIds)
+            ->where('date', '>=', $filters['startDate'])
+            ->where('date', '<=', $filters['endDate']);
+    }
+
+    /**
+     * Selected partners that actually have rows in range, in the same
+     * order the request listed them (so page 1 is stable across reloads).
+     *
+     * @param  array{table: string, currency: mixed, startDate: mixed, endDate: mixed, partnerIds: array<int>, companyId: int}  $filters
+     * @return array<int>
+     */
+    private function activePartnerIds(array $filters): array
+    {
+        $withRows = $this->statementQuery($filters)
+            ->distinct()
+            ->pluck('partner_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $withRowsSet = array_flip($withRows);
+
+        return array_values(array_filter(
+            $filters['partnerIds'],
+            fn (int $id) => isset($withRowsSet[$id])
+        ));
+    }
+
+    /**
+     * KPI totals over every selected partner with activity — not the
+     * current page. Debit/credit/count are plain SUMs; ending balance is
+     * the sum of each partner's chronologically last end_balance, which
+     * is what taking last() of a full_date-asc collection used to mean.
+     *
+     * @param  array{table: string, currency: mixed, startDate: mixed, endDate: mixed, partnerIds: array<int>, companyId: int}  $filters
+     * @param  array<int>  $activePartnerIds
+     * @return array{partnerCount: int, transactionCount: int, totalDebit: float, totalCredit: float, totalEndBalance: float}
+     */
+    private function statementKpis(array $filters, array $activePartnerIds): array
+    {
+        $partnerCount = count($activePartnerIds);
+        if ($partnerCount === 0) {
+            return [
+                'partnerCount' => 0,
+                'transactionCount' => 0,
+                'totalDebit' => 0.0,
+                'totalCredit' => 0.0,
+                'totalEndBalance' => 0.0,
+            ];
+        }
+
+        $sums = $this->statementQuery($filters, $activePartnerIds)
+            ->selectRaw('COALESCE(SUM(debit), 0) AS total_debit, COALESCE(SUM(credit), 0) AS total_credit, COUNT(*) AS transaction_count')
+            ->first();
+
+        // Table name is whitelist-only (STATEMENT_TABLE_BY_TYPE); values are bound.
+        $table = $filters['table'];
+        $placeholders = implode(',', array_fill(0, count($activePartnerIds), '?'));
+        $ranked = DB::select(
+            'SELECT COALESCE(SUM(end_balance), 0) AS total_end_balance FROM (
+                SELECT end_balance,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY partner_id
+                        ORDER BY full_date DESC, created_at DESC, id DESC
+                    ) AS rn
+                FROM '.$table.'
+                WHERE company_id = ?
+                  AND currency_name = ?
+                  AND partner_id IN ('.$placeholders.')
+                  AND date >= ?
+                  AND date <= ?
+            ) ranked WHERE rn = 1',
+            array_merge(
+                [$filters['companyId'], $filters['currency']],
+                $activePartnerIds,
+                [$filters['startDate'], $filters['endDate']]
+            )
+        );
+
+        return [
+            'partnerCount' => $partnerCount,
+            'transactionCount' => (int) ($sums->transaction_count ?? 0),
+            'totalDebit' => (float) ($sums->total_debit ?? 0),
+            'totalCredit' => (float) ($sums->total_credit ?? 0),
+            'totalEndBalance' => (float) ($ranked[0]->total_end_balance ?? 0),
+        ];
+    }
+
+    /**
+     * Load statement rows for the given partners (one query), group them
+     * preserving $partnerIds order, and attach partner names in one batch.
+     *
+     * @param  array{table: string, currency: mixed, startDate: mixed, endDate: mixed, partnerIds: array<int>, companyId: int}  $filters
+     * @param  array<int>  $partnerIds
+     * @return array<int, array{partnerId: int, partnerName: string|null, rows: \Illuminate\Support\Collection}>
+     */
+    private function buildGroups(array $filters, array $partnerIds): array
+    {
+        if (! count($partnerIds)) {
+            return [];
+        }
+
+        $rows = $this->statementQuery($filters, $partnerIds)
+            ->orderBy('partner_id')
+            ->orderByRaw('full_date asc, created_at asc, id asc')
+            ->get()
+            ->groupBy('partner_id');
+
+        $partners = Partner::whereIn('id', $partnerIds)->get()->keyBy('id');
+
+        $groups = [];
+        foreach ($partnerIds as $partnerId) {
+            $partnerRows = $rows->get($partnerId);
+            if (! $partnerRows || ! count($partnerRows)) {
+                continue;
+            }
+            $partner = $partners->get($partnerId);
+            $groups[] = [
+                'partnerId' => $partnerId,
+                'partnerName' => $partner ? $partner->getName() : null,
+                'rows' => $partnerRows->values(),
+            ];
+        }
+
+        return $groups;
     }
 
     /**
@@ -207,63 +332,49 @@ class PartnersStatementController
     }
 
     /**
-     * The report itself. Query logic lives in fetchStatementGroups() and
-     * is UNCHANGED except the two confirmed bug fixes noted in the class
-     * docblock. Pagination is by PARTNER GROUP (10 per page), not by row —
-     * see class docblock.
+     * The report itself. Partner IDs with activity are paginated (10 per
+     * page); only that page's ledgers leave the database. KPIs still
+     * describe every selected partner with rows in the date range.
      */
     public function result(Company $company, Request $request)
     {
-        $data = $this->fetchStatementGroups($company, $request);
-        if (is_null($data)) {
+        $filters = $this->resolveFilters($company, $request);
+        if (is_null($filters)) {
             return redirect()->back()->with('fail', __('No Data Found'));
         }
-        $groups = collect($data['groups']);
-        $lang = app()->getLocale();
 
-        /**
-         * KPI totals computed from the FULL (unpaginated) set of every
-         * selected partner's rows — matches the original Blade page's own
-         * running totals exactly: Debit/Credit are summed across every row
-         * of every partner; the ending-balance total is the SUM of each
-         * partner's own most recent (last chronological) row's end_balance
-         * — not one single reference, since this report spans many
-         * partners/accounts at once, unlike Bank/Safe Statement's single
-         * account.
-         */
-        $totalDebit = 0.0;
-        $totalCredit = 0.0;
-        $totalEndBalance = 0.0;
-        $transactionCount = 0;
-        foreach ($groups as $group) {
-            $rows = collect($group['rows']);
-            $totalDebit += (float) $rows->sum('debit');
-            $totalCredit += (float) $rows->sum('credit');
-            $totalEndBalance += (float) ($rows->last()->end_balance ?? 0);
-            $transactionCount += $rows->count();
+        $activePartnerIds = $this->activePartnerIds($filters);
+        if (! count($activePartnerIds)) {
+            return redirect()->back()->with('fail', __('No Data Found'));
         }
-        $kpis = [
-            'partnerCount' => $groups->count(),
-            'transactionCount' => $transactionCount,
-            'totalDebit' => $totalDebit,
-            'totalCredit' => $totalCredit,
-            'totalEndBalance' => $totalEndBalance,
-        ];
 
-        $paginator = $this->paginateCollection($groups, 10, $request);
-        $paginator->getCollection()->transform(function ($group) use ($lang) {
-            $rows = collect($group['rows'])->map(fn ($row) => $this->mapStatementRow($row, $lang))->values();
+        $page = max(1, (int) Paginator::resolveCurrentPage('page'));
+        $perPage = self::PARTNERS_PER_PAGE;
+        $totalPartners = count($activePartnerIds);
+        $pagePartnerIds = array_slice($activePartnerIds, ($page - 1) * $perPage, $perPage);
 
+        $lang = app()->getLocale();
+        $groups = collect($this->buildGroups($filters, $pagePartnerIds))->map(function (array $group) use ($lang) {
             return [
                 'partnerId' => $group['partnerId'],
                 'partnerName' => $group['partnerName'],
-                'rows' => $rows,
+                'rows' => collect($group['rows'])->map(fn ($row) => $this->mapStatementRow($row, $lang))->values(),
             ];
         });
 
+        $paginator = (new LengthAwarePaginator(
+            $groups,
+            $totalPartners,
+            $perPage,
+            $page,
+            ['path' => Paginator::resolveCurrentPath(), 'pageName' => 'page']
+        ))->withQueryString();
+
+        $kpis = $this->statementKpis($filters, $activePartnerIds);
+
         return \Inertia\Inertia::render('Statements/PartnersStatement/Result', [
             'company' => ['id' => $company->id],
-            'currency' => $data['currency'],
+            'currency' => $filters['currency'],
             'kpis' => $kpis,
             'paginator' => $paginator->toArray(),
             'urls' => [
@@ -276,28 +387,30 @@ class PartnersStatementController
     }
 
     /**
-     * Excel export (project-owner requested) — same filters as result(),
-     * reusing fetchStatementGroups()/mapStatementRow() so the workbook can
-     * never drift from what's on screen. Exports every selected partner's
-     * FULL transaction list (not just the currently-viewed page of partner
-     * groups). Flattened to one sheet with a "Partner" column (rather than
-     * the on-screen collapsible groups), since a flat sheet is more useful
-     * for real spreadsheet work (sorting/filtering/pivoting by partner)
-     * than nested, hidden groups would be.
+     * Excel export — same filters as result(), one whereIn for every
+     * partner with activity (full range, not the current page). Flattened
+     * to one sheet with a Partner column for sorting/filtering/pivoting.
      */
     public function exportExcel(Company $company, Request $request)
     {
-        $data = $this->fetchStatementGroups($company, $request);
-        if (is_null($data)) {
+        $filters = $this->resolveFilters($company, $request);
+        if (is_null($filters)) {
             return redirect()->back()->with('fail', __('No Data Found'));
         }
+
+        $activePartnerIds = $this->activePartnerIds($filters);
+        if (! count($activePartnerIds)) {
+            return redirect()->back()->with('fail', __('No Data Found'));
+        }
+
         $lang = app()->getLocale();
+        $groups = $this->buildGroups($filters, $activePartnerIds);
 
         $headings = ['Partner', '#', 'Date', 'Beginning Balance', 'Debit', 'Credit', 'End Balance', 'Comment'];
 
         $rows = collect();
         $endingBalanceTotal = 0.0;
-        foreach ($data['groups'] as $group) {
+        foreach ($groups as $group) {
             $groupRows = collect($group['rows']);
             $endingBalanceTotal += (float) ($groupRows->last()->end_balance ?? 0);
 
@@ -316,7 +429,7 @@ class PartnersStatementController
             }
         }
 
-        $fileNameParts = ['Partners-Statement', strtoupper((string) $data['currency'])];
+        $fileNameParts = ['Partners-Statement', strtoupper((string) $filters['currency'])];
         $fileName = preg_replace('/[^A-Za-z0-9\-]+/', '-', implode('-', $fileNameParts)).'.xlsx';
 
         return (new PartnersStatementExport($headings, $rows, $endingBalanceTotal))->download($fileName);

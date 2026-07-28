@@ -48,6 +48,7 @@ class LcSettlementInternalMoneyTransferController
             ->with(['fromBank', 'fromAccountType', 'letterOfCreditIssuance'])
             ->orderByDesc('id')
             ->paginate($paginationPerPage)
+            ->withQueryString()
             ->through(fn (LcSettlementInternalMoneyTransfer $transfer) => [
                 'id' => $transfer->id,
                 'transfer_date_formatted' => $transfer->getTransferDateFormatted(),

@@ -57,22 +57,43 @@ use Illuminate\Http\Request;
  */
 class CompanyController extends Controller
 {
+    private const ROWS_PER_PAGE = 20;
+
     /**
      * ✅ MIGRATED to Vue + Inertia. Renders
      * resources/js/Pages/SuperAdmin/Companies/Index.vue.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $companies = Company::orderBy('id', 'desc')->get();
+        /*
+         * Paginated because this is the one list that grows directly with
+         * the number of tenants — it used to load, hydrate and render
+         * every company, plus a media lookup per row for the logo.
+         * Searching by name happens in SQL so it spans all pages, not
+         * just the one on screen.
+         */
+        $search = trim((string) $request->get('search', ''));
 
-        return \Inertia\Inertia::render('SuperAdmin/Companies/Index', [
-            'rows' => $companies->map(fn (Company $c) => [
+        $companies = Company::query()
+            // `name` stores a per-locale JSON map, so LIKE runs against the
+            // encoded text. That matches any locale's spelling, which is
+            // what someone typing into this box actually wants.
+            ->when($search !== '', fn ($q) => $q->where('name', 'like', '%'.$search.'%'))
+            ->orderBy('id', 'desc')
+            ->paginate(self::ROWS_PER_PAGE)
+            ->withQueryString()
+            ->through(fn (Company $c) => [
                 'id' => $c->id,
                 'name' => $c->name['en'] ?? ($c->name[array_key_first($c->name ?? ['' => ''])] ?? ''),
                 'image_url' => $c->getFirstMediaUrl(),
                 'edit_url' => route('companySection.edit', ['companySection' => $c->id]),
                 'remove_image_url' => $c->getFirstMediaUrl() ? route('remove.company.image', ['lang' => app()->getLocale(), 'company' => $c->id]) : null,
-            ])->values(),
+            ]);
+
+        return \Inertia\Inertia::render('SuperAdmin/Companies/Index', [
+            'paginator' => $companies->toArray(),
+            'search' => $search,
+            'indexUrl' => route('companySection.index'),
             'createUrl' => route('companySection.create'),
             'removeUrl' => route('remove.company'),
         ]);

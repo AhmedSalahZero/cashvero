@@ -15,18 +15,23 @@ use Illuminate\Support\Collection;
  * a DB::table()->...->get() call) into a real LengthAwarePaginator,
  * with the current filters re-attached to every page link.
  *
- * Why this exists: several Statement reports (Bank Statement, Safe
- * Statement, and — as they're migrated next — Factoring/LG-LC/Cash
- * Expense/Partners/Withdrawal Statements) build their result set as a
- * plain Collection rather than an Eloquent query, because the real
- * table/columns queried differ per account type, branch, or currency
- * (decided at runtime). Laravel's Model::paginate() doesn't apply to
- * an already-fetched Collection, so this does the same job by hand —
- * exactly what BankStatementController's original private
- * paginate()/paginator() pair already did. Extracted here instead of
- * copy-pasted per controller, since every Statement page needs the
- * identical behavior (§3.8 of the roadmap: shared bug class, fix
- * once).
+ * ⚠️ Only three reports still need this. Everything else moved to
+ * App\Traits\PaginatesStatementQueries, which pages in SQL so a 50-row
+ * page no longer costs a full table read. Reach for that one first;
+ * this trait is the fallback for row sets that genuinely cannot be
+ * expressed as a single query:
+ *
+ *   - Factoring Statement — each row's end balance is a running total
+ *     of every earlier row, computed in PHP. Page 2 has no way to know
+ *     page 1's closing balance.
+ *   - Factoring Charges Statement — one transaction expands into up to
+ *     three charge rows in PHP, then those are sorted and running-
+ *     totalled. There is no table to LIMIT.
+ *   - Partners Statement — one query per selected partner, paginated
+ *     at partner-group level so a page never splits a partner in half.
+ *
+ * Fixing those three properly means SQL window functions (or storing
+ * the balances), which is a bigger change than pagination.
  *
  * IMPORTANT: this is presentation-layer pagination only. It does not
  * change what rows are fetched or how any balance/total is

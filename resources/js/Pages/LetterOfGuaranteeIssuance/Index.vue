@@ -52,11 +52,40 @@ watch(() => props.activeLgType, (type) => {
     if (type) activeTab.value = type;
 });
 
+/* ── Filter state ──────────────────────────────────────────────────
+   Every tabData() request must carry the *whole* filter set, not just
+   the one field that changed: the endpoint is stateless, so anything
+   omitted silently falls back to the 60-month default window and an
+   empty search. Paging used to send only `page` and searching only
+   `field`/`value`, which is why each action reset the other. ------- */
+const searchField = ref('transaction_name');
+const searchValue = ref('');
+
+function tabParams(type, extra) {
+    const dates = props.filterDates?.[type] || {};
+    const params = new URLSearchParams();
+    const all = {
+        type,
+        startDate: dates.startDate,
+        endDate: dates.endDate,
+        field: searchField.value,
+        value: searchValue.value,
+        ...extra,
+    };
+    // Blank values must be dropped, not sent empty: the backend feeds
+    // startDate/endDate straight into whereBetween().
+    for (const [key, value] of Object.entries(all)) {
+        if (value !== null && value !== undefined && value !== '') {
+            params.append(key, value);
+        }
+    }
+    return params;
+}
+
 async function fetchTab(type, extra = {}) {
     tabLoading.value = true;
     try {
-        const params = new URLSearchParams({ type, ...extra });
-        const res = await fetch(`${props.tabDataUrl}?${params.toString()}`, { headers: { Accept: 'application/json' } });
+        const res = await fetch(`${props.tabDataUrl}?${tabParams(type, extra).toString()}`, { headers: { Accept: 'application/json' } });
         tabsData.value[type] = await res.json();
     } finally {
         tabLoading.value = false;
@@ -71,16 +100,36 @@ function switchTab(type) {
 }
 
 function goToPage(page) {
+    if (page < 1 || page > currentTab.value.last_page || page === currentTab.value.current_page) return;
     fetchTab(activeTab.value, { page });
 }
 
-/* ── Search — now a lightweight fetch against the active tab only,
-   not a full page reload (matches the original's server-side search
-   on Transaction Name / LG Code / dates). ────────────────────────── */
-const searchField = ref('transaction_name');
-const searchValue = ref('');
+/* Windowed page numbers — the bar used to render one button per page,
+   so a company with a few thousand LGs got a few hundred buttons. */
+const pageWindow = computed(() => {
+    const { current_page: current, last_page: last } = currentTab.value;
+    if (last <= 1) return [];
+
+    const pages = new Set([1, last]);
+    for (let p = current - 2; p <= current + 2; p++) {
+        if (p >= 1 && p <= last) pages.add(p);
+    }
+
+    const sorted = [...pages].sort((a, b) => a - b);
+    return sorted.flatMap((page, i) => {
+        const previous = sorted[i - 1];
+        return previous && page - previous > 1 ? ['gap', page] : [page];
+    });
+});
+
+const rowOffset = computed(() => (currentTab.value.current_page - 1) * (currentTab.value.per_page || 0));
+
+/* ── Search — a lightweight fetch against the active tab only, not a
+   full page reload (matches the original's server-side search on
+   Transaction Name / LG Code / dates). Resets to page 1, and the term
+   is carried by tabParams() from here on. ───────────────────────── */
 function applySearch() {
-    fetchTab(activeTab.value, { field: searchField.value, value: searchValue.value });
+    fetchTab(activeTab.value, { page: 1 });
 }
 
 /* ── Cancel modal ─────────────────────────────────────────────── */
@@ -216,7 +265,7 @@ const odooErrorTarget = ref(null);
                     </thead>
                     <tbody>
                         <tr v-for="(row, index) in currentTab.rows" :key="row.id" class="cvr-table-row">
-                            <td class="px-3 py-3 cvr-text-secondary">{{ index + 1 }}</td>
+                            <td class="px-3 py-3 cvr-text-secondary">{{ rowOffset + index + 1 }}</td>
                             <td class="px-3 py-3 cvr-text-primary max-w-[12rem] break-words">{{ row.transaction_name }}</td>
                             <td class="px-3 py-3 cvr-text-secondary max-w-[12rem] break-words">{{ row.beneficiary_name }}</td>
                             <td class="px-3 py-3 cvr-text-secondary">{{ row.source_formatted }}</td>
@@ -260,14 +309,28 @@ const odooErrorTarget = ref(null);
             <!-- Pagination -->
             <div v-if="currentTab.last_page > 1" class="flex items-center justify-between mt-4 text-sm">
                 <p class="cvr-text-muted">{{ currentTab.total }} total records</p>
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-1">
                     <button
-                        v-for="p in currentTab.last_page"
-                        :key="p"
-                        @click="goToPage(p)"
-                        class="px-3 py-1.5 rounded border text-xs"
-                        :class="p === currentTab.current_page ? 'cvr-btn-primary' : 'cvr-btn-secondary'"
-                    >{{ p }}</button>
+                        @click="goToPage(currentTab.current_page - 1)"
+                        :disabled="currentTab.current_page === 1"
+                        class="cvr-btn-secondary px-3 py-1.5 rounded border text-xs"
+                        :class="{ 'opacity-40 cursor-not-allowed': currentTab.current_page === 1 }"
+                    >‹</button>
+                    <template v-for="(p, i) in pageWindow" :key="i">
+                        <span v-if="p === 'gap'" class="px-2 cvr-text-muted">…</span>
+                        <button
+                            v-else
+                            @click="goToPage(p)"
+                            class="px-3 py-1.5 rounded border text-xs"
+                            :class="p === currentTab.current_page ? 'cvr-btn-primary' : 'cvr-btn-secondary'"
+                        >{{ p }}</button>
+                    </template>
+                    <button
+                        @click="goToPage(currentTab.current_page + 1)"
+                        :disabled="currentTab.current_page === currentTab.last_page"
+                        class="cvr-btn-secondary px-3 py-1.5 rounded border text-xs"
+                        :class="{ 'opacity-40 cursor-not-allowed': currentTab.current_page === currentTab.last_page }"
+                    >›</button>
                 </div>
             </div>
 

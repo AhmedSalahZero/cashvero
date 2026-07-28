@@ -6,7 +6,7 @@ use App\Exports\Statements\CashExpenseStatementExport;
 use App\Models\CashExpenseCategory;
 use App\Models\Company;
 use App\Traits\GeneralFunctions;
-use App\Traits\PaginatesRawCollections;
+use App\Traits\PaginatesStatementQueries;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -52,7 +52,7 @@ use Illuminate\Support\Facades\DB;
  *   - result()      → ✅ Migrated to Inertia (Statements/CashExpenseStatement/Result).
  *                     Query logic (fetchStatementRows()) is UNCHANGED from the
  *                     original controller. Real server-side pagination (via
- *                     PaginatesRawCollections) and GET instead of POST are new,
+ *                     PaginatesStatementQueries) and GET instead of POST are new,
  *                     presentation-only — matches Bank/Safe Statement's sibling
  *                     pages. Safe to change HTTP verb/URI here: nothing else in
  *                     the app references result.cash.expense.statement.
@@ -65,7 +65,11 @@ use Illuminate\Support\Facades\DB;
 class CashExpenseStatementController
 {
     use GeneralFunctions;
-    use PaginatesRawCollections;
+    use PaginatesStatementQueries;
+
+    private const STATEMENT_TABLE = 'cash_expenses';
+
+    private const ROWS_PER_PAGE = 50;
 
     /**
      * Filter form: date range, Currency, and one or more expense
@@ -112,23 +116,25 @@ class CashExpenseStatementController
         $currency = $request->get('currency');
         $cashExpenseCategoryIds = $request->get('cash_expense_category_name_id', []);
 
-        $results = DB::table('cash_expenses')
+        $freshQuery = fn () => DB::table(self::STATEMENT_TABLE)
             ->where('cash_expenses.company_id', $company->id)
             ->where('currency', $currency)
             ->where('payment_date', '>=', $startDate)
             ->where('payment_date', '<=', $endDate)
             ->whereIn('cash_expense_category_name_id', $cashExpenseCategoryIds)
-            ->orderByRaw('payment_date asc')
+            // `payment_date` alone is not a stable sort: same-day expenses
+            // could swap places between page 1 and page 2 and be shown twice
+            // or not at all. The id tiebreaker makes the order total.
+            ->orderByRaw('payment_date asc, cash_expenses.id asc')
             ->join('cash_expense_category_names', 'cash_expense_category_names.id', '=', 'cash_expenses.cash_expense_category_name_id')
             ->join('cash_expense_categories', 'cash_expense_categories.id', '=', 'cash_expense_category_names.cash_expense_category_id')
-            ->selectRaw('cash_expenses.*,cash_expense_category_names.name as sub_category_name , cash_expense_categories.name as main_category_name')
-            ->get();
+            ->selectRaw('cash_expenses.*,cash_expense_category_names.name as sub_category_name , cash_expense_categories.name as main_category_name');
 
-        if (! count($results)) {
+        if (! $freshQuery()->exists()) {
             return null;
         }
 
-        return ['results' => $results, 'currency' => $currency];
+        return ['query' => $freshQuery, 'currency' => $currency];
     }
 
     /**
@@ -170,16 +176,21 @@ class CashExpenseStatementController
         if (is_null($data)) {
             return redirect()->back()->with('fail', __('No Data Found'));
         }
-        $results = $data['results'];
+        // Totals stay range-wide; they are SQL SUMs over the same WHERE
+        // clause now rather than sums of a fully hydrated collection.
+        $paginator = $this->paginateStatement($data['query'], self::ROWS_PER_PAGE);
+        $sums = $this->statementSums($data['query'], [
+            'total_paid' => self::STATEMENT_TABLE.'.paid_amount',
+            'total_withhold' => self::STATEMENT_TABLE.'.total_withhold_amount',
+        ]);
 
         $kpis = [
-            'totalPaidAmount' => (float) $results->sum('paid_amount'),
-            'totalWithholdAmount' => (float) $results->sum('total_withhold_amount'),
-            'transactionCount' => $results->count(),
+            'totalPaidAmount' => $sums['total_paid'],
+            'totalWithholdAmount' => $sums['total_withhold'],
+            'transactionCount' => $paginator->total(),
         ];
 
         $lang = app()->getLocale();
-        $paginator = $this->paginateCollection($results, 50, $request);
         $paginator->getCollection()->transform(fn ($row) => $this->mapStatementRow($row, $lang));
 
         return \Inertia\Inertia::render('Statements/CashExpenseStatement/Result', [
@@ -212,7 +223,9 @@ class CashExpenseStatementController
 
         $headings = ['#', 'Date', 'Main Category', 'Sub Category', 'Supplier Name', 'Paid Amount', 'Withhold Amount', 'Amount In Paying Currency', 'Exchange Rate', 'Reviewed', 'Comment'];
 
-        $rows = $data['results']->values()->map(function ($row, $index) use ($lang) {
+        // The workbook is the whole range, not the page on screen, so the
+        // export runs the same query unpaginated.
+        $rows = $data['query']()->get()->values()->map(function ($row, $index) use ($lang) {
             $mapped = $this->mapStatementRow($row, $lang);
 
             return [

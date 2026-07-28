@@ -7,7 +7,7 @@ use App\Models\AccountType;
 use App\Models\Company;
 use App\Models\FinancialInstitution;
 use App\Traits\GeneralFunctions;
-use App\Traits\PaginatesRawCollections;
+use App\Traits\PaginatesStatementQueries;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -44,7 +44,7 @@ use Illuminate\Support\Facades\DB;
  *   - index()        → ✅ Migrated to Inertia (Statements/WithdrawalStatement/Index)
  *   - result()        → ✅ Migrated to Inertia (Statements/WithdrawalStatement/Result).
  *                      Query logic (fetchWithdrawals()/getOverdraftWithdrawals())
- *                      is UNCHANGED. Pagination via PaginatesRawCollections is new
+ *                      is UNCHANGED. Pagination via PaginatesStatementQueries is new
  *                      (project-owner requested heavy-report handling; the
  *                      original had none at all — same gap Safe Statement had).
  *                      Since the shared route stays POST, pagination "page N"
@@ -68,7 +68,9 @@ class WithdrawalsSettlementReportController
 {
     const NUMBER_OF_INTERNAL_MONTHS = 6;
     use GeneralFunctions;
-    use PaginatesRawCollections;
+    use PaginatesStatementQueries;
+
+    private const ROWS_PER_PAGE = 50;
 
     /**
      * Filter form: date range, Banks (multi-select), Account Type, Currency.
@@ -124,7 +126,20 @@ class WithdrawalsSettlementReportController
      * given filters. Read by both result() (this page) and
      * getOverdraftWithdrawalsWithoutStartDate() (the Cash Forecast widget).
      */
-    protected function getOverdraftWithdrawals(string $startDate, string $endDate, string $currency, int $accountTypeId, int $companyId, array $financialInstitutionIds)
+    /**
+     * The same query as getOverdraftWithdrawals() below, handed back as a
+     * factory instead of a fetched Collection so result() and exportExcel()
+     * can paginate and aggregate it in SQL. Every call returns a new
+     * builder — paginate()/first()/sum() each mutate the one they run on.
+     *
+     * Also returns the two table names the caller needs to qualify columns
+     * with: `credit` lives on the bank statement table while
+     * `settlement_amount` and `net_balance` live on the withdrawals table,
+     * and this query joins five tables.
+     *
+     * @return array{query: callable, withdrawalsTable: string, bankStatementTable: string}
+     */
+    protected function overdraftWithdrawalsQuery(string $startDate, string $endDate, string $currency, int $accountTypeId, int $companyId, array $financialInstitutionIds): array
     {
         $accountType = AccountType::find($accountTypeId);
         $fullClassName = ('\App\Models\\'.$accountType->model_name);
@@ -136,7 +151,7 @@ class WithdrawalsSettlementReportController
 
         $tableName = (new $fullClassName)->getTable();
 
-        return DB::table($withdrawalsTableName)
+        $freshQuery = fn () => DB::table($withdrawalsTableName)
             ->join($bankStatementTableName, $bankStatementIdName, '=', $bankStatementTableName.'.id')
             ->join($tableName, $bankStatementTableName.'.'.$foreignKeyName, '=', $tableName.'.id')
             ->join('financial_institutions', 'financial_institutions.id', '=', $tableName.'.financial_institution_id')
@@ -145,8 +160,25 @@ class WithdrawalsSettlementReportController
             ->whereIn($bankStatementTableName.'.'.$foreignKeyName, $overdraftIds)
             ->whereBetween($bankStatementTableName.'.date', [$startDate, $endDate])
             ->where('currency', $currency)
-            ->orderByRaw('due_date asc')
-            ->get();
+            // `due_date` alone is not a stable sort: withdrawals sharing a
+            // due date could swap places between page 1 and page 2 and be
+            // shown twice or not at all. The id tiebreaker makes it total.
+            ->orderByRaw('due_date asc, '.$withdrawalsTableName.'.id asc');
+
+        return [
+            'query' => $freshQuery,
+            'withdrawalsTable' => $withdrawalsTableName,
+            'bankStatementTable' => $bankStatementTableName,
+        ];
+    }
+
+    /**
+     * Fetched form, kept for the Cash Forecast widget below, which filters
+     * and reshapes the rows as a Collection rather than paging them.
+     */
+    protected function getOverdraftWithdrawals(string $startDate, string $endDate, string $currency, int $accountTypeId, int $companyId, array $financialInstitutionIds)
+    {
+        return $this->overdraftWithdrawalsQuery($startDate, $endDate, $currency, $accountTypeId, $companyId, $financialInstitutionIds)['query']()->get();
     }
 
     /** UNCHANGED — used only by the Cash Forecast widget's refreshReport(). */
@@ -192,16 +224,25 @@ class WithdrawalsSettlementReportController
         $fullClassName = ('\App\Models\\'.$accountType->model_name);
         $tableNameFormatted = $fullClassName::getTableNameFormatted();
 
-        $overdraftWithdrawals = $this->getOverdraftWithdrawals($startDate, $endDate, $currency, $accountTypeId, $company->id, $financialInstitutionIds);
+        $withdrawals = $this->overdraftWithdrawalsQuery($startDate, $endDate, $currency, $accountTypeId, $company->id, $financialInstitutionIds);
+
+        // Totals still cover the whole filtered range — they are SQL SUMs
+        // over the same WHERE clause instead of sums of a hydrated
+        // collection, so only this page's 50 rows leave the database.
+        $paginator = $this->paginateStatement($withdrawals['query'], self::ROWS_PER_PAGE);
+        $sums = $this->statementSums($withdrawals['query'], [
+            'total_withdrawal' => $withdrawals['bankStatementTable'].'.credit',
+            'total_settlement' => $withdrawals['withdrawalsTable'].'.settlement_amount',
+            'total_outstanding' => $withdrawals['withdrawalsTable'].'.net_balance',
+        ]);
 
         $kpis = [
-            'totalWithdrawalAmount' => (float) $overdraftWithdrawals->sum('credit'),
-            'totalSettlementAmount' => (float) $overdraftWithdrawals->sum('settlement_amount'),
-            'totalOutstandingBalance' => (float) $overdraftWithdrawals->sum('net_balance'),
-            'transactionCount' => $overdraftWithdrawals->count(),
+            'totalWithdrawalAmount' => $sums['total_withdrawal'],
+            'totalSettlementAmount' => $sums['total_settlement'],
+            'totalOutstandingBalance' => $sums['total_outstanding'],
+            'transactionCount' => $paginator->total(),
         ];
 
-        $paginator = $this->paginateCollection($overdraftWithdrawals, 50, $request);
         $paginator->getCollection()->transform(fn ($row) => $this->mapWithdrawalRow($row, $tableNameFormatted));
 
         return \Inertia\Inertia::render('Statements/WithdrawalStatement/Result', [

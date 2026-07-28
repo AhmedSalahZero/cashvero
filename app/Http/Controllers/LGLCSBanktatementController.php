@@ -12,7 +12,7 @@ use App\Models\LetterOfCreditFacility;
 use App\Models\LetterOfCreditIssuance;
 use App\Models\LetterOfGuaranteeIssuance;
 use App\Traits\GeneralFunctions;
-use App\Traits\PaginatesRawCollections;
+use App\Traits\PaginatesStatementQueries;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -70,7 +70,9 @@ use Illuminate\Support\Facades\DB;
 class LGLCSBanktatementController
 {
     use GeneralFunctions;
-    use PaginatesRawCollections;
+    use PaginatesStatementQueries;
+
+    private const ROWS_PER_PAGE = 50;
 
     private const STATEMENT_TABLE_BY_TYPE = [
         'LetterOfCreditIssuance' => 'letter_of_credit_statements',
@@ -168,7 +170,7 @@ class LGLCSBanktatementController
         $source = $request->get('source');
         $type = $request->get('type');
 
-        $results = DB::table($statementTableName)
+        $freshQuery = fn () => DB::table($statementTableName)
             ->where($statementTableName.'.company_id', $company->id)
             ->where('date', '>=', $startDate)
             ->where('date', '<=', $endDate)
@@ -187,10 +189,9 @@ class LGLCSBanktatementController
             ->when($lcTypeOrLgTypeColumnName, function ($q) use ($lcTypeOrLgTypeColumnName, $type) {
                 $q->where($lcTypeOrLgTypeColumnName, $type);
             })
-            ->orderByRaw('date desc , '.$statementTableName.'.id desc')
-            ->get();
+            ->orderByRaw('date desc , '.$statementTableName.'.id desc');
 
-        if (! count($results)) {
+        if (! $freshQuery()->exists()) {
             return null;
         }
 
@@ -206,7 +207,8 @@ class LGLCSBanktatementController
         ][$reportType][$type] ?? null;
 
         return [
-            'results' => $results,
+            'query' => $freshQuery,
+            'statementTable' => $statementTableName,
             'isLcOverdraftBankStatement' => $isLcOverdraftBankStatement,
             'financialInstitutionName' => $financialInstitutionName,
             'letterOfCreditFacilityName' => $letterOfCreditFacilityName,
@@ -248,19 +250,13 @@ class LGLCSBanktatementController
         if (is_null($data)) {
             return redirect()->back()->with('fail', __('No Data Found'));
         }
-        $results = $data['results'];
         $isLcOverdraftBankStatement = $data['isLcOverdraftBankStatement'];
 
-        $kpis = [
-            'beginningBalance' => (float) ($results->last()->beginning_balance ?? 0),
-            'endingBalance' => (float) ($results->first()->end_balance ?? 0),
-            'totalDebit' => (float) $results->sum('debit'),
-            'totalCredit' => (float) $results->sum('credit'),
-            'transactionCount' => $results->count(),
-        ];
+        // Range-wide KPIs via SQL aggregates; only this page's rows are read.
+        $paginator = $this->paginateStatement($data['query'], self::ROWS_PER_PAGE);
+        $kpis = $this->ledgerStatementKpis($data['query'], $data['statementTable'], $paginator->total());
 
         $lang = app()->getLocale();
-        $paginator = $this->paginateCollection($results, 50, $request);
         $paginator->getCollection()->transform(fn ($row) => $this->mapStatementRow($row, $lang, $isLcOverdraftBankStatement));
 
         return \Inertia\Inertia::render('Statements/LgLcStatement/Result', [
@@ -307,7 +303,9 @@ class LGLCSBanktatementController
         }
         $headings[] = 'Comment';
 
-        $rows = $data['results']->values()->map(function ($row, $index) use ($lang, $isLcOverdraftBankStatement) {
+        // The workbook is the whole range, not the page on screen, so the
+        // export runs the same query unpaginated.
+        $rows = $data['query']()->get()->values()->map(function ($row, $index) use ($lang, $isLcOverdraftBankStatement) {
             $mapped = $this->mapStatementRow($row, $lang, $isLcOverdraftBankStatement);
 
             $line = ['#' => $index + 1, 'Date' => $mapped['date']];

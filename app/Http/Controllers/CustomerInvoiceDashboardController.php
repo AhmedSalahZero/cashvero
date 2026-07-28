@@ -85,6 +85,9 @@ use Inertia\Inertia;
 class CustomerInvoiceDashboardController extends Controller
 {
 	use HasBalances;
+
+	private const INVOICE_ROWS_PER_PAGE = 50;
+
     /**
      * Cash Status dashboard — the "Cash Status" tab of the Dashboard
      * sidebar section. All the actual math (balances, overdraft room,
@@ -501,20 +504,31 @@ class CustomerInvoiceDashboardController extends Controller
 		
 		$deductions = Deduction::onlyForCompany($company->id)->get();
 
+        /*
+         * Paginated at the database level: a long-standing customer can
+         * have thousands of invoices, and every row here costs several
+         * accessor lookups (deductions, due-date history, exchange rate).
+         * `id` is appended to the sort so the order is total — without it
+         * invoices sharing a date could swap between pages and be shown
+         * twice or skipped. The Excel export below still runs the same
+         * query unpaginated.
+         */
         $invoices = ('App\Models\\' . $modelType)::where('company_id', $company->id)
         ->where($clientIdColumnName, $partnerId)
         ->where('currency', $currency)
-		->orderByRaw('invoice_date asc , invoice_due_date desc , net_balance desc')
-        ->get();
+		->with(['deductions', 'dueDateHistories'])
+		->orderByRaw('invoice_date asc , invoice_due_date desc , net_balance desc , id asc')
+        ->paginate(self::INVOICE_ROWS_PER_PAGE)
+        ->withQueryString();
         $customer = Partner::find($partnerId);
-        if (!count($invoices)) {
+        if (!$invoices->total()) {
             return  redirect()->back()->with('fail', __('No Data Found'));
         }
 		$hasProjectNameColumn = $modelType == 'CustomerInvoice'?  CustomerInvoice::hasProjectNameColumn() : false;
 		$totalCollectionOrPaidText  = $modelType == 'CustomerInvoice' ? __('Total Collections') : __('Total Payments');
 
 		$invoiceIsCollectedOrPaidMethod = 'is' . ucfirst($isCollectedOrPaid);
-		$formattedInvoices = $invoices->map(function ($invoice) use ($invoiceIsCollectedOrPaidMethod, $company, $modelType, $moneyReceivedOrPaidUrlName, $hasProjectNameColumn, $currency) {
+		$formattedInvoices = $invoices->through(function ($invoice) use ($invoiceIsCollectedOrPaidMethod, $company, $modelType, $moneyReceivedOrPaidUrlName, $hasProjectNameColumn, $currency) {
 			$isDone = $invoice->{$invoiceIsCollectedOrPaidMethod}();
 			return [
 				'id' => $invoice->id,
@@ -552,10 +566,10 @@ class CustomerInvoiceDashboardController extends Controller
 					'amount' => $d->pivot->amount,
 				])->values(),
 			];
-		})->values();
+		});
 
         return Inertia::render('Balances/InvoiceReport', [
-            'invoices' => $formattedInvoices,
+            'invoices' => $formattedInvoices->toArray(),
             'partnerName' => $customer->getName(),
             'partnerId' => $customer->getId(),
             'currency' => $currency,

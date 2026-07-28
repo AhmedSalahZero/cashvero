@@ -17,7 +17,7 @@ use App\Models\TimeOfDeposit;
 use App\Services\Api\CashExpenseOdooService;
 use App\Services\Api\LetterOfGuaranteeService;
 use App\Traits\GeneralFunctions;
-use App\Traits\PaginatesRawCollections;
+use App\Traits\PaginatesStatementQueries;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -50,9 +50,10 @@ use Illuminate\Support\Facades\DB;
  *                               fetchStatementData() and is BYTE-FOR-BYTE
  *                               UNCHANGED from the original Blade-era
  *                               controller — only the pagination (now via
- *                               PaginatesRawCollections, filters preserved
- *                               across pages) and the row/KPI shaping for
- *                               Vue are new.
+ *                               PaginatesStatementQueries — only the current
+ *                               page is read from the database, filters
+ *                               preserved across pages) and the row/KPI
+ *                               shaping for Vue are new.
  *   - getAccountNumbers()     → ✅ New. Small JSON lookup powering the Bank → Account
  *                               Type → Account Number cascading dropdown on the Vue
  *                               form, mirroring the existing pattern already used by
@@ -74,7 +75,9 @@ use Illuminate\Support\Facades\DB;
 class BankStatementController
 {
     use GeneralFunctions;
-    use PaginatesRawCollections;
+    use PaginatesStatementQueries;
+
+    private const ROWS_PER_PAGE = 50;
 
     /**
      * Filter form: pick Bank → Account Type → Account Number → Currency → date range.
@@ -167,10 +170,13 @@ class BankStatementController
         $accountTypeName = $accountType->getName();
         $isCurrentAccount = $accountType->isCurrentAccount();
         $statementModelName = null;
+        $statementTable = null;
+        $freshQuery = null;
         if ($isCurrentAccount) {
             $statementModelName = 'CurrentAccountBankStatement';
+            $statementTable = 'current_account_bank_statements';
             $financialInstitutionAccount = FinancialInstitutionAccount::findByAccountNumber($accountNumber, $company->id, $financialInstitutionId);
-            $results = DB::table('current_account_bank_statements')
+            $freshQuery = fn () => DB::table('current_account_bank_statements')
             ->where('date', '>=', $startDate)
             ->where('date', '<=', $endDate)
             /**
@@ -187,15 +193,15 @@ class BankStatementController
             ->where('current_account_bank_statements.date', '<=', $endDate)
             ->leftJoin('money_received', 'current_account_bank_statements.money_received_id', '=', 'money_received.id')
             ->selectRaw('current_account_bank_statements.*,financial_institution_accounts.*,money_received.is_reviewed,money_received.reviewed_by,current_account_bank_statements.id as id,current_account_bank_statements.full_date as full_date,current_account_bank_statements.date as date')
-            ->orderByRaw('date desc , current_account_bank_statements.id desc')
-            ->get();
+            ->orderByRaw('date desc , current_account_bank_statements.id desc');
 
 
         } elseif ($accountType->isCleanOverdraftAccount()) {
             $statementModelName = 'CleanOverdraftBankStatement';
+            $statementTable = 'clean_overdraft_bank_statements';
             $cleanOverdraft  = CleanOverdraft::findByAccountNumber($accountNumber, $company->id, $financialInstitutionId);
 
-            $results = DB::table('clean_overdraft_bank_statements')
+            $freshQuery = fn () => DB::table('clean_overdraft_bank_statements')
                  ->where('clean_overdraft_bank_statements.company_id', $company->id)
                  ->where('date', '>=', $startDate)
                  ->where('date', '<=', $endDate)
@@ -204,13 +210,13 @@ class BankStatementController
                  ->where('clean_overdrafts.currency', '=', $currencyName)
                 //  ->leftJoin('money_received','current_account_bank_statements.money_received_id','=','money_received.id')
                 ->orderByRaw('clean_overdraft_bank_statements.date desc , clean_overdraft_bank_statements.id desc')
-                ->selectRaw('*,clean_overdraft_bank_statements.id as id')
-                 ->get();
+                ->selectRaw('*,clean_overdraft_bank_statements.id as id');
 
         } elseif ($accountType->isFullySecuredOverdraftAccount()) {
             $fullySecuredOverdraft  = FullySecuredOverdraft::findByAccountNumber($accountNumber, $company->id, $financialInstitutionId);
             $statementModelName = 'FullySecuredOverdraftBankStatement';
-            $results = DB::table('fully_secured_overdraft_bank_statements')
+            $statementTable = 'fully_secured_overdraft_bank_statements';
+            $freshQuery = fn () => DB::table('fully_secured_overdraft_bank_statements')
                  ->where('fully_secured_overdraft_bank_statements.company_id', $company->id)
                  ->where('date', '>=', $startDate)
                  ->where('date', '<=', $endDate)
@@ -218,13 +224,13 @@ class BankStatementController
                  ->join('fully_secured_overdrafts', 'fully_secured_overdraft_bank_statements.fully_secured_overdraft_id', '=', 'fully_secured_overdrafts.id')
                  ->where('fully_secured_overdrafts.currency', '=', $currencyName)
                  ->selectRaw('*,fully_secured_overdraft_bank_statements.id as id')
-                 ->orderByRaw('date desc, fully_secured_overdraft_bank_statements.id desc')
-                 ->get();
+                 ->orderByRaw('date desc, fully_secured_overdraft_bank_statements.id desc');
         } elseif ($accountType->isOverdraftAgainstCommercialPaperAccount()) {
             $statementModelName = 'OverdraftAgainstCommercialPaperBankStatement';
+            $statementTable = 'overdraft_against_commercial_paper_bank_statements';
 
             $overdraftAgainstCommercialPaper  = OverdraftAgainstCommercialPaper::findByAccountNumber($accountNumber, $company->id, $financialInstitutionId);
-            $results = DB::table('overdraft_against_commercial_paper_bank_statements')
+            $freshQuery = fn () => DB::table('overdraft_against_commercial_paper_bank_statements')
                  ->where('overdraft_against_commercial_paper_bank_statements.company_id', $company->id)
                  ->where('date', '>=', $startDate)
                  ->where('date', '<=', $endDate)
@@ -232,13 +238,13 @@ class BankStatementController
                  ->join('overdraft_against_commercial_papers', 'overdraft_against_commercial_paper_bank_statements.overdraft_against_commercial_paper_id', '=', 'overdraft_against_commercial_papers.id')
                  ->where('overdraft_against_commercial_papers.currency', '=', $currencyName)
                  ->orderByRaw('date desc, overdraft_against_commercial_paper_bank_statements.id desc')
-                 ->selectRaw('* , overdraft_against_commercial_paper_bank_statements.limit as statement_limit,overdraft_against_commercial_paper_bank_statements.id as id')
-                 ->get();
+                 ->selectRaw('* , overdraft_against_commercial_paper_bank_statements.limit as statement_limit,overdraft_against_commercial_paper_bank_statements.id as id');
         } elseif ($accountType->isOverdraftAgainstAssignmentOfContractAccount()) {
             $statementModelName = 'OverdraftAgainstAssignmentOfContractBankStatement';
+            $statementTable = 'overdraft_against_assignment_of_contract_bank_statements';
             $overdraftAgainstAgainstAssignmentOfContract  = OverdraftAgainstAssignmentOfContract::findByAccountNumber($accountNumber, $company->id, $financialInstitutionId);
             $odaId = $overdraftAgainstAgainstAssignmentOfContract ? $overdraftAgainstAgainstAssignmentOfContract->id:0;
-            $results = DB::table('overdraft_against_assignment_of_contract_bank_statements')
+            $freshQuery = fn () => DB::table('overdraft_against_assignment_of_contract_bank_statements')
                  ->where('overdraft_against_assignment_of_contract_bank_statements.company_id', $company->id)
                  ->where('date', '>=', $startDate)
                  ->where('date', '<=', $endDate)
@@ -246,16 +252,16 @@ class BankStatementController
                  ->join('overdraft_against_assignment_of_contracts', 'overdraft_against_assignment_of_contract_bank_statements.overdraft_against_assignment_of_contract_id', '=', 'overdraft_against_assignment_of_contracts.id')
                  ->where('overdraft_against_assignment_of_contracts.currency', '=', $currencyName)
                  ->orderByRaw('date desc, overdraft_against_assignment_of_contract_bank_statements.id desc')
-                 ->selectRaw('* , overdraft_against_assignment_of_contract_bank_statements.limit as statement_limit,overdraft_against_assignment_of_contract_bank_statements.id as id')
-                 ->get();
+                 ->selectRaw('* , overdraft_against_assignment_of_contract_bank_statements.limit as statement_limit,overdraft_against_assignment_of_contract_bank_statements.id as id');
         }
 
-        if (! count($results)) {
+        if (is_null($freshQuery) || ! $freshQuery()->exists()) {
             return null;
         }
 
         return [
-            'results' => $results,
+            'query' => $freshQuery,
+            'statementTable' => $statementTable,
             'statementModelName' => $statementModelName,
             'accountType' => $accountType,
             'accountTypeName' => $accountTypeName,
@@ -313,32 +319,23 @@ class BankStatementController
         if (is_null($data)) {
             return redirect()->back()->with('fail', __('No Data Found'));
         }
-        $results = $data['results'];
         $isCurrentAccount = $data['isCurrentAccount'];
         $isAgainstCommercialPaper = $data['isAgainstCommercialPaper'];
         $isAgainstAssignmentOfContract = $data['isAgainstAssignmentOfContract'];
 
         /**
-         * KPI totals — computed from the FULL result set, before pagination,
-         * so they always reflect the whole date range, not just the current
-         * page. $results is already ordered date desc / id desc, so the
-         * first row is the most recent movement (its end_balance IS the
-         * range's ending balance) and the last row is the earliest movement
-         * (its beginning_balance IS the range's beginning balance) — exactly
-         * how the original Blade page's own totals implicitly worked, just
-         * made explicit here instead of left for the person to read off the
-         * table's first/last row by eye.
+         * KPI totals still describe the FULL date range, not the current
+         * page — they just no longer require reading the whole range into
+         * PHP to get there. Debit/credit are SQL SUMs over the same WHERE
+         * clause; the beginning and ending balances are read off the
+         * earliest and latest rows, which is what taking last()/first() of
+         * the date-desc collection used to mean. Whether a range has 50
+         * rows or 50,000, the page costs the same now.
          */
-        $kpis = [
-            'beginningBalance' => (float) ($results->last()->beginning_balance ?? 0),
-            'endingBalance' => (float) ($results->first()->end_balance ?? 0),
-            'totalDebit' => (float) $results->sum('debit'),
-            'totalCredit' => (float) $results->sum('credit'),
-            'transactionCount' => $results->count(),
-        ];
+        $paginator = $this->paginateStatement($data['query'], self::ROWS_PER_PAGE);
+        $kpis = $this->ledgerStatementKpis($data['query'], $data['statementTable'], $paginator->total());
 
         $lang = app()->getLocale();
-        $paginator = $this->paginateCollection($results, 50, $request);
         $paginator->getCollection()->transform(
             fn ($row) => $this->mapStatementRow($row, $lang, $isCurrentAccount, $isAgainstCommercialPaper, $isAgainstAssignmentOfContract)
         );
@@ -408,7 +405,9 @@ class BankStatementController
         }
         array_push($headings, 'Reviewed', 'Comment');
 
-        $rows = $data['results']->values()->map(function ($row, $index) use ($lang, $isCurrentAccount, $showActualLimit, $isAgainstCommercialPaper, $isAgainstAssignmentOfContract) {
+        // The workbook is the whole range, not the page on screen, so the
+        // export runs the same query unpaginated.
+        $rows = $data['query']()->get()->values()->map(function ($row, $index) use ($lang, $isCurrentAccount, $showActualLimit, $isAgainstCommercialPaper, $isAgainstAssignmentOfContract) {
             $mapped = $this->mapStatementRow($row, $lang, $isCurrentAccount, $isAgainstCommercialPaper, $isAgainstAssignmentOfContract);
 
             $line = ['#' => $index + 1, 'Date' => $mapped['date']];

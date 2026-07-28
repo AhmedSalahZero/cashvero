@@ -1,13 +1,29 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import Pagination from '@/Components/Pagination.vue';
 
 const props = defineProps({
     company: Object, // null if not scoped to a company
     createUrl: String,
-    rows: Array,
+    paginator: Object,
+    search: String,
+    indexUrl: String,
     removeUrl: String,
+});
+
+const rows = computed(() => props.paginator?.data || []);
+
+/* Server-side search so it spans every user the current admin may see,
+   not just the page on screen. Debounced to one request per pause. */
+const searchTerm = ref(props.search || '');
+let searchTimer = null;
+watch(searchTerm, (value) => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+        router.get(props.indexUrl, { search: value }, { preserveState: true, replace: true });
+    }, 350);
 });
 
 const deleteTarget = ref(null);
@@ -27,9 +43,15 @@ function destroyRow() {
         <div class="p-6">
             <div class="flex items-center justify-between mb-6">
                 <h1 class="text-xl font-semibold cvr-text-primary">Users Table</h1>
-                <Link :href="createUrl" class="cvr-btn-copper px-3 py-1.5 rounded text-sm inline-flex items-center gap-1">
-                    + Add
-                </Link>
+                <div class="flex items-center gap-3">
+                    <div class="cvr-search-bar flex items-center gap-2 px-3 py-1.5 w-64">
+                        <span class="cvr-text-muted text-sm">🔍</span>
+                        <input v-model="searchTerm" type="text" placeholder="Search users..." class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
+                    </div>
+                    <Link :href="createUrl" class="cvr-btn-copper px-3 py-1.5 rounded text-sm inline-flex items-center gap-1">
+                        + Add
+                    </Link>
+                </div>
             </div>
 
             <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
@@ -65,6 +87,8 @@ function destroyRow() {
                     </tbody>
                 </table>
             </div>
+
+            <Pagination :paginator="paginator" label="users" />
 
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">

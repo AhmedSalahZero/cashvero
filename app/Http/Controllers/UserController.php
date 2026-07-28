@@ -73,6 +73,8 @@ use Spatie\Permission\Models\Permission;
  */
 class UserController extends Controller
 {
+    private const ROWS_PER_PAGE = 20;
+
     use ImageSave;
 
     public function __construct()
@@ -84,14 +86,23 @@ class UserController extends Controller
      * ✅ MIGRATED to Vue + Inertia. Renders
      * resources/js/Pages/SuperAdmin/Users/Index.vue.
      */
-    public function index(?Company $company = null)
+    public function index(Request $request, ?Company $company = null)
     {
-        $users = User::getUsersWithRoles($company);
+        /*
+         * Paginated: without a company in the URL this is every user in
+         * the system, and it grows with companies x users. The role
+         * visibility gates in getUsersWithRolesQuery() are all whereHas
+         * clauses, so they still apply across the whole set rather than
+         * to the page on screen. Name search runs in SQL for the same
+         * reason.
+         */
+        $search = trim((string) $request->get('search', ''));
 
-        return \Inertia\Inertia::render('SuperAdmin/Users/Index', [
-            'company' => $company ? ['id' => $company->id] : null,
-            'createUrl' => $company ? route('user.create', ['company' => $company->id]) : route('user.create'),
-            'rows' => collect($users)->map(function (User $u) use ($company) {
+        $users = User::getUsersWithRolesQuery($company)
+            ->when($search !== '', fn ($q) => $q->where('users.name', 'like', '%'.$search.'%'))
+            ->paginate(self::ROWS_PER_PAGE)
+            ->withQueryString()
+            ->through(function (User $u) use ($company) {
                 return [
                     'id' => $u->id,
                     'name' => $u->name,
@@ -101,7 +112,14 @@ class UserController extends Controller
                     'edit_url' => $company ? route('user.edit', ['user' => $u->id, 'company' => $company->id]) : route('user.edit', ['user' => $u->id]),
                     'permissions_url' => $company ? route('user.permissions.edit', ['user' => $u->id, 'company' => $company->id]) : route('user.permissions.edit', ['user' => $u->id]),
                 ];
-            })->values(),
+            });
+
+        return \Inertia\Inertia::render('SuperAdmin/Users/Index', [
+            'company' => $company ? ['id' => $company->id] : null,
+            'createUrl' => $company ? route('user.create', ['company' => $company->id]) : route('user.create'),
+            'paginator' => $users->toArray(),
+            'search' => $search,
+            'indexUrl' => $company ? route('user.index', ['company' => $company->id]) : route('user.index'),
             'removeUrl' => route('remove.user'),
         ]);
     }

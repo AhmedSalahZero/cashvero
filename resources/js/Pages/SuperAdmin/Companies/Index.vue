@@ -1,12 +1,28 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import Pagination from '@/Components/Pagination.vue';
 
 const props = defineProps({
-    rows: Array,
+    paginator: Object,
+    search: String,
+    indexUrl: String,
     createUrl: String,
     removeUrl: String,
+});
+
+const rows = computed(() => props.paginator?.data || []);
+
+/* Search runs server-side so it covers every company, not just the page
+   currently rendered. Debounced so typing does not fire a request per key. */
+const searchTerm = ref(props.search || '');
+let searchTimer = null;
+watch(searchTerm, (value) => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+        router.get(props.indexUrl, { search: value }, { preserveState: true, replace: true });
+    }, 350);
 });
 
 const deleteTarget = ref(null);
@@ -35,9 +51,15 @@ function removeImage(row) {
         <div class="p-6">
             <div class="flex items-center justify-between mb-6">
                 <h1 class="text-xl font-semibold cvr-text-primary">Companies Table</h1>
-                <Link :href="createUrl" class="cvr-btn-copper px-3 py-1.5 rounded text-sm inline-flex items-center gap-1">
-                    + Add
-                </Link>
+                <div class="flex items-center gap-3">
+                    <div class="cvr-search-bar flex items-center gap-2 px-3 py-1.5 w-64">
+                        <span class="cvr-text-muted text-sm">🔍</span>
+                        <input v-model="searchTerm" type="text" placeholder="Search companies..." class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
+                    </div>
+                    <Link :href="createUrl" class="cvr-btn-copper px-3 py-1.5 rounded text-sm inline-flex items-center gap-1">
+                        + Add
+                    </Link>
+                </div>
             </div>
 
             <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
@@ -71,6 +93,8 @@ function removeImage(row) {
                     </tbody>
                 </table>
             </div>
+
+            <Pagination :paginator="paginator" label="companies" />
 
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">

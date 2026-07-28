@@ -12,6 +12,7 @@ use App\Models\FactoringTransaction;
 use App\Models\FinancialInstitution;
 use App\Models\Partner;
 use App\Models\Settlement;
+use App\Traits\FiltersFactoringTransactions;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -50,63 +51,42 @@ use Inertia\Inertia;
  */
 class FactoringWithRecourseController
 {
+    use FiltersFactoringTransactions;
     use GeneralFunctions;
 
-    protected function applyFilter(Request $request, Collection $collection): Collection
-    {
-        if (!count($collection)) {
-            return $collection;
-        }
+    private const ROWS_PER_PAGE = 20;
 
-        $searchFieldName = $request->get('field');
-        $dateFieldName = $searchFieldName === 'factoring_date' ? 'factoring_date' : 'created_at';
-        $from = $request->get('from');
-        $to = $request->get('to');
-        $value = $request->query('value');
-
-        return $collection
-            ->when($request->has('value'), function ($collection) use ($value, $searchFieldName) {
-                return $collection->filter(function ($item) use ($value, $searchFieldName) {
-                    if ($searchFieldName === 'customer_id') {
-                        return false !== stristr($item->customer?->getName() ?? '', (string) $value);
-                    }
-                    if ($searchFieldName === 'factoring_company_id') {
-                        return false !== stristr($item->factoringCompany?->getName() ?? '', (string) $value);
-                    }
-
-                    return false !== stristr((string) $item->{$searchFieldName}, (string) $value);
-                });
-            })
-            ->when($request->get('from'), function ($collection) use ($dateFieldName, $from) {
-                return $collection->where($dateFieldName, '>=', $from);
-            })
-            ->when($request->get('to'), function ($collection) use ($dateFieldName, $to) {
-                return $collection->where($dateFieldName, '<=', $to);
-            })
-            ->sortByDesc('id')
-            ->values();
-    }
-
+    /**
+     * Listing page. This used to load every factoring transaction the
+     * company had ever recorded — with five eager-loaded relations and no
+     * date window — and then filter and sort that collection in PHP. The
+     * filter runs as SQL now (see FiltersFactoringTransactions), so the
+     * database returns one page at a time.
+     */
     public function index(Company $company, Request $request)
     {
-        $transactions = $company->factoringTransactions()
+        $query = $company->factoringTransactions()
             ->with(['factoringCompany', 'factoringContract', 'customer', 'customerInvoice', 'financialInstitution'])
-            ->where('recourse_type', FactoringTransaction::WITH_RECOURSE)
-            ->get();
+            ->where('recourse_type', FactoringTransaction::WITH_RECOURSE);
 
-        $transactions = $this->applyFilter($request, $transactions);
+        $transactions = $this->applyFactoringFilter($request, $query)
+            ->paginate(self::ROWS_PER_PAGE)
+            ->withQueryString();
 
-        $searchFields = [
-            'factoring_date' => __('Factoring Date'),
-            'customer_id' => __('Customer'),
-            'factoring_company_id' => __('Factoring Company'),
-            'invoice_currency' => __('Invoice Currency'),
-            'received_amount' => __('Received Amount'),
-        ];
+        $searchFields = $this->factoringSearchFields();
 
         return Inertia::render('FactoringWithRecourse/Index', [
             'company' => ['id' => $company->id, 'name' => $company->getName()],
             'searchFields' => $searchFields,
+            // Echoed back so the search inputs keep what the user typed.
+            // The paginator links carry the same values, so page 2 stays
+            // inside the same filtered set.
+            'filters' => [
+                'field' => $request->get('field', ''),
+                'value' => $request->query('value', ''),
+                'from' => $request->get('from', ''),
+                'to' => $request->get('to', ''),
+            ],
             'financialInstitutionBanks' => FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->get()
                 ->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()])->values(),
             'accountTypes' => AccountType::onlyCashAccounts()->get()
@@ -114,7 +94,7 @@ class FactoringWithRecourseController
             'canCreate' => hasAuthFor('create supplier payment'),
             'canUpdate' => hasAuthFor('update supplier payment'),
             'canDelete' => hasAuthFor('delete supplier payment'),
-            'transactions' => $transactions->values()->map(fn (FactoringTransaction $t) => [
+            'transactions' => $transactions->through(fn (FactoringTransaction $t) => [
                 'id' => $t->id,
                 'factoring_date_formatted' => $t->getFactoringDateFormatted(),
                 'factoring_company_name' => $t->factoringCompany?->getName(),
@@ -140,7 +120,7 @@ class FactoringWithRecourseController
                 'mark_rejected_url' => route('factoring.with-recourse.mark-rejected', ['company' => $company->id, 'factoringTransaction' => $t->id]),
                 'revert_rejected_url' => route('factoring.with-recourse.revert-rejected', ['company' => $company->id, 'factoringTransaction' => $t->id]),
                 'delete_url' => route('factoring.with-recourse.destroy', ['company' => $company->id, 'factoringTransaction' => $t->id]),
-            ]),
+            ])->toArray(),
             'urls' => [
                 'create' => route('factoring.with-recourse.create', ['company' => $company->id]),
                 'index' => route('factoring.with-recourse.index', ['company' => $company->id]),

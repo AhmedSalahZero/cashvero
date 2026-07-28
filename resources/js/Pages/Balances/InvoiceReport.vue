@@ -14,6 +14,7 @@
 import { ref, computed } from 'vue';
 import { Link, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import Pagination from '@/Components/Pagination.vue';
 
 const props = defineProps({
     company: Object,
@@ -28,7 +29,7 @@ const props = defineProps({
     downPaymentSettlementUrl: String,
     exportUrl: String,
     backUrl: String,
-    invoices: Array,
+    invoices: Object,
 });
 
 function formatAmount(value) {
@@ -75,7 +76,11 @@ function closeDeductModal() {
     activeInvoiceId.value = null;
 }
 
-const activeInvoice = computed(() => props.invoices.find(inv => inv.id === activeInvoiceId.value) || null);
+const rows = computed(() => props.invoices?.data || []);
+/* Row numbers continue across pages rather than restarting at 1. */
+const rowOffset = computed(() => ((props.invoices?.current_page || 1) - 1) * (props.invoices?.per_page || 0));
+
+const activeInvoice = computed(() => rows.value.find(inv => inv.id === activeInvoiceId.value) || null);
 
 function addDeductionRow() {
     deductionForm.deductions.push(blankDeductionRow());
@@ -108,7 +113,7 @@ function submitDeductions(invoice) {
                 <Link :href="downPaymentSettlementUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap">
                     Down Payment Amount Settlement
                 </Link>
-                <a v-if="exportUrl && invoices.length" :href="exportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap">
+                <a v-if="exportUrl && invoices.total" :href="exportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap">
                     ⬇️ Export to Excel
                 </a>
             </div>
@@ -138,8 +143,8 @@ function submitDeductions(invoice) {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="(invoice, i) in invoices" :key="invoice.id" class="cvr-table-row">
-                            <td class="px-4 py-3 text-center cvr-text-secondary">{{ i + 1 }}</td>
+                        <tr v-for="(invoice, i) in rows" :key="invoice.id" class="cvr-table-row">
+                            <td class="px-4 py-3 text-center cvr-text-secondary">{{ rowOffset + i + 1 }}</td>
                             <td v-if="hasProjectNameColumn" class="px-4 py-3 text-left cvr-text-secondary">{{ invoice.project_name }}</td>
                             <td class="px-4 py-3 text-center cvr-text-secondary">{{ invoice.invoice_date }}</td>
                             <td class="px-4 py-3 text-center cvr-text-primary">{{ invoice.invoice_number }}</td>
@@ -177,12 +182,14 @@ function submitDeductions(invoice) {
                                 </a>
                             </td>
                         </tr>
-                        <tr v-if="invoices.length === 0">
+                        <tr v-if="rows.length === 0">
                             <td colspan="16" class="px-4 py-8 text-center cvr-text-muted">No invoices found.</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
+
+            <Pagination :paginator="invoices" label="invoices" />
 
             <!-- Deduct modal -->
             <div v-if="activeInvoiceId" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

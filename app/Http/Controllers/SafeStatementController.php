@@ -6,7 +6,7 @@ use App\Exports\Statements\SafeStatementExport;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Traits\GeneralFunctions;
-use App\Traits\PaginatesRawCollections;
+use App\Traits\PaginatesStatementQueries;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -32,12 +32,15 @@ use Illuminate\Support\Facades\DB;
  *                     The underlying query (fetchStatementRows()) is
  *                     UNCHANGED. Two genuinely new, presentation-only
  *                     things were added:
- *                       1. Real server-side pagination via PaginatesRawCollections
+ *                       1. Real server-side pagination via PaginatesStatementQueries
  *                          (the original Blade page loaded every matching row
  *                          into one client-side DataTable at once — fine for a
  *                          short range, but explicitly called out by the
  *                          project owner as needing "heavy report" handling
- *                          for ranges with hundreds of transactions).
+ *                          for ranges with hundreds of transactions). Only the
+ *                          current page's rows are read from the database;
+ *                          the KPI totals come from SQL aggregates over the
+ *                          full range.
  *                       2. The filter form now submits as GET instead of the
  *                          original's POST, purely so the result page's URL
  *                          carries its own filters — matching Bank Statement's
@@ -59,7 +62,11 @@ use Illuminate\Support\Facades\DB;
 class SafeStatementController
 {
     use GeneralFunctions;
-    use PaginatesRawCollections;
+    use PaginatesStatementQueries;
+
+    private const STATEMENT_TABLE = 'cash_in_safe_statements';
+
+    private const ROWS_PER_PAGE = 50;
 
     /**
      * Filter form: Branch → Currency → date range.
@@ -95,23 +102,22 @@ class SafeStatementController
         $branchId = $request->get('branch_id');
         $currency = $request->get('currency');
 
-        $results = DB::table('cash_in_safe_statements')
+        $freshQuery = fn () => DB::table(self::STATEMENT_TABLE)
             ->where('company_id', $company->id)
             ->where('currency', $currency)
             ->where('branch_id', $branchId)
             ->where('date', '>=', $startDate)
             ->where('date', '<=', $endDate)
-            ->orderByRaw('date desc , id desc')
-            ->get();
+            ->orderByRaw('date desc , id desc');
 
-        if (! count($results)) {
+        if (! $freshQuery()->exists()) {
             return null;
         }
 
         $branch = Branch::find($branchId);
 
         return [
-            'results' => $results,
+            'query' => $freshQuery,
             'branchName' => $branch ? $branch->name : null,
             'currency' => $currency,
         ];
@@ -155,26 +161,20 @@ class SafeStatementController
         if (is_null($data)) {
             return redirect()->back()->with('fail', __('No Data Found'));
         }
-        $results = $data['results'];
 
         /**
-         * KPI totals — computed from the FULL result set, before
-         * pagination. $results is ordered date desc / id desc, so the
-         * first row is the most recent movement (its end_balance is the
-         * range's ending balance) and the last row is the earliest
-         * movement (its beginning_balance is the range's beginning
-         * balance) — identical convention to Bank Statement's KPIs.
+         * Only this page's 50 rows leave the database now. The KPIs below
+         * still describe the FULL date range — SUM(debit)/SUM(credit) run
+         * as SQL aggregates over the same WHERE clause, and the opening
+         * and closing balances are read off the earliest and latest rows,
+         * which is the same convention as before (the collection was
+         * ordered date desc / id desc, so its last row held the beginning
+         * balance and its first row the ending balance).
          */
-        $kpis = [
-            'beginningBalance' => (float) ($results->last()->beginning_balance ?? 0),
-            'endingBalance' => (float) ($results->first()->end_balance ?? 0),
-            'totalDebit' => (float) $results->sum('debit'),
-            'totalCredit' => (float) $results->sum('credit'),
-            'transactionCount' => $results->count(),
-        ];
+        $paginator = $this->paginateStatement($data['query'], self::ROWS_PER_PAGE);
+        $kpis = $this->ledgerStatementKpis($data['query'], self::STATEMENT_TABLE, $paginator->total());
 
         $lang = app()->getLocale();
-        $paginator = $this->paginateCollection($results, 50, $request);
         $paginator->getCollection()->transform(fn ($row) => $this->mapStatementRow($row, $lang));
 
         return \Inertia\Inertia::render('Statements/SafeStatement/Result', [
@@ -213,7 +213,9 @@ class SafeStatementController
 
         $headings = ['#', 'Date', 'Beginning Balance', 'Debit', 'Credit', 'End Balance', 'Reviewed', 'Comment'];
 
-        $rows = $data['results']->values()->map(function ($row, $index) use ($lang) {
+        // The workbook is the whole range, not the page on screen, so the
+        // export runs the same query unpaginated.
+        $rows = $data['query']()->get()->values()->map(function ($row, $index) use ($lang) {
             $mapped = $this->mapStatementRow($row, $lang);
 
             return [

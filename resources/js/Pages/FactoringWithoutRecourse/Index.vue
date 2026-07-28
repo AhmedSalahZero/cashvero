@@ -2,10 +2,13 @@
 import { ref, reactive, watch, computed } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import Pagination from '@/Components/Pagination.vue';
 
 const props = defineProps({
     company: Object,
-    transactions: Array,
+    transactions: Object,
+    searchFields: Object,
+    filters: Object,
     canCreate: Boolean,
     canUpdate: Boolean,
     canDelete: Boolean,
@@ -13,6 +16,33 @@ const props = defineProps({
     accountTypes: Array,
     urls: Object,
 });
+
+const rows = computed(() => props.transactions?.data || []);
+/* Row numbers continue across pages instead of restarting at 1 on each. */
+const rowOffset = computed(() => ((props.transactions?.current_page || 1) - 1) * (props.transactions?.per_page || 0));
+
+/* ── Search ───────────────────────────────────────────────────────
+   Runs server-side, so it searches every transaction rather than the
+   twenty currently rendered. Customer and Factoring Company match on
+   the related record's name. */
+const search = reactive({
+    field: props.filters?.field || 'factoring_date',
+    value: props.filters?.value || '',
+    from: props.filters?.from || '',
+    to: props.filters?.to || '',
+});
+
+function applySearch() {
+    router.get(props.urls.index, { ...search, page: 1 }, { preserveState: true, preserveScroll: true, replace: true });
+}
+
+function resetSearch() {
+    search.field = 'factoring_date';
+    search.value = '';
+    search.from = '';
+    search.to = '';
+    router.get(props.urls.index, {}, { preserveScroll: true, replace: true });
+}
 
 const page = usePage();
 const errors = computed(() => page.props.errors || {});
@@ -93,6 +123,29 @@ function destroyRow() {
                 </Link>
             </div>
 
+            <div class="flex flex-wrap items-end gap-3 mb-4">
+                <div>
+                    <label class="cvr-form-label">Search By</label>
+                    <select v-model="search.field" class="cvr-input px-3 py-2 rounded">
+                        <option v-for="(label, field) in searchFields" :key="field" :value="field">{{ label }}</option>
+                    </select>
+                </div>
+                <div class="cvr-search-bar flex items-center gap-2 px-3 py-1.5 w-64">
+                    <span class="cvr-text-muted text-sm">🔍</span>
+                    <input v-model="search.value" @keyup.enter="applySearch" type="text" placeholder="Search..." class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
+                </div>
+                <div>
+                    <label class="cvr-form-label">From</label>
+                    <input v-model="search.from" type="date" class="cvr-input px-3 py-2 rounded" />
+                </div>
+                <div>
+                    <label class="cvr-form-label">To</label>
+                    <input v-model="search.to" type="date" class="cvr-input px-3 py-2 rounded" />
+                </div>
+                <button @click="applySearch" class="cvr-btn-secondary px-3 py-2 rounded border text-sm">Search</button>
+                <button @click="resetSearch" class="cvr-btn-secondary px-3 py-2 rounded border text-sm">Reset</button>
+            </div>
+
             <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
@@ -112,8 +165,8 @@ function destroyRow() {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="(row, index) in transactions" :key="row.id" class="cvr-table-row">
-                            <td class="px-4 py-3">{{ index + 1 }}</td>
+                        <tr v-for="(row, index) in rows" :key="row.id" class="cvr-table-row">
+                            <td class="px-4 py-3">{{ rowOffset + index + 1 }}</td>
                             <td class="px-4 py-3 whitespace-nowrap">{{ row.factoring_date_formatted }}</td>
                             <td class="px-4 py-3">{{ row.factoring_company_name }}</td>
                             <td class="px-4 py-3">{{ row.customer_name }}</td>
@@ -144,12 +197,14 @@ function destroyRow() {
                                 </div>
                             </td>
                         </tr>
-                        <tr v-if="transactions.length === 0">
+                        <tr v-if="rows.length === 0">
                             <td colspan="12" class="px-4 py-8 text-center cvr-text-muted">No records found.</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
+
+            <Pagination :paginator="transactions" label="transactions" />
 
             <!-- Mark As Settled modal -->
             <div v-if="settleTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
