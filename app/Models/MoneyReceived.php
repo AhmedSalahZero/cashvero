@@ -447,6 +447,21 @@ class MoneyReceived extends Model implements IHasDebitCurrentAccountStatement
 	{
 		return $this->cheque ? $this->cheque->getChequeNumber():null;
 	}
+
+	/**
+	 * Fallback for Odoo cheque collection refs when this model itself is in
+	 * $items (no settlements). Settlements override this via IsSettlement.
+	 */
+	public function getInvoiceNumber(): string
+	{
+		$chequeNumber = $this->getChequeNumber();
+		if ($chequeNumber) {
+			return (string) $chequeNumber;
+		}
+
+		return (string) $this->id;
+	}
+
 	public function getReceivedAmountFormatted()
     {
         return number_format($this->getReceivedAmount()) ;

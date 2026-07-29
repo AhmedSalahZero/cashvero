@@ -21,6 +21,20 @@ use Carbon\Carbon;
 trait IsMoneyOut
 {
 
+	/**
+	 * Fallback for Odoo cheque refs when the parent money model itself is in
+	 * $items (no settlements). Settlements override this via IsSettlement.
+	 */
+	public function getInvoiceNumber(): string
+	{
+		$chequeNumber = $this->getPayableChequeNumber();
+		if ($chequeNumber) {
+			return (string) $chequeNumber;
+		}
+
+		return (string) $this->id;
+	}
+
 /**
      * * This Code Is The Same For Money Payments And Cash Expenses
 	 * * So If You Edit Here You Should Edit In CashExpense Model Also

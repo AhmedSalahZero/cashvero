@@ -806,10 +806,11 @@ class CashExpense extends Model  implements IHaveCreditOverdraftStatement
 	{
 		$payableCheque = $this->payableCheque;
 		if($payableCheque){
-				/**
-				 * ! getOdooId Is Not Exists In FinancialInstitution Model
-				 */
-			return $payableCheque->deliveryBank->getOdooId();
+			$financialInstitution = $payableCheque->deliveryBank;
+			$accountTypeId = $payableCheque->account_type;
+			$accountNumber = $payableCheque->account_number;
+
+			return (int) $financialInstitution->getOdooIdForAccount($accountTypeId, $accountNumber);
 		}
 		return 0;
 	}

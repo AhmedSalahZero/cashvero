@@ -135,7 +135,7 @@ class MoneyPaymentOdooService
             ];
 	}
 	
-    public function createCashExpense(string $date,float $amountInCurrency,float $amountInMainFunctionalCurrency,int $journalId,int $odooCurrencyId,int $debitOdooAccountId,int $creditOdooAccountId,int $odooPartnerId,string $ref,int $isTax , bool $isMoneyReceived = false , ?string $userComment = null )
+    public function createCashExpense(string $date,float $amountInCurrency,float $amountInMainFunctionalCurrency,int $journalId,int $odooCurrencyId,int $debitOdooAccountId,int $creditOdooAccountId,?int $odooPartnerId,string $ref,int $isTax , bool $isMoneyReceived = false , ?string $userComment = null )
     {
 		  $message =$this->getMessage(); 
 		  $odooPartnerId = $isTax ? null : $odooPartnerId;
