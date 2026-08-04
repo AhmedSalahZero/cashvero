@@ -12,7 +12,8 @@ const props = defineProps({
     contractsSection: Array,          // [{ contract_id, contract_name, contract_code, cash_inflow, cash_outflow, net_cash }]
     companyUnallocatedCashOut: Object,
     grandTotal: Object,               // { cash_inflow, cash_outflow, net_cash, accumulated_net }
-    currencyName: String,
+    currencyName: String,              // عملة الفلتر — تختار العقود فقط
+    displayCurrency: String,           // العملة الوظيفية — كل الأرقام المعروضة بها
     title: String,
     filters: Object,
     urls: Object,
@@ -69,7 +70,7 @@ const accumulatedTotal = computed(() => {
                 </div>
             </div>
 
-            <p class="text-sm cvr-text-muted mb-4"><strong class="cvr-text-primary">Currency:</strong> {{ currencyName }} — <strong class="cvr-text-primary">Interval:</strong> {{ reportInterval }}</p>
+            <p class="text-sm cvr-text-muted mb-4"><strong class="cvr-text-primary">All amounts are shown in:</strong> {{ displayCurrency }} — <strong class="cvr-text-primary">Contracts filter currency:</strong> {{ currencyName }} — <strong class="cvr-text-primary">Interval:</strong> {{ reportInterval }}</p>
 
             <div class="cvr-card-bg cvr-border border rounded-lg overflow-auto">
                 <table class="min-w-full text-sm">

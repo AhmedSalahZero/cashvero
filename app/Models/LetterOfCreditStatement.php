@@ -75,7 +75,7 @@ class LetterOfCreditStatement extends Model
 
 	public static function updateNextRows(LetterOfCreditStatement $model):string 
 	{
-		$minDate  = $model->date ;
+		$minDate = $model->full_date ;
 	
 		
 		/**
@@ -87,13 +87,13 @@ class LetterOfCreditStatement extends Model
 		 */
 		 StatementCascade::touchRows(
 			DB::table('letter_of_credit_statements')
-		->where('date','>=',$minDate)
+		->where('full_date','>=',$minDate)
 		->where('financial_institution_id',$model->financial_institution_id)
 		->where('source',$model->source)
 		->where('lc_facility_id',$model->lc_facility_id)
 		->where('cd_or_td_id',$model->cd_or_td_id)
 		->where('lc_type',$model->lc_type),
-			'date asc , id asc'
+			'full_date asc , id asc'
 		);
 		
 		return $minDate;
@@ -167,8 +167,8 @@ class LetterOfCreditStatement extends Model
 						// وتلقائي هيحذف السحوبات settlements
 					}else{
 						DB::table('letter_of_credit_statements')
-						->where('date','>=',$minDate)
-						->orderByRaw('date asc , id asc')
+						->where('full_date','>=',$minDate)
+						->orderByRaw('full_date asc , id asc')
 						->where('lc_facility_id',$model->lc_facility_id)
 						->where('cd_or_td_id',$model->cd_or_td_id)
 						->where('lc_type',$model->lc_type)

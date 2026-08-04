@@ -77,7 +77,7 @@ class OtherPartnerStatement extends Model  implements IHaveStatement
 
 	public static function updateNextRows(self $model):string 
 	{
-		$minDate  = $model->date ;
+		$minDate  = $model->full_date ;
 	
 		
 		/**
@@ -90,11 +90,11 @@ class OtherPartnerStatement extends Model  implements IHaveStatement
 
 		 StatementCascade::touchRows(
 			DB::table('other_partner_statements')
-		->where('date','>=',$minDate)
+		->where('full_date','>=',$minDate)
 		->where('company_id',$model->company_id)
 		->where('partner_id',$model->partner_id)
 		->where('currency_name',$model->currency_name),
-			'date asc , id asc'
+			'full_date asc , id asc'
 		);
 		
 		return $minDate;

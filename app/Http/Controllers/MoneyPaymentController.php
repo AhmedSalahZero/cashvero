@@ -22,6 +22,7 @@ use App\Models\PayableCheque;
 use App\Models\PurchaseOrder;
 use App\Models\SupplierInvoice;
 use App\Services\Api\OdooPayment;
+use App\Services\Api\OdooSync;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -663,6 +664,20 @@ class MoneyPaymentController
         $returnModel = false
         // ,$accountNumberHasChanged = false
     ) {
+        /**
+         * * الحفظ كله جوه ترانزاكشن واحدة
+         * * وأي اتصال بأودو بيتنفذ بعد ما الترانزاكشن تكومِت (شوف OdooSync)
+         */
+        return OdooSync::transaction(function () use ($company, $request, $returnModel) {
+            return $this->storeWithinTransaction($company, $request, $returnModel);
+        });
+    }
+
+    protected function storeWithinTransaction(
+        Company $company,
+        StoreMoneyPaymentRequest $request,
+        $returnModel = false
+    ) {
         $hasUnappliedAmount = (bool)$request->get('unapplied_amount');
         $partnerType = $request->get('partner_type', 'is_supplier');
         $moneyType = $request->get('type');
@@ -942,35 +957,42 @@ class MoneyPaymentController
 
     public function update(Company $company, StoreMoneyPaymentRequest $request, moneyPayment $moneyPayment)
     {
-	
-        $oldSettlementsForMoneyReceivedWithDownPayment  = $moneyPayment->settlementsForDownPaymentThatComeFromMoneyModel ;
         $newType = $request->get('type');
-        $request->merge([
-            'journal_entry_id'=>$moneyPayment->journal_entry_id,
-            'account_bank_statement_line_id'=>$moneyPayment->account_bank_statement_line_id,
-        ]);
-        $moneyPayment->deleteRelations();
-        $moneyPaidAmountHasChanged = $moneyPayment->getAmount() != $request->input('paid_amount.'.$newType);
-        $moneyPayment->delete();
-        $newMoneyPayment = $this->store($company, $request, true);
-        if (!$moneyPaidAmountHasChanged) {
-            $newMoneyPayment->storeNewSettlement(
-                $oldSettlementsForMoneyReceivedWithDownPayment->toArray(),
-                $newMoneyPayment->getPartnerId(),
-                $company,
-                1
-            );
-        }
+        /**
+         * * التعديل معمول كـ حذف ثم إنشاء
+         * * فلازم يكون كله في ترانزاكشن واحدة
+         * * قبل كده لو أي حاجة ضربت في النص كان السجل القديم بيروح والجديد بيتعمل ناقص
+         */
+        OdooSync::transaction(function () use ($company, $request, $moneyPayment, $newType) {
+            $oldSettlementsForMoneyReceivedWithDownPayment  = $moneyPayment->settlementsForDownPaymentThatComeFromMoneyModel ;
+            $request->merge([
+                'journal_entry_id'=>$moneyPayment->journal_entry_id,
+                'account_bank_statement_line_id'=>$moneyPayment->account_bank_statement_line_id,
+            ]);
+            $moneyPayment->deleteRelations();
+            $moneyPaidAmountHasChanged = $moneyPayment->getAmount() != $request->input('paid_amount.'.$newType);
+            $moneyPayment->delete();
+            $newMoneyPayment = $this->storeWithinTransaction($company, $request, true);
+            if (!$moneyPaidAmountHasChanged) {
+                $newMoneyPayment->storeNewSettlement(
+                    $oldSettlementsForMoneyReceivedWithDownPayment->toArray(),
+                    $newMoneyPayment->getPartnerId(),
+                    $company,
+                    1
+                );
+            }
+        });
         $activeTab = $newType;
         return redirect()->route('view.money.payment', ['company'=>$company->id,'active'=>$activeTab])->with('success', __('Money Payment Has Been Updated Successfully'));
     }
 
     public function destroy(Company $company, MoneyPayment $moneyPayment, DeleteMoneyPaymentRequest $request)
     {
-        
-        $moneyPayment->deleteRelations();
         $activeTab = $moneyPayment->getType();
-        $moneyPayment->delete();
+        OdooSync::transaction(function () use ($moneyPayment) {
+            $moneyPayment->deleteRelations();
+            $moneyPayment->delete();
+        });
         return redirect()->route('view.money.payment', ['company'=>$company->id,'active'=>$activeTab])->with('success', __('Money Payment Has Been Updated Successfully'));
     }
     protected function generateBranchId($nameOrId, $companyId)

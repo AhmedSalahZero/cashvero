@@ -14,7 +14,7 @@ use Inertia\Inertia;
  * ConsolidatedCashFlowReportController
  * ------------------------------------------------------------------
  * Rolls up the Company Cash Flow (banks section) and every selected
- * Contract Cash Flow (up to 50 per run) into one combined report.
+ * Contract Cash Flow into one combined report.
  *
  * ⚠️ CALCULATION LOGIC IS 100% UNTOUCHED. All of it lives in
  * ConsolidatedCashFlowService::build(), which was already clean and
@@ -48,7 +48,7 @@ class ConsolidatedCashFlowReportController
             ->where('company_id', $company->id)
             ->whereIn('status', [Contract::RUNNING, Contract::RUNNING_AND_AGAINST])
             ->orderBy('name')
-            ->get(['id', 'name', 'code']);
+            ->get(['id', 'name', 'code', 'currency']);
 
         return Inertia::render('ConsolidatedCashFlowReport/Index', [
             'company' => ['id' => $company->id, 'name' => $company->getName()],
@@ -58,6 +58,7 @@ class ConsolidatedCashFlowReportController
                 'id' => $c->id,
                 'name' => $c->getName(),
                 'code' => $c->getCode(),
+                'currency' => touppercase(trim((string) $c->getCurrency())),
             ])->values(),
             'urls' => [
                 'result' => route('reports.consolidated-cash-flow.result', ['company' => $company->id]),
@@ -163,10 +164,17 @@ class ConsolidatedCashFlowReportController
         $lastAccumulated = $gtAccumulated !== [] ? $gtAccumulated[count($gtAccumulated) - 1] : 0.0;
         $rows[] = ['label' => __('Accumulated Net Cash (+/-)'), 'type' => 'total', 'values' => $gtAccumulated, 'total' => $lastAccumulated];
 
-        $fileNameParts = ['Consolidated-Cash-Flow', $payload['currencyName'] ?? null];
+        $displayCurrency = (string) ($payload['displayCurrency'] ?? '');
+        $fileNameParts = ['Consolidated-Cash-Flow', $displayCurrency !== '' ? $displayCurrency : ($payload['currencyName'] ?? null)];
         $fileName = preg_replace('/[^A-Za-z0-9\-]+/', '-', implode('-', array_filter($fileNameParts))).'.xlsx';
 
-        return (new CashFlowMatrixExport($headings, $rows, (string) ($payload['title'] ?? __('Consolidated Cash Flow Report'))))->download($fileName);
+        // الأرقام كلها بالعملة الوظيفية وليست بعملة الفلتر، فلازم العنوان يوضح ده
+        $sheetTitle = (string) ($payload['title'] ?? __('Consolidated Cash Flow Report'));
+        if ($displayCurrency !== '') {
+            $sheetTitle .= ' — '.__('All amounts are shown in').' '.$displayCurrency;
+        }
+
+        return (new CashFlowMatrixExport($headings, $rows, $sheetTitle))->download($fileName);
     }
 
     /**

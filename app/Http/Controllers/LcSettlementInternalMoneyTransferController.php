@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\FinancialInstitution;
 use App\Models\LcSettlementInternalMoneyTransfer;
 use App\Models\LetterOfCreditIssuance;
+use App\Services\Api\OdooSync;
 use App\Traits\GeneralFunctions;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -138,6 +139,16 @@ class LcSettlementInternalMoneyTransferController
 
     public function store(Company $company, Request $request)
     {
+        /**
+         * * الحفظ كله جوه ترانزاكشن واحدة
+         */
+        return OdooSync::transaction(function () use ($company, $request) {
+            return $this->storeWithinTransaction($company, $request);
+        });
+    }
+
+    protected function storeWithinTransaction(Company $company, Request $request)
+    {
         $internalMoneyTransfer = new LcSettlementInternalMoneyTransfer;
         $companyId = $company->id;
         $letterOfCreditIssuance = LetterOfCreditIssuance::find($request->get('to_letter_of_credit_issuance_id'));
@@ -169,9 +180,16 @@ class LcSettlementInternalMoneyTransferController
 
     public function update(Company $company, Request $request, LcSettlementInternalMoneyTransfer $lcSettlementInternalTransfer)
     {
-        $lcSettlementInternalTransfer->deleteRelations();
-        $lcSettlementInternalTransfer->delete();
-        $this->store($company, $request);
+        /**
+         * * التعديل معمول كـ حذف ثم إنشاء
+         * * فلازم يكون كله في ترانزاكشن واحدة
+         */
+        OdooSync::transaction(function () use ($company, $request, $lcSettlementInternalTransfer) {
+            $lcSettlementInternalTransfer->deleteRelations();
+            $lcSettlementInternalTransfer->delete();
+
+            $this->storeWithinTransaction($company, $request);
+        });
 
         return redirect()->route('lc-settlement-internal-money-transfers.index', ['company' => $company->id])
             ->with('success', __('Item Has Been Updated Successfully'));
@@ -179,8 +197,10 @@ class LcSettlementInternalMoneyTransferController
 
     public function destroy(Company $company, LcSettlementInternalMoneyTransfer $lcSettlementInternalTransfer)
     {
-        $lcSettlementInternalTransfer->deleteRelations();
-        $lcSettlementInternalTransfer->delete();
+        OdooSync::transaction(function () use ($lcSettlementInternalTransfer) {
+            $lcSettlementInternalTransfer->deleteRelations();
+            $lcSettlementInternalTransfer->delete();
+        });
 
         return redirect()->back()->with('success', __('Item Has Been Delete Successfully'));
     }

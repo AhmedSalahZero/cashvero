@@ -80,7 +80,7 @@ class ShareholderStatement extends Model  implements IHaveStatement
 
 	public static function updateNextRows(self $model):string 
 	{
-		$minDate  = $model->date ;
+		$minDate  = $model->full_date ;
 	
 		
 		/**
@@ -93,11 +93,11 @@ class ShareholderStatement extends Model  implements IHaveStatement
 
 		 StatementCascade::touchRows(
 			DB::table('shareholder_statements')
-		->where('date','>=',$minDate)
+		->where('full_date','>=',$minDate)
 		->where('company_id',$model->company_id)
 		->where('partner_id',$model->partner_id)
 		->where('currency_name',$model->currency_name),
-			'date asc , id asc'
+			'full_date asc , id asc'
 		);
 		
 		return $minDate;
@@ -136,9 +136,12 @@ class ShareholderStatement extends Model  implements IHaveStatement
 			});
 			
 			static::updated(function (self $model) {
-				
-			
-				
+				/**
+				 * * كان فاضي، فأي تعديل أو حذف (الحذف بيصفّر debit/credit ويعمل save)
+				 * * كان بيسيب كل الصفوف اللي بعده برصيد قديم غلط للأبد
+				 * * دلوقتي بيتتالى زي باقي كل الكشوف في النظام
+				 */
+				self::updateNextRows($model);
 			});
 			
 			static::deleting(function(self $shareholderStatement){

@@ -8,6 +8,7 @@ use App\Models\Currency;
 use App\Models\FinancialInstitution;
 use App\Models\InternalMoneyTransfer;
 use App\Services\Api\InternalMoneyTransfer as OdooInternalMoneyTransfer;
+use App\Services\Api\OdooSync;
 
 trait HasOdooMoneyTransfer
 {
@@ -73,6 +74,24 @@ trait HasOdooMoneyTransfer
         $company = $this->company;
         $transferDate = $this->getTransferDate();
         if ($company->hasOdooIntegrationCredentials() && $company->withinIntegrationDate($transferDate)) {
+            /**
+             * * كل الاتصال بأودو اتأجل لما الترانزاكشن تكومِت
+             * * لو أودو ضرب إيرور التحويل بيفضل محفوظ محليًا
+             * * وبيتسجل عليه synced_with_odoo = 0 مع سبب الفشل
+             */
+            OdooSync::defer(function () use ($company, $transferDate) {
+                $this->pushOdooTransfer($company, $transferDate);
+            }, $this, 'Create Odoo money transfer');
+        }
+
+    }
+
+    /**
+     * * الجزء اللي بيتكلم مع أودو فعليًا
+     * * بيتنادي من خلال OdooSync بعد ما الداتا المحلية تتحفظ
+     */
+    protected function pushOdooTransfer(Company $company, string $transferDate): void
+    {
             $fromAccountTypeId = $this->from_account_type_id;
             $fromAccountNumber = $this->from_account_number;
             $toAccountTypeId = $this->to_account_type_id;
@@ -121,13 +140,11 @@ trait HasOdooMoneyTransfer
                 $toOdooId = $toBranch->getOdooId();
                 
                 $this->storeOdoo($userComment,$exchangeRate,$company,$transferDate,$fromOdooId,$fromJournalId,$toJournalId,$toOdooId,$amountInCurrency,$currencyName,false,$secondCurrency,$amountToBuy);
-                
+
             }
-            
-        }
-        
+
     }
-    
-    
+
+
 
 }

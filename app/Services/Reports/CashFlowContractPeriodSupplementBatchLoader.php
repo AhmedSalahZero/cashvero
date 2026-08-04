@@ -179,7 +179,7 @@ class CashFlowContractPeriodSupplementBatchLoader
                 'letter_of_guarantee_issuances.lg_type',
                 'financial_institution_accounts.currency',
                 'current_account_bank_statements.date',
-                DB::raw('sum(credit) as paid_amount'),
+                DB::raw('sum(credit) as total_amount'),
             ])
             ->join('financial_institution_accounts', 'financial_institution_accounts.id', '=', 'current_account_bank_statements.financial_institution_account_id')
             ->join('letter_of_guarantee_issuances', 'letter_of_guarantee_issuances.id', '=', 'current_account_bank_statements.letter_of_guarantee_issuance_id')
@@ -407,18 +407,8 @@ class CashFlowContractPeriodSupplementBatchLoader
             $companyId,
             $foreignExchangeRates,
         );
-        // ⚠️ REAL BUG FIXED HERE (2026-07-25): this always read
-        // $row->total_amount, but the FEE query (applyLetterOfGuaranteeFees()'s
-        // $feeRows, called here with $isCashCover=false) selects the amount
-        // as `paid_amount`, not `total_amount` — only the two cash-cover
-        // queries ($coverSumRows / $coverDetailRows) alias it as
-        // `total_amount`. Any contract with an LG fee row in the report
-        // period hit "Undefined property: stdClass::$total_amount" here.
-        // Fixed by reading whichever alias the calling query actually
-        // selected, matching the same $isCashCover-based pattern already
-        // used one line above for $dateField.
-        $amountField = $isCashCover ? 'total_amount' : 'paid_amount';
-        $amount = (float) $row->{$amountField} * $exchangeRate;
+        // Fee + cash-cover queries both alias the amount as `total_amount`.
+        $amount = (float) $row->total_amount * $exchangeRate;
         $lgType = $lgsTypes[$row->lg_type] ?? $row->lg_type;
 
         if (! isset($result[$mainType][$subType][$lgType])) {

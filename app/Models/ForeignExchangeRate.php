@@ -137,7 +137,20 @@ class ForeignExchangeRate extends Model
 
 		return $rate;
 	}
-	
+
+	/**
+	 * ! نفس getExchangeRateAt لكن يرجع 1 لو المستدعي لم يمرر العملة الوظيفية أو الأسعار
+	 * ! تستخدمها دوال التوقعات القديمة اللي بارامتراتها اختيارية عشان ما تكسرش أي مستدعي
+	 */
+	public static function getExchangeRateAtOrOne($receivingCurrency,$mainFunctionalCurrency,$receivingDate,$companyId,$foreignExchangeRates)
+	{
+		if (empty($mainFunctionalCurrency) || is_null($foreignExchangeRates)) {
+			return 1;
+		}
+
+		return self::getExchangeRateAt($receivingCurrency,$mainFunctionalCurrency,$receivingDate,$companyId,$foreignExchangeRates);
+	}
+
 	public static function importOdooExchangeRates(Company $company)
 	{
 		

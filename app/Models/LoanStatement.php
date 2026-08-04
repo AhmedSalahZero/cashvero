@@ -79,7 +79,7 @@ class LoanStatement extends Model  implements IHaveStatement
 
 	public static function updateNextRows(self $model):string 
 	{
-		$minDate  = $model->date ;
+		$minDate = $model->full_date ;
 	
 		
 		/**
@@ -92,9 +92,9 @@ class LoanStatement extends Model  implements IHaveStatement
 
 		 StatementCascade::touchRows(
 			DB::table('loan_statements')
-		->where('date','>=',$minDate)
+		->where('full_date','>=',$minDate)
 		->where('financial_institution_account_id',$model->financial_institution_account_id),
-			'date asc , id asc'
+			'full_date asc , id asc'
 		);
 		
 		return $minDate;
@@ -153,8 +153,8 @@ class LoanStatement extends Model  implements IHaveStatement
 						// وتلقائي هيحذف السحوبات settlements
 					}else{
 						DB::table('loan_statements')
-						->where('date','>=',$minDate)
-						->orderByRaw('date asc , id asc')
+						->where('full_date','>=',$minDate)
+						->orderByRaw('full_date asc , id asc')
 						->where('financial_institution_account_id',$model->financial_institution_account_id)->update([
 							'updated_at'=>now()
 						]);

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Interfaces\Models\IHasDebitCurrentAccountStatement;
 use App\Models\OpeningBalance;
 use App\Services\Api\OdooPayment;
+use App\Services\Api\OdooSync;
 use App\Traits\Models\HasCashInSafe;
 use App\Traits\Models\HasDebitCurrentAccountStatement;
 use App\Traits\Models\HasDebitOverdraftStatement;
@@ -334,7 +335,14 @@ class MoneyReceived extends Model implements IHasDebitCurrentAccountStatement
 			$moneyReceived->comment_en = self::generateComment($moneyReceived,'en');
 			$moneyReceived->comment_ar = self::generateComment($moneyReceived,'ar');
 		});
-		
+		/**
+		 * * شبكة أمان: أي مسار حذف مش بينده deleteRelations صراحة
+		 * * كان بيسيب البنك ستيتمنت وكشوف الشركاء يتامى
+		 * * ملحوظة: ده مش بيشتغل مع الحذف المباشر على الكويري بيلدر
+		 */
+		self::deleting(function (self $moneyReceived): void {
+			$moneyReceived->deleteRelations();
+		});
 	}
 	public static function getAllTypes()
 	{
@@ -955,12 +963,21 @@ class MoneyReceived extends Model implements IHasDebitCurrentAccountStatement
 		return $this->contract ? $this->contract->getCode() : '-';
 	}
 	
+
+	/**
+	 * * ضمان إن deleteRelations متتنفذش مرتين على نفس الإنستانس
+	 * * الكنترولرز بتناديها صراحة قبل delete() ، والـ deleting hook بينده عليها كمان
+	 */
+	protected bool $relationsAlreadyDeleted = false;
+
 	public function deleteRelations()
 	{
-		$OdooPaymentService = null;
-		if($this->company->hasOdooIntegrationCredentials()){
-			$OdooPaymentService = new OdooPayment($this->company);
+		if ($this->relationsAlreadyDeleted) {
+			return;
 		}
+		$this->relationsAlreadyDeleted = true;
+		$company = $this->company;
+		$hasOdooIntegration = $company->hasOdooIntegrationCredentials();
 		$this->unlinkNonCustomerOrSupplierOdooExpense();
 		$oldType = $this->getType();
 		 /**
@@ -971,23 +988,16 @@ class MoneyReceived extends Model implements IHasDebitCurrentAccountStatement
 		  * longer crashes with "Call to a member function ... on null" when deleting — it
 		  * simply skips the Odoo-unlink step it has nothing to unlink from anyway.
 		  */
-		 if ($this->account_bank_statement_line_id && $OdooPaymentService) {
-            $OdooPaymentService->unlinkBankCollection($this->account_bank_statement_line_id);
+		if ($hasOdooIntegration && $this->account_bank_statement_line_id) {
+			$bankStatementLineId = $this->account_bank_statement_line_id;
+			OdooSync::defer(function () use ($company, $bankStatementLineId) {
+				(new OdooPayment($company))->unlinkBankCollection($bankStatementLineId);
+			}, null, 'Unlink Odoo bank collection #'.$bankStatementLineId);
         }
-		$this->settlements->each(function($settlement) use($OdooPaymentService){
-			if ($settlement->account_bank_statement_line_id && $OdooPaymentService) {
-            $OdooPaymentService->unlinkBankCollection($settlement->account_bank_statement_line_id);
-        }
-		elseif($OdooPaymentService && $settlement->odoo_move_id && $settlement->invoice && $settlement->invoice->odoo_id){
-			$OdooPaymentService->unlink($settlement->odoo_move_id);
-		}
-		elseif($OdooPaymentService && $settlement->odoo_id){
-			$OdooPaymentService->cancelPayments($settlement->odoo_id);
-		}
-		
-			// if($settlement->odoo_move_id){
-			// 	$OdooPaymentService->unlink($settlement->odoo_move_id);
-			// }
+		$this->settlements->each(function($settlement) use($company, $hasOdooIntegration){
+			if ($hasOdooIntegration) {
+				$this->deferSettlementOdooUnlink($company, $settlement);
+			}
 			$settlement->delete();
 		});
 	

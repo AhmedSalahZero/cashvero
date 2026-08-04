@@ -12,6 +12,7 @@ use App\Models\MoneyReceived;
 use App\Models\Partner;
 use App\Services\Api\CashExpenseOdooService;
 use App\Services\Api\OdooPayment;
+use App\Services\Api\OdooSync;
 use Carbon\Carbon;
 
 /**
@@ -68,11 +69,8 @@ trait IsMoney
     {
 		
         $totalWithholdAmount= 0 ;
-        $OdooPaymentService = null ;
 		$storedSettlements = [];
-        if ($company->hasOdooIntegrationCredentials() && $syncWithOdoo) {
-            $OdooPaymentService = new OdooPayment($company);
-        }
+		$shouldSyncWithOdoo = $company->hasOdooIntegrationCredentials() && $syncWithOdoo ;
         foreach ($settlements as $settlementArr) {
             $settlementArr['settlement_amount'] = isset($settlementArr['settlement_amount']) ?  unformat_number($settlementArr['settlement_amount']) :  0 ;
             if ($settlementArr['settlement_amount'] > 0) {
@@ -84,8 +82,14 @@ trait IsMoney
                 $totalWithholdAmount += $withholdAmount  ;
                 unset($settlementArr['net_balance']);
 				$settlement =  $this->settlements()->create($settlementArr);
-                if ($OdooPaymentService && $syncWithOdoo && $company->withinIntegrationDate($this->getDate())) {
-                    $OdooPaymentService->createPayment($settlement);
+                if ($shouldSyncWithOdoo && $company->withinIntegrationDate($this->getDate())) {
+					/**
+					 * * كل تسوية ليها استدعاء مستقل بعد الكوميت
+					 * * فشل تسوية في أودو مش بيوقف باقي التسويات ولا بيرجع الداتا المحلية
+					 */
+                    OdooSync::defer(function () use ($company, $settlement) {
+						(new OdooPayment($company))->createPayment($settlement);
+					}, $this, 'Create Odoo payment for settlement');
                 }
 				$storedSettlements[]=$settlement;
                 
@@ -465,6 +469,32 @@ trait IsMoney
 		return 0 ;
 	}
     
+    /**
+     * * بيأجل إلغاء ربط التسوية في أودو لبعد ما الترانزاكشن تكومِت
+     * * بنقرأ ال ids دلوقتي لأن صف التسوية نفسه هيتحذف قبل ما الاستدعاء يتنفذ
+     */
+    protected function deferSettlementOdooUnlink(Company $company, $settlement): void
+    {
+        $bankStatementLineId = $settlement->account_bank_statement_line_id;
+        $odooMoveId = $settlement->odoo_move_id;
+        $odooId = $settlement->odoo_id;
+        $invoiceOdooId = $settlement->invoice ? $settlement->invoice->odoo_id : null;
+
+        if ($bankStatementLineId) {
+            OdooSync::defer(function () use ($company, $bankStatementLineId) {
+                (new OdooPayment($company))->unlinkBankCollection($bankStatementLineId);
+            }, null, 'Unlink Odoo bank collection #'.$bankStatementLineId);
+        } elseif ($odooMoveId && $invoiceOdooId) {
+            OdooSync::defer(function () use ($company, $odooMoveId) {
+                (new OdooPayment($company))->unlink($odooMoveId);
+            }, null, 'Unlink Odoo move #'.$odooMoveId);
+        } elseif ($odooId) {
+            OdooSync::defer(function () use ($company, $odooId) {
+                (new OdooPayment($company))->cancelPayments($odooId);
+            }, null, 'Cancel Odoo payment #'.$odooId);
+        }
+    }
+
     public function handleOdooDownPayments($OdooPaymentService, $hasOdooIntegration)
     {
         

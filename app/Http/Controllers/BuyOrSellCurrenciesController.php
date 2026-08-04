@@ -7,6 +7,7 @@ use App\Models\Branch;
 use App\Models\BuyOrSellCurrency;
 use App\Models\Company;
 use App\Models\FinancialInstitution;
+use App\Services\Api\OdooSync;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -313,6 +314,16 @@ class BuyOrSellCurrenciesController
 	}
 	
 	public function store(Company $company  , StoreBuyOrSellCurrencyRequest $request){
+		/**
+		 * * الحفظ كله جوه ترانزاكشن واحدة
+		 * * وأي اتصال بأودو بيتنفذ بعد ما الترانزاكشن تكومِت (شوف OdooSync)
+		 */
+		return OdooSync::transaction(function () use ($company, $request) {
+			return $this->storeWithinTransaction($company, $request);
+		});
+	}
+
+	protected function storeWithinTransaction(Company $company  , StoreBuyOrSellCurrencyRequest $request){
 		$buyOrSellCurrency = new BuyOrSellCurrency ;
 		$type = $request->get('type');
 		$transferDate = Carbon::make($request->get('transaction_date'))->format('Y-m-d') ;
@@ -369,17 +380,26 @@ class BuyOrSellCurrenciesController
 	public function update(Company $company , StoreBuyOrSellCurrencyRequest $request , BuyOrSellCurrency $buyOrSellCurrency){
 
 		// $type = $buyOrSellCurrency->getType();
-		$buyOrSellCurrency->deleteRelations();
-		$buyOrSellCurrency->delete();
-		return $this->store($company,$request);
+		/**
+		 * * التعديل معمول كـ حذف ثم إنشاء
+		 * * فلازم يكون كله في ترانزاكشن واحدة
+		 */
+		return OdooSync::transaction(function () use ($company, $request, $buyOrSellCurrency) {
+			$buyOrSellCurrency->deleteRelations();
+			$buyOrSellCurrency->delete();
+
+			return $this->storeWithinTransaction($company,$request);
+		});
 		// $activeTab = $type ;
 		// return redirect()->route('buy-or-sell-currencies.index',['company'=>$company->id,'active'=>$activeTab])->with('success',__('Item Has Been Updated Successfully'));
 	}
 	
 	public function destroy(Company $company , BuyOrSellCurrency $buyOrSellCurrency)
 	{
-		$buyOrSellCurrency->deleteRelations();
-		$buyOrSellCurrency->delete();
+		OdooSync::transaction(function () use ($buyOrSellCurrency) {
+			$buyOrSellCurrency->deleteRelations();
+			$buyOrSellCurrency->delete();
+		});
 		return redirect()->back()->with('success',__('Item Has Been Delete Successfully'));
 	}
 	

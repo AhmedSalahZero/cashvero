@@ -1,27 +1,44 @@
 <script setup>
-import { ref } from 'vue';
-import { router } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import MultiSelectDropdown from '@/Components/MultiSelectDropdown.vue';
+import AppLayout from '@/Layouts/AppLayout.vue';
+import { router } from '@inertiajs/vue3';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
     company: Object,
     mainFunctionalCurrency: String,
     currencies: Array,
-    activeContracts: Array, // [{id, name, code}]
+    activeContracts: Array, // [{id, name, code, currency}]
     urls: Object,
 });
 
 const reportInterval = ref('weekly');
 const startDate = ref(new Date().toISOString().slice(0, 10));
 const endDate = ref((() => { const d = new Date(); d.setMonth(d.getMonth() + 6); return d.toISOString().slice(0, 10); })());
-const currency = ref(props.mainFunctionalCurrency || '');
+function normalizeCurrency(value) {
+    return String(value || '').trim().toUpperCase();
+}
+
+// Options are keyed by currency code; fall back to the first one so the select
+// is never blank when the company's main currency isn't in the list.
+const defaultCurrency = (props.currencies || []).find(
+    c => normalizeCurrency(c.code) === normalizeCurrency(props.mainFunctionalCurrency)
+) || (props.currencies || [])[0];
+const currency = ref(defaultCurrency ? defaultCurrency.code : '');
 const contractIds = ref([]);
 
-const contractOptions = props.activeContracts.map(c => ({
-    value: c.id,
-    label: c.code ? `${c.name} [${c.code}]` : c.name,
-}));
+// The contracts list must follow the selected currency: the report only ever
+// consolidates contracts of one currency (see ConsolidatedCashFlowService).
+const contractOptions = computed(() => props.activeContracts
+    .filter(c => normalizeCurrency(c.currency) === normalizeCurrency(currency.value))
+    .map(c => ({
+        value: c.id,
+        label: c.code ? `${c.name} [${c.code}]` : c.name,
+    })));
+
+watch(currency, () => {
+    contractIds.value = [];
+});
 
 function submit() {
     router.get(props.urls.result, {
@@ -39,7 +56,7 @@ function submit() {
         <div class="p-6 mx-auto">
             <h1 class="text-xl font-semibold cvr-text-primary mb-2">Consolidated Cash Flow Report</h1>
             <p class="text-sm cvr-text-muted mb-1">Note: the report period must include today (same rule as the main cash flow report).</p>
-            <p class="text-sm cvr-text-muted mb-6">Tip: select only the contracts you need (up to 50 per run). Monthly interval is faster than daily for long periods.</p>
+            <p class="text-sm cvr-text-muted mb-6">Tip: leave contracts empty to include all active contracts, or select the ones you need. Monthly interval is faster than daily for long periods.</p>
 
             <div class="cvr-card-bg cvr-border border rounded-lg p-5">
                 <form @submit.prevent="submit" class="space-y-4">
@@ -63,8 +80,7 @@ function submit() {
                         <div>
                             <label class="cvr-form-label">Currency</label>
                             <select v-model="currency" class="cvr-input w-full px-3 py-2 rounded">
-                                <option :value="mainFunctionalCurrency">{{ mainFunctionalCurrency }}</option>
-                                <option v-for="c in currencies" :key="c.code" :value="c.label">{{ c.label }}</option>
+                                <option v-for="c in currencies" :key="c.code" :value="c.code">{{ c.label }}</option>
                             </select>
                         </div>
                     </div>

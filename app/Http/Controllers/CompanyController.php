@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\CompanySystem;
 use App\Models\Partner;
 use App\Models\User;
+use App\Services\Api\OdooService;
 use App\Traits\ImageSave;
 use Illuminate\Http\Request;
 
@@ -210,15 +211,30 @@ class CompanyController extends Controller
             ]);
         });
 
-        foreach ($request->get('odoo_username') as $userId => $odooUsername) {
+        $usersWithNewCredentials = [];
+
+        foreach ($request->get('odoo_username', []) as $userId => $odooUsername) {
             $user = User::find($userId);
+            if (! $user) {
+                continue;
+            }
             $user->update([
                 'odoo_username' => $odooUsername,
                 'odoo_db_password' => $request->input('odoo_db_password.'.$userId),
             ]);
+            $usersWithNewCredentials[] = $user;
         }
         Partner::handleTaxesColumnsToPartnerTable($companySection);
         $companySection->update($request->except(['image', 'systems', 'odoo_username', 'odoo_db_password']));
+
+        /**
+         * * بنجيب الـ odoo_id بعد ما الشركة تتحدّث
+         * * عشان المصادقة تتم على الـ url والداتابيز الجداد لو اتغيروا
+         * * وبنبعت اليوزر صراحةً لأن اللي عامل لوجن هنا هو السوبر أدمن
+         */
+        foreach ($usersWithNewCredentials as $user) {
+            OdooService::refreshUserOdooId($companySection, $user);
+        }
 
         $companySection->systems()->delete();
         foreach ($newSystems as $systemName) {

@@ -4,6 +4,7 @@ namespace App\Traits\Models;
 
 use App\Models\CertificatesOfDeposit;
 use App\Services\Api\InternalMoneyTransfer as OdooInternalMoneyTransfer;
+use App\Services\Api\OdooSync;
 
 trait HasDeleteOdoo
 {
@@ -18,13 +19,17 @@ trait HasDeleteOdoo
 			$storeColumns
 		);
         if ($company->hasOdooIntegrationCredentials()) {
-            $internalMoneyTransferService = (new OdooInternalMoneyTransfer($company));
             foreach ($columnsToDelete as $columnName) {
                 if ($journalEntryId = $this->{$columnName}) {
-                    $internalMoneyTransferService->unlink($journalEntryId);
+                    /**
+                     * * بنمرر ال id كقيمة لأن الصف ممكن يكون اتحذف قبل ما الاستدعاء يتنفذ
+                     */
+                    OdooSync::defer(function () use ($company, $journalEntryId) {
+                        (new OdooInternalMoneyTransfer($company))->unlink($journalEntryId);
+                    }, null, 'Unlink Odoo journal entry #'.$journalEntryId);
                 }
             }
-        
+
         }
     }
    

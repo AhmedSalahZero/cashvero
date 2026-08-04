@@ -8,6 +8,7 @@ use App\Models\Company;
 use App\Models\FinancialInstitution;
 use App\Models\InternalMoneyTransfer;
 use App\Http\Requests\StoreInternalMoneyTransferRequest;
+use App\Services\Api\OdooSync;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -274,6 +275,16 @@ class InternalMoneyTransferController
 	}
 	
 	public function store(Company $company , string $type  , StoreInternalMoneyTransferRequest $request){
+		/**
+		 * * الحفظ كله جوه ترانزاكشن واحدة
+		 * * وأي اتصال بأودو بيتنفذ بعد ما الترانزاكشن تكومِت (شوف OdooSync)
+		 */
+		return OdooSync::transaction(function () use ($company, $type, $request) {
+			return $this->storeWithinTransaction($company, $type, $request);
+		});
+	}
+
+	protected function storeWithinTransaction(Company $company , string $type  , StoreInternalMoneyTransferRequest $request){
 		$internalMoneyTransfer = new InternalMoneyTransfer ;
 		$internalMoneyTransfer->type = $type ;
 		$transferDate = Carbon::make($request->get('transfer_date'))->format('Y-m-d') ;
@@ -328,18 +339,26 @@ class InternalMoneyTransferController
 	
 	public function update(Company $company , string $type , StoreInternalMoneyTransferRequest $request , InternalMoneyTransfer $internalMoneyTransfer){
 
-		$internalMoneyTransfer->deleteRelations();
-		$internalMoneyTransfer->delete();
-		$this->store($company,$type,$request);
+		/**
+		 * * التعديل معمول كـ حذف ثم إنشاء
+		 * * فلازم يكون كله في ترانزاكشن واحدة
+		 */
+		OdooSync::transaction(function () use ($company, $type, $request, $internalMoneyTransfer) {
+			$internalMoneyTransfer->deleteRelations();
+			$internalMoneyTransfer->delete();
+
+			$this->storeWithinTransaction($company,$type,$request);
+		});
 		$activeTab = $type ;
 		return redirect()->route('internal-money-transfers.index',['company'=>$company->id,'active'=>$activeTab])->with('success',__('Item Has Been Updated Successfully'));
 	}
 	
 	public function destroy(Company $company , string $type, InternalMoneyTransfer $internalMoneyTransfer)
 	{
-	
-		$internalMoneyTransfer->deleteRelations();
-		$internalMoneyTransfer->delete();
+		OdooSync::transaction(function () use ($internalMoneyTransfer) {
+			$internalMoneyTransfer->deleteRelations();
+			$internalMoneyTransfer->delete();
+		});
 		return redirect()->back()->with('success',__('Item Has Been Delete Successfully'));
 	}
 }

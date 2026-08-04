@@ -8,22 +8,39 @@ use App\Models\MoneyPayment;
 use App\Models\MoneyReceived;
 use App\Services\Api\MoneyPaymentOdooService;
 use App\Services\Api\OdooPayment;
+use App\Services\Api\OdooSync;
 
 trait HasNonCustomerOrSupplier
 {
     public function storeNonCustomerOrSupplierOdooExpense(bool $isDownPayment)
     {
-		
+
         $company = $this->company ;
         $date = $this->getDate();
         if ($company->hasOdooIntegrationCredentials() && $company->withinIntegrationDate($date)) {
+            /**
+             * * كل الاتصال بأودو اتأجل لما الترانزاكشن تكومِت
+             * * لو أودو ضرب إيرور مش هيأثر علي الداتا المحفوظة محليًا
+             */
+            OdooSync::defer(function () use ($isDownPayment, $company, $date) {
+                $this->createNonCustomerOrSupplierOdooExpense($isDownPayment, $company, $date);
+            }, $this, 'Create Odoo expense');
+        }
+    }
+
+    /**
+     * * الجزء اللي بيتكلم مع أودو فعليًا
+     * * بيتنادي من خلال OdooSync بعد ما الداتا المحلية تتحفظ
+     */
+    protected function createNonCustomerOrSupplierOdooExpense(bool $isDownPayment, $company, $date): void
+    {
             $isMoneyReceived = $this instanceof MoneyReceived ;
             $odooPaymentService = new OdooPayment($company);
             if ($this->isChequeAndNotCustomerOrSupplier()) {
                 $result = $odooPaymentService->createDownPayment($this);
                 return ;
             }
-		
+
             $moneyPaymentOdooService = new MoneyPaymentOdooService($company);
 			$isNotCashExpense = !($this instanceof CashExpense);
             $amountInCurrency = $isDownPayment && $isNotCashExpense  ? $this->getDownPaymentAmount() :  $this->getAmount();
@@ -58,30 +75,29 @@ trait HasNonCustomerOrSupplier
             $this->journal_entry_id = $result['journal_entry_id'];
             $this->odoo_reference = $result['odoo_reference'];
             $this->save();
-                
-            
-        }
     }
     public function unlinkNonCustomerOrSupplierOdooExpense()
     {
         $company = $this->company ;
         $journalEntryId = $this->journal_entry_id;
-      
-        if ($company->hasOdooIntegrationCredentials() && $journalEntryId) {
-            $moneyPaymentOdooService = new MoneyPaymentOdooService($company);
-            $moneyPaymentOdooService->unlink($journalEntryId);
-        } elseif ($company->hasOdooIntegrationCredentials()) {
-            $company =$this->company;
-            if ($company->hasOdooIntegrationCredentials()) {
-                $odooId = $this->odoo_id ;
-                if ($odooId) {
-                    $odooPaymentService = new OdooPayment($company);
-                    $odooPaymentService->cancelDownPayment($odooId);
-                }
-            }
+        $odooId = $this->odoo_id ;
+
+        if (! $company->hasOdooIntegrationCredentials()) {
+            return ;
         }
-        
-            
+        /**
+         * * بنمرر ال ids كقيم مش كموديل
+         * * لأن الصف نفسه ممكن يكون اتحذف قبل ما الاستدعاء يتنفذ
+         */
+        if ($journalEntryId) {
+            OdooSync::defer(function () use ($company, $journalEntryId) {
+                (new MoneyPaymentOdooService($company))->unlink($journalEntryId);
+            }, null, 'Unlink Odoo journal entry #'.$journalEntryId);
+        } elseif ($odooId) {
+            OdooSync::defer(function () use ($company, $odooId) {
+                (new OdooPayment($company))->cancelDownPayment($odooId);
+            }, null, 'Cancel Odoo down payment #'.$odooId);
+        }
     }
 
 }

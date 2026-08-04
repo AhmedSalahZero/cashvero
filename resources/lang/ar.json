@@ -1338,5 +1338,7 @@
 "Amount":"المبلغ",
 "Actions":"الإجراءات",
 "Configure":"تكوين",
-"Installments":"الأقساط"
+"Installments":"الأقساط",
+"All amounts are shown in":"جميع المبالغ معروضة بما يعادل",
+"Contracts filter currency":"عملة فلتر العقود"
 }

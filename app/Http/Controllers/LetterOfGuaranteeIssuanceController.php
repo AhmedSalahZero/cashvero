@@ -21,6 +21,7 @@ use App\Models\Partner;
 use App\Models\PurchaseOrder;
 use App\Models\TimeOfDeposit;
 use App\Services\Api\LetterOfGuaranteeService;
+use App\Services\Api\OdooSync;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -711,7 +712,21 @@ class LetterOfGuaranteeIssuanceController
         StoreLetterOfGuaranteeIssuanceRequest $request,
         string $source
     ) {
-		
+        /**
+         * * الحفظ كله جوه ترانزاكشن واحدة
+         * * وأي اتصال بأودو بيتنفذ بعد ما الترانزاكشن تكومِت (شوف OdooSync)
+         */
+        return OdooSync::transaction(function () use ($company, $request, $source) {
+            return $this->storeWithinTransaction($company, $request, $source);
+        });
+    }
+
+    protected function storeWithinTransaction(
+        Company $company,
+        StoreLetterOfGuaranteeIssuanceRequest $request,
+        string $source
+    ) {
+
         $partner = Partner::find($request->get('partner_id'));
         $customerName = $partner->getName() ;
         $lgCode = $request->get('lg_code');
@@ -893,10 +908,18 @@ class LetterOfGuaranteeIssuanceController
          * * يبقي هنحذف اللي عملناه في اودو
          */
         
-        $letterOfGuaranteeIssuance->deleteAllRelations();
-        $letterOfGuaranteeIssuance->delete();
-        return $this->store($company, $request, $source);
-    
+        /**
+         * * التعديل معمول كـ حذف ثم إنشاء
+         * * فلازم يكون كله في ترانزاكشن واحدة
+         * * قبل كده لو أي حاجة ضربت في النص كان الخطاب القديم بيروح والجديد بيتعمل ناقص
+         */
+        return OdooSync::transaction(function () use ($company, $request, $letterOfGuaranteeIssuance, $source) {
+            $letterOfGuaranteeIssuance->deleteAllRelations();
+            $letterOfGuaranteeIssuance->delete();
+
+            return $this->storeWithinTransaction($company, $request, $source);
+        });
+
         // return redirect()->route('view.letter.of.guarantee.issuance', ['company'=>$company->id,'active'=>$request->get('lg_type')])->with('success', __('Data Store Successfully'));
     }
 
@@ -912,7 +935,14 @@ class LetterOfGuaranteeIssuanceController
      */
     public function backToRunningStatus(Company $company, Request $request, LetterOfGuaranteeIssuance $letterOfGuaranteeIssuance, string $source)
     {
-        
+        return OdooSync::transaction(function () use ($company, $request, $letterOfGuaranteeIssuance, $source) {
+            return $this->backToRunningStatusWithinTransaction($company, $request, $letterOfGuaranteeIssuance, $source);
+        });
+    }
+
+    protected function backToRunningStatusWithinTransaction(Company $company, Request $request, LetterOfGuaranteeIssuance $letterOfGuaranteeIssuance, string $source)
+    {
+
         $lgType = $letterOfGuaranteeIssuance->getLgType();
         $currency = $letterOfGuaranteeIssuance->getLgCurrency();
         $issuanceDate = $letterOfGuaranteeIssuance->getIssuanceDate();
@@ -955,28 +985,33 @@ class LetterOfGuaranteeIssuanceController
 			foreach (['cancel_journal_entry_id'] as $journalColumnName) {
             $currentJournalEntryId = $letterOfGuaranteeIssuance->{$journalColumnName};
             if ($currentJournalEntryId) {
-                $odooLetterOfGuaranteeIssuance = new LetterOfGuaranteeService($company);
-                $odooLetterOfGuaranteeIssuance->unlink($currentJournalEntryId);
+                OdooSync::defer(function () use ($company, $currentJournalEntryId) {
+                    (new LetterOfGuaranteeService($company))->unlink($currentJournalEntryId);
+                }, null, 'Unlink Odoo journal entry #'.$currentJournalEntryId);
             }
         }
-		
+
 		}
 		 if ($company->hasOdooIntegrationCredentials() && !$isCdOrTd && $company->withinIntegrationDate($issuanceDate)) {
-            $currency = $financialInstitutionAccount->getCurrency();
-            $odooLetterOfGuaranteeIssuance = new LetterOfGuaranteeService($company);
-            $fromAccountNumber = $financialInstitutionAccount->getAccountNumber();
-            $journalId = $financialInstitutionAccount->financialInstitution->getJournalIdForAccount(27, $fromAccountNumber);
-            $accountOdooId = $financialInstitutionAccount->financialInstitution->getOdooIdForAccount(27, $fromAccountNumber);
-            $odooCurrencyId = Currency::getOdooId($currency);
-            $lgOdooAccountId = FinancialInstitutionAccount::getLetterOfGuaranteeOdooIdFromType($lgType, $company->id);
-            $ref = $letterOfGuaranteeIssuance->generateIssuanceRef();
-            $message = $letterOfGuaranteeIssuance->generateIssuanceMessage();
-            $analytic_distribution = $letterOfGuaranteeIssuance->formatAnalysisDistribution() ;
-            $result = $odooLetterOfGuaranteeIssuance->createLgIssuanceCashCover($issuanceDate, $cashCoverAmount, $journalId, $odooCurrencyId, $lgOdooAccountId, $accountOdooId, $letterOfGuaranteeIssuance->getBeneficiaryOdooId(), $ref, $message, $analytic_distribution);
-            $letterOfGuaranteeIssuance->account_bank_statement_odoo_id=$result['account_bank_statement_line_id'];
-            $letterOfGuaranteeIssuance->journal_entry_id=$result['journal_entry_id'];
-            $letterOfGuaranteeIssuance->save();
-            
+            /**
+             * * الاتصال بأودو بيتأجل لبعد ما الترانزاكشن تكومِت
+             */
+            OdooSync::defer(function () use ($company, $letterOfGuaranteeIssuance, $financialInstitutionAccount, $issuanceDate, $cashCoverAmount, $lgType) {
+                $currency = $financialInstitutionAccount->getCurrency();
+                $odooLetterOfGuaranteeIssuance = new LetterOfGuaranteeService($company);
+                $fromAccountNumber = $financialInstitutionAccount->getAccountNumber();
+                $journalId = $financialInstitutionAccount->financialInstitution->getJournalIdForAccount(27, $fromAccountNumber);
+                $accountOdooId = $financialInstitutionAccount->financialInstitution->getOdooIdForAccount(27, $fromAccountNumber);
+                $odooCurrencyId = Currency::getOdooId($currency);
+                $lgOdooAccountId = FinancialInstitutionAccount::getLetterOfGuaranteeOdooIdFromType($lgType, $company->id);
+                $ref = $letterOfGuaranteeIssuance->generateIssuanceRef();
+                $message = $letterOfGuaranteeIssuance->generateIssuanceMessage();
+                $analytic_distribution = $letterOfGuaranteeIssuance->formatAnalysisDistribution() ;
+                $result = $odooLetterOfGuaranteeIssuance->createLgIssuanceCashCover($issuanceDate, $cashCoverAmount, $journalId, $odooCurrencyId, $lgOdooAccountId, $accountOdooId, $letterOfGuaranteeIssuance->getBeneficiaryOdooId(), $ref, $message, $analytic_distribution);
+                $letterOfGuaranteeIssuance->account_bank_statement_odoo_id=$result['account_bank_statement_line_id'];
+                $letterOfGuaranteeIssuance->journal_entry_id=$result['journal_entry_id'];
+                $letterOfGuaranteeIssuance->save();
+            }, $letterOfGuaranteeIssuance, 'Create Odoo LG cash cover');
         }
 		
         return redirect()->route('view.letter.of.guarantee.issuance', ['company'=>$company->id,'active'=>$request->get('lg_type', $letterOfGuaranteeIssuance->getLgType())])->with('success', __('Data Store Successfully'));
@@ -1009,7 +1044,7 @@ class LetterOfGuaranteeIssuanceController
          * back the status change too, instead of leaving a half-cancelled
          * LG behind.
          */
-        return DB::transaction(function () use ($company, $request, $letterOfGuaranteeIssuance, $source) {
+        return OdooSync::transaction(function () use ($company, $request, $letterOfGuaranteeIssuance, $source) {
             /**
              * @var LetterOfGuaranteeIssuance $letterOfGuaranteeIssuance
              */
@@ -1082,7 +1117,14 @@ class LetterOfGuaranteeIssuanceController
      */
     public function applyAmountToBeDecreased(Company $company, Request $request, LetterOfGuaranteeIssuance $letterOfGuaranteeIssuance, string $source)
     {
-        
+        return OdooSync::transaction(function () use ($company, $request, $letterOfGuaranteeIssuance, $source) {
+            return $this->applyAmountToBeDecreasedWithinTransaction($company, $request, $letterOfGuaranteeIssuance, $source);
+        });
+    }
+
+    protected function applyAmountToBeDecreasedWithinTransaction(Company $company, Request $request, LetterOfGuaranteeIssuance $letterOfGuaranteeIssuance, string $source)
+    {
+
         $financialInstitutionId = $letterOfGuaranteeIssuance->financial_institution_id ;
         /**
          * @var LetterOfGuaranteeIssuanceAdvancedPaymentHistory $letterOfGuaranteeIssuanceAdvancedPaymentHistory
@@ -1147,7 +1189,14 @@ class LetterOfGuaranteeIssuanceController
      */
     public function editAmountToBeDecreased(Company $company, Request $request, LetterOfGuaranteeIssuanceAdvancedPaymentHistory $lgAdvancedPaymentHistory, string $source)
     {
-        
+        return OdooSync::transaction(function () use ($company, $request, $lgAdvancedPaymentHistory, $source) {
+            return $this->editAmountToBeDecreasedWithinTransaction($company, $request, $lgAdvancedPaymentHistory, $source);
+        });
+    }
+
+    protected function editAmountToBeDecreasedWithinTransaction(Company $company, Request $request, LetterOfGuaranteeIssuanceAdvancedPaymentHistory $lgAdvancedPaymentHistory, string $source)
+    {
+
         $decreaseDate = Carbon::make($request->get('decrease_date', now()->format('Y-m-d')))->format('Y-m-d');
         $decreaseAmount = $request->get('amount_to_be_decreased', 0);
         $lgAdvancedPaymentHistory->update([
@@ -1195,10 +1244,10 @@ class LetterOfGuaranteeIssuanceController
      */
     public function deleteAdvancedPayment(Company $company, Request $request, LetterOfGuaranteeIssuanceAdvancedPaymentHistory $lgAdvancedPaymentHistory)
     {
-    
-        
-        $lgAdvancedPaymentHistory->deleteAllRelations();
-        $lgAdvancedPaymentHistory->delete();
+        OdooSync::transaction(function () use ($lgAdvancedPaymentHistory) {
+            $lgAdvancedPaymentHistory->deleteAllRelations();
+            $lgAdvancedPaymentHistory->delete();
+        });
         return redirect()->route('view.letter.of.guarantee.issuance', ['company'=>$company->id,'active'=>$lgAdvancedPaymentHistory->letterOfGuaranteeIssuance->getLgType()])->with('success',__('Data Store Successfully'));
     
         
@@ -1212,10 +1261,11 @@ class LetterOfGuaranteeIssuanceController
      */
     public function destroy(Company $company ,  LetterOfGuaranteeIssuance $letterOfGuaranteeIssuance)
     {
-        
-        $letterOfGuaranteeIssuance->deleteAllRelations();
         $lgType = $letterOfGuaranteeIssuance->getLgType();
-        $letterOfGuaranteeIssuance->delete();
+        OdooSync::transaction(function () use ($letterOfGuaranteeIssuance) {
+            $letterOfGuaranteeIssuance->deleteAllRelations();
+            $letterOfGuaranteeIssuance->delete();
+        });
         return redirect()->route('view.letter.of.guarantee.issuance',['company'=>$company->id,'active'=>$lgType]);
     }
     

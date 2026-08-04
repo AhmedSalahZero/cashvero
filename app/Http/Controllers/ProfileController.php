@@ -69,8 +69,12 @@ class ProfileController extends Controller
 				'odoo_db_password' => $request->odoo_db_password,
 			]);
 
-			if ($odooCredentialsChanged) {
-				$user->update(['odoo_id' => null]);
+			/**
+			 * * بنجيبه كمان لما يكون فاضي أصلاً حتى لو الكريدنشيالز ما اتغيرتش
+			 * * قبل كده لو اليوزر حفظ نفس البيانات كان مفيش حاجة بتحصل
+			 * * فالـ odoo_id يفضل null ومفيش طريقة تخليه يترجع من الواجهة
+			 */
+			if ($odooCredentialsChanged || is_null($user->getOdooId())) {
 				$this->refreshOdooId($user);
 			}
 		}
@@ -101,13 +105,14 @@ class ProfileController extends Controller
 	{
 		$odooCompany = $user->companies->first(fn (Company $company) => $company->hasOdooCredentials());
 
-		if (!$odooCompany || !$user->getOdooDBUserName() || !$user->getOdooDBPassword()) {
+		if (!$odooCompany) {
 			return;
 		}
 
-		try {
-			new OdooService($odooCompany);
-		} catch (\Exception $e) {
-		}
+		/**
+		 * * التصفير والمصادقة واللوج كلهم جوه الميثود دي
+		 * * عشان تبقى نفس السلوك بتاع فورم الشركة
+		 */
+		OdooService::refreshUserOdooId($odooCompany, $user);
 	}
 }

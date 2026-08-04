@@ -17,6 +17,7 @@ use App\Models\OutgoingTransfer;
 use App\Models\Partner;
 use App\Models\PayableCheque;
 use App\Services\Api\CashExpenseOdooService;
+use App\Services\Api\OdooSync;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -288,9 +289,19 @@ class CashExpenseController
 		];
 	}
 
-	public function store(Company $company , StoreCashExpenseRequest $request 
+	public function store(Company $company , StoreCashExpenseRequest $request
 	// , $inUpdateMode = false
 	){
+		/**
+		 * * الحفظ كله جوه ترانزاكشن واحدة
+		 * * وأي اتصال بأودو بيتنفذ بعد ما الترانزاكشن تكومِت (شوف OdooSync)
+		 */
+		return OdooSync::transaction(function () use ($company, $request) {
+			return $this->storeWithinTransaction($company, $request);
+		});
+	}
+
+	protected function storeWithinTransaction(Company $company , StoreCashExpenseRequest $request){
 		$moneyType = $request->get('type');
 		$bankId = null;
 		$paymentBranchName = $request->get('delivery_branch_id') ;
@@ -385,24 +396,29 @@ class CashExpenseController
 		$cashExpense->saveAllocations($contracts);
 		
 			
-		 if($company->hasOdooIntegrationCredentials() && $isCashPaymentOrOutgoingTransfer 
+		 if($company->hasOdooIntegrationCredentials() && $isCashPaymentOrOutgoingTransfer
 		 && $company->withinIntegrationDate($date)
 		//  && !$inUpdateMode
 		 ){
-			$analytic_distribution = $cashExpense->formatAnalysisDistribution() ;
-			$cashExpenseOdooService = new CashExpenseOdooService($company);
-			$journalId = $cashExpenseOdooService->getJournalId($cashExpense) ;
-			$creditOdooAccountId=$cashExpenseOdooService->getChartOfAccountId($cashExpense);
-			$odooCurrencyId = Currency::getOdooId($currencyName);
-			$debitOdooAccountId = $cashExpenseCategoryName->getOdooId();
-			$userComment = $cashExpense->getUserComment();
-			$result = $cashExpenseOdooService->createCashExpense($subCategoryName,$date,$amountInCurrency,$amountInMainFunctionalCurrency,$journalId,$odooCurrencyId,$debitOdooAccountId,$creditOdooAccountId,$analytic_distribution,null,null,false , $userComment);
-			$cashExpense->account_bank_statement_line_id=$result['account_bank_statement_line_id'];
-			$cashExpense->journal_entry_id=$result['journal_entry_id'];
-			$cashExpense->odoo_reference=$result['reference'];
-			$cashExpense->save();
-			
-			
+			/**
+			 * * الاتصال بأودو بيتأجل لبعد ما الترانزاكشن تكومِت
+			 * * لو أودو ضرب إيرور المصروف بيفضل محفوظ محليًا
+			 * * وبيتسجل عليه synced_with_odoo = 0 مع سبب الفشل
+			 */
+			OdooSync::defer(function () use ($company, $cashExpense, $subCategoryName, $date, $amountInCurrency, $amountInMainFunctionalCurrency, $currencyName, $cashExpenseCategoryName) {
+				$analytic_distribution = $cashExpense->formatAnalysisDistribution() ;
+				$cashExpenseOdooService = new CashExpenseOdooService($company);
+				$journalId = $cashExpenseOdooService->getJournalId($cashExpense) ;
+				$creditOdooAccountId=$cashExpenseOdooService->getChartOfAccountId($cashExpense);
+				$odooCurrencyId = Currency::getOdooId($currencyName);
+				$debitOdooAccountId = $cashExpenseCategoryName->getOdooId();
+				$userComment = $cashExpense->getUserComment();
+				$result = $cashExpenseOdooService->createCashExpense($subCategoryName,$date,$amountInCurrency,$amountInMainFunctionalCurrency,$journalId,$odooCurrencyId,$debitOdooAccountId,$creditOdooAccountId,$analytic_distribution,null,null,false , $userComment);
+				$cashExpense->account_bank_statement_line_id=$result['account_bank_statement_line_id'];
+				$cashExpense->journal_entry_id=$result['journal_entry_id'];
+				$cashExpense->odoo_reference=$result['reference'];
+				$cashExpense->save();
+			}, $cashExpense, 'Create Odoo cash expense');
 		 }else{
 			// cheques 
 			$cashExpense->storeNonCustomerOrSupplierOdooExpense(false);
@@ -440,14 +456,17 @@ class CashExpenseController
 		]);
 		
 		// $accountNumberHasChanged = $cashExpense->getAccountNumber() != $accountNumber;
-		$cashExpense->deleteRelations();
-		$cashExpense->delete();
-		
-		
-		 $this->store($company,$request);
-		
-	
-		
+		/**
+		 * * التعديل معمول كـ حذف ثم إنشاء
+		 * * فلازم يكون كله في ترانزاكشن واحدة
+		 */
+		OdooSync::transaction(function () use ($company, $request, $cashExpense) {
+			$cashExpense->deleteRelations();
+			$cashExpense->delete();
+
+			$this->storeWithinTransaction($company, $request);
+		});
+
 		 $activeTab = $newType;
 		 // Same fix as store() — a real redirect instead of JSON, for
 		 // Inertia's router.put() to work correctly.
@@ -456,10 +475,11 @@ class CashExpenseController
 	
 	public function destroy(Company $company , CashExpense $cashExpense)
 	{
-		
-		$cashExpense->deleteRelations();
 		$activeTab = $cashExpense->getType();
-		$cashExpense->delete();
+		OdooSync::transaction(function () use ($cashExpense) {
+			$cashExpense->deleteRelations();
+			$cashExpense->delete();
+		});
 		return redirect()->route('view.cash.expense',['company'=>$company->id,'active'=>$activeTab])->with('success',__('Cash Expense Has Been Updated Successfully'));
 	}
 	protected function generateBranchId($nameOrId,$companyId){

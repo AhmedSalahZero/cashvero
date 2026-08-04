@@ -78,7 +78,7 @@ class CashInSafeStatement extends Model
 
 	public static function updateNextRows(CashInSafeStatement $model):string 
 	{
-		$minDate  = $model->date ;
+		$minDate = $model->full_date ;
 		// $minDate  = $model->full_date ;
 	
 		
@@ -92,9 +92,9 @@ class CashInSafeStatement extends Model
 
 		 StatementCascade::touchRows(
 			DB::table('cash_in_safe_statements')
-		->where('date','>=',$minDate)
+		->where('full_date','>=',$minDate)
 		->where('branch_id',$model->branch_id),
-			'date asc , id asc'
+			'full_date asc , id asc'
 		);
 		
 		return $minDate;
@@ -153,8 +153,8 @@ class CashInSafeStatement extends Model
 						// وتلقائي هيحذف السحوبات settlements
 					}else{
 						DB::table('cash_in_safe_statements')
-						->where('date','>=',$minDate)
-						->orderByRaw('date asc , id asc')
+						->where('full_date','>=',$minDate)
+						->orderByRaw('full_date asc , id asc')
 						->where('branch_id',$model->branch_id)->update([
 							'updated_at'=>now()
 						]);

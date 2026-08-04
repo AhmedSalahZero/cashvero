@@ -7,12 +7,12 @@ begin
 		declare _count_all_rows integer default 0 ; 
 		set new.created_at = CURRENT_TIMESTAMP;
 		if new.source = "lc-facility" then 
-		select date , end_balance  into _previous_date,_last_end_balance  from letter_of_credit_statements where company_id = new.company_id and currency = new.currency and letter_of_credit_statements.lc_facility_id = new.lc_facility_id  and financial_institution_id = new.financial_institution_id and source = new.source and lc_type = new.lc_type  and  date <= new.date   order by date desc , id desc limit 1 ;
-		select  count(*) into _count_all_rows from letter_of_credit_statements where company_id = new.company_id and currency = new.currency and letter_of_credit_statements.lc_facility_id = new.lc_facility_id  and lc_type = new.lc_type and financial_institution_id = new.financial_institution_id and source = new.source and date <= new.date   order by date desc , id desc limit 1 ;
+		select date,end_balance into _previous_date, _last_end_balance  from letter_of_credit_statements where company_id = new.company_id and currency = new.currency and letter_of_credit_statements.lc_facility_id = new.lc_facility_id  and financial_institution_id = new.financial_institution_id and source = new.source and lc_type = new.lc_type  and  (full_date < new.full_date or (full_date = new.full_date and id < new.id))   order by full_date desc , id desc limit 1 ;
+		select  count(*) into _count_all_rows from letter_of_credit_statements where company_id = new.company_id and currency = new.currency and letter_of_credit_statements.lc_facility_id = new.lc_facility_id  and lc_type = new.lc_type and financial_institution_id = new.financial_institution_id and source = new.source and (full_date < new.full_date or (full_date = new.full_date and id < new.id))   order by full_date desc , id desc limit 1 ;
 		
 		else
-		select date , end_balance  into _previous_date,_last_end_balance  from letter_of_credit_statements where company_id = new.company_id and currency = new.currency   and financial_institution_id = new.financial_institution_id and source = new.source and lc_type = new.lc_type  and  date <= new.date   order by date desc , id desc limit 1 ;
-		select  count(*) into _count_all_rows from letter_of_credit_statements where company_id = new.company_id and currency = new.currency   and lc_type = new.lc_type and financial_institution_id = new.financial_institution_id and source = new.source and date <= new.date   order by date desc , id desc limit 1 ;
+		select date , end_balance  into _previous_date,_last_end_balance  from letter_of_credit_statements where company_id = new.company_id and currency = new.currency   and financial_institution_id = new.financial_institution_id and source = new.source and lc_type = new.lc_type  and  (full_date < new.full_date or (full_date = new.full_date and id < new.id))   order by full_date desc , id desc limit 1 ;
+		select  count(*) into _count_all_rows from letter_of_credit_statements where company_id = new.company_id and currency = new.currency   and lc_type = new.lc_type and financial_institution_id = new.financial_institution_id and source = new.source and (full_date < new.full_date or (full_date = new.full_date and id < new.id))   order by full_date desc , id desc limit 1 ;
 		
 		end if ; 
 		
@@ -21,7 +21,7 @@ begin
 	 
 	set new.end_balance = new.beginning_balance + new.debit - new.credit ; 
 	set new.is_debit = if(new.debit > 0 , 1 , 0);
-	set new.is_credit = if(new.debit > 0 , 0 , 1);
+	set new.is_credit = if(new.credit > 0 , 1 , 0);
 	
 
 end //
@@ -34,24 +34,9 @@ begin
 		declare _previous_date date default null ;
 		declare _count_all_rows integer default 0 ; 
 		if new.source = "lc-facility" then 
-		select date,end_balance into _previous_date, _last_end_balance  from letter_of_credit_statements where company_id = new.company_id and letter_of_credit_statements.lc_facility_id = new.lc_facility_id   and financial_institution_id = new.financial_institution_id and source = new.source and lc_type = new.lc_type and currency = new.currency and date = new.date and id < new.id order by date desc , id desc limit 1 ;
-		if  (_previous_date)
-			then
-		select date,end_balance into _previous_date, _last_end_balance  from letter_of_credit_statements where company_id = new.company_id and letter_of_credit_statements.lc_facility_id = new.lc_facility_id   and financial_institution_id = new.financial_institution_id and source = new.source and lc_type = new.lc_type and currency = new.currency and date = new.date and id < new.id order by date desc , id desc limit 1 ;
-			else 
-		select date,end_balance into _previous_date, _last_end_balance  from letter_of_credit_statements where company_id = new.company_id and letter_of_credit_statements.lc_facility_id = new.lc_facility_id   and financial_institution_id = new.financial_institution_id and source = new.source and lc_type = new.lc_type and currency = new.currency and date < new.date order by date desc , id desc limit 1 ;
-					 
-			end if ;
+		select date,end_balance into _previous_date, _last_end_balance  from letter_of_credit_statements where company_id = new.company_id and letter_of_credit_statements.lc_facility_id = new.lc_facility_id   and financial_institution_id = new.financial_institution_id and source = new.source and lc_type = new.lc_type and currency = new.currency and  (full_date < new.full_date or (full_date = new.full_date and id < new.id))  order by full_date desc , id desc limit 1 ;
 		else
-				select date,end_balance into _previous_date, _last_end_balance  from letter_of_credit_statements where company_id = new.company_id   and financial_institution_id = new.financial_institution_id and source = new.source and lc_type = new.lc_type and currency = new.currency and date = new.date and id < new.id order by date desc , id desc limit 1 ;
-
-		if  (_previous_date)
-			then
-				select date,end_balance into _previous_date, _last_end_balance  from letter_of_credit_statements where company_id = new.company_id   and financial_institution_id = new.financial_institution_id and source = new.source and lc_type = new.lc_type and currency = new.currency and date = new.date and id < new.id order by date desc , id desc limit 1 ;
-			else 
-				select date,end_balance into _previous_date, _last_end_balance  from letter_of_credit_statements where company_id = new.company_id   and financial_institution_id = new.financial_institution_id and source = new.source and lc_type = new.lc_type and currency = new.currency and date < new.date order by date desc , id desc limit 1 ;
-					 
-			end if ;
+				select date,end_balance into _previous_date, _last_end_balance  from letter_of_credit_statements where company_id = new.company_id   and financial_institution_id = new.financial_institution_id and source = new.source and lc_type = new.lc_type and currency = new.currency and  (full_date < new.full_date or (full_date = new.full_date and id < new.id))  order by full_date desc , id desc limit 1 ;
 			
 		end if ; 
 		
@@ -61,7 +46,7 @@ begin
 	 set new.beginning_balance = _last_end_balance ;
 	set new.end_balance = new.beginning_balance + new.debit - new.credit ; 
 	set new.is_debit = if(new.debit > 0 , 1 , 0);
-	set new.is_credit = if(new.debit > 0 , 0 , 1);
+	set new.is_credit = if(new.credit > 0 , 1 , 0);
 	
 end //
 

@@ -20,7 +20,12 @@ trait AuthTrait
 	protected int $company_id  ;
 	protected Company $company ; 
 	protected ?int $uid;
-	public function __construct(Company $company ) 
+	/**
+	 * * $user اختياري: لو مبعتش بياخد اليوزر اللي عامل لوجن زي الأول
+	 * * بنبعته صراحةً لما نكون بنشتغل نيابة عن يوزر تاني
+	 * * (السوبر أدمن بيعدّل بيانات يوزر، كيو، كرون، كوماند)
+	 */
+	public function __construct(Company $company, ?User $user = null )
 	{
 		$odooUrl = $company->getOdooDBUrl();
 		$odooDbName = $company->getOdooDBName();
@@ -29,11 +34,11 @@ trait AuthTrait
 		}
 		$this->url = (string) $odooUrl;
 		$this->db = (string) $odooDbName;
-		$user =auth()->user();
+		$user = $user ?: auth()->user();
 		/**
-		 * @var User $user
+		 * @var User|null $user
 		 */
-		if (!$user) {
+		if (!$user instanceof User) {
 			throw new \RuntimeException(__('No authenticated user found for Odoo integration context.'));
 		}
 		$odooUsername = $user->getOdooDBUserName();
@@ -51,18 +56,44 @@ trait AuthTrait
 		try{
 			if(is_null($currentOdooId)){
 					$uid = $common->authenticate($this->db, $this->username, $this->password, array());
+					if(!is_numeric($uid)){
+						/**
+						 * * أودو بيرجّع false لو اليوزر أو الباسورد غلط
+						 * * وبيرجّع array فيها faultString لو الداتابيز غلط
+						 */
+						\Illuminate\Support\Facades\Log::warning('Odoo authenticate rejected the credentials', [
+							'company_id' => $company->id,
+							'odoo_db' => $this->db,
+							'odoo_username' => $this->username,
+							'response' => $uid,
+						]);
+					}
 				}else{
 					$uid = $currentOdooId ;
 				}
 		}
-		catch(\Exception $e){
-			
+		catch(\Throwable $e){
+			/**
+			 * * الاستثناء كان بيتبلع هنا خالص
+			 * * فمكانش فيه أي طريقة تعرف بيها ليه الاتصال فشل
+			 */
+			\Illuminate\Support\Facades\Log::error('Odoo authenticate failed: '.$e->getMessage(), [
+				'company_id' => $company->id,
+				'odoo_url' => $this->url,
+				'odoo_db' => $this->db,
+				'odoo_username' => $this->username,
+				'exception' => get_class($e),
+			]);
 			$uid = null;
 		}
-		if(is_array($uid)){
+		if(is_array($uid) || !is_numeric($uid)){
 			$uid = null ;
 		}
-		if(is_null($currentOdooId)){
+		/**
+		 * * بنحفظ الـ id بس لما يكون اتجاب فعلاً
+		 * * قبل كده كان بيحفظ null لما المصادقة تفشل
+		 */
+		if(is_null($currentOdooId) && !is_null($uid)){
 			$user->update([
 				'odoo_id'=>$uid 
 			]);
@@ -70,6 +101,13 @@ trait AuthTrait
 		$models = ripcord::client("$this->url/xmlrpc/2/object");
 		$this->models = $models;
 		$this->uid = $uid;
+	}
+	/**
+	 * * الـ uid اللي أودو قبله فعلاً، و null لو المصادقة فشلت
+	 */
+	public function getUid(): ?int
+	{
+		return $this->uid;
 	}
 	   public function execute($model, $method, $args,$kwargs = [])
     {

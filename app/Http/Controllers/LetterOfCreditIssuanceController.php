@@ -24,6 +24,7 @@ use App\Models\PaymentSettlement;
 use App\Models\PurchaseOrder;
 use App\Models\SupplierInvoice;
 use App\Models\TimeOfDeposit;
+use App\Services\Api\OdooSync;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -562,6 +563,17 @@ class LetterOfCreditIssuanceController
      */
     public function store(Company $company, StoreLetterOfCreditIssuanceRequest $request, string $source)
     {
+        /**
+         * * الحفظ كله جوه ترانزاكشن واحدة
+         * * وأي اتصال بأودو بيتنفذ بعد ما الترانزاكشن تكومِت (شوف OdooSync)
+         */
+        return OdooSync::transaction(function () use ($company, $request, $source) {
+            return $this->storeWithinTransaction($company, $request, $source);
+        });
+    }
+
+    protected function storeWithinTransaction(Company $company, StoreLetterOfCreditIssuanceRequest $request, string $source)
+    {
         $financialInstitutionId = $request->get('financial_institution_id');
         $letterOfCreditFacilityId = $request->get('lc_facility_id');
         $letterOfCreditFacility = $source == LetterOfCreditIssuance::LC_FACILITY ? LetterOfCreditFacility::find($letterOfCreditFacilityId) : null;
@@ -727,9 +739,17 @@ class LetterOfCreditIssuanceController
             }
         }
 
-        $letterOfCreditIssuance->deleteAllRelations();
-        $letterOfCreditIssuance->delete();
-        $this->store($company, $request, $source);
+        /**
+         * * التعديل معمول كـ حذف ثم إنشاء
+         * * فلازم يكون كله في ترانزاكشن واحدة
+         * * قبل كده لو أي حاجة ضربت في النص كان الاعتماد القديم بيروح والجديد بيتعمل ناقص
+         */
+        OdooSync::transaction(function () use ($company, $request, $letterOfCreditIssuance, $source) {
+            $letterOfCreditIssuance->deleteAllRelations();
+            $letterOfCreditIssuance->delete();
+
+            $this->storeWithinTransaction($company, $request, $source);
+        });
         return redirect()->route('view.letter.of.credit.issuance', ['company' => $company->id, 'active' => $request->get('lc_type')])->with('success', __('Data Store Successfully'));
     }
 
@@ -739,6 +759,13 @@ class LetterOfCreditIssuanceController
      * entries and the settlement. UNCHANGED, deliberately.
      */
     public function backToRunningStatus(Company $company, Request $request, LetterOfCreditIssuance $letterOfCreditIssuance, string $source)
+    {
+        return OdooSync::transaction(function () use ($company, $request, $letterOfCreditIssuance, $source) {
+            return $this->backToRunningStatusWithinTransaction($company, $request, $letterOfCreditIssuance, $source);
+        });
+    }
+
+    protected function backToRunningStatusWithinTransaction(Company $company, Request $request, LetterOfCreditIssuance $letterOfCreditIssuance, string $source)
     {
         $letterOfCreditIssuanceStatus = LetterOfCreditIssuance::RUNNING;
 
@@ -773,6 +800,13 @@ class LetterOfCreditIssuanceController
      * safe fallback this method already has built in).
      */
     public function markAsPaid(Company $company, StoreNewSettlementWithLcIssuanceRequest $request, LetterOfCreditIssuance $letterOfCreditIssuance, string $source)
+    {
+        return OdooSync::transaction(function () use ($company, $request, $letterOfCreditIssuance, $source) {
+            return $this->markAsPaidWithinTransaction($company, $request, $letterOfCreditIssuance, $source);
+        });
+    }
+
+    protected function markAsPaidWithinTransaction(Company $company, StoreNewSettlementWithLcIssuanceRequest $request, LetterOfCreditIssuance $letterOfCreditIssuance, string $source)
     {
         $supplierInvoiceId = $request->get('supplier_invoice_id');
         $supplierInvoice = SupplierInvoice::find($supplierInvoiceId);
@@ -855,9 +889,11 @@ class LetterOfCreditIssuanceController
      */
     public function destroy(Company $company, LetterOfCreditIssuance $letterOfCreditIssuance)
     {
-        $letterOfCreditIssuance->deleteAllRelations();
         $lcType = $letterOfCreditIssuance->getLcType();
-        $letterOfCreditIssuance->delete();
+        OdooSync::transaction(function () use ($letterOfCreditIssuance) {
+            $letterOfCreditIssuance->deleteAllRelations();
+            $letterOfCreditIssuance->delete();
+        });
         return redirect()->route('view.letter.of.credit.issuance', ['company' => $company->id, 'active' => $lcType]);
     }
 
@@ -879,6 +915,13 @@ class LetterOfCreditIssuanceController
      * deliberately — already redirects correctly.
      */
     public function applyExpense(Company $company, Request $request, LetterOfCreditIssuance $letterOfCreditIssuance, $type = 'create')
+    {
+        return OdooSync::transaction(function () use ($company, $request, $letterOfCreditIssuance, $type) {
+            return $this->applyExpenseWithinTransaction($company, $request, $letterOfCreditIssuance, $type);
+        });
+    }
+
+    protected function applyExpenseWithinTransaction(Company $company, Request $request, LetterOfCreditIssuance $letterOfCreditIssuance, $type = 'create')
     {
         $date = Carbon::make($request->input('date.'.$type))->format('Y-m-d');
         $amount = $request->input('amount.'.$type, 0);
@@ -923,9 +966,15 @@ class LetterOfCreditIssuanceController
      */
     public function updateExpense(Company $company, Request $request, LcIssuanceExpense $expense)
     {
-        $expense->delete();
-        $letterOfCreditIssuance = $expense->letterOfCreditIssuance;
-        $this->applyExpense($company, $request, $letterOfCreditIssuance, 'update');
+        /**
+         * * التعديل معمول كـ حذف ثم إنشاء
+         * * فلازم يكون كله في ترانزاكشن واحدة
+         */
+        OdooSync::transaction(function () use ($company, $request, $expense) {
+            $expense->delete();
+            $letterOfCreditIssuance = $expense->letterOfCreditIssuance;
+            $this->applyExpenseWithinTransaction($company, $request, $letterOfCreditIssuance, 'update');
+        });
         return redirect()->route('view.letter.of.credit.issuance', ['company' => $company->id])->with('success', __('Expense Updated Successfully'));
     }
 

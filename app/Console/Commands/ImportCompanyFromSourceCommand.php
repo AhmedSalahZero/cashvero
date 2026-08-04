@@ -9,6 +9,9 @@ use Illuminate\Console\Command;
  * Cut over one company from the local mysql_source DB (veroanalysis /
  * system.veroanalysis.com) into this app's default DB (cash-vero).
  *
+ * Row primary keys are remapped (auto-increment) on the target; foreign keys
+ * are rewritten so relationships stay intact. company_id stays the same.
+ *
  *   php artisan company:import-from-source {company_id} --dry-run
  *   php artisan company:import-from-source {company_id} --force
  */
@@ -19,7 +22,7 @@ class ImportCompanyFromSourceCommand extends Command
         {--dry-run : Schema report, row counts, and collision check only — no writes}
         {--force : Required to wipe target company data and import}';
 
-    protected $description = 'Import one company from local mysql_source (veroanalysis) into cash-vero, wiping target company rows first';
+    protected $description = 'Import one company from local mysql_source (veroanalysis) into cash-vero with remapped PKs, wiping target company rows first';
 
     public function handle(CompanyImportService $importer): int
     {
@@ -39,7 +42,7 @@ class ImportCompanyFromSourceCommand extends Command
         }
 
         $this->info(sprintf(
-            'Company import  id=%d  source=%s  target=%s  mode=%s',
+            'Company import  id=%d  source=%s  target=%s  mode=%s  pk=remap',
             $companyId,
             $importer->sourceConnection(),
             $importer->targetConnection(),
@@ -76,14 +79,16 @@ class ImportCompanyFromSourceCommand extends Command
         $this->line("Rows on target before import (intersection): {$totalTargetRows}");
 
         if (count($analysis['collisions'])) {
-            $this->error('PK collisions with other companies on target:');
+            $this->warn('PK collisions with other companies (informational — PKs will be remapped):');
             foreach (array_slice($analysis['collisions'], 0, 20) as $collision) {
                 $this->line("  {$collision['table']} id={$collision['id']} other_company_id={$collision['other_company_id']}");
             }
-
-            return self::FAILURE;
+            if (count($analysis['collisions']) >= 20) {
+                $this->line('  …');
+            }
+        } else {
+            $this->info('Collision preflight: none (remap mode still assigns new PKs)');
         }
-        $this->info('Collision preflight: OK');
 
         if ($dryRun) {
             $this->info('Dry-run complete — no writes.');
@@ -104,11 +109,23 @@ class ImportCompanyFromSourceCommand extends Command
             }
         }
         $this->line("Copied company_id rows: {$copiedRows}");
+        if (isset($report['triggers_suspended'])) {
+            $this->line('Statement balance triggers suspended during import: '.$report['triggers_suspended']);
+        }
         if (isset($report['users'])) {
             $this->line('Users: '.json_encode($report['users']));
         }
         if (isset($report['indirect'])) {
             $this->line('Indirect: '.json_encode($report['indirect']));
+        }
+        if (! empty($report['id_maps']) && is_array($report['id_maps'])) {
+            $mapped = array_sum($report['id_maps']);
+            $this->line("ID maps: {$mapped} keys across ".count($report['id_maps']).' tables');
+            $top = $report['id_maps'];
+            arsort($top);
+            foreach (array_slice($top, 0, 10, true) as $table => $n) {
+                $this->line("  {$table}: {$n}");
+            }
         }
 
         $verification = $report['verification'] ?? null;

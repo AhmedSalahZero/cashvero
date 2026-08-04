@@ -21,20 +21,17 @@ trait HasPartnerStatement
 {
 	public function deletePartnerStatement()
 	{
-		if($this->isEmployee() && $this->employeeStatement){
-			$this->employeeStatement->delete();
-		}
-		if($this->isShareholder() && $this->shareholderStatement){
-			$this->shareholderStatement->delete();
-		}
-		if($this->isSubsidiaryCompany() && $this->subsidiaryCompanyStatement){
-			$this->subsidiaryCompanyStatement->delete();
-		}
-		if($this->isOtherPartner() && $this->otherPartnerStatement){
-			$this->otherPartnerStatement->delete();
-		}
-		if($this->isTax() && $this->taxStatement){
-			$this->taxStatement->delete();
+		/**
+		 * * كان بيتشرط على نوع الشريك الحالي قبل الحذف
+		 * * (isEmployee() وكده) ، فلو النوع اتغير أو كان فاضي
+		 * * الكشف القديم كان بيفضل ورا الحركة يتيم
+		 * * دلوقتي بنحذف أي كشف شريك مربوط بالحركة أيًا كان نوعه
+		 * * وكل علاقة بترجع null لو مالهاش صف فمفيش أي ضرر
+		 */
+		foreach (['employeeStatement','shareholderStatement','subsidiaryCompanyStatement','otherPartnerStatement','taxStatement'] as $relationName) {
+			if($this->{$relationName}){
+				$this->{$relationName}->delete();
+			}
 		}
 	}
 	/** @phpstan-ignore-next-line */

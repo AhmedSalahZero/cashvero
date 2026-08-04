@@ -5,6 +5,7 @@ use App\Helpers\HStr;
 use App\Http\Controllers\MoneyReceivedController;
 use App\Http\Requests\StoreMoneyReceivedRequest;
 use App\Models\CashVeroBranch;
+use App\Models\Company;
 use App\Models\Contract;
 use App\Models\Currency;
 use App\Models\CustomerInvoice;
@@ -13,6 +14,7 @@ use App\Models\MoneyReceived;
 use App\Models\Partner;
 use App\Models\SalesOrder;
 use App\Models\SupplierInvoice;
+use App\Models\User;
 use App\Services\Api\Traits\AuthTrait;
 use App\Services\Api\Traits\CommonHelper;
 use App\Services\Api\Traits\HasUnlink;
@@ -20,11 +22,40 @@ use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Str;
 
 class OdooService
 {
 	use AuthTrait , CommonHelper,HasUnlink;
+
+	/**
+	 * * بتجيب الـ odoo_id لليوزر المبعوت مش لليوزر اللي عامل لوجن
+	 * * بتصفّر القيمة القديمة الأول عشان AuthTrait يعمل authenticate من جديد
+	 * * بترجّع الـ uid لو نجح و null لو فشل، ومش بترمي استثناء
+	 */
+	public static function refreshUserOdooId(Company $company, User $user): ?int
+	{
+		if (! $company->hasOdooIntegrationCredentials($user)) {
+			return null;
+		}
+
+		$user->update(['odoo_id' => null]);
+
+		try {
+			return (new self($company, $user))->getUid();
+		} catch (\Throwable $e) {
+			Log::error('Odoo odoo_id refresh failed: '.$e->getMessage(), [
+				'company_id' => $company->id,
+				'user_id' => $user->id,
+				'odoo_username' => $user->getOdooDBUserName(),
+				'exception' => get_class($e),
+			]);
+
+			return null;
+		}
+	}
+
 	/**
 	 * * import project or contracts
 	 */

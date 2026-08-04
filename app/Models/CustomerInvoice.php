@@ -629,11 +629,12 @@ class CustomerInvoice extends Model implements IInvoice
 	}
 	
 	
-	public static function getForecastedProjectCollection(array &$result   , string $startDate , string $endDate , $currency  , $companyId  , array $datesWithWeekNumber , ?int $contractId = null):void
+	public static function getForecastedProjectCollection(array &$result   , string $startDate , string $endDate , $currency  , $companyId  , array $datesWithWeekNumber , ?int $contractId = null , $foreignExchangeRates = null , ?string $mainFunctionalCurrency = null):void
 	{
 		/**
-		 * 
+		 *
 		 * * في حالة لو مرر العقد فا مش محتاجين عمله لان العقد الواحد مربوط بعملة واحدة
+		 * * المبالغ هنا بعملة العقد فلازم تتحول للعملة الوظيفية عشان تتجمع مع باقي الصفوف المحولة
 		 */
 		$totalCashInFlowKey = __('Total Cash Inflow');
 		$currentTypeText = 'Forecasted Project Collection';
@@ -688,10 +689,12 @@ class CustomerInvoice extends Model implements IInvoice
 				
 				$salesOrderNetBalance = 0 ;
 				if($salesOrderNetPayments > $salesOrderAmount){
-					$salesOrderNetBalance = 0;	
+					$salesOrderNetBalance = 0;
 				}else{
 					$salesOrderNetBalance = $salesOrderAmount - $salesOrderNetPayments;
 				}
+				$exchangeRate = ForeignExchangeRate::getExchangeRateAtOrOne($contract->getCurrency(),$mainFunctionalCurrency,$currentSoCollectionDaysFormatted,$companyId,$foreignExchangeRates);
+				$salesOrderNetBalance = $salesOrderNetBalance * $exchangeRate;
 				$invoiceNumber =   $customerName . '-' . $contractName  ;
 				$result['customers'][$currentTypeText][$invoiceNumber]['weeks'][$currentWeekYear] = isset($result['customers'][$currentTypeText][$invoiceNumber]['weeks'][$currentWeekYear]) ? $result['customers'][$currentTypeText][$invoiceNumber]['weeks'][$currentWeekYear]+  $salesOrderNetBalance :$salesOrderNetBalance;
 				$result['customers'][$currentTypeText][$invoiceNumber]['total'] = isset($result['customers'][$currentTypeText][$invoiceNumber]['total']) ? $result['customers'][$currentTypeText][$invoiceNumber]['total']  + $salesOrderNetBalance : $salesOrderNetBalance;

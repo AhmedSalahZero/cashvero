@@ -22,6 +22,7 @@ use App\Models\MoneyReceived;
 use App\Models\Partner;
 use App\Models\SalesOrder;
 use App\Services\Api\OdooPayment;
+use App\Services\Api\OdooSync;
 use App\Traits\GeneralFunctions;
 use App\Traits\Models\HasBasicFilter;
 use Carbon\Carbon;
@@ -671,7 +672,18 @@ class MoneyReceivedController
     
     public function store(Company $company, StoreMoneyReceivedRequest $request, $returnModel = false, $accountNumberHasChanged=false)
     {
-		
+        /**
+         * * الحفظ كله جوه ترانزاكشن واحدة
+         * * وأي اتصال بأودو بيتنفذ بعد ما الترانزاكشن تكومِت (شوف OdooSync)
+         */
+        return OdooSync::transaction(function () use ($company, $request, $returnModel, $accountNumberHasChanged) {
+            return $this->storeWithinTransaction($company, $request, $returnModel, $accountNumberHasChanged);
+        });
+    }
+
+    protected function storeWithinTransaction(Company $company, StoreMoneyReceivedRequest $request, $returnModel = false, $accountNumberHasChanged=false)
+    {
+
         $syncWithOdoo = !$request->has('stop-sync-with-odoo')  ;
         $hasUnappliedAmount = (bool)$request->get('unapplied_amount');
         $isGeneralDownPaymentOrSettlementOpening = $request->get('down_payment_type') == MoneyReceived::DOWN_PAYMENT_GENERAL || $request->get('down_payment_type') == MoneyReceived::SETTLEMENT_OF_OPENING_BALANCE;
@@ -1021,28 +1033,31 @@ class MoneyReceivedController
 
     public function update(Company $company, StoreMoneyReceivedRequest $request, moneyReceived $moneyReceived)
     {
-        
-        $oldSettlementsForMoneyReceivedWithDownPayment  = $moneyReceived->settlementsForDownPaymentThatComeFromMoneyModel ;
         //	$companyId = $company->id ;
         $newType = $request->get('type');
-        $moneyReceivedAmountHasChanged = $moneyReceived->getAmount() != $request->input('received_amount.'.$newType);
-    
-        
-        $moneyReceived->deleteRelations();
-        $moneyReceived->delete();
-        
-        $newMoneyReceived = $this->store($company, $request, true);
-      
-        
-        
-        if (!$moneyReceivedAmountHasChanged) {
-            $newMoneyReceived->storeNewSettlement(
-                $oldSettlementsForMoneyReceivedWithDownPayment->toArray(),
-                $newMoneyReceived->getPartnerId(),
-                $company,
-                1
-            );
-        }
+        /**
+         * * التعديل معمول كـ حذف ثم إنشاء
+         * * فلازم يكون كله في ترانزاكشن واحدة
+         * * قبل كده لو أي حاجة ضربت في النص كان السجل القديم بيروح والجديد بيتعمل ناقص
+         */
+        OdooSync::transaction(function () use ($company, $request, $moneyReceived, $newType) {
+            $oldSettlementsForMoneyReceivedWithDownPayment  = $moneyReceived->settlementsForDownPaymentThatComeFromMoneyModel ;
+            $moneyReceivedAmountHasChanged = $moneyReceived->getAmount() != $request->input('received_amount.'.$newType);
+
+            $moneyReceived->deleteRelations();
+            $moneyReceived->delete();
+
+            $newMoneyReceived = $this->storeWithinTransaction($company, $request, true);
+
+            if (!$moneyReceivedAmountHasChanged) {
+                $newMoneyReceived->storeNewSettlement(
+                    $oldSettlementsForMoneyReceivedWithDownPayment->toArray(),
+                    $newMoneyReceived->getPartnerId(),
+                    $company,
+                    1
+                );
+            }
+        });
         $activeTab = $newType;
 
         return redirect()->route('view.money.receive', ['company' => $company->id, 'active' => $activeTab])
@@ -1051,9 +1066,11 @@ class MoneyReceivedController
     
     public function destroy(Company $company, MoneyReceived $moneyReceived, DeleteMoneyReceivedRequest $request)
     {
-        $moneyReceived->deleteRelations();
         $activeTab = $moneyReceived->getType();
-        $moneyReceived->delete();
+        OdooSync::transaction(function () use ($moneyReceived) {
+            $moneyReceived->deleteRelations();
+            $moneyReceived->delete();
+        });
         return redirect()->route('view.money.receive', ['company'=>$company->id,'active'=>$activeTab])->with('success', __('Money Received Has Been Updated Successfully'));
     }
     protected function generateBranchId($nameOrId, $companyId)

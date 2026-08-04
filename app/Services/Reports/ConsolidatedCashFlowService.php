@@ -21,8 +21,6 @@ use Illuminate\Support\Facades\Log;
 
 class ConsolidatedCashFlowService
 {
-    private const MAX_CONTRACTS_PER_RUN = 50;
-
     /**
      * @return array{
      *   weeks: array<string, string|int>,
@@ -60,28 +58,27 @@ class ConsolidatedCashFlowService
      */
     private function resolveContractIds(Company $company, Request $request): array
     {
+        $currency = (string) $request->input('currency', $company->getMainFunctionalCurrency());
         $contractIds = $request->input('contract_ids', []);
         if (! is_array($contractIds)) {
             $contractIds = [];
         }
         $contractIds = array_values(array_unique(array_filter(array_map('intval', $contractIds))));
+
+        $baseQuery = Contract::query()
+            ->where('company_id', $company->id)
+            ->whereIn('status', [Contract::RUNNING, Contract::RUNNING_AND_AGAINST])
+            ->where('currency', $currency);
+
         if ($contractIds === []) {
-            $contractIds = Contract::query()
-                ->where('company_id', $company->id)
-                ->whereIn('status', [Contract::RUNNING, Contract::RUNNING_AND_AGAINST])
-                ->orderBy('name')
-                ->pluck('id')
-                ->all();
+            return $baseQuery->orderBy('name')->pluck('id')->all();
         }
 
-        if (count($contractIds) > self::MAX_CONTRACTS_PER_RUN) {
-            throw new \RuntimeException(__(
-                'Too many contracts selected (:count). Please choose up to :max contracts per run.',
-                ['count' => count($contractIds), 'max' => self::MAX_CONTRACTS_PER_RUN]
-            ));
-        }
-
-        return $contractIds;
+        return $baseQuery
+            ->whereIn('id', $contractIds)
+            ->orderBy('name')
+            ->pluck('id')
+            ->all();
     }
 
     /**
@@ -162,6 +159,8 @@ class ConsolidatedCashFlowService
                 'companyUnallocatedCashOut' => $companyUnallocatedCashOut,
                 'grandTotal' => $grandTotal,
                 'currencyName' => $currencyName,
+                // عملة الفلتر تختار العقود فقط، أما كل الأرقام المعروضة فمحوّلة للعملة الوظيفية
+                'displayCurrency' => (string) $sharedTimeline['mainFunctionalCurrency'],
                 'title' => __('Consolidated Cash Flow Report').' [ '.$reportInterval.' ]',
             ];
         } finally {
@@ -234,6 +233,8 @@ class ConsolidatedCashFlowService
             $companyId,
             $datesWithWeekNumber,
             null,
+            $foreignExchangeRates,
+            $mainFunctionalCurrency,
         );
         SupplierInvoice::getForecastedProjectCollection(
             $result,
@@ -243,6 +244,8 @@ class ConsolidatedCashFlowService
             $companyId,
             $datesWithWeekNumber,
             null,
+            $foreignExchangeRates,
+            $mainFunctionalCurrency,
         );
         CustomerInvoice::getCustomerInvoicesUnderCollectionAtDatesForContracts(
             $result,
@@ -321,6 +324,8 @@ class ConsolidatedCashFlowService
             $customerDueInvoices,
             $supplierDueInvoices,
             $pastDueLoanInstallments,
+            $foreignExchangeRates,
+            $mainFunctionalCurrency,
         );
 
         $orderByKeys = [

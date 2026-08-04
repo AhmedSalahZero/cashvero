@@ -1471,11 +1471,15 @@ class Company extends Model implements HasMedia
         return (bool) ($this->getOdooDBUrl() && $this->getOdooDBName());
     }
 
-    public function hasOdooIntegrationCredentials():bool
+    /**
+     * * $user اختياري: لو مبعتش بياخد اليوزر اللي عامل لوجن زي الأول
+     * * بنبعته صراحةً لما نسأل عن يوزر تاني غير اللي في السيشن
+     */
+    public function hasOdooIntegrationCredentials(?User $user = null):bool
     {
-		$user =auth()->user();
+		$user = $user ?: auth()->user();
 		/**
-		 * @var User $user
+		 * @var User|null $user
 		 */
         return $this->hasOdooCredentials() && $user && $user->getOdooDBUserName() && $user->getOdooDBPassword();
     }

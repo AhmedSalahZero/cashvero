@@ -358,8 +358,8 @@ class CashFlowReportController
 		  /**
 		   * ! start postponed
 		   */
-		  CustomerInvoice::getForecastedProjectCollection($result ,$startDate , $endDate,$currency,$company->id,$datesWithWeekNumber,$contractId) ;
-		   SupplierInvoice::getForecastedProjectCollection($result ,$startDate , $endDate,$currency,$company->id,$datesWithWeekNumber,$contractId) ;
+		  CustomerInvoice::getForecastedProjectCollection($result ,$startDate , $endDate,$currency,$company->id,$datesWithWeekNumber,$contractId,$foreignExchangeRates,$mainFunctionalCurrency) ;
+		   SupplierInvoice::getForecastedProjectCollection($result ,$startDate , $endDate,$currency,$company->id,$datesWithWeekNumber,$contractId,$foreignExchangeRates,$mainFunctionalCurrency) ;
 		
 		 /**
 		   * ! end postponed
@@ -457,6 +457,8 @@ class CashFlowReportController
 			$customerDueInvoices,
 			$supplierDueInvoices,
 			$pastDueLoanInstallments,
+			$foreignExchangeRates,
+			$mainFunctionalCurrency,
 		);
 
 		$orderByKeys = [
@@ -632,9 +634,11 @@ class CashFlowReportController
 		array $customerDueInvoices = [],
 		array $supplierDueInvoices = [],
 		array $pastDueLoanInstallments = [],
+		$foreignExchangeRates = null,
+		?string $mainFunctionalCurrency = null,
 	): void {
 		if ($isContract && $contractId) {
-			SupplierInvoice::getForecastedProjectPayment($result, $formStartDate, $formEndDate, $currency, $company->id, $datesWithWeekNumber, $contractId);
+			SupplierInvoice::getForecastedProjectPayment($result, $formStartDate, $formEndDate, $currency, $company->id, $datesWithWeekNumber, $contractId, $foreignExchangeRates, $mainFunctionalCurrency);
 		}
 
 		$totalCashInFlowArray = $result['customers'][__('Total Cash Inflow')]['total'] ?? [];

@@ -496,11 +496,12 @@ class SupplierInvoice extends Model implements IInvoice
 	{
 		return 'invoice_date';
 	}
-	public static function getForecastedProjectCollection(array &$result  , string $startDate , string $endDate , $currency  , $companyId  , array $datesWithWeekNumber , ?int $contractId = null):void
+	public static function getForecastedProjectCollection(array &$result  , string $startDate , string $endDate , $currency  , $companyId  , array $datesWithWeekNumber , ?int $contractId = null , $foreignExchangeRates = null , ?string $mainFunctionalCurrency = null):void
 	{
 		/**
-		 * 
+		 *
 		 * * في حالة لو مرر العقد فا مش محتاجين عمله لان العقد الواحد مربوط بعملة واحدة
+		 * * المبالغ هنا بعملة العقد فلازم تتحول للعملة الوظيفية عشان تتجمع مع باقي الصفوف المحولة
 		 */
 		$key = 'Forecasted Suppliers Contract Payments';
 
@@ -555,10 +556,12 @@ class SupplierInvoice extends Model implements IInvoice
 				
 				$purchaseOrderNetBalance = 0 ;
 				if($purchaseOrderNetPayments > $purchaseOrderAmount){
-					$purchaseOrderNetBalance = 0;	
+					$purchaseOrderNetBalance = 0;
 				}else{
 					$purchaseOrderNetBalance = $purchaseOrderAmount - $purchaseOrderNetPayments;
 				}
+				$exchangeRate = ForeignExchangeRate::getExchangeRateAtOrOne($contract->getCurrency(),$mainFunctionalCurrency,$currentSoCollectionDaysFormatted,$companyId,$foreignExchangeRates);
+				$purchaseOrderNetBalance = $purchaseOrderNetBalance * $exchangeRate;
 				$invoiceNumber =   $customerName . '-' . $contractName  ;
 				$result['suppliers'][$key][$invoiceNumber]['weeks'][$currentWeekYear] = isset($result['suppliers'][$key][$invoiceNumber]['weeks'][$currentWeekYear]) ? $result['suppliers'][$key][$invoiceNumber]['weeks'][$currentWeekYear]+  $purchaseOrderNetBalance :$purchaseOrderNetBalance;
 				$result['suppliers'][$key][$invoiceNumber]['total'] = isset($result['suppliers'][$key][$invoiceNumber]['total']) ? $result['suppliers'][$key][$invoiceNumber]['total']  + $purchaseOrderNetBalance : $purchaseOrderNetBalance;
@@ -568,11 +571,12 @@ class SupplierInvoice extends Model implements IInvoice
 			}
 		}
 	}
-	public static function getForecastedProjectPayment(array &$result   , string $startDate , string $endDate , $currency  , $companyId  , array $datesWithWeekNumber ,?int $contractId = null):void
+	public static function getForecastedProjectPayment(array &$result   , string $startDate , string $endDate , $currency  , $companyId  , array $datesWithWeekNumber ,?int $contractId = null , $foreignExchangeRates = null , ?string $mainFunctionalCurrency = null):void
 	{
 		/**
-		 * 
+		 *
 		 * * في حالة لو مرر العقد فا مش محتاجين عمله لان العقد الواحد مربوط بعملة واحدة
+		 * * المبالغ هنا بعملة العقد فلازم تتحول للعملة الوظيفية عشان تتجمع مع باقي الصفوف المحولة
 		 */
 		// $totalCashInFlowKey = __('Total Cash Inflow');
 		
@@ -624,10 +628,12 @@ class SupplierInvoice extends Model implements IInvoice
 				$currentInvoiceAmount = DB::table('customer_invoices')->where('company_id',$companyId)->where('currency',$currency)->where('sales_order_number',$soNumber)->where('contract_code',$contractCode)->sum('invoice_amount');
 				$salesOrderNetBalance = 0 ;
 				if($currentInvoiceAmount > $salesOrderAmount){
-					$salesOrderNetBalance = 0;	
+					$salesOrderNetBalance = 0;
 				}else{
 					$salesOrderNetBalance = $salesOrderAmount - $currentInvoiceAmount;
 				}
+				$exchangeRate = ForeignExchangeRate::getExchangeRateAtOrOne($contract->getCurrency(),$mainFunctionalCurrency,$currentSoCollectionDaysFormatted,$companyId,$foreignExchangeRates);
+				$salesOrderNetBalance = $salesOrderNetBalance * $exchangeRate;
 				$invoiceNumber =   $customerName . '-' . $contractName  ;
 				$result['suppliers'][$key][$invoiceNumber]['weeks'][$currentWeekYear] = isset($result['suppliers'][$key][$invoiceNumber]['weeks'][$currentWeekYear]) ? $result['suppliers'][$key][$invoiceNumber]['weeks'][$currentWeekYear]+  $salesOrderNetBalance :$salesOrderNetBalance;
 				$result['suppliers'][$key][$invoiceNumber]['total'] = isset($result['suppliers'][$key][$invoiceNumber]['total']) ? $result['suppliers'][$key][$invoiceNumber]['total']  + $salesOrderNetBalance : $salesOrderNetBalance;

@@ -6,6 +6,7 @@ use App\Interfaces\Models\IHaveCreditOverdraftStatement;
 use App\Models\OpeningBalance;
 use App\Models\OutgoingTransfer;
 use App\Services\Api\OdooPayment;
+use App\Services\Api\OdooSync;
 use App\Traits\Models\HasCreditStatements;
 use App\Traits\Models\HasForeignExchangeGainOrLoss;
 use App\Traits\Models\HasNonCustomerOrSupplier;
@@ -252,7 +253,16 @@ class MoneyPayment extends Model implements IHaveCreditOverdraftStatement
             $moneyPayment->comment_en = self::generateComment($moneyPayment, 'en');
             $moneyPayment->comment_ar = self::generateComment($moneyPayment, 'ar');
         });
-        
+        /**
+         * * شبكة أمان: أي مسار حذف مش بينده deleteRelations صراحة
+         * * (زي DeletingClass@truncate / @multipleRowsDeleting)
+         * * كان بيسيب البنك ستيتمنت وكشوف الشركاء يتامى
+         * * ملحوظة: ده مش بيشتغل مع الحذف المباشر على الكويري بيلدر
+         * * لأن الـ model events أصلاً مش بتتنفذ هناك
+         */
+        self::deleting(function (self $moneyPayment): void {
+            $moneyPayment->deleteRelations();
+        });
     }
     
     
@@ -796,12 +806,21 @@ class MoneyPayment extends Model implements IHaveCreditOverdraftStatement
             return $this->currentAccountCreditBankStatement ;
         }
     }
+
+	/**
+	 * * ضمان إن deleteRelations متتنفذش مرتين على نفس الإنستانس
+	 * * الكنترولرز بتناديها صراحة قبل delete() ، والـ deleting hook بينده عليها كمان
+	 */
+	protected bool $relationsAlreadyDeleted = false;
+
     public function deleteRelations()
     {
-		$OdooPaymentService= null;
-		if($this->company->hasOdooIntegrationCredentials()){
-			$OdooPaymentService = new OdooPayment($this->company);
+		if ($this->relationsAlreadyDeleted) {
+			return;
 		}
+		$this->relationsAlreadyDeleted = true;
+		$company = $this->company;
+		$hasOdooIntegration = $company->hasOdooIntegrationCredentials();
         $this->unlinkNonCustomerOrSupplierOdooExpense();
         $oldType = $this->getType();
         /**
@@ -813,27 +832,18 @@ class MoneyPayment extends Model implements IHaveCreditOverdraftStatement
          * with "Call to a member function ... on null" when deleting — it simply skips the
          * Odoo-unlink step it has nothing to unlink from anyway.
          */
-        if ($this->account_bank_statement_line_id && $OdooPaymentService) {
-            $OdooPaymentService->unlinkBankCollection($this->account_bank_statement_line_id);
+        if ($hasOdooIntegration && $this->account_bank_statement_line_id) {
+			$bankStatementLineId = $this->account_bank_statement_line_id;
+			OdooSync::defer(function () use ($company, $bankStatementLineId) {
+				(new OdooPayment($company))->unlinkBankCollection($bankStatementLineId);
+			}, null, 'Unlink Odoo bank collection #'.$bankStatementLineId);
         }
-        $this->settlements->each(function ($settlement) use ($OdooPaymentService) {
-			
-            if ($settlement->account_bank_statement_line_id && $OdooPaymentService) {
-                $OdooPaymentService->unlinkBankCollection($settlement->account_bank_statement_line_id);
-            }
-			elseif($OdooPaymentService && $settlement->odoo_move_id && $settlement->invoice && $settlement->invoice->odoo_id){
-				$OdooPaymentService->unlink($settlement->odoo_move_id);
+        $this->settlements->each(function ($settlement) use ($company, $hasOdooIntegration) {
+
+			if ($hasOdooIntegration) {
+				$this->deferSettlementOdooUnlink($company, $settlement);
 			}
-			elseif($OdooPaymentService && $settlement->odoo_id){
-				$OdooPaymentService->cancelPayments($settlement->odoo_id);
-			}
-			// if($settlement->odoo_move_id && $settlement->invoice->odoo_id){
-			// 	$OdooPaymentService->unlink($settlement->odoo_move_id);
-			// }
-			// elseif($settlement->odoo_id){
-			// 	$OdooPaymentService->cancelPayments($settlement->odoo_id);
-			// }
-			
+
             $settlement->delete();
         });
         $oldTypeRelationName = dashesToCamelCase($oldType);
@@ -982,26 +992,18 @@ class MoneyPayment extends Model implements IHaveCreditOverdraftStatement
         }
     }
     
-    public function subsidiaryCompanyStatement(): HasOne
-    {
-        return $this->hasOne(SubsidiaryCompanyStatement::class, 'money_received_id', 'id');
-    }
-    public function shareholderStatement(): HasOne
-    {
-        return $this->hasOne(ShareholderStatement::class, 'money_received_id', 'id');
-    }
-    public function otherPartnerStatement(): HasOne
-    {
-        return $this->hasOne(OtherPartnerStatement::class, 'money_received_id', 'id');
-    }
-    public function employeeStatement(): HasOne
-    {
-        return $this->hasOne(EmployeeStatement::class, 'money_received_id', 'id');
-    }
-    public function taxStatement(): HasOne
-    {
-        return $this->hasOne(TaxStatement::class, 'money_received_id', 'id');
-    }
+    /**
+     * * الخمس علاقات دي كانت متعرّفة هنا بـ money_received_id بالغلط
+     * * (نسخ ولصق من MoneyReceived) وكانت بتعمل حاجتين وحشين:
+     * *   1. عند الإنشاء: بتكتب money_received_id = رقم الدفعة
+     * *      فالصف بيطلع بالعمودين متملّيين بنفس الرقم
+     * *   2. عند الحذف: deletePartnerStatement() بتدوّر بـ
+     * *      money_received_id = رقم الدفعة ، فممكن تمسح كشف
+     * *      شريك بتاع قبض ليه نفس الرقم
+     * * اتشالت خالص عشان النسخة الصح اللي في HasPartnerStatement
+     * * تشتغل — وهي بتستخدم getForeignKeyName() اللي بيرجّع
+     * * money_payment_id للدفعات و money_received_id للقبض
+     */
     public function getCustomerOrSupplier():string
     {
         return 'supplier';

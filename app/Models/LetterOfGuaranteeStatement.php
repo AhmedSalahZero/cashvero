@@ -94,7 +94,7 @@ class LetterOfGuaranteeStatement extends Model
 	}
 	public static function updateNextRows(LetterOfGuaranteeStatement $model):string 
 	{
-		$minDate  = $model->date ;
+		$minDate = $model->full_date ;
 	
 		
 		/**
@@ -107,13 +107,13 @@ class LetterOfGuaranteeStatement extends Model
 
 		 StatementCascade::touchRows(
 			DB::table((new self)->getTable())
-		->where('date','>=',$minDate)
+		->where('full_date','>=',$minDate)
 		->where('financial_institution_id',$model->financial_institution_id)
 		->where('source',$model->source)
 		->where('lg_facility_id',$model->lg_facility_id)
 		->where('cd_or_td_id',$model->cd_or_td_id)
 		->where('lg_type',$model->lg_type),
-			'date asc , id asc'
+			'full_date asc , id asc'
 		);
 		
 		return $minDate;
@@ -188,8 +188,8 @@ class LetterOfGuaranteeStatement extends Model
 						// وتلقائي هيحذف السحوبات settlements
 					}else{
 						DB::table((new self)->getTable())
-						->where('date','>=',$minDate)
-						->orderByRaw('date asc , id asc')
+						->where('full_date','>=',$minDate)
+						->orderByRaw('full_date asc , id asc')
 						->where('lg_facility_id',$model->lg_facility_id)
 						->where('cd_or_td_id',$model->cd_or_td_id)
 						->where('lg_type',$model->lg_type)

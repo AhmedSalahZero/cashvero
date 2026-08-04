@@ -67,7 +67,7 @@ class LetterOfCreditCashCoverStatement extends Model
 
 	public static function updateNextRows(LetterOfCreditCashCoverStatement $model):string 
 	{
-		$minDate  = $model->date ;
+		$minDate = $model->full_date ;
 	
 		
 		/**
@@ -79,12 +79,12 @@ class LetterOfCreditCashCoverStatement extends Model
 		 */
 		 StatementCascade::touchRows(
 			DB::table('letter_of_credit_cash_cover_statements')
-		->where('date','>=',$minDate)
+		->where('full_date','>=',$minDate)
 		->where('financial_institution_id',$model->financial_institution_id)
 		->where('source',$model->source)
 		->where('lc_facility_id',$model->lc_facility_id)
 		->where('lc_type',$model->lc_type),
-			'date asc , id asc'
+			'full_date asc , id asc'
 		);
 		
 		return $minDate;
@@ -152,8 +152,8 @@ class LetterOfCreditCashCoverStatement extends Model
 						// وتلقائي هيحذف السحوبات settlements
 					}else{
 						DB::table('letter_of_credit_cash_cover_statements')
-						->where('date','>=',$minDate)
-						->orderByRaw('date asc , id asc')
+						->where('full_date','>=',$minDate)
+						->orderByRaw('full_date asc , id asc')
 						->where('lc_facility_id',$model->lc_facility_id)
 						->where('lc_type',$model->lc_type)
 						->where('financial_institution_id',$model->financial_institution_id)

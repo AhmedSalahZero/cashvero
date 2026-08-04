@@ -8,6 +8,7 @@ use App\Models\OutgoingTransfer;
 use App\Models\Settlement;
 use App\Services\Api\CashExpenseOdooService;
 use App\Services\Api\OdooPayment;
+use App\Services\Api\OdooSync;
 use App\Traits\HasCompany;
 use App\Traits\Models\HasCreditStatements;
 use App\Traits\Models\HasForeignExchangeGainOrLoss;
@@ -135,7 +136,14 @@ class CashExpense extends Model  implements IHaveCreditOverdraftStatement
 			$cashExpense->comment_en = self::generateComment($cashExpense,'en');
 			$cashExpense->comment_ar = self::generateComment($cashExpense,'ar');
 		});
-		
+		/**
+		 * * شبكة أمان: أي مسار حذف مش بينده deleteRelations صراحة
+		 * * كان بيسيب البنك ستيتمنت والشيكات يتامى
+		 * * ملحوظة: ده مش بيشتغل مع الحذف المباشر على الكويري بيلدر
+		 */
+		self::deleting(function (self $cashExpense): void {
+			$cashExpense->deleteRelations();
+		});
 	}
 
 	public function getPartnerOdooId()
@@ -519,16 +527,30 @@ class CashExpense extends Model  implements IHaveCreditOverdraftStatement
 			return $this->currentAccountCreditBankStatement ;
 		}
 	}
+
+	/**
+	 * * ضمان إن deleteRelations متتنفذش مرتين على نفس الإنستانس
+	 * * الكنترولرز بتناديها صراحة قبل delete() ، والـ deleting hook بينده عليها كمان
+	 */
+	protected bool $relationsAlreadyDeleted = false;
+
 	public function deleteRelations()
 	{
+		if ($this->relationsAlreadyDeleted) {
+			return;
+		}
+		$this->relationsAlreadyDeleted = true;
 		$this->unlinkNonCustomerOrSupplierOdooExpense();
 		
 		// $company= $this->company;
 		// $journalEntryId = $this->journal_entry_id;
 		
-		if ($this->account_bank_statement_line_id) {
-            $OdooPaymentService = new OdooPayment($this->company);
-            $OdooPaymentService->unlinkBankCollection($this->account_bank_statement_line_id);
+		if ($this->company->hasOdooIntegrationCredentials() && $this->account_bank_statement_line_id) {
+			$company = $this->company;
+			$bankStatementLineId = $this->account_bank_statement_line_id;
+			OdooSync::defer(function () use ($company, $bankStatementLineId) {
+				(new OdooPayment($company))->unlinkBankCollection($bankStatementLineId);
+			}, null, 'Unlink Odoo bank collection #'.$bankStatementLineId);
         }
 		
 		// if($company->hasOdooIntegrationCredentials() && $journalEntryId){

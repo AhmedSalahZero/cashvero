@@ -249,7 +249,16 @@ public function update(Company $company, StoreOpeningBalanceRequest $request, Su
 		
 		$elementsToDelete = array_diff($oldIdsFromDatabase, $idsFromRequest);
 		foreach($elementsToDelete as $idToDelete){
-			$suppliers_opening_balance->moneyModel()->where('money_payments.id', $idToDelete)->delete();
+			/**
+			 * * كان delete على الكويري بيلدر مباشرة
+			 * * فكان بيمسح صف الـ money payment بس ويسيب البنك ستيتمنت وكشوف الشركاء وراه
+			 * * لازم نحمّل الموديل وننده deleteRelations قبل الحذف
+			 */
+			$moneyPaymentToDelete = $suppliers_opening_balance->moneyModel()->where('money_payments.id', $idToDelete)->first();
+			if($moneyPaymentToDelete){
+				$moneyPaymentToDelete->deleteRelations();
+				$moneyPaymentToDelete->delete();
+			}
 		}
 		
         $elementsToUpdate = array_intersect($idsFromRequest, $oldIdsFromDatabase); // origin one

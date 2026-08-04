@@ -69,7 +69,7 @@ class LetterOfGuaranteeCashCoverStatement extends Model
 
 	public static function updateNextRows(LetterOfGuaranteeCashCoverStatement $model):string 
 	{
-		$minDate  = $model->date ;
+		$minDate = $model->full_date ;
 	
 		
 		/**
@@ -82,12 +82,12 @@ class LetterOfGuaranteeCashCoverStatement extends Model
 
 		 StatementCascade::touchRows(
 			DB::table('letter_of_guarantee_cash_cover_statements')
-		->where('date','>=',$minDate)
+		->where('full_date','>=',$minDate)
 		->where('financial_institution_id',$model->financial_institution_id)
 		->where('source',$model->source)
 		->where('lg_facility_id',$model->lg_facility_id)
 		->where('lg_type',$model->lg_type),
-			'date asc , id asc'
+			'full_date asc , id asc'
 		);
 		
 		return $minDate;
@@ -158,8 +158,8 @@ class LetterOfGuaranteeCashCoverStatement extends Model
 						// وتلقائي هيحذف السحوبات settlements
 					}else{
 						DB::table('letter_of_guarantee_cash_cover_statements')
-						->where('date','>=',$minDate)
-						->orderByRaw('date asc , id asc')
+						->where('full_date','>=',$minDate)
+						->orderByRaw('full_date asc , id asc')
 						->where('lg_facility_id',$model->lg_facility_id)
 						->where('lg_type',$model->lg_type)
 						->where('financial_institution_id',$model->financial_institution_id)
