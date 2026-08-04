@@ -270,7 +270,13 @@ class OdooService
 				continue;
 			}
 			$currentOdooCustomerName = $projectArr['partner_id'][1] ;
-			$code = Contract::generateRandomContract($companyId,$currentOdooCustomerName,$startDate,$modelType);
+			/**
+			 * * كان بيمرر $startDate — ودا متغير من برة اللوب (تاريخ بداية
+			 * * المزامنة)، فالكود كان بيطلع بشهر/سنة المزامنة مش المشروع نفسه
+			 * * (مثلًا c-01-2026 لمشروع بادئ في مايو). دلوقتي بيستخدم تاريخ
+			 * * بداية المشروع الجاري زي مسار الإنشاء اليدوي بالظبط.
+			 */
+			$code = Contract::generateRandomContract($companyId,$currentOdooCustomerName,$currentProjectStartDate,$modelType);
 			$partnerId = Partner::handlePartnerForOdoo($currentOdooCustomerId ,$currentOdooCustomerName,1,0,false,false,$companyId  );
 			$oldProject = Contract::where('odoo_id',$currentOdooProjectId)->first();
 			

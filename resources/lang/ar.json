@@ -1340,5 +1340,6 @@
 "Configure":"تكوين",
 "Installments":"الأقساط",
 "All amounts are shown in":"جميع المبالغ معروضة بما يعادل",
-"Contracts filter currency":"عملة فلتر العقود"
+"Contracts filter currency":"عملة فلتر العقود",
+"This contract code is already used by another contract in this company":"كود العقد ده مستخدم بالفعل في عقد تاني بنفس الشركة"
 }
