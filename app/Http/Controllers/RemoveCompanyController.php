@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use Inertia\Inertia;
 
 /**
  * RemoveCompanyController
@@ -28,6 +29,21 @@ use Illuminate\Support\Facades\Artisan;
  * reload). Fixed by redirecting back to the Companies list with a
  * flash message instead — the deletion logic itself (Artisan
  * `delete:all`, then $company->delete()) is completely UNCHANGED.
+ *
+ * ⚠️ Second round of the SAME symptom, different cause: after that
+ * first fix the page started showing Laravel's raw redirect document
+ * ("Redirecting to https://…/en/companySection.") inside Inertia's
+ * error dialog. A plain redirect only works for an Inertia visit if
+ * the browser transparently follows the 302 on the XHR and hands
+ * Inertia the *followed* page — when that doesn't happen the client
+ * gets the 302 itself, which carries no X-Inertia header, so Inertia
+ * treats it as an invalid response and dumps the body in a dialog.
+ * Inertia::location() removes that dependency entirely: for an
+ * Inertia request it answers 409 + X-Inertia-Location, which the
+ * client is built to handle by navigating to the URL itself; for a
+ * plain (non-Inertia) request it still returns the exact same
+ * RedirectResponse as before. Flash message and delete logic
+ * unchanged.
  */
 class RemoveCompanyController extends Controller
 {
@@ -44,7 +60,11 @@ class RemoveCompanyController extends Controller
 		Artisan::call('delete:all',['company_id'=>$company_id]);
         $company->delete();
 
-        return redirect()->route('companySection.index')->with('success', __('Company and all its data were deleted successfully.'));
+        $redirect = redirect()->route('companySection.index')
+            ->with('success', __('Company and all its data were deleted successfully.'));
 
+        // Inertia visit  -> 409 + X-Inertia-Location (client navigates itself)
+        // normal request -> the same RedirectResponse as before
+        return Inertia::location($redirect);
     }
 }
