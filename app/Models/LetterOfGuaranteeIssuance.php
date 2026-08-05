@@ -7,6 +7,7 @@ use App\Http\Controllers\LetterOfGuaranteeIssuanceRenewalDateController;
 use App\Models\LgRenewalDateHistory;
 use App\Services\Api\LetterOfGuaranteeService;
 use App\Services\Api\OdooSync;
+use App\Services\Reports\LgCashCoverEffectiveDate;
 use App\Traits\HasBasicStoreRequest;
 use App\Traits\HasCompany;
 use App\Traits\Models\HasCommissionStatements;
@@ -724,26 +725,33 @@ class LetterOfGuaranteeIssuance extends Model
     {
         $lgsTypes = LgTypes::getAll();
         $mainType = 'customers';
+		// $dateFieldName is kept for call-site compatibility; bucketing uses
+		// cancellation date when present, otherwise issuance renewal_date.
+		$effectiveDateSql = LgCashCoverEffectiveDate::sql();
         $commonQuery = DB::table('letter_of_guarantee_cash_cover_statements')
                         ->where('letter_of_guarantee_cash_cover_statements.company_id', $companyId)
                         ->join('letter_of_guarantee_issuances', 'letter_of_guarantee_issuances.id', '=', 'letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id')
-						->join('partners','partners.id','=','letter_of_guarantee_issuances.partner_id')
-                        ->whereBetween($dateFieldName, [$startDate,$endDate])
-                        ->where('letter_of_guarantee_issuance_id', '>', 0)
+						->join('partners','partners.id','=','letter_of_guarantee_issuances.partner_id');
+		$commonQuery = LgCashCoverEffectiveDate::joinTo($commonQuery);
+		$commonQuery = $commonQuery
+                        ->whereBetween(DB::raw($effectiveDateSql), [$startDate,$endDate])
+                        ->where('letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id', '>', 0)
                         ->when($contractId, function ($q) use ($contractId) {
                             $q->where('contract_id', $contractId);
                         }) ;
         $commonQueryBase = clone $commonQuery;
         $rows = $commonQuery
-        ->groupByRaw('letter_of_guarantee_issuances.lg_type,letter_of_guarantee_cash_cover_statements.currency')
-        ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type ,sum(debit) as total_amount , letter_of_guarantee_cash_cover_statements.currency as currency,'.$dateFieldName)->get();
+        ->groupByRaw('letter_of_guarantee_issuances.lg_type,letter_of_guarantee_cash_cover_statements.currency,'.$effectiveDateSql)
+        ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type ,sum(debit) as total_amount , letter_of_guarantee_cash_cover_statements.currency as currency,'.$effectiveDateSql.' as movement_date')->get();
                     
                $totalCashInFlowKey = __('Total Cash Inflow');         
         $subType = __('Cancelled LGs Cash Cover');
-       $allRowsWithoutGrouping = $commonQueryBase->get();
+       $allRowsWithoutGrouping = $commonQueryBase
+	   		->addSelect(DB::raw($effectiveDateSql.' as movement_date'))
+	   		->get();
         foreach ($rows as $row) {
             $currentCurrency = $row->currency;
-            $date = $row->{$dateFieldName};
+            $date = $row->movement_date;
             $exchangeRate = ForeignExchangeRate::getExchangeRateAt($currentCurrency, $mainFunctionalCurrency, $date, $companyId, $foreignExchangeRates);
             $lgType = $lgsTypes[$row->lg_type];
             $currentPaidAmount = $row->total_amount *$exchangeRate;
@@ -761,7 +769,7 @@ class LetterOfGuaranteeIssuance extends Model
 		// $formattedResults = [];
 		foreach($allRowsWithoutGrouping as $rowWithoutGrouping){
 			 $currentCurrency = $rowWithoutGrouping->currency;
-            $date = $rowWithoutGrouping->{$dateFieldName};
+            $date = $rowWithoutGrouping->movement_date;
 			$partnerName = $rowWithoutGrouping->name;
 			 $lgCode = $rowWithoutGrouping->lg_code;
 			// $lgCode = LetterOfGuaranteeIssuance::find($rowWithoutGrouping->letter_of_guarantee_issuance_id)->getName();

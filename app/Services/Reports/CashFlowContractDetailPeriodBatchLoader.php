@@ -22,8 +22,6 @@ use Illuminate\Support\Facades\DB;
  */
 final class CashFlowContractDetailPeriodBatchLoader
 {
-    private const LG_CASH_COVER_DATE_COLUMN = 'letter_of_guarantee_issuances.renewal_date';
-
     public static function apply(
         array &$result,
         array &$letterOfGuaranteeModelData,
@@ -633,14 +631,17 @@ final class CashFlowContractDetailPeriodBatchLoader
             $result[$mainType][$subTypeFees]['total'][$weekKey] = ($result[$mainType][$subTypeFees]['total'][$weekKey] ?? 0) + $amount;
         }
 
-        $coverRows = DB::table('letter_of_guarantee_cash_cover_statements')
+        $coverQuery = DB::table('letter_of_guarantee_cash_cover_statements')
             ->join('letter_of_guarantee_issuances', 'letter_of_guarantee_issuances.id', '=', 'letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id')
             ->join('partners', 'partners.id', '=', 'letter_of_guarantee_issuances.partner_id')
-            ->where('letter_of_guarantee_cash_cover_statements.company_id', $companyId)
-            ->whereBetween(self::LG_CASH_COVER_DATE_COLUMN, [$periodStart, $periodEnd])
+            ->where('letter_of_guarantee_cash_cover_statements.company_id', $companyId);
+        $coverQuery = LgCashCoverEffectiveDate::joinTo($coverQuery);
+        $effectiveDateSql = LgCashCoverEffectiveDate::sql();
+        $coverRows = $coverQuery
+            ->whereBetween(DB::raw($effectiveDateSql), [$periodStart, $periodEnd])
             ->where('letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id', '>', 0)
             ->where('letter_of_guarantee_issuances.contract_id', $contractId)
-            ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, letter_of_guarantee_cash_cover_statements.debit as total_amount, letter_of_guarantee_cash_cover_statements.currency as currency, '.self::LG_CASH_COVER_DATE_COLUMN.' as movement_date, partners.name as partner_name, letter_of_guarantee_issuances.lg_code as lg_code')
+            ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, letter_of_guarantee_cash_cover_statements.debit as total_amount, letter_of_guarantee_cash_cover_statements.currency as currency, '.$effectiveDateSql.' as movement_date, partners.name as partner_name, letter_of_guarantee_issuances.lg_code as lg_code')
             ->get();
 
         foreach ($coverRows as $row) {

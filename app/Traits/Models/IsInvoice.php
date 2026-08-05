@@ -107,19 +107,22 @@ trait IsInvoice
 	{
 		return self::where('company_id',getCurrentCompanyId())->where('is_period_closed',0)->get()->unique(function($item){return $item['invoice_month'] .'-'.$item['invoice_year'];})->values()->toArray();
 	}
-	public function getAging(){
-		if($this->getStatus() == self::COLLETED_OR_PAID){
+	public function getAging()
+	{
+		if ($this->getStatus() == self::COLLETED_OR_PAID) {
 			return '-';
 		}
-		// Carbon 3 (this project's Laravel 12) changed diffInDays() to
-		// return a SIGNED, FRACTIONAL value by default instead of
-		// Carbon 2's always-positive whole-day count — the exact same
-		// bug class already documented in the roadmap (§4/§14) for
-		// TimeOfDeposit's renewal interest calc, just a second,
-		// previously-unfound instance of it here. Forcing $absolute
-		// and casting to int restores the original, intended behavior:
-		// a plain "how many whole days" count, nothing more.
-		return (int) now()->diffInDays(Carbon::make($this->getInvoiceDate()), true);
+		$dueDate = $this->getInvoiceDueDate();
+		if (! $dueDate) {
+			return '-';
+		}
+		// Carbon 3 diffInDays() is signed and fractional; aging is a whole
+		// day count from the due date (not invoice_date), and 0 while the
+		// invoice is not due yet. Matches InvoiceAgingService, which also
+		// ages from invoice_due_date.
+		$days = (int) Carbon::make($dueDate)->startOfDay()->diffInDays(now()->startOfDay());
+
+		return max($days, 0);
 	}
 	public function getCurrency()
 	{

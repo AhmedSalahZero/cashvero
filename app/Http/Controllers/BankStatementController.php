@@ -193,7 +193,7 @@ class BankStatementController
             ->where('current_account_bank_statements.date', '<=', $endDate)
             ->leftJoin('money_received', 'current_account_bank_statements.money_received_id', '=', 'money_received.id')
             ->selectRaw('current_account_bank_statements.*,financial_institution_accounts.*,money_received.is_reviewed,money_received.reviewed_by,current_account_bank_statements.id as id,current_account_bank_statements.full_date as full_date,current_account_bank_statements.date as date')
-            ->orderByRaw('date desc , current_account_bank_statements.id desc');
+            ->orderByRaw('current_account_bank_statements.full_date desc , current_account_bank_statements.id desc');
 
 
         } elseif ($accountType->isCleanOverdraftAccount()) {
@@ -209,7 +209,7 @@ class BankStatementController
                  ->join('clean_overdrafts', 'clean_overdraft_bank_statements.clean_overdraft_id', '=', 'clean_overdrafts.id')
                  ->where('clean_overdrafts.currency', '=', $currencyName)
                 //  ->leftJoin('money_received','current_account_bank_statements.money_received_id','=','money_received.id')
-                ->orderByRaw('clean_overdraft_bank_statements.date desc , clean_overdraft_bank_statements.id desc')
+                ->orderByRaw('clean_overdraft_bank_statements.full_date desc , clean_overdraft_bank_statements.id desc')
                 ->selectRaw('*,clean_overdraft_bank_statements.id as id');
 
         } elseif ($accountType->isFullySecuredOverdraftAccount()) {
@@ -224,7 +224,7 @@ class BankStatementController
                  ->join('fully_secured_overdrafts', 'fully_secured_overdraft_bank_statements.fully_secured_overdraft_id', '=', 'fully_secured_overdrafts.id')
                  ->where('fully_secured_overdrafts.currency', '=', $currencyName)
                  ->selectRaw('*,fully_secured_overdraft_bank_statements.id as id')
-                 ->orderByRaw('date desc, fully_secured_overdraft_bank_statements.id desc');
+                 ->orderByRaw('fully_secured_overdraft_bank_statements.full_date desc, fully_secured_overdraft_bank_statements.id desc');
         } elseif ($accountType->isOverdraftAgainstCommercialPaperAccount()) {
             $statementModelName = 'OverdraftAgainstCommercialPaperBankStatement';
             $statementTable = 'overdraft_against_commercial_paper_bank_statements';
@@ -237,7 +237,7 @@ class BankStatementController
                  ->where('overdraft_against_commercial_paper_id', $overdraftAgainstCommercialPaper->id)
                  ->join('overdraft_against_commercial_papers', 'overdraft_against_commercial_paper_bank_statements.overdraft_against_commercial_paper_id', '=', 'overdraft_against_commercial_papers.id')
                  ->where('overdraft_against_commercial_papers.currency', '=', $currencyName)
-                 ->orderByRaw('date desc, overdraft_against_commercial_paper_bank_statements.id desc')
+                 ->orderByRaw('overdraft_against_commercial_paper_bank_statements.full_date desc, overdraft_against_commercial_paper_bank_statements.id desc')
                  ->selectRaw('* , overdraft_against_commercial_paper_bank_statements.limit as statement_limit,overdraft_against_commercial_paper_bank_statements.id as id');
         } elseif ($accountType->isOverdraftAgainstAssignmentOfContractAccount()) {
             $statementModelName = 'OverdraftAgainstAssignmentOfContractBankStatement';
@@ -251,7 +251,7 @@ class BankStatementController
                  ->where('overdraft_against_assignment_of_contract_id', $odaId)
                  ->join('overdraft_against_assignment_of_contracts', 'overdraft_against_assignment_of_contract_bank_statements.overdraft_against_assignment_of_contract_id', '=', 'overdraft_against_assignment_of_contracts.id')
                  ->where('overdraft_against_assignment_of_contracts.currency', '=', $currencyName)
-                 ->orderByRaw('date desc, overdraft_against_assignment_of_contract_bank_statements.id desc')
+                 ->orderByRaw('overdraft_against_assignment_of_contract_bank_statements.full_date desc, overdraft_against_assignment_of_contract_bank_statements.id desc')
                  ->selectRaw('* , overdraft_against_assignment_of_contract_bank_statements.limit as statement_limit,overdraft_against_assignment_of_contract_bank_statements.id as id');
         }
 

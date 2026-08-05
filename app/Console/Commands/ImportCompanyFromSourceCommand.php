@@ -91,15 +91,38 @@ class ImportCompanyFromSourceCommand extends Command
         }
 
         if ($dryRun) {
+            if (! empty($report['preflight']['errors'])) {
+                foreach ($report['preflight']['errors'] as $error) {
+                    $this->error($error);
+                }
+            } else {
+                $this->info('Preflight: PASS');
+            }
+            if (! empty($report['preflight']['order_violations'])) {
+                $this->warn('Order violations: '.count($report['preflight']['order_violations']));
+            }
+            if (! empty($report['preflight']['unmapped_local_ids'])) {
+                $this->warn('Unmapped local IDs:');
+                foreach (array_slice($report['preflight']['unmapped_local_ids'], 0, 20) as $u) {
+                    $this->line("  {$u['table']}.{$u['column']} rows={$u['rows']}");
+                }
+            }
+            if (! empty($report['preflight']['cycle_breaks'])) {
+                $this->warn('Cycle breaks: '.implode(', ', $report['preflight']['cycle_breaks']));
+            }
             $this->info('Dry-run complete — no writes.');
 
-            return self::SUCCESS;
+            return $result['ok'] ? self::SUCCESS : self::FAILURE;
         }
 
         if (count($report['errors'])) {
             foreach ($report['errors'] as $error) {
                 $this->error($error);
             }
+        }
+
+        if (! empty($report['order_cycle_breaks'])) {
+            $this->warn('Order cycle breaks: '.implode(', ', $report['order_cycle_breaks']));
         }
 
         $copiedRows = 0;
