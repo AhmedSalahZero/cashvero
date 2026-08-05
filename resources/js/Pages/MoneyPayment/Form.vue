@@ -72,8 +72,17 @@ const transactionTypeOptions = computed(() => {
             { value: 'loan', label: 'Loan' },
         ];
     }
-    if (partnerType.value === 'is_shareholder' || partnerType.value === 'is_subsidiary_company') {
-        return [{ value: 'funding-to', label: 'Funding To' }];
+    if (partnerType.value === 'is_shareholder') {
+        return [
+            { value: 'funding-to', label: 'Funding To' },
+            { value: 'dividend-payment', label: 'Dividend Payment' },
+        ];
+    }
+    if (partnerType.value === 'is_subsidiary_company') {
+        return [
+            { value: 'funding-to', label: 'Funding To' },
+            { value: 'investment-in-subsidiary-company', label: 'Investment In Subsidiary Company' },
+        ];
     }
     if (partnerType.value === 'is_other_partner') {
         return [{ value: 'insurance-to', label: 'Insurance To' }];

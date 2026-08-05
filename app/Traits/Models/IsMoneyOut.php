@@ -64,16 +64,23 @@ trait IsMoneyOut
 			foreach ($items as $settlementOrMoneyModel) {
 				$odooId = $settlementOrMoneyModel->odoo_id ;
 				$ref = 'Cheque Payment ' . $settlementOrMoneyModel->getInvoiceNumber();
+				/**
+				 * * $amountInInvoiceCurrency هو المبلغ بعملة الفاتورة (الأجنبية)
+				 * * و $amount هو نفسه مضروب في الـ Rate يعني بعملة الصرف (الجنيه)
+				 * * الاتنين لازم يروحوا لأودو عشان القيد يطلع صح من غير تعديل يدوي
+				 */
+				$amountInInvoiceCurrency = $settlementOrMoneyModel->getAmount();
 				$amount= $settlementOrMoneyModel->getAmountInReceivingCurrency();
 				$isMoneyPayment  = $settlementOrMoneyModel instanceof MoneyPayment ;
 				if ($isMoneyPayment && $this->isInvoiceSettlementWithDownPayment()) {
-						$amount = $this->downPaymentSettlements->sum('down_payment_amount')* $this->getExchangeRate();
-				
+						$amountInInvoiceCurrency = $this->downPaymentSettlements->sum('down_payment_amount');
+						$amount = $amountInInvoiceCurrency * $this->getExchangeRate();
+
 				}
 				if ($settlementOrMoneyModel->account_bank_statement_line_id) {
 					$odooPaymentService->unlinkBankCollection($settlementOrMoneyModel->account_bank_statement_line_id);
 				}
-				$res = $odooPaymentService->chequePayment($odooId, $amount, $actualPaymentDate, $odooCurrencyId, $journalId, $debitAccountOdooId, $creditOdooAccountId, $odooPartnerId, $ref);
+				$res = $odooPaymentService->chequePayment($odooId, $amount, $actualPaymentDate, $odooCurrencyId, $journalId, $debitAccountOdooId, $creditOdooAccountId, $odooPartnerId, $ref, '', $amountInInvoiceCurrency);
 				$settlementOrMoneyModel->update([
 				'account_bank_statement_line_id'=>$res['statement_entry_id']??null,
 					'odoo_reference'=>$res['bank_reference']??null

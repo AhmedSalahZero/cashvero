@@ -34,6 +34,7 @@ const sections = [
             ['insurance_from_account_code', 'Insurance From Account'],
             ['advances_to_suppliers_code', 'Advances To Suppliers'],
             ['advances_from_customers_code', 'Advances From Customers'],
+            ['investment_in_subsidiary_company_code', 'Investment In Subsidiary Company'],
         ],
     },
     {

@@ -84,6 +84,8 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $advances_to_suppliers_id
  * @property string|null $advances_from_customers_code
  * @property string|null $advances_from_customers_id
+ * @property string|null $investment_in_subsidiary_company_code
+ * @property string|null $investment_in_subsidiary_company_id
  * @property-read \App\Models\Company|null $company
  * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\OdooSetting newModelQuery()
  * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\OdooSetting newQuery()
@@ -125,6 +127,8 @@ use Illuminate\Database\Eloquent\Model;
  * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\OdooSetting whereInsuranceFromAccountId($value)
  * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\OdooSetting whereInsuranceToAccountCode($value)
  * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\OdooSetting whereInsuranceToAccountId($value)
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\OdooSetting whereInvestmentInSubsidiaryCompanyCode($value)
+ * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\OdooSetting whereInvestmentInSubsidiaryCompanyId($value)
  * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\OdooSetting whereInterestRevenueCode($value)
  * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\OdooSetting whereInterestRevenueId($value)
  * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\OdooSetting whereLetterOfCreditCommissionFeesCode($value)
@@ -280,12 +284,19 @@ class OdooSetting extends Model
 		}
 		return  (int) $this->letter_of_guarantee_issuance_fees_id;
 	}
-	public function getLetterOfGuaranteeCommissionFeesId():int 
+	public function getLetterOfGuaranteeCommissionFeesId():int
 	{
 		if(!$this->letter_of_guarantee_commission_fees_id){
 			throw new \Exception('Letter Of Guarantee Issuance Fees Id Not Found .. Please Add It From Other Odoo Setting Form');
 		}
 		return  (int) $this->letter_of_guarantee_commission_fees_id;
+	}
+	public function getInvestmentInSubsidiaryCompanyAccount():int
+	{
+		if(!$this->investment_in_subsidiary_company_id){
+			throw new \Exception('Investment In Subsidiary Company Account Not Found .. Please Add It From Other Odoo Setting Form');
+		}
+		return  (int) $this->investment_in_subsidiary_company_id;
 	}
 
 	

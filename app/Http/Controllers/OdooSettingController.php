@@ -72,6 +72,7 @@ class OdooSettingController
                 'insurance_from_account_code' => $setting->insurance_from_account_code,
                 'advances_to_suppliers_code' => $setting->advances_to_suppliers_code,
                 'advances_from_customers_code' => $setting->advances_from_customers_code,
+                'investment_in_subsidiary_company_code' => $setting->investment_in_subsidiary_company_code,
 
                 'bid_lg_cash_cover_code' => $setting->bid_lg_cash_cover_code,
                 'final_lg_cash_cover_code' => $setting->final_lg_cash_cover_code,

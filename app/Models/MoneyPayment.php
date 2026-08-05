@@ -1072,6 +1072,12 @@ class MoneyPayment extends Model implements IHaveCreditOverdraftStatement
                 'ref'=>__('Funding To')
             ];
         }
+        if ($transactionType == 'investment-in-subsidiary-company' && $this->getPartnerType() == 'is_subsidiary_company') {
+            return [
+                'id'=>$odooSettings->getInvestmentInSubsidiaryCompanyAccount(),
+                'ref'=>__('Investment In Subsidiary Company')
+            ];
+        }
         if ($transactionType == 'funding-to' && $this->getPartnerType() == 'is_shareholder') {
             return [
                 'id'=>$odooSettings->getShareholderAccount(),

@@ -1210,22 +1210,32 @@ class MoneyReceivedController
                 $odooId = $settlementOrMoneyModel->odoo_id ;
 				$isMoneyReceived = $settlementOrMoneyModel instanceof MoneyReceived ;
                 $isOpeningAndMoneyReceivedBalance = $isMoneyReceived && $settlementOrMoneyModel->isOpenBalance() ;
-                $odooCurrencyId =Currency::getOdooId($currency);
+                /**
+                 * * القيد بيتسجّل بعملة الفاتورة زي ما الصرف بيعمل بالظبط
+                 * * (قبل كده كان بياخد عملة التحصيل فالقيمة الأجنبية كانت بتضيع)
+                 */
+                $odooCurrencyId =Currency::getOdooId($moneyReceived->getCurrency());
                 $accountTypeId=$moneyReceived->cheque->getAccountTypeId();
                 $accountNumber = $moneyReceived->cheque->getAccountNumber();
                 $journalId = $financialInstitution->getJournalIdForAccount($accountTypeId, $accountNumber);
                 $debitAccountOdooId = $financialInstitution->getOdooIdForAccount($accountTypeId, $accountNumber);
                 $creditOdooAccountId = $odooSetting->getChequesReceivableId();
                 $odooPartnerId = $moneyReceived->getPartnerOdooId();
+                /**
+                 * * $amountInInvoiceCurrency بعملة الفاتورة و $amountInMainFunctionalCurrency
+                 * * بعملة التحصيل (الجنيه) — الاتنين بيروحوا لأودو
+                 */
+                $amountInInvoiceCurrency = $settlementOrMoneyModel->getAmount();
                 $amountInMainFunctionalCurrency= $settlementOrMoneyModel->getAmountInReceivingCurrency();
 				if($isMoneyReceived && $moneyReceived->isInvoiceSettlementWithDownPayment() ){
-					$amountInMainFunctionalCurrency = $moneyReceived->downPaymentSettlements->sum('down_payment_amount') * $moneyReceived->getExchangeRate() ;
+					$amountInInvoiceCurrency = $moneyReceived->downPaymentSettlements->sum('down_payment_amount') ;
+					$amountInMainFunctionalCurrency = $amountInInvoiceCurrency * $moneyReceived->getExchangeRate() ;
 				}
                 $ref = 'Cheque Collection ' . $settlementOrMoneyModel->getInvoiceNumber();
                 if ($isOpeningAndMoneyReceivedBalance) {
                     $settlementOrMoneyModel->markOpeningPayableChequeAsPaidInOdoo(true);
                 } else {
-                    $res =$OdooPaymentService->chequeCollection($odooId, $amountInMainFunctionalCurrency, $actualCollectionDate, $odooCurrencyId, $journalId, $debitAccountOdooId, $creditOdooAccountId, $odooPartnerId, $ref);
+                    $res =$OdooPaymentService->chequeCollection($odooId, $amountInMainFunctionalCurrency, $actualCollectionDate, $odooCurrencyId, $journalId, $debitAccountOdooId, $creditOdooAccountId, $odooPartnerId, $ref, '', $amountInInvoiceCurrency);
                     $settlementOrMoneyModel->update([
                         'account_bank_statement_line_id'=>$res['statement_entry_id']??null,
                         'odoo_reference'=>$res['bank_reference']??null
