@@ -2,6 +2,10 @@
 import { ref, computed, watch } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { todayDate } from '@/composables/today';
+/* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
+   الحماية الحقيقية على السيرفر. */
+const maxDate = todayDate();
 
 const props = defineProps({
     company: Object,
@@ -146,7 +150,7 @@ const visibleSettlements = computed(() =>
                     <div class="cvr-form-grid-4 items-end">
                         <div>
                             <label class="cvr-form-label">Settlement Date *</label>
-                            <input v-model="form.date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="form.date" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Settlement Amount</label>

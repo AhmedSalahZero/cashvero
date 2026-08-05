@@ -112,6 +112,18 @@ trait PaginatesStatementQueries
      * summed in SQL; the opening and closing balances are read off the
      * boundary rows, because they are stored per row rather than derived.
      *
+     * ⚠️ $dateColumn MUST be the same column the report's own query orders
+     * by. beginning_balance/end_balance are a running balance sequenced by
+     * `full_date asc, id asc` (see CurrentAccountBankStatement::…,
+     * CashInSafeStatement::… and RepairStatementBalancesCommand::ORDER), so
+     * a statement that displays by `full_date` but reads its boundary rows
+     * by the date-only `date` column picks a different row whenever the
+     * last day in range holds more than one movement and the highest id is
+     * not the latest full_date — which is normal, because back-dated rows
+     * get a later id than their full_date. The card then shows some middle
+     * row's closing balance. Default stays 'date' for the statements whose
+     * query really does order by `date`.
+     *
      * @param  callable():\Illuminate\Database\Query\Builder  $freshQuery
      * @return array<string,float|int>
      */

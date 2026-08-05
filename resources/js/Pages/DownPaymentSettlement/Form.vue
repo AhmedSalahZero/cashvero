@@ -2,6 +2,10 @@
 import { ref, computed } from 'vue';
 import { router, usePage, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { todayDate } from '@/composables/today';
+/* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
+   الحماية الحقيقية على السيرفر في الـ Form Request. */
+const maxDate = todayDate();
 
 const props = defineProps({
     modelType: String, // 'CustomerInvoice' | 'SupplierInvoice'
@@ -23,7 +27,7 @@ const page = usePage();
 const errors = computed(() => page.props.errors || {});
 const errorMessages = computed(() => Object.values(errors.value).flat().filter(Boolean));
 
-const settlementDate = ref(new Date().toISOString().slice(0, 10));
+const settlementDate = ref(todayDate());
 
 /* Each row starts pre-filled with whatever's already settled against
    that invoice for this down payment (matches the original: editing
@@ -110,7 +114,7 @@ function submit() {
                         </div>
                         <div>
                             <label class="cvr-form-label">Settlement Date</label>
-                            <input v-model="settlementDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="settlementDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errors.settlement_date" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.settlement_date }}</p>
                         </div>
                     </div>

@@ -2,6 +2,10 @@
 import { ref, computed, watch } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { todayDate } from '@/composables/today';
+/* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
+   الحماية الحقيقية على السيرفر في الـ Form Request. */
+const maxDate = todayDate();
 
 const page = usePage();
 const errors = computed(() => page.props.errors || {});
@@ -451,7 +455,7 @@ function submitMarkAsPaid() {
                     </h2>
                     <div class="mb-4">
                         <label class="cvr-form-label">Actual Payment Date *</label>
-                        <input v-model="actualPaymentDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                        <input v-model="actualPaymentDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                         <p v-if="paymentDateWarning" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ paymentDateWarning }}</p>
                         <p v-else-if="errors.actual_payment_date" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.actual_payment_date }}</p>
                     </div>

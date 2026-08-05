@@ -9,6 +9,7 @@ use App\Models\FinancialInstitutionAccount;
 use App\Models\LoanSchedule;
 use App\Models\LoanScheduleSettlement;
 use App\Models\MediumTermLoan;
+use App\Rules\DateMustBeLessThanOrEqualDate;
 use App\Traits\GeneralFunctions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -375,6 +376,14 @@ class MediumTermLoanController
                 ->back()
                 ->with('warning', __('This loan schedule installment is not linked to an active medium term loan.'));
         }
+
+        /**
+         * * تسوية القسط بتصرف فلوس فعليًا من الحساب
+         * * فما ينفعش تتسجّل بتاريخ بعد النهاردة
+         */
+        $request->validate([
+            'date' => ['required', new DateMustBeLessThanOrEqualDate(null, now(), __('Settlement Date Must Be Less Than Or Equal Today'))],
+        ]);
 
         $currentAccountNumber = $request->get('current_account_number');
         $amount = number_unformat($request->get('amount'));

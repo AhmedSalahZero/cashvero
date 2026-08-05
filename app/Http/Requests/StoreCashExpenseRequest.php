@@ -7,6 +7,7 @@ use App\Models\FinancialInstitution;
 use App\Rules\ActiveFinancialInstitutionAccountRule;
 use App\Rules\AmountCanNotBeGreaterThanEndBalanceAtPaymentDate;
 use App\Rules\DateMustBeGreaterThanOrEqualDate;
+use App\Rules\DateMustBeLessThanOrEqualDate;
 use App\Rules\SettlementPlusWithoutCanNotBeGreaterNetBalance;
 use App\Rules\UniqueChequeNumberRule;
 use App\Rules\UniqueReceiptNumberForReceivingBranchRule;
@@ -58,6 +59,11 @@ class StoreCashExpenseRequest extends FormRequest
 		
         return [
 			'type'=>'required',
+			/**
+			 * * ما ينفعش ندفع مصروف نقدي بتاريخ بعد النهاردة
+			 * * نفس القاعدة الموجودة في ReceivingOrPaymentDateRule للقبض والصرف
+			 */
+			'payment_date'=>['required',new DateMustBeLessThanOrEqualDate(null,now(),__('Payment Date Can Not Be Greater Than Today'))],
 			'delivery_branch_id'=>$type == CashExpense::CASH_PAYMENT  ? ['required','not_in:-1'] : [],
 			'paid_amount.'.$type => ['required','gt:0'],
 			'account_type.'.$type => $accountTypeValidation =  $type == CashExpense::OUTGOING_TRANSFER || $type == CashExpense::PAYABLE_CHEQUE ? 'required' : 'sometimes',
@@ -89,6 +95,7 @@ class StoreCashExpenseRequest extends FormRequest
 			'delivery_branch_id.not_in'=>__('Please Enter New Branch Name'),
 			'due_date.required'=>__('Cheque Due Date Is Required'),
 			'delivery_date.required'=>__('Please Select Payment Date'),
+			'payment_date.required'=>__('Please Select Payment Date'),
 			'cheque_number.required'=>__('Please Insert Cheque Number'),
 			
 		];

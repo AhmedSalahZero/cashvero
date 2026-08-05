@@ -2,6 +2,10 @@
 import { ref, computed, watch } from 'vue';
 import { router, usePage, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { todayDate } from '@/composables/today';
+/* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
+   الحماية الحقيقية على السيرفر في الـ Form Request. */
+const maxDate = todayDate();
 
 const props = defineProps({
     company: Object,
@@ -33,7 +37,7 @@ async function fetchJson(url) {
     return { ok: res.ok, data };
 }
 
-const transferDate = ref(props.model?.transfer_date || new Date().toISOString().slice(0, 10));
+const transferDate = ref(props.model?.transfer_date || todayDate());
 const fromBankId = ref(props.model?.from_bank_id || (props.financialInstitutionBanks[0]?.id ?? ''));
 const currency = ref(props.model?.currency || 'EGP');
 const toLetterOfCreditIssuanceId = ref(props.model?.to_letter_of_credit_issuance_id || '');
@@ -124,7 +128,7 @@ function submit() {
                     <div class="cvr-form-grid-3">
                         <div>
                             <label class="cvr-form-label">Date *</label>
-                            <input v-model="transferDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="transferDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errors.transfer_date" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.transfer_date }}</p>
                         </div>
                         <div>

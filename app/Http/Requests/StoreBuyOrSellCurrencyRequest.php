@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Rules\ActiveFinancialInstitutionAccountRule;
 use App\Rules\AmountCanNotBeGreaterThanEndBalanceAtPaymentDate;
+use App\Rules\DateMustBeLessThanOrEqualDate;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreBuyOrSellCurrencyRequest extends FormRequest
@@ -39,7 +40,10 @@ class StoreBuyOrSellCurrencyRequest extends FormRequest
 
 		$companyId = $this->route('company')->id;
         return [
-			'transaction_date'=>'required',
+			/**
+			 * * ما ينفعش نشتري أو نبيع عملة بتاريخ بعد النهاردة
+			 */
+			'transaction_date'=>['required',new DateMustBeLessThanOrEqualDate(null,now(),__('Transaction Date Can Not Be Greater Than Today'))],
 			'currency_to_sell_amount'=>['required','gt:0'],
 			'from_account_number'=>[new ActiveFinancialInstitutionAccountRule($companyId, $accountType, $accountNumber, $financialInstitutionId)],
 			'to_account_number'=>[new ActiveFinancialInstitutionAccountRule($companyId, $this->get('to_account_type_id'), $this->get('to_account_number'), $this->get('to_bank_id'))],

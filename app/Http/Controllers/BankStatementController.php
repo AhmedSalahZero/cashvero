@@ -262,6 +262,14 @@ class BankStatementController
         return [
             'query' => $freshQuery,
             'statementTable' => $statementTable,
+            /**
+             * * كل فروع الاستعلام فوق بترتّب بـ full_date مش date، وده نفس
+             * * الترتيب اللي الرصيد الجاري (beginning_balance/end_balance)
+             * * بيتسلسل بيه في CurrentAccountBankStatement و
+             * * RepairStatementBalancesCommand ('full_date asc, id asc')
+             * * فالكروت لازم تقرا آخر/أول صف بنفس العمود ده
+             */
+            'orderColumn' => 'full_date',
             'statementModelName' => $statementModelName,
             'accountType' => $accountType,
             'accountTypeName' => $accountTypeName,
@@ -333,7 +341,7 @@ class BankStatementController
          * rows or 50,000, the page costs the same now.
          */
         $paginator = $this->paginateStatement($data['query'], self::ROWS_PER_PAGE);
-        $kpis = $this->ledgerStatementKpis($data['query'], $data['statementTable'], $paginator->total());
+        $kpis = $this->ledgerStatementKpis($data['query'], $data['statementTable'], $paginator->total(), $data['orderColumn']);
 
         $lang = app()->getLocale();
         $paginator->getCollection()->transform(

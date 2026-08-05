@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Rules\DateMustBeGreaterThanOrEqualDate;
+use App\Rules\DateMustBeLessThanOrEqualDate;
 use App\Rules\NumberMustBeGreaterThanOrEqualRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -34,7 +35,12 @@ class StoreDownPaymentSettlementRequest extends FormRequest
 		$message = __('Total Settlements Must Be Equal Or Less Than Down Payment Amounts');
 		
         return [
-            'settlement_date'=> ['required',new DateMustBeGreaterThanOrEqualDate($settlementDate,$receivingDate,__('Settlement Date Must Be Greater Or Equal Down Payment Receiving Date'))],
+            /**
+             * * التسوية بتحرّك فلوس فعليًا، فما ينفعش تتسجّل بتاريخ بعد النهاردة
+             */
+            'settlement_date'=> ['required',
+				new DateMustBeLessThanOrEqualDate(null,now(),__('Settlement Date Must Be Less Than Or Equal Today')),
+				new DateMustBeGreaterThanOrEqualDate($settlementDate,$receivingDate,__('Settlement Date Must Be Greater Or Equal Down Payment Receiving Date'))],
 			'received_amount'=>['required',new NumberMustBeGreaterThanOrEqualRule($greaterNumber,$settlementAmount,$message)]
         ];
     }

@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Rules\ActiveFinancialInstitutionAccountRule;
 use App\Rules\AmountCanNotBeGreaterThanEndBalanceAtPaymentDate;
+use App\Rules\DateMustBeLessThanOrEqualDate;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreInternalMoneyTransferRequest extends FormRequest
@@ -37,7 +38,10 @@ class StoreInternalMoneyTransferRequest extends FormRequest
 		$currency = $this->get('currency_to_sell');
 		$companyId = $this->route('company')->id;
         return [
-			'transfer_date'=>'required',
+			/**
+			 * * ما ينفعش نعمل تحويل داخلي بتاريخ بعد النهاردة
+			 */
+			'transfer_date'=>['required',new DateMustBeLessThanOrEqualDate(null,now(),__('Transaction Date Can Not Be Greater Than Today'))],
 			'amount'=>['required','gt:0'],
 			'from_account_number'=>[new ActiveFinancialInstitutionAccountRule($companyId, $accountType, $accountNumber, $financialInstitutionId)],
 			'to_account_number'=>[new ActiveFinancialInstitutionAccountRule($companyId, $this->get('to_account_type_id'), $this->get('to_account_number'), $this->get('to_bank_id'))],

@@ -2,6 +2,10 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { todayDate } from '@/composables/today';
+/* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
+   الحماية الحقيقية على السيرفر في الـ Form Request. */
+const maxDate = todayDate();
 
 /*
  * CashExpense/Form.vue
@@ -62,7 +66,7 @@ const TYPES = {
 
 const form = ref({
     type: props.model?.type ?? TYPES.CASH_PAYMENT,
-    payment_date: props.model?.payment_date ?? new Date().toISOString().slice(0, 10),
+    payment_date: props.model?.payment_date ?? todayDate(),
     currency: props.model?.currency ?? '',
     expense_category_id: props.categoryNames.find(n => n.id === props.model?.cash_expense_category_name_id)?.category_id ?? '',
     cash_expense_category_name_id: props.model?.cash_expense_category_name_id ?? '',
@@ -337,7 +341,7 @@ function submit() {
                     <div class="cvr-form-grid-4">
                         <div>
                             <label class="cvr-form-label">Payment Date *</label>
-                            <input v-model="form.payment_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="form.payment_date" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Expense Category</label>

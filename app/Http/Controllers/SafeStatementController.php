@@ -108,7 +108,14 @@ class SafeStatementController
             ->where('branch_id', $branchId)
             ->where('date', '>=', $startDate)
             ->where('date', '<=', $endDate)
-            ->orderByRaw('date desc , id desc');
+            /**
+             * * الترتيب بـ full_date مش date: الرصيد الجاري
+             * * (beginning_balance/end_balance) بيتسلسل في
+             * * CashInSafeStatement بـ 'full_date asc , id asc'، فالترتيب
+             * * بالتاريخ من غير وقت كان بيقلب الصفوف اللي في نفس اليوم
+             * * ويخلي رصيد آخر صف مش متصل برصيد اللي بعده
+             */
+            ->orderByRaw('full_date desc , id desc');
 
         if (! $freshQuery()->exists()) {
             return null;
@@ -172,7 +179,7 @@ class SafeStatementController
          * balance and its first row the ending balance).
          */
         $paginator = $this->paginateStatement($data['query'], self::ROWS_PER_PAGE);
-        $kpis = $this->ledgerStatementKpis($data['query'], self::STATEMENT_TABLE, $paginator->total());
+        $kpis = $this->ledgerStatementKpis($data['query'], self::STATEMENT_TABLE, $paginator->total(), 'full_date');
 
         $lang = app()->getLocale();
         $paginator->getCollection()->transform(fn ($row) => $this->mapStatementRow($row, $lang));

@@ -2,6 +2,10 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { todayDate } from '@/composables/today';
+/* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
+   الحماية الحقيقية على السيرفر في الـ Form Request. */
+const maxDate = todayDate();
 
 /*
  * InternalMoneyTransfer/Form.vue
@@ -66,7 +70,7 @@ const showChequeNumber = props.type === 'bank-to-safe' || props.type === 'safe-t
 const showTransferDays = props.type === 'bank-to-bank';
 
 const form = ref({
-    transfer_date: props.model?.transfer_date ?? new Date().toISOString().slice(0, 10),
+    transfer_date: props.model?.transfer_date ?? todayDate(),
     transfer_days: props.model?.transfer_days ?? 0,
     amount: props.model?.amount ?? 0,
     currency: props.model?.currency ?? '',
@@ -270,7 +274,7 @@ function submit() {
                     <div class="cvr-form-grid-4">
                         <div>
                             <label class="cvr-form-label">Transfer Date *</label>
-                            <input v-model="form.transfer_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="form.transfer_date" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('transfer_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('transfer_date') }}</p>
                         </div>
                         <div v-if="showTransferDays">

@@ -79,14 +79,6 @@ class OdooPayment
                     $paymentData['destination_account_id'] = (int) $odooIdWithRef['id'];
                     $paymentData['memo'] = $odooIdWithRef['ref'] ?: $paymentData['memo'];
                 }
-                /**
-                 * * الجهات الضريبية بيتخزن في odoo_id بتاعها رقم الحساب مش رقم الشريك
-                 * * (شوف OdooSettingController::store) فبعتها كـ partner_id كان بيبوّظ القيد
-                 * * نفس الحماية الموجودة في createCashExpense
-                 */
-                if ($moneyModel->partner && $moneyModel->partner->isTax()) {
-                    $paymentData['partner_id'] = null;
-                }
             }
 
             $paymentId = $this->models->execute_kw(
@@ -390,10 +382,16 @@ class OdooPayment
         ?float $amountInEntryCurrency = null
     ) {
         /**
-         * * لو القيمة بالعملة الأجنبية مبعتتش أو جت صفر بنرجع للمبلغ الأصلي
-         * * عشان ما نبعتش amount_currency = 0 مع debit/credit بقيمة
+         * * amount_currency بيتبعت بس لو المستدعي حدّدها صراحةً
+         * * لو مبعتهاش بنسيب أودو يحسبها زي الأول بالظبط — ده مقصود
+         * * عشان جهة التحصيل (اللي قيدها متسق أصلاً) ما يتغيّرش سلوكها
          */
-        $amountInEntryCurrency = $amountInEntryCurrency ? abs($amountInEntryCurrency) : abs($amount);
+        $foreignAmountLine = $amountInEntryCurrency
+            ? ['amount_currency' => abs($amountInEntryCurrency)]
+            : [];
+        $foreignAmountCounterLine = $amountInEntryCurrency
+            ? ['amount_currency' => -abs($amountInEntryCurrency)]
+            : [];
 
         
         try {
@@ -458,27 +456,25 @@ class OdooPayment
                     'name' => $message ,
                     'is_reconciled' => true,
                     'line_ids' => [
-                        [0, 0, [
+                        [0, 0, array_merge([
                             'account_id' => $debitOdooAccountId,
                             'debit' => abs($amount),
                             'credit' => 0.0,
                             'currency_id' => $currency_id,
-                            'amount_currency' => $amountInEntryCurrency,
                             'name' => $message,
                             'partner_id' => $PartnerId,
 
-                        ]],
+                        ], $foreignAmountLine)],
 
-                        [0, 0, [
+                        [0, 0, array_merge([
                             'account_id' => $creditOdooAccountId,
                             'debit' => 0.0,
                             'credit' => abs($amount),
                             'currency_id' => $currency_id,
-                            'amount_currency' => -$amountInEntryCurrency,
                             'name' => $message,
                           'partner_id' => $PartnerId,
 
-                        ]],
+                        ], $foreignAmountCounterLine)],
                     ],
 
                 ];
@@ -622,10 +618,16 @@ class OdooPayment
         ?float $amountInEntryCurrency = null
     ) {
         /**
-         * * لو القيمة بالعملة الأجنبية مبعتتش أو جت صفر بنرجع للمبلغ الأصلي
-         * * عشان ما نبعتش amount_currency = 0 مع debit/credit بقيمة
+         * * amount_currency بيتبعت بس لو المستدعي حدّدها صراحةً
+         * * لو مبعتهاش بنسيب أودو يحسبها زي الأول بالظبط — ده مقصود
+         * * عشان جهة التحصيل (اللي قيدها متسق أصلاً) ما يتغيّرش سلوكها
          */
-        $amountInEntryCurrency = $amountInEntryCurrency ? abs($amountInEntryCurrency) : abs($amount);
+        $foreignAmountLine = $amountInEntryCurrency
+            ? ['amount_currency' => abs($amountInEntryCurrency)]
+            : [];
+        $foreignAmountCounterLine = $amountInEntryCurrency
+            ? ['amount_currency' => -abs($amountInEntryCurrency)]
+            : [];
         try {
             // Step 1: Verify the payment exists and get its details
             $paymentData = $this->execute(
@@ -691,27 +693,25 @@ class OdooPayment
                     'is_reconciled' => true,
                     
                     'line_ids' => [
-                        [0, 0, [
+                        [0, 0, array_merge([
                             'account_id' => $debitOdooAccountId,
                             'debit' => abs($amount),
                             'credit' => 0.0,
                             'currency_id' => $currency_id,
-                            'amount_currency' => $amountInEntryCurrency,
                             'name' => $message,
                               'partner_id' => $PartnerId,
 
-                        ]],
+                        ], $foreignAmountLine)],
 
-                        [0, 0, [
+                        [0, 0, array_merge([
                             'account_id' => $creditOdooAccountId,
                             'debit' => 0.0,
                             'credit' => abs($amount),
                             'currency_id' => $currency_id,
-                            'amount_currency' => -$amountInEntryCurrency,
                             'name' => $message,
                             'partner_id' => $PartnerId,
 
-                        ]],
+                        ], $foreignAmountCounterLine)],
                     ],
 
                 ];
@@ -1386,17 +1386,14 @@ public function transferAdvanceToReceivableOrPayable(int $odooCurrencyId , float
                 'journal_id' => $journalId,
                 'date' => date('Y-m-d'),
                 'ref' => 'Transfer Customer Advance to Receivable',
-                /**
-                 * * الـ currency_id كان ناقص هنا (موجود في فرع الموردين بس)
-                 * * وبدونه أودو بيتجاهل amount_currency ويخلّيها = المبلغ بالجنيه
-                 * * فالقيد كان بيتسجّل من غير قيمة العملة الأجنبية
-                 */
                 'line_ids' => [
+					//   'debit' => abs($amountInMainFunctionalCurrency),
+                    //     'amount_currency' => abs($amountInCurrency),
+						
                     [0, 0, [
                         'account_id' => $advanceAccountId,
                         'partner_id' => $partnerId,
                         'name' => 'Transfer from Customer Advance',
-                        'currency_id' => $odooCurrencyId,
                         'debit' => abs($amountInMainFunctionalCurrency),
 						'amount_currency' => abs($amountInCurrency),
                         'credit' => 0,
@@ -1405,10 +1402,9 @@ public function transferAdvanceToReceivableOrPayable(int $odooCurrencyId , float
                         'account_id' => $receivableAccountId,
                         'partner_id' => $partnerId,
                         'name' => 'Transfer to Receivable',
-                        'currency_id' => $odooCurrencyId,
                         'debit' => 0,
-                        'credit' => abs($amountInMainFunctionalCurrency),
-						'amount_currency' => -abs($amountInCurrency),
+                        'credit' => $amountInMainFunctionalCurrency,
+						'amount_currency' => -$amountInCurrency,
                     ]]
                 ]
             ];

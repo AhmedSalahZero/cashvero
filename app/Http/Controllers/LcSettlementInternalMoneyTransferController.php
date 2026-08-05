@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\FinancialInstitution;
 use App\Models\LcSettlementInternalMoneyTransfer;
 use App\Models\LetterOfCreditIssuance;
+use App\Rules\DateMustBeLessThanOrEqualDate;
 use App\Services\Api\OdooSync;
 use App\Traits\GeneralFunctions;
 use Illuminate\Http\Request;
@@ -137,8 +138,21 @@ class LcSettlementInternalMoneyTransferController
         return url('/'.app()->getLocale().'/'.$company->id.'/'.ltrim($path, '/'));
     }
 
+    /**
+     * * الكنترولر ده مالوش Form Request، فالتحقق بيتعمل هنا
+     * * التحويل بيحرّك فلوس فعليًا فما ينفعش يتسجّل بتاريخ بعد النهاردة
+     * * لازم يتنفّذ قبل ما الترانزاكشن تبدأ
+     */
+    protected function validateTransferDate(Request $request): void
+    {
+        $request->validate([
+            'transfer_date' => ['required', new DateMustBeLessThanOrEqualDate(null, now(), __('Transaction Date Can Not Be Greater Than Today'))],
+        ]);
+    }
+
     public function store(Company $company, Request $request)
     {
+        $this->validateTransferDate($request);
         /**
          * * الحفظ كله جوه ترانزاكشن واحدة
          */
@@ -180,6 +194,7 @@ class LcSettlementInternalMoneyTransferController
 
     public function update(Company $company, Request $request, LcSettlementInternalMoneyTransfer $lcSettlementInternalTransfer)
     {
+        $this->validateTransferDate($request);
         /**
          * * التعديل معمول كـ حذف ثم إنشاء
          * * فلازم يكون كله في ترانزاكشن واحدة

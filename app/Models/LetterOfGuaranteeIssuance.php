@@ -746,8 +746,22 @@ class LetterOfGuaranteeIssuance extends Model
                     
                $totalCashInFlowKey = __('Total Cash Inflow');         
         $subType = __('Cancelled LGs Cash Cover');
+		/**
+		 * * $commonQueryBase اتعمله clone قبل ما يتحط عليه أي select
+		 * * فالـ addSelect كان بيخلي الاستعلام يجيب movement_date لوحده
+		 * * وباقي الأعمدة اللي اللوب تحت بيقراها (currency - name - lg_code
+		 * * - lg_type - debit) كانت بترجع Undefined property على stdClass
+		 * * الأعمدة متكرّرة في أكتر من جدول فلازم تتحدد بالجدول بتاعها
+		 */
        $allRowsWithoutGrouping = $commonQueryBase
-	   		->addSelect(DB::raw($effectiveDateSql.' as movement_date'))
+	   		->selectRaw(
+				'letter_of_guarantee_issuances.lg_type as lg_type,'
+				.'letter_of_guarantee_issuances.lg_code as lg_code,'
+				.'partners.name as name,'
+				.'letter_of_guarantee_cash_cover_statements.currency as currency,'
+				.'letter_of_guarantee_cash_cover_statements.debit as debit,'
+				.$effectiveDateSql.' as movement_date'
+			)
 	   		->get();
         foreach ($rows as $row) {
             $currentCurrency = $row->currency;

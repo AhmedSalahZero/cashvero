@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Models\MoneyPayment;
 use App\Rules\AmountCanNotBeGreaterThanEndBalanceAtPaymentDate;
 use App\Rules\DateMustBeGreaterThanOrEqualDate;
+use App\Rules\DateMustBeLessThanOrEqualDate;
 use Illuminate\Foundation\Http\FormRequest;
 
 class MarkChequeAsPaidRequest extends FormRequest
@@ -36,7 +37,13 @@ class MarkChequeAsPaidRequest extends FormRequest
 		$dueDate = data_get($row, 'due_date');
 		
         return [
-			'actual_payment_date'=>['required',new DateMustBeGreaterThanOrEqualDate(null,$dueDate,__('Payment Date Must Be Greater Than Or Equal Cheque Due Date'))],
+			/**
+			 * * صرف الشيك حدث فعلي حصل في البنك، فما ينفعش يتسجّل بتاريخ بعد النهاردة
+			 * * (الشيك اللي استحقاقه في المستقبل مايتعلّمش مدفوع دلوقتي — وده مقصود)
+			 */
+			'actual_payment_date'=>['required',
+				new DateMustBeLessThanOrEqualDate(null,now(),__('Payment Date Must Be Less Than Or Equal Today')),
+				new DateMustBeGreaterThanOrEqualDate(null,$dueDate,__('Payment Date Must Be Greater Than Or Equal Cheque Due Date'))],
 			'amount_can_not_be_greater_than_end_balance_at_payment_date'=>new AmountCanNotBeGreaterThanEndBalanceAtPaymentDate('ACTUAL_PAYMENT_DATE',$row->getAmount(),$row->company,$row->getAccountTypeId(),$row->getAccountNumber(),$row->getFinancialInstitutionId(),$this->actual_payment_date,null),
         ];
     }

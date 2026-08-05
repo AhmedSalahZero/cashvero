@@ -2,6 +2,10 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { todayDate } from '@/composables/today';
+/* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
+   الحماية الحقيقية على السيرفر في الـ Form Request. */
+const maxDate = todayDate();
 
 /*
  * BuyOrSellCurrencies/Form.vue
@@ -48,7 +52,7 @@ const isEdit = props.mode === 'edit';
 
 const form = ref({
     type: props.model?.type ?? 'bank-to-bank',
-    transaction_date: props.model?.transaction_date ?? new Date().toISOString().slice(0, 10),
+    transaction_date: props.model?.transaction_date ?? todayDate(),
     currency_to_sell: props.model?.currency_to_sell ?? '',
     currency_to_buy: props.model?.currency_to_buy ?? '',
     currency_to_sell_amount: props.model?.currency_to_sell_amount ?? 0,
@@ -381,7 +385,7 @@ function submit() {
                         </div>
                         <div>
                             <label class="cvr-form-label">Transaction Date *</label>
-                            <input v-model="form.transaction_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="form.transaction_date" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('transaction_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('transaction_date') }}</p>
                         </div>
                         <div>

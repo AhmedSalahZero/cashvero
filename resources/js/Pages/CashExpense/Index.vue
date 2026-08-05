@@ -2,6 +2,10 @@
 import { ref, computed } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { todayDate } from '@/composables/today';
+/* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
+   الحماية الحقيقية على السيرفر في الـ Form Request. */
+const maxDate = todayDate();
 
 /*
  * CashExpense/Index.vue
@@ -114,7 +118,7 @@ function isSelected(type, id) {
 }
 
 const markPaidTarget = ref(null); // { type, ids } | null
-const actualPaymentDate = ref(new Date().toISOString().slice(0, 10));
+const actualPaymentDate = ref(todayDate());
 function openMarkPaidModal(type) {
     if (!(selectedIds.value[type] || []).length) return;
     markPaidTarget.value = { type, ids: selectedIds.value[type] };
@@ -298,7 +302,7 @@ const odooRefTarget = ref(null);
                         Mark {{ markPaidTarget.ids.length }} item(s) as paid?
                     </h2>
                     <label class="cvr-form-label">Actual Payment Date</label>
-                    <input v-model="actualPaymentDate" type="date" class="cvr-input w-full px-3 py-2 rounded mb-4" />
+                    <input v-model="actualPaymentDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded mb-4" />
                     <div class="flex justify-end gap-2">
                         <button @click="markPaidTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
                         <button @click="confirmMarkPaid" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>

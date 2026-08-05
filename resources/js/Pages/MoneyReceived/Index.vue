@@ -2,6 +2,10 @@
 import { ref, computed, watch } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { todayDate } from '@/composables/today';
+/* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
+   الحماية الحقيقية على السيرفر في الـ Form Request. */
+const maxDate = todayDate();
 
 const page = usePage();
 const errors = computed(() => page.props.errors || {});
@@ -618,7 +622,7 @@ function submitApplyCollection() {
                     <div class="cvr-form-grid-3 mb-4">
                         <div>
                             <label class="cvr-form-label">Cheque Deposit Date *</label>
-                            <input v-model="collectionForm.deposit_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="collectionForm.deposit_date" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="depositDateWarning" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ depositDateWarning }}</p>
                             <p v-else-if="errors.deposit_date" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.deposit_date }}</p>
                         </div>
@@ -686,7 +690,7 @@ function submitApplyCollection() {
                         </div>
                         <div class="col-span-2">
                             <label class="cvr-form-label">Collection Date *</label>
-                            <input v-model="applyCollectionDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="applyCollectionDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
                     <div class="flex justify-end gap-2">

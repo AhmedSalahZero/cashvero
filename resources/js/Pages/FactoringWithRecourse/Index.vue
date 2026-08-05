@@ -2,6 +2,10 @@
 import { ref, reactive, watch, computed } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { todayDate } from '@/composables/today';
+/* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
+   الحماية الحقيقية على السيرفر. */
+const maxDate = todayDate();
 import Pagination from '@/Components/Pagination.vue';
 
 const props = defineProps({
@@ -231,7 +235,7 @@ function destroyRow() {
                     <div class="space-y-3">
                         <div>
                             <label class="cvr-form-label">Collection Date *</label>
-                            <input v-model="collectForm.collection_date" type="date" :max="new Date().toISOString().slice(0,10)" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="collectForm.collection_date" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errors.collection_date" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.collection_date }}</p>
                         </div>
                         <div>
@@ -279,7 +283,7 @@ function destroyRow() {
                         </div>
                         <div>
                             <label class="cvr-form-label">Date *</label>
-                            <input v-model="rejectForm.rejection_date" type="date" :max="new Date().toISOString().slice(0,10)" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="rejectForm.rejection_date" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errors.rejection_date" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.rejection_date }}</p>
                         </div>
                         <div>

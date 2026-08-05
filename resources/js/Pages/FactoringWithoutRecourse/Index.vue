@@ -2,6 +2,10 @@
 import { ref, reactive, watch, computed } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { todayDate } from '@/composables/today';
+/* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
+   الحماية الحقيقية على السيرفر. */
+const maxDate = todayDate();
 import Pagination from '@/Components/Pagination.vue';
 
 const props = defineProps({
@@ -212,7 +216,7 @@ function destroyRow() {
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">Mark As Settled</h2>
                     <div>
                         <label class="cvr-form-label">Date *</label>
-                        <input v-model="settleForm.settlement_date" type="date" :max="new Date().toISOString().slice(0,10)" class="cvr-input w-full px-3 py-2 rounded" />
+                        <input v-model="settleForm.settlement_date" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                         <p v-if="errors.settlement_date" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.settlement_date }}</p>
                     </div>
                     <div class="flex justify-end gap-2 mt-5">
@@ -246,7 +250,7 @@ function destroyRow() {
                     <div class="space-y-3">
                         <div>
                             <label class="cvr-form-label">Date *</label>
-                            <input v-model="differenceForm.difference_received_date" type="date" :max="new Date().toISOString().slice(0,10)" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="differenceForm.difference_received_date" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errors.difference_received_date" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.difference_received_date }}</p>
                         </div>
                         <div>

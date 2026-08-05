@@ -2,6 +2,10 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { router, usePage, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { todayDate } from '@/composables/today';
+/* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
+   الحماية الحقيقية على السيرفر في الـ Form Request. */
+const maxDate = todayDate();
 
 const props = defineProps({
     company: Object,
@@ -308,7 +312,7 @@ function submit() {
                 <div :class="isOverContract ? 'cvr-form-grid-2-2-2-4-2' : 'cvr-form-grid-2-2-6-2'">
                     <div>
                         <label class="cvr-form-label">Payment Date *</label>
-                        <input v-model="deliveryDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                        <input v-model="deliveryDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                         <p v-if="errors.delivery_date" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.delivery_date }}</p>
                     </div>
                     <div>

@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\ContractLoanSchedule;
 use App\Models\ContractLoanScheduleSettlement;
 use App\Models\FinancialInstitutionAccount;
+use App\Rules\DateMustBeLessThanOrEqualDate;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -164,6 +165,14 @@ class ContractLoanScheduleController extends Controller
                 ->back()
                 ->with('warning', __('This contract schedule installment is not linked to an active leasing contract with a drawee bank.'));
         }
+
+        /**
+         * * تسوية القسط بتصرف فلوس فعليًا من الحساب
+         * * فما ينفعش تتسجّل بتاريخ بعد النهاردة
+         */
+        $request->validate([
+            'date' => ['required', new DateMustBeLessThanOrEqualDate(null, now(), __('Settlement Date Must Be Less Than Or Equal Today'))],
+        ]);
 
         $currentAccountNumber = $request->get('current_account_number');
         $amount = number_unformat($request->get('amount'));
