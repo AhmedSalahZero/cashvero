@@ -2,6 +2,10 @@
 import { ref, computed, watch } from 'vue';
 import { router, usePage, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { todayDate } from '@/composables/today';
+/* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
+   الحماية الحقيقية على السيرفر في الـ Form Request. */
+const maxDate = todayDate();
 
 const props = defineProps({
     mode: String, // 'create' | 'edit'
@@ -217,7 +221,7 @@ function submit() {
                     <div class="cvr-form-grid-3">
                         <div>
                             <label class="cvr-form-label">Factoring Date *</label>
-                            <input v-model="factoringDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="factoringDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errors.factoring_date" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.factoring_date }}</p>
                         </div>
                         <div>

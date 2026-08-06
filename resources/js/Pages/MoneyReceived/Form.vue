@@ -101,7 +101,49 @@ const branchesList = ref([...props.selectedBranches]);
    backend, which only ever reads `.{$moneyType}` out of these
    arrays regardless of what else was posted) ───────────────────── */
 const receivedAmount = ref(props.model?.received_amount || 0);
-const exchangeRate = ref(props.model?.exchange_rate || 1);
+
+/* Exchange Rate now accepts either a plain number ("50") or a division
+   expression ("1/50" or "=1/50", spreadsheet-style) — some rates are
+   naturally quoted as a fraction and forcing manual division invites
+   typos. `exchangeRateInput` holds exactly what the person typed;
+   `exchangeRate` is the parsed numeric value everything else (amount
+   calculations, the submitted payload) actually uses. */
+const exchangeRateInput = ref(String(props.model?.exchange_rate ?? 1));
+function parseExchangeRateExpression(raw) {
+    const s = String(raw ?? '').trim().replace(/^=/, '');
+    if (!s) return 0;
+    // Fast path: a plain number ("50", "0.02").
+    if (/^-?\d+(\.\d+)?$/.test(s)) {
+        const n = Number(s);
+        return Number.isFinite(n) ? n : 0;
+    }
+    // Otherwise treat it as a small arithmetic expression — "1/50",
+    // "1*50", "(1+1)/50", etc. Only allow digits/operators/parens/spaces
+    // through before evaluating, so this can never run arbitrary code.
+    if (/^[\d+\-*/().\s]+$/.test(s)) {
+        try {
+            // eslint-disable-next-line no-new-func
+            const result = Function(`"use strict"; return (${s});`)();
+            return Number.isFinite(result) ? result : 0;
+        } catch (e) {
+            return 0;
+        }
+    }
+    return 0;
+}
+const exchangeRate = computed(() => parseExchangeRateExpression(exchangeRateInput.value));
+/* Spreadsheet-style "commit on blur": once the person clicks away from
+   the field, replace whatever they typed ("=1/50", "1*50", ...) with
+   its plain numeric result ("0.02", "50"), same as Excel resolving a
+   formula into the cell. A genuinely unparseable entry (parses to 0)
+   is left as-is so they can see and fix their typo instead of having
+   it silently wiped to "0". */
+function onExchangeRateBlur() {
+    const parsed = parseExchangeRateExpression(exchangeRateInput.value);
+    if (parsed) {
+        exchangeRateInput.value = String(Math.round(parsed * 1e6) / 1e6);
+    }
+}
 
 const cashInSafe = reactive({
     receivingBranchId: props.model?.cash_in_safe?.receiving_branch_id || '',
@@ -232,7 +274,18 @@ async function fetchContracts() {
     contracts.value = Object.entries(result.data?.contracts || {}).map(([id, name]) => ({ id, name }));
 }
 async function fetchSalesOrders() {
-    if (!contractId.value || contractId.value === 'general-down') { salesOrders.value = []; return; }
+    if (!contractId.value) { salesOrders.value = []; return; }
+    if (contractId.value === 'general-down') {
+        // No real sales order behind "General Down Payment" — show one
+        // synthetic row instead ("General", disabled, 0 order amount)
+        // so the person can still type how much of the unapplied
+        // amount to send as a down payment. `id: -1` is a real sentinel
+        // the backend already understands (storeNewSalesOrdersAmounts
+        // maps sales_order_id -1 → null), not a UI-only placeholder —
+        // don't change it to null/0 here or the submitted row breaks.
+        salesOrders.value = [{ id: -1, so_number: 'General', amount: 0, received_amount: 0 }];
+        return;
+    }
     const params = new URLSearchParams();
     params.set('down_payment_id', isEdit.value ? props.model.id : '0');
     const result = await fetchJson(`${props.urls.getSalesOrdersForContract}/${contractId.value}/${receivingCurrency.value}?${params.toString()}`);
@@ -514,10 +567,10 @@ function submit() {
                         <input v-model="cashInSafe.receiptNumber" type="text" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                 </div>
-                <div v-if="showExchangeRateFields" class="cvr-form-grid-2 mt-4">
+                <div v-if="showExchangeRateFields" class="cvr-form-grid-2-narrow mt-4">
                     <div>
                         <label class="cvr-form-label">Exchange Rate *</label>
-                        <input v-model="exchangeRate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
+                        <input v-model="exchangeRateInput" @blur="onExchangeRateBlur" type="text" inputmode="decimal" placeholder="e.g. 50 or 1/50" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
                         <label class="cvr-form-label">Amount In Invoice Currency [{{ invoiceCurrency }}]</label>
@@ -557,10 +610,10 @@ function submit() {
                         <p v-if="errors['account_number.cash-in-bank']" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors['account_number.cash-in-bank'] }}</p>
                     </div>
                 </div>
-                <div v-if="showExchangeRateFields" class="cvr-form-grid-2 mt-4">
+                <div v-if="showExchangeRateFields" class="cvr-form-grid-2-narrow mt-4">
                     <div>
                         <label class="cvr-form-label">Exchange Rate *</label>
-                        <input v-model="exchangeRate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
+                        <input v-model="exchangeRateInput" @blur="onExchangeRateBlur" type="text" inputmode="decimal" placeholder="e.g. 50 or 1/50" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
                         <label class="cvr-form-label">Amount In Invoice Currency [{{ invoiceCurrency }}]</label>
@@ -602,11 +655,11 @@ function submit() {
                         </select>
                     </div>
                     <template v-if="showExchangeRateFields">
-                        <div>
+                        <div class="cvr-field-narrow">
                             <label class="cvr-form-label">Exchange Rate *</label>
-                            <input v-model="exchangeRate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="exchangeRateInput" @blur="onExchangeRateBlur" type="text" inputmode="decimal" placeholder="e.g. 50 or 1/50" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
-                        <div>
+                        <div class="cvr-field-narrow">
                             <label class="cvr-form-label">Amount In Invoice Currency [{{ invoiceCurrency }}]</label>
                             <input :value="amountInInvoiceCurrency" readonly class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
@@ -645,10 +698,10 @@ function submit() {
                         <p v-if="errors['account_number.incoming-transfer']" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors['account_number.incoming-transfer'] }}</p>
                     </div>
                 </div>
-                <div v-if="showExchangeRateFields" class="cvr-form-grid-2 mt-4">
+                <div v-if="showExchangeRateFields" class="cvr-form-grid-2-narrow mt-4">
                     <div>
                         <label class="cvr-form-label">Exchange Rate *</label>
-                        <input v-model="exchangeRate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
+                        <input v-model="exchangeRateInput" @blur="onExchangeRateBlur" type="text" inputmode="decimal" placeholder="e.g. 50 or 1/50" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
                         <label class="cvr-form-label">Amount In Invoice Currency [{{ invoiceCurrency }}]</label>
@@ -750,12 +803,14 @@ function submit() {
                     <p v-if="errors.sales_orders_amounts" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.sales_orders_amounts }}</p>
                 </div>
 
-                <div class="cvr-form-grid-2">
+                <div class="cvr-form-row-unapplied">
                     <div>
                         <label class="cvr-form-label">Unapplied Amount [{{ receivingCurrency }}]</label>
                         <input :value="unappliedAmountInReceivingCurrency" readonly class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
-                    <div>
+                    <!-- Second field only when Invoice Currency and Receive Currency differ —
+                         with the same currency both figures are identical, so showing both is redundant. -->
+                    <div v-if="!isSameCurrency">
                         <label class="cvr-form-label">Unapplied Amount [{{ invoiceCurrency }}]</label>
                         <input :value="unappliedAmount" readonly class="cvr-input w-full px-3 py-2 rounded" />
                     </div>

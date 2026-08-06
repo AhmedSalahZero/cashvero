@@ -1177,6 +1177,18 @@ class MoneyReceived extends Model implements IHasDebitCurrentAccountStatement
 				'sales_order_id'=>null
 			];
 		}
+		// Only these are real columns on down_payment_settlements (see the
+		// migration). $dataArr below also carries whatever extra keys the
+		// caller's row happened to have (received_amount, sales_order_name,
+		// net_invoice_amount, ...) which aren't columns at all — passing
+		// those straight into create() throws an "Unknown column" SQL
+		// error. Filter down to the real schema right before the insert.
+		$allowedColumns = [
+			'contract_id', 'sales_order_id', 'customer_id',
+			'down_payment_amount', 'total_down_payment_settlement',
+			'down_payment_balance', 'currency', 'money_received_id',
+			'company_id',
+		];
 		foreach($salesOrdersAmounts as $salesOrderReceivedAmountArr)
 		{
 			if(isset($salesOrderReceivedAmountArr['received_amount'])&&$salesOrderReceivedAmountArr['received_amount'] > 0){
@@ -1196,7 +1208,7 @@ class MoneyReceived extends Model implements IHasDebitCurrentAccountStatement
 						'down_payment_balance'=>$downPaymentAmount
 					]
 				) ;
-				
+				$dataArr = array_intersect_key($dataArr, array_flip($allowedColumns));
 				$this->downPaymentSettlements()->create($dataArr);
 			}
 		}

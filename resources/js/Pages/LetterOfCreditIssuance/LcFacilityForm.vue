@@ -2,6 +2,10 @@
 import { ref, computed, watch } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { todayDate } from '@/composables/today';
+/* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
+   الحماية الحقيقية على السيرفر في الـ Form Request. */
+const maxDate = todayDate();
 
 const props = defineProps({
     mode: String, // 'create' | 'edit'
@@ -395,7 +399,7 @@ function submit() {
                     <div class="cvr-form-grid-3">
                         <div>
                             <label class="cvr-form-label">Issuance Date *</label>
-                            <input v-model="form.issuance_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="form.issuance_date" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">LC Duration (Days) *</label>

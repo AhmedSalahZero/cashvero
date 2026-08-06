@@ -174,6 +174,7 @@ class CompanyImportService
      */
     private const MORPH_TABLES = [
         'App\\Models\\Company' => 'companies',
+        'App\\Models\\User' => 'users',
         'App\\Models\\Partner' => 'partners',
         'App\\Models\\Contract' => 'contracts',
         'App\\Models\\MoneyReceived' => 'money_received',
@@ -186,6 +187,7 @@ class CompanyImportService
         'App\\Models\\CustomerInvoice' => 'customer_invoices',
         'App\\Models\\SupplierInvoice' => 'supplier_invoices',
         'Company' => 'companies',
+        'User' => 'users',
         'Partner' => 'partners',
         'Contract' => 'contracts',
         'MoneyReceived' => 'money_received',
@@ -305,6 +307,24 @@ class CompanyImportService
      */
     private array $deferredSelfFks = [];
 
+    /** @var array<string, bool> Tables whose company rows this run copies (so an unmapped id is genuinely foreign). */
+    private array $copySet = [];
+
+    /** @var array<string, array{table: string, column: string, parent: string, nulled: int, kept: int, other_company_on_source: int, dangling_on_source: int, samples: array<int, mixed>}> */
+    private array $unresolvedFks = [];
+
+    /** @var array<string, array<string, bool>> table => column => is nullable on target */
+    private array $nullableCache = [];
+
+    /** @var array<int|string, int|null> source user id => target user id (null when unresolvable) */
+    private array $resolvedUserIds = [];
+
+    /** @var array<string, array<string, int>> parent table => set of ids present on source */
+    private array $sourceIdCache = [];
+
+    /** Off while re-pointing target-only tables, where an unmapped id is expected. */
+    private bool $nullUnresolvedFks = true;
+
     public function __construct(?string $targetConnection = null)
     {
         $this->target = $targetConnection ?? (string) config('database.default');
@@ -384,6 +404,12 @@ class CompanyImportService
         $this->orderCycleBreaks = [];
         $this->accountTypeModelNames = null;
         $this->deferredSelfFks = [];
+        $this->copySet = [];
+        $this->unresolvedFks = [];
+        $this->nullableCache = [];
+        $this->resolvedUserIds = [];
+        $this->sourceIdCache = [];
+        $this->nullUnresolvedFks = true;
 
         $analysis = $this->analyze($companyId);
         $report = [
@@ -397,6 +423,9 @@ class CompanyImportService
             'order_cycle_breaks' => [],
             'import_order' => [],
             'target_only_untouched' => $analysis['target_only'],
+            'target_only_relink' => [],
+            'unresolved_fks' => [],
+            'media' => [],
             'verification' => null,
             'errors' => [],
             'preflight' => null,
@@ -414,6 +443,7 @@ class CompanyImportService
         $preflight = $this->preflight($companyId, $analysis['intersection']);
         $report['preflight'] = $preflight;
         $tables = $preflight['ordered_tables'];
+        $this->copySet = $this->buildCopySet($tables);
         $report['import_order'] = $tables;
         $report['order_cycle_breaks'] = $this->orderCycleBreaks;
 
@@ -447,6 +477,9 @@ class CompanyImportService
 
             DB::connection($this->target)->beginTransaction();
             try {
+                // Fingerprint the rows target-only tables point at, BEFORE they are
+                // wiped — that is the only chance to rebuild old id → new id.
+                $legacyRows = $this->captureTargetRowFingerprints($companyId, $analysis['target_only']);
                 $this->wipeTargetCompany($companyId, $tables, $report);
                 $this->upsertCompanyRow($companyId, $report);
                 // Users first so user_id FKs on company tables remap correctly.
@@ -455,6 +488,8 @@ class CompanyImportService
                 $this->applyDeferredSelfForeignKeys();
                 $this->copyIndirectTables($companyId, $report);
                 $this->copyCompanyMedia($companyId, $report);
+                $this->relinkTargetOnlyTables($companyId, $legacyRows, $analysis['target_only'], $report);
+                $report['unresolved_fks'] = array_values($this->unresolvedFks);
                 DB::connection($this->target)->commit();
             } catch (Throwable $e) {
                 try {
@@ -1070,12 +1105,7 @@ class CompanyImportService
             $report['wiped'][$table] = $deleted;
         }
 
-        if (Schema::connection($this->target)->hasTable('media')) {
-            $report['wiped']['media'] = DB::connection($this->target)->table('media')
-                ->where('model_type', 'App\\Models\\Company')
-                ->where('model_id', $companyId)
-                ->delete();
-        }
+        $this->wipeCompanyMedia($companyId, $report);
 
         $pending = $tables;
         foreach (self::SKIP_COPY as $skip) {
@@ -1273,35 +1303,151 @@ class CompanyImportService
     /**
      * @param  array<string, mixed>  $report
      */
+    /**
+     * Copy media for the company row and for every attached model we can remap
+     * (partners, invoices, contracts, users, …) — not just the company logo.
+     *
+     * @param  array<string, mixed>  $report
+     */
     private function copyCompanyMedia(int $companyId, array &$report): void
     {
         if (! Schema::connection(self::SOURCE)->hasTable('media') || ! Schema::connection($this->target)->hasTable('media')) {
             return;
         }
 
-        $rows = DB::connection(self::SOURCE)->table('media')
+        $pk = $this->primaryKeyColumn('media', $this->target) ?? 'id';
+
+        // The company row keeps its id, so model_id maps to itself.
+        $batches = [['App\\Models\\Company', 'companies', [$companyId => $companyId]]];
+        foreach ($this->mediaMorphTargets() as $type => $parent) {
+            if ($parent === 'companies') {
+                continue;
+            }
+            $map = $this->idMaps[$parent] ?? [];
+            if (count($map)) {
+                $batches[] = [$type, $parent, $map];
+            }
+        }
+
+        $copied = [];
+        foreach ($batches as [$type, $parent, $map]) {
+            $inserted = 0;
+            $rows = DB::connection(self::SOURCE)->table('media')
+                ->where('model_type', $type)
+                ->whereIn('model_id', array_keys($map))
+                ->orderBy($pk)
+                ->get();
+
+            foreach ($rows as $row) {
+                $payload = $this->filterColumns('media', (array) $row);
+                $oldId = $payload[$pk] ?? null;
+                unset($payload[$pk]);
+                $payload['model_id'] = $map[$row->model_id];
+
+                // Models shared across companies are never wiped, so skip re-inserting
+                // the same file instead of duplicating it on every run.
+                if ($this->mediaModelIsShared($parent) && $this->mediaAlreadyPresent($type, $payload)) {
+                    continue;
+                }
+
+                $newId = (int) DB::connection($this->target)->table('media')->insertGetId($payload);
+                if ($oldId !== null) {
+                    $this->idMaps['media'][$oldId] = $newId;
+                }
+                $inserted++;
+            }
+
+            $copied[$parent] = ($copied[$parent] ?? 0) + $inserted;
+        }
+
+        $report['media'] = $copied;
+        $report['indirect']['media'] = array_sum($copied);
+    }
+
+    /**
+     * Delete this company's media before the wipe: the company row itself plus
+     * anything hanging off a company-scoped model whose rows are about to go.
+     * Must run while the current target ids are still resolvable.
+     *
+     * @param  array<string, mixed>  $report
+     */
+    private function wipeCompanyMedia(int $companyId, array &$report): void
+    {
+        if (! Schema::connection($this->target)->hasTable('media')) {
+            return;
+        }
+
+        $deleted = DB::connection($this->target)->table('media')
             ->where('model_type', 'App\\Models\\Company')
             ->where('model_id', $companyId)
-            ->get();
+            ->delete();
 
-        $pk = $this->primaryKeyColumn('media', $this->target) ?? 'id';
-        $inserted = 0;
-
-        foreach ($rows as $row) {
-            $payload = $this->filterColumns('media', (array) $row);
-            $oldId = $payload[$pk] ?? null;
-            unset($payload[$pk]);
-
-            // Company morph keeps company id.
-            $payload['model_id'] = $companyId;
-
-            $newId = (int) DB::connection($this->target)->table('media')->insertGetId($payload);
-            if ($oldId !== null) {
-                $this->idMaps['media'][$oldId] = $newId;
+        foreach ($this->mediaMorphTargets() as $type => $parent) {
+            if ($parent === 'companies' || $this->mediaModelIsShared($parent)) {
+                continue;
             }
-            $inserted++;
+            $ids = DB::connection($this->target)->table($parent)
+                ->where('company_id', $companyId)
+                ->pluck('id')
+                ->all();
+            foreach (array_chunk($ids, 500) as $chunk) {
+                $deleted += DB::connection($this->target)->table('media')
+                    ->where('model_type', $type)
+                    ->whereIn('model_id', $chunk)
+                    ->delete();
+            }
         }
-        $report['indirect']['media'] = $inserted;
+
+        $report['wiped']['media'] = $deleted;
+    }
+
+    /**
+     * Morph types whose parent table we can remap, keyed by the stored model_type.
+     *
+     * @return array<string, string>
+     */
+    private function mediaMorphTargets(): array
+    {
+        $out = [];
+        foreach (self::MORPH_TABLES as $type => $parent) {
+            if (! str_contains($type, '\\')) {
+                continue; // short aliases duplicate the FQCN entries
+            }
+            if (! Schema::connection($this->target)->hasTable($parent)) {
+                continue;
+            }
+            if (! $this->mediaModelIsShared($parent)
+                && ! Schema::connection($this->target)->hasColumn($parent, 'company_id')) {
+                continue;
+            }
+            $out[$type] = $parent;
+        }
+
+        return $out;
+    }
+
+    /** Models that outlive a single company and must never be wiped by an import. */
+    private function mediaModelIsShared(string $parent): bool
+    {
+        return $parent === 'users';
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function mediaAlreadyPresent(string $type, array $payload): bool
+    {
+        $query = DB::connection($this->target)->table('media')
+            ->where('model_type', $type)
+            ->where('model_id', $payload['model_id']);
+
+        foreach (['collection_name', 'file_name'] as $column) {
+            if (isset($payload[$column])) {
+                $query->where($column, $payload[$column]);
+            }
+        }
+
+        return $query->exists();
     }
 
     /**
@@ -1355,6 +1501,358 @@ class CompanyImportService
         return $newId;
     }
 
+    /**
+     * Tables whose company rows this run actually copies. An id missing from
+     * idMaps for one of these is genuinely foreign (another company or dangling);
+     * for anything else — global reference tables, target-only parents — the
+     * original id is still the right value.
+     *
+     * @param  array<int, string>  $tables
+     * @return array<string, bool>
+     */
+    private function buildCopySet(array $tables): array
+    {
+        $set = [];
+        foreach ($tables as $table) {
+            if ($table === 'companies' || in_array($table, self::SKIP_COPY, true)) {
+                continue;
+            }
+            if (Schema::connection($this->target)->hasColumn($table, 'company_id')) {
+                $set[$table] = true;
+            }
+        }
+        foreach (array_keys(self::INDIRECT) as $table) {
+            if (Schema::connection($this->target)->hasTable($table)) {
+                $set[$table] = true;
+            }
+        }
+        $set['users'] = true;
+
+        return $set;
+    }
+
+    private function recordUnresolvedFk(string $table, string $column, string $parent, mixed $value, bool $nulled): void
+    {
+        $key = $table.'.'.$column;
+        $this->unresolvedFks[$key] ??= [
+            'table' => $table,
+            'column' => $column,
+            'parent' => $parent,
+            'nulled' => 0,
+            'kept' => 0,
+            // Split the cause so a bad link is not confused with source data that
+            // was already dangling before the import touched anything.
+            'other_company_on_source' => 0,
+            'dangling_on_source' => 0,
+            'samples' => [],
+        ];
+        $this->unresolvedFks[$key][$nulled ? 'nulled' : 'kept']++;
+        $this->unresolvedFks[$key][$this->sourceRowExists($parent, $value) ? 'other_company_on_source' : 'dangling_on_source']++;
+        if (count($this->unresolvedFks[$key]['samples']) < 5) {
+            $this->unresolvedFks[$key]['samples'][] = $value;
+        }
+    }
+
+    private function sourceRowExists(string $parent, mixed $id): bool
+    {
+        if (! isset($this->sourceIdCache[$parent])) {
+            $this->sourceIdCache[$parent] = Schema::connection(self::SOURCE)->hasTable($parent)
+                ? array_flip(array_map('strval', DB::connection(self::SOURCE)->table($parent)->pluck('id')->all()))
+                : [];
+        }
+
+        return isset($this->sourceIdCache[$parent][(string) $id]);
+    }
+
+    private function columnIsNullable(string $table, string $column): bool
+    {
+        if (! isset($this->nullableCache[$table])) {
+            $map = [];
+            $rows = DB::connection($this->target)->select(
+                'SELECT COLUMN_NAME, IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?',
+                [DB::connection($this->target)->getDatabaseName(), $table]
+            );
+            foreach ($rows as $row) {
+                $name = $row->COLUMN_NAME ?? $row->column_name ?? null;
+                if ($name === null) {
+                    continue;
+                }
+                $map[$name] = strtoupper((string) ($row->IS_NULLABLE ?? $row->is_nullable ?? 'NO')) === 'YES';
+            }
+            $this->nullableCache[$table] = $map;
+        }
+
+        return $this->nullableCache[$table][$column] ?? false;
+    }
+
+    /**
+     * Target users are matched by email, so a source user outside this company's
+     * membership can still be resolved instead of leaving a stale id behind.
+     */
+    private function resolveUserIdByEmail(int|string $sourceUserId): ?int
+    {
+        if (array_key_exists($sourceUserId, $this->resolvedUserIds)) {
+            return $this->resolvedUserIds[$sourceUserId];
+        }
+
+        $resolved = null;
+        $sourceUser = DB::connection(self::SOURCE)->table('users')->where('id', $sourceUserId)->first();
+        if ($sourceUser && ! empty($sourceUser->email)) {
+            $targetUser = DB::connection($this->target)->table('users')->where('email', $sourceUser->email)->first();
+            if ($targetUser) {
+                $resolved = (int) $targetUser->id;
+                $this->idMaps['users'][$sourceUserId] = $resolved;
+            }
+        }
+
+        return $this->resolvedUserIds[$sourceUserId] = $resolved;
+    }
+
+    /**
+     * Content fingerprint of every company row a target-only table points at,
+     * taken BEFORE the wipe. Pairing these against the freshly inserted rows is
+     * the only way to rebuild old target id → new target id, since target-only
+     * tables have no counterpart on source to re-derive the link from.
+     *
+     * @param  array<int, string>  $targetOnly
+     * @return array<string, array<int, array{id: int|string, hash: string}>>
+     */
+    private function captureTargetRowFingerprints(int $companyId, array $targetOnly): array
+    {
+        $out = [];
+        foreach ($this->relinkParentTables($targetOnly) as $table) {
+            $pk = $this->primaryKeyColumn($table, $this->target) ?? 'id';
+            $columns = $this->fingerprintColumns($table);
+            $rows = DB::connection($this->target)->table($table)
+                ->where('company_id', $companyId)
+                ->orderBy($pk)
+                ->get();
+            foreach ($rows as $row) {
+                $out[$table][] = [
+                    'id' => $row->{$pk},
+                    'hash' => $this->fingerprint((array) $row, $columns),
+                ];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  array<int, string>  $targetOnly
+     * @return array<int, string>
+     */
+    private function relinkParentTables(array $targetOnly): array
+    {
+        $parents = [];
+        foreach ($targetOnly as $table) {
+            if (in_array($table, self::SKIP_COPY, true) || ! Schema::connection($this->target)->hasTable($table)) {
+                continue;
+            }
+            foreach ($this->fkColumnsFor($table) as $parent) {
+                if ($parent !== $table && isset($this->copySet[$parent])
+                    && Schema::connection($this->target)->hasColumn($parent, 'company_id')) {
+                    $parents[$parent] = true;
+                }
+            }
+        }
+
+        return array_keys($parents);
+    }
+
+    /**
+     * Columns stable across a re-import: everything except the primary key and
+     * the id columns that get remapped.
+     *
+     * @return array<int, string>
+     */
+    private function fingerprintColumns(string $table): array
+    {
+        $skip = array_flip(array_keys($this->fkColumnsFor($table)));
+        $skip[$this->primaryKeyColumn($table, $this->target) ?? 'id'] = true;
+        foreach (array_keys(self::POLYMORPHIC_ACCOUNT_FK) as $column) {
+            $skip[$column] = true;
+        }
+
+        $columns = [];
+        foreach (Schema::connection($this->target)->getColumnListing($table) as $column) {
+            if (isset($skip[$column]) || $this->isPolymorphicIdColumn($table, $column)) {
+                continue;
+            }
+            $columns[] = $column;
+        }
+        sort($columns);
+
+        return $columns;
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  array<int, string>  $columns
+     */
+    private function fingerprint(array $row, array $columns): string
+    {
+        $parts = [];
+        foreach ($columns as $column) {
+            $value = $row[$column] ?? null;
+            $parts[] = $value === null ? "\0" : (string) $value;
+        }
+
+        return md5(implode("\x1f", $parts));
+    }
+
+    /**
+     * Re-point rows in tables that exist only on target (features with no source
+     * counterpart) at the parents' new ids. Without this every import leaves them
+     * dangling, because the wipe deletes the parents and the copy re-keys them.
+     *
+     * @param  array<string, array<int, array{id: int|string, hash: string}>>  $legacyRows
+     * @param  array<int, string>  $targetOnly
+     * @param  array<string, mixed>  $report
+     */
+    private function relinkTargetOnlyTables(int $companyId, array $legacyRows, array $targetOnly, array &$report): void
+    {
+        $legacy = [];
+        foreach ($legacyRows as $table => $rows) {
+            $map = $this->pairLegacyIds($table, $rows, $companyId);
+            if (count($map)) {
+                $legacy[$table] = $map;
+            }
+        }
+
+        $summary = ['tables' => 0, 'rows_updated' => 0, 'columns_updated' => 0, 'unresolved' => []];
+        if (! count($legacy)) {
+            $report['target_only_relink'] = $summary;
+
+            return;
+        }
+
+        $savedMaps = $this->idMaps;
+        $savedNulling = $this->nullUnresolvedFks;
+        $this->idMaps = $legacy;
+        // An id outside $legacy here means a target-only parent, not a foreign row.
+        $this->nullUnresolvedFks = false;
+
+        try {
+            foreach ($targetOnly as $table) {
+                if (in_array($table, self::SKIP_COPY, true)
+                    || ! Schema::connection($this->target)->hasTable($table)
+                    || ! Schema::connection($this->target)->hasColumn($table, 'company_id')) {
+                    continue;
+                }
+
+                $fks = array_filter($this->fkColumnsFor($table), fn ($parent) => isset($legacy[$parent]));
+                if (! count($fks)) {
+                    continue;
+                }
+
+                $pk = $this->primaryKeyColumn($table, $this->target) ?? 'id';
+                $rows = DB::connection($this->target)->table($table)->where('company_id', $companyId)->get();
+                if ($rows->isEmpty()) {
+                    continue;
+                }
+                $summary['tables']++;
+
+                foreach ($rows as $row) {
+                    $original = (array) $row;
+                    $remapped = $this->remapForeignKeys($table, $original);
+
+                    $changes = [];
+                    foreach ($fks as $column => $parent) {
+                        if (! array_key_exists($column, $original) || $this->isEmptyFk($original[$column])) {
+                            continue;
+                        }
+                        if (isset($legacy[$parent][$original[$column]])) {
+                            $changes[$column] = $remapped[$column];
+
+                            continue;
+                        }
+                        // Already dangling before this run — nothing to re-point it at.
+                        $key = $table.'.'.$column;
+                        $summary['unresolved'][$key] = ($summary['unresolved'][$key] ?? 0) + 1;
+                    }
+
+                    if (count($changes)) {
+                        DB::connection($this->target)->table($table)
+                            ->where($pk, $row->{$pk})
+                            ->update($changes);
+                        $summary['rows_updated']++;
+                        $summary['columns_updated'] += count($changes);
+                    }
+                }
+            }
+        } finally {
+            $this->idMaps = $savedMaps;
+            $this->nullUnresolvedFks = $savedNulling;
+        }
+
+        $report['target_only_relink'] = $summary;
+    }
+
+    /**
+     * Pair pre-wipe ids with post-copy ids for one table.
+     *
+     * @param  array<int, array{id: int|string, hash: string}>  $before
+     * @return array<int|string, int|string>
+     */
+    private function pairLegacyIds(string $table, array $before, int $companyId): array
+    {
+        $pk = $this->primaryKeyColumn($table, $this->target) ?? 'id';
+        $columns = $this->fingerprintColumns($table);
+
+        $after = [];
+        $rows = DB::connection($this->target)->table($table)
+            ->where('company_id', $companyId)
+            ->orderBy($pk)
+            ->get();
+        foreach ($rows as $row) {
+            $after[] = ['id' => $row->{$pk}, 'hash' => $this->fingerprint((array) $row, $columns)];
+        }
+
+        $beforeByHash = [];
+        foreach ($before as $item) {
+            $beforeByHash[$item['hash']][] = $item['id'];
+        }
+        $afterByHash = [];
+        foreach ($after as $item) {
+            $afterByHash[$item['hash']][] = $item['id'];
+        }
+
+        $map = [];
+        $used = [];
+        $leftoverBefore = [];
+        foreach ($beforeByHash as $hash => $ids) {
+            $targets = $afterByHash[$hash] ?? [];
+            if (count($targets) === count($ids)) {
+                foreach ($ids as $index => $old) {
+                    $map[$old] = $targets[$index];
+                    $used[(string) $targets[$index]] = true;
+                }
+
+                continue;
+            }
+            $leftoverBefore = array_merge($leftoverBefore, $ids);
+        }
+
+        // Rows edited on source since the last import no longer match by content;
+        // fall back to id order when the leftovers line up one-to-one.
+        $leftoverAfter = [];
+        foreach ($after as $item) {
+            if (! isset($used[(string) $item['id']])) {
+                $leftoverAfter[] = $item['id'];
+            }
+        }
+        if (count($leftoverBefore) && count($leftoverBefore) === count($leftoverAfter)) {
+            sort($leftoverBefore);
+            sort($leftoverAfter);
+            foreach ($leftoverBefore as $index => $old) {
+                $map[$old] = $leftoverAfter[$index];
+            }
+        }
+
+        return $map;
+    }
+
     private function applyDeferredSelfForeignKeys(): void
     {
         foreach ($this->deferredSelfFks as $table => $items) {
@@ -1388,6 +1886,30 @@ class CompanyImportService
             $old = $payload[$column];
             if (isset($this->idMaps[$refTable][$old])) {
                 $payload[$column] = $this->idMaps[$refTable][$old];
+
+                continue;
+            }
+
+            // Parent row is not part of this company's copied set — the id points at
+            // another company's row or at nothing. Copying it verbatim would silently
+            // attach this row to an unrelated record on target, so resolve or blank it.
+            if ($refTable === 'users') {
+                $resolved = $this->resolveUserIdByEmail($old);
+                if ($resolved !== null) {
+                    $payload[$column] = $resolved;
+
+                    continue;
+                }
+            }
+
+            if (! $this->nullUnresolvedFks || ! isset($this->copySet[$refTable])) {
+                continue; // global reference (banks, account_types) or a target-only parent
+            }
+
+            $nullable = $this->columnIsNullable($table, $column);
+            $this->recordUnresolvedFk($table, $column, $refTable, $old, $nullable);
+            if ($nullable) {
+                $payload[$column] = null;
             }
         }
 
@@ -1405,6 +1927,9 @@ class CompanyImportService
             $refTable = self::MORPH_TABLES[$type] ?? self::MORPH_TABLES[class_basename($type)] ?? null;
             if ($refTable && isset($this->idMaps[$refTable][$payload[$idCol]])) {
                 $payload[$idCol] = $this->idMaps[$refTable][$payload[$idCol]];
+            } elseif ($refTable && $this->nullUnresolvedFks && isset($this->copySet[$refTable])) {
+                // Blanking one half of a morph pair would corrupt the row — flag instead.
+                $this->recordUnresolvedFk($table, $idCol, $refTable, $payload[$idCol], false);
             }
         }
 
@@ -1416,6 +1941,8 @@ class CompanyImportService
             $refTable = self::MORPH_TABLES[$type] ?? self::MORPH_TABLES['App\\Models\\'.$type] ?? null;
             if ($refTable && isset($this->idMaps[$refTable][$payload['invoice_id']])) {
                 $payload['invoice_id'] = $this->idMaps[$refTable][$payload['invoice_id']];
+            } elseif ($refTable && $this->nullUnresolvedFks && isset($this->copySet[$refTable])) {
+                $this->recordUnresolvedFk($table, 'invoice_id', $refTable, $payload['invoice_id'], false);
             }
         }
 
@@ -1432,6 +1959,12 @@ class CompanyImportService
                 $refTable = $this->tableForAccountTypeModel($modelName);
                 if ($refTable && isset($this->idMaps[$refTable][$payload[$idCol]])) {
                     $payload[$idCol] = $this->idMaps[$refTable][$payload[$idCol]];
+                } elseif ($refTable && $this->nullUnresolvedFks && isset($this->copySet[$refTable])) {
+                    $nullable = $this->columnIsNullable($table, $idCol);
+                    $this->recordUnresolvedFk($table, $idCol, $refTable, $payload[$idCol], $nullable);
+                    if ($nullable) {
+                        $payload[$idCol] = null;
+                    }
                 }
 
                 continue;

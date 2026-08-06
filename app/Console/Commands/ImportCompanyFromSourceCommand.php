@@ -141,6 +141,43 @@ class ImportCompanyFromSourceCommand extends Command
         if (isset($report['indirect'])) {
             $this->line('Indirect: '.json_encode($report['indirect']));
         }
+        if (! empty($report['media'])) {
+            $this->line('Media copied: '.json_encode($report['media']));
+        }
+
+        $relink = $report['target_only_relink'] ?? [];
+        if (! empty($relink['tables'])) {
+            $this->line(sprintf(
+                'Target-only tables re-pointed: %d tables, %d rows, %d columns',
+                $relink['tables'],
+                $relink['rows_updated'] ?? 0,
+                $relink['columns_updated'] ?? 0
+            ));
+        }
+        if (! empty($relink['unresolved'])) {
+            $this->warn('Target-only refs that were already dangling before this run:');
+            foreach ($relink['unresolved'] as $column => $rows) {
+                $this->line("  {$column}: {$rows}");
+            }
+        }
+
+        if (! empty($report['unresolved_fks'])) {
+            $nulled = array_sum(array_column($report['unresolved_fks'], 'nulled'));
+            $kept = array_sum(array_column($report['unresolved_fks'], 'kept'));
+            $this->warn("Foreign keys pointing outside this company: {$nulled} blanked, {$kept} kept (column not nullable)");
+            foreach (array_slice($report['unresolved_fks'], 0, 20) as $item) {
+                $this->line(sprintf(
+                    '  %s.%s -> %s  nulled=%d kept=%d  (other_company_on_source=%d, already_dangling_on_source=%d)',
+                    $item['table'],
+                    $item['column'],
+                    $item['parent'],
+                    $item['nulled'],
+                    $item['kept'],
+                    $item['other_company_on_source'] ?? 0,
+                    $item['dangling_on_source'] ?? 0
+                ));
+            }
+        }
         if (! empty($report['id_maps']) && is_array($report['id_maps'])) {
             $mapped = array_sum($report['id_maps']);
             $this->line("ID maps: {$mapped} keys across ".count($report['id_maps']).' tables');

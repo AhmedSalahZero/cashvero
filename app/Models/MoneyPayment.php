@@ -969,6 +969,20 @@ class MoneyPayment extends Model implements IHaveCreditOverdraftStatement
             ];
         }
         
+        // Only these are real columns on down_payment_money_payment_settlements
+        // (see the migration). Everything merged into $dataArr below also
+        // carries whatever extra keys the caller's row happened to have
+        // (paid_amount, purchases_order_id, purchases_order_name,
+        // net_invoice_amount, ...) which aren't columns at all — passing
+        // those straight into create() throws an "Unknown column" SQL
+        // error. Filter down to the real schema right before the insert.
+        $allowedColumns = [
+            'contract_id', 'purchase_order_id', 'supplier_id',
+            'down_payment_amount', 'total_down_payment_settlement',
+            'down_payment_balance', 'currency', 'money_payment_id',
+            'cash_expense_id', 'company_id',
+        ];
+
         foreach ($purchaseOrders as $purchaseOrderArr) {
             if (isset($purchaseOrderArr['paid_amount'])&&$purchaseOrderArr['paid_amount'] > 0) {
 				$isDownPaymentOverContract = $this->isDownPaymentOverContract();
@@ -983,10 +997,11 @@ class MoneyPayment extends Model implements IHaveCreditOverdraftStatement
                         'currency'=>$isDownPaymentOverContract ? $this->currency : $this->getPaymentCurrency()
                     ],
                     [
-                        'purchase_order_id'=>$purchaseOrderArr['purchases_order_id'] == -1 ? null : $purchaseOrderArr['purchases_order_id'],
+                        'purchase_order_id'=>($purchaseOrderArr['purchases_order_id'] ?? null) == -1 ? null : ($purchaseOrderArr['purchases_order_id'] ?? null),
                         'down_payment_balance'=>$downPaymentAmount
                     ]
                 );
+                $dataArr = array_intersect_key($dataArr, array_flip($allowedColumns));
                 $this->downPaymentSettlements()->create($dataArr);
             }
         }

@@ -44,6 +44,44 @@ class CompanyImportServiceTest extends TestCase
         return $m->invoke($obj, ...$args);
     }
 
+    private function setProp(object $obj, string $name, mixed $value): void
+    {
+        $p = (new ReflectionClass($obj))->getProperty($name);
+        $p->setAccessible(true);
+        $p->setValue($obj, $value);
+    }
+
+    private function getProp(object $obj, string $name): mixed
+    {
+        $p = (new ReflectionClass($obj))->getProperty($name);
+        $p->setAccessible(true);
+
+        return $p->getValue($obj);
+    }
+
+    /**
+     * Seed a service whose only copied parent is money_received, with one row
+     * mapped (5 -> 500). Everything the unresolved-FK path needs is cached so
+     * the assertions stay pure.
+     */
+    private function serviceWithCopySet(array $nullableCache): CompanyImportService
+    {
+        $svc = $this->service();
+        $this->setProp($svc, 'idMaps', ['money_received' => [5 => 500]]);
+        $this->setProp($svc, 'fkCache', [
+            'employee_statements' => [
+                'money_received_id' => 'money_received',
+                'drawee_bank_id' => 'banks',
+            ],
+        ]);
+        $this->setProp($svc, 'copySet', ['money_received' => true]);
+        $this->setProp($svc, 'nullableCache', $nullableCache);
+        // 272 exists on source (another company's row), 999 does not exist at all.
+        $this->setProp($svc, 'sourceIdCache', ['money_received' => ['272' => 0]]);
+
+        return $svc;
+    }
+
     public function test_invoice_id_maps_differ_by_table(): void
     {
         $byTable = $this->const('FK_COLUMN_MAP_BY_TABLE');
@@ -251,6 +289,96 @@ class CompanyImportServiceTest extends TestCase
         $this->assertTrue($preflight['ok'], implode('; ', $preflight['errors']));
         $this->assertSame([], $preflight['order_violations']);
         $this->assertSame([], $preflight['unmapped_local_ids']);
+    }
+
+    public function test_foreign_key_outside_the_copied_company_is_blanked_not_copied_verbatim(): void
+    {
+        $svc = $this->serviceWithCopySet([
+            'employee_statements' => ['money_received_id' => true],
+        ]);
+
+        $mapped = $this->invoke($svc, 'remapForeignKeys', 'employee_statements', ['money_received_id' => 5]);
+        $this->assertSame(500, $mapped['money_received_id'], 'a copied parent must still remap');
+
+        // 272 belongs to another company on source — keeping it would attach this
+        // row to whatever happens to own id 272 on target.
+        $foreign = $this->invoke($svc, 'remapForeignKeys', 'employee_statements', ['money_received_id' => 272]);
+        $this->assertNull($foreign['money_received_id']);
+
+        $recorded = $this->getProp($svc, 'unresolvedFks');
+        $this->assertArrayHasKey('employee_statements.money_received_id', $recorded);
+        $entry = $recorded['employee_statements.money_received_id'];
+        $this->assertSame(1, $entry['nulled']);
+        $this->assertSame(1, $entry['other_company_on_source']);
+        $this->assertSame(0, $entry['dangling_on_source']);
+    }
+
+    public function test_unresolvable_foreign_key_is_kept_when_the_column_is_not_nullable(): void
+    {
+        $svc = $this->serviceWithCopySet([
+            'employee_statements' => ['money_received_id' => false],
+        ]);
+
+        $row = $this->invoke($svc, 'remapForeignKeys', 'employee_statements', ['money_received_id' => 999]);
+        $this->assertSame(999, $row['money_received_id']);
+
+        $entry = $this->getProp($svc, 'unresolvedFks')['employee_statements.money_received_id'];
+        $this->assertSame(1, $entry['kept']);
+        $this->assertSame(0, $entry['nulled']);
+        // 999 is absent from source too — already broken there, not a bad link we made.
+        $this->assertSame(1, $entry['dangling_on_source']);
+    }
+
+    public function test_global_reference_ids_are_never_blanked(): void
+    {
+        $svc = $this->serviceWithCopySet([
+            'employee_statements' => ['drawee_bank_id' => true],
+        ]);
+
+        // banks is outside the copy set: source and target share its ids.
+        $row = $this->invoke($svc, 'remapForeignKeys', 'employee_statements', ['drawee_bank_id' => 7]);
+        $this->assertSame(7, $row['drawee_bank_id']);
+        $this->assertSame([], $this->getProp($svc, 'unresolvedFks'));
+    }
+
+    public function test_relink_pass_does_not_blank_ids_it_cannot_map(): void
+    {
+        $svc = $this->serviceWithCopySet([
+            'employee_statements' => ['money_received_id' => true],
+        ]);
+        // While re-pointing target-only tables an unmapped id means "target-only
+        // parent", which must survive untouched.
+        $this->setProp($svc, 'nullUnresolvedFks', false);
+
+        $row = $this->invoke($svc, 'remapForeignKeys', 'employee_statements', ['money_received_id' => 272]);
+        $this->assertSame(272, $row['money_received_id']);
+        $this->assertSame([], $this->getProp($svc, 'unresolvedFks'));
+    }
+
+    public function test_fingerprint_tracks_content_and_distinguishes_null_from_empty(): void
+    {
+        $svc = $this->service();
+        $columns = ['amount', 'note'];
+
+        $a = $this->invoke($svc, 'fingerprint', ['id' => 1, 'amount' => '10.00', 'note' => 'x'], $columns);
+        $b = $this->invoke($svc, 'fingerprint', ['id' => 99, 'amount' => '10.00', 'note' => 'x'], $columns);
+        $this->assertSame($a, $b, 'the primary key must not affect the fingerprint');
+
+        $changed = $this->invoke($svc, 'fingerprint', ['amount' => '10.01', 'note' => 'x'], $columns);
+        $this->assertNotSame($a, $changed);
+
+        $null = $this->invoke($svc, 'fingerprint', ['amount' => null, 'note' => 'x'], $columns);
+        $empty = $this->invoke($svc, 'fingerprint', ['amount' => '', 'note' => 'x'], $columns);
+        $this->assertNotSame($null, $empty);
+    }
+
+    public function test_media_morph_registry_covers_users(): void
+    {
+        $morph = $this->const('MORPH_TABLES');
+
+        $this->assertSame('users', $morph['App\\Models\\User']);
+        $this->assertSame('users', $morph['User']);
+        $this->assertSame('companies', $morph['App\\Models\\Company']);
     }
 
     private function databasesReachable(): bool

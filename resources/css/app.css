@@ -739,6 +739,37 @@ body {
     grid-template-columns: 4fr 5fr 2fr 1fr;
     gap: 1rem;
 }
+/* Narrow fixed-width pair — Exchange Rate / Amount In Invoice Currency.
+   Unlike .cvr-form-grid-2 (which stretches each field to half the row),
+   these two fields are short numeric values and don't need that much
+   room — cap each column instead of letting it fill the row. */
+.cvr-form-grid-2-narrow {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 200px));
+    gap: 1rem;
+}
+/* Unapplied Amount field(s) — same reasoning, and right-aligned to
+   match the original CashVero layout (they sit at the end of the
+   "Choose Contract For Down Payment" block, not stretched across it).
+   One or two fields render inside depending on whether Invoice
+   Currency and Receive/Payment Currency match. */
+.cvr-form-row-unapplied {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+.cvr-form-row-unapplied > div {
+    width: 160px;
+    flex: 0 0 auto;
+}
+/* Single narrow field inside a larger shared grid row (e.g. the Cheque
+   section's Exchange Rate / Amount In Invoice Currency, which sit
+   alongside Branch in one .cvr-form-grid-3) — caps that one column's
+   width instead of letting the grid track stretch it. */
+.cvr-field-narrow {
+    max-width: 200px;
+}
 @media (max-width: 720px) {
     .cvr-form-grid-2,
     .cvr-form-grid-3,
@@ -753,8 +784,12 @@ body {
     .cvr-form-grid-3-3-2-2-2,
     .cvr-form-grid-2-2-2-4-2,
     .cvr-form-grid-2-2-6-2,
-    .cvr-form-grid-4-5-2-1 {
+    .cvr-form-grid-4-5-2-1,
+    .cvr-form-grid-2-narrow {
         grid-template-columns: 1fr;
+    }
+    .cvr-form-row-unapplied > div {
+        width: 100%;
     }
 }
 
