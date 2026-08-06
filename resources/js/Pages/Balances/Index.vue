@@ -47,9 +47,20 @@ function currencyLabel(currency) {
 const search = ref('');
 const filteredRows = computed(() => {
     const rows = activeCard.value?.rows || [];
-    if (!search.value) return rows;
     const q = search.value.toLowerCase();
-    return rows.filter(r => (r.client_name || '').toLowerCase().includes(q));
+    const matched = !search.value
+        ? rows
+        : rows.filter(r => (r.client_name || '').toLowerCase().includes(q));
+    /* Net Balance, high → low. The SQL in the controller does order by
+       net_balance desc, but that ordering is lost afterwards: subtractQuery()
+       rewrites net_balance in place (down payments), and addMainCurrency()
+       builds the main_currency rows from scratch in partner-id order. So the
+       main_currency tab in particular arrived effectively unsorted, with
+       credit (negative) balances scattered across pages. Sorting here fixes
+       every tab at once and touches no balance math.
+       Copy before .sort() — it mutates, and `rows` is the same array the
+       KPI card total was computed from. */
+    return [...matched].sort((a, b) => b.net_balance - a.net_balance);
 });
 
 /* ── Client-side pagination ──────────────────────────────────────
@@ -73,6 +84,30 @@ const pagedRows = computed(() => {
     const start = (currentPage.value - 1) * pageSize;
     return filteredRows.value.slice(start, start + pageSize);
 });
+
+/* ── Footer totals ───────────────────────────────────────────────
+   Added because the page was genuinely misleading: with 50 rows per
+   page and no total anywhere in the table, summing the visible column
+   gives the PAGE total, which a reader naturally compares against the
+   KPI card's TAB total. On company 92 that was 98,571,638.67 (page 1
+   of 86 rows) vs 86,517,636.15 (all 86) — the gap was two credit
+   balances sitting on page 2. Both numbers are now spelled out.
+   `tabTotal` matches the KPI card exactly whenever the search box is
+   empty; with a search active it's the total of what matched, and the
+   label says so. */
+const sumColumn = (rows, key) => rows.reduce((sum, r) => sum + Number(r[key] || 0), 0);
+const totalsFor = rows => ({
+    invoices: sumColumn(rows, 'invoices'),
+    down_payments: sumColumn(rows, 'down_payments'),
+    net_balance: sumColumn(rows, 'net_balance'),
+});
+const tabTotals = computed(() => totalsFor(filteredRows.value));
+const pageTotals = computed(() => totalsFor(pagedRows.value));
+const isPaginated = computed(() => filteredRows.value.length > pageSize);
+
+// Number of columns after Net Balance (the report buttons) — used to pad
+// the footer rows so their cells line up with the header.
+const trailingColumns = computed(() => (activeCard.value?.currency !== 'main_currency' ? 2 : 1));
 
 // Switching currency or searching should always land back on page 1 —
 // otherwise "page 4" of one tab could silently show as an empty
@@ -110,8 +145,12 @@ function balanceColorVar(balance) {
     return 'var(--cvr-num-green)';
 }
 
+// Whole numbers only — balances here are read at a glance and the
+// piasters were pure noise. Also puts this page in step with the same
+// report in system.veroanalysis.com, whose Blade has always rendered
+// these through number_format() with no decimals.
 function formatAmount(value) {
-    return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+    return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
 </script>
 
@@ -177,6 +216,8 @@ function formatAmount(value) {
                             <th class="px-4 py-3 text-center">#</th>
                             <th class="px-4 py-3 text-left">Name</th>
                             <th class="px-4 py-3 text-center">Currency</th>
+                            <th class="px-4 py-3 text-right">Invoices</th>
+                            <th class="px-4 py-3 text-right">Down Payments</th>
                             <th class="px-4 py-3 text-right">Net Balance</th>
                             <th class="px-4 py-3 text-center">Statement Report</th>
                             <th v-if="activeCard?.currency !== 'main_currency'" class="px-4 py-3 text-center">Invoice Report</th>
@@ -189,6 +230,8 @@ function formatAmount(value) {
                                 <span class="block truncate max-w-[280px]" :title="row.client_name">{{ row.client_name }}</span>
                             </td>
                             <td class="px-4 py-3 text-center cvr-text-secondary">{{ currencyLabel(row.currency) }}</td>
+                            <td class="px-4 py-3 text-right cvr-text-secondary">{{ formatAmount(row.invoices) }}</td>
+                            <td class="px-4 py-3 text-right cvr-text-secondary">{{ formatAmount(row.down_payments) }}</td>
                             <td class="px-4 py-3 text-right font-medium" :class="balanceClass(row.net_balance)">{{ formatAmount(row.net_balance) }}</td>
                             <td class="px-4 py-3 text-center">
                                 <Link :href="row.statement_report_url" class="cvr-btn-primary px-3 py-1 rounded text-xs whitespace-nowrap">
@@ -202,9 +245,32 @@ function formatAmount(value) {
                             </td>
                         </tr>
                         <tr v-if="filteredRows.length === 0">
-                            <td :colspan="activeCard?.currency !== 'main_currency' ? 6 : 5" class="px-4 py-8 text-center cvr-text-muted">No balances found.</td>
+                            <td :colspan="3 + 3 + trailingColumns" class="px-4 py-8 text-center cvr-text-muted">No balances found.</td>
                         </tr>
                     </tbody>
+
+                    <!-- Totals — page total only when pagination is actually
+                         in effect (otherwise it's the same number twice). -->
+                    <tfoot v-if="filteredRows.length" class="cvr-table-head">
+                        <tr v-if="isPaginated">
+                            <td colspan="3" class="px-4 py-3 text-right font-medium cvr-text-secondary">
+                                Total — this page ({{ pagedRows.length }} of {{ filteredRows.length }})
+                            </td>
+                            <td class="px-4 py-3 text-right font-medium cvr-text-secondary">{{ formatAmount(pageTotals.invoices) }}</td>
+                            <td class="px-4 py-3 text-right font-medium cvr-text-secondary">{{ formatAmount(pageTotals.down_payments) }}</td>
+                            <td class="px-4 py-3 text-right font-medium" :class="balanceClass(pageTotals.net_balance)">{{ formatAmount(pageTotals.net_balance) }}</td>
+                            <td :colspan="trailingColumns"></td>
+                        </tr>
+                        <tr>
+                            <td colspan="3" class="px-4 py-3 text-right font-semibold cvr-text-primary">
+                                {{ search ? `Total — all ${filteredRows.length} matching rows` : `Total — ${currencyLabel(activeCard.currency)}` }}
+                            </td>
+                            <td class="px-4 py-3 text-right font-semibold cvr-text-primary">{{ formatAmount(tabTotals.invoices) }}</td>
+                            <td class="px-4 py-3 text-right font-semibold cvr-text-primary">{{ formatAmount(tabTotals.down_payments) }}</td>
+                            <td class="px-4 py-3 text-right font-semibold" :class="balanceClass(tabTotals.net_balance)">{{ formatAmount(tabTotals.net_balance) }}</td>
+                            <td :colspan="trailingColumns"></td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
 

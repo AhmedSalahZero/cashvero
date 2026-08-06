@@ -82,6 +82,15 @@ function fmt(value) {
 
 const invoiceTypeLabels = { CustomerInvoice: 'Customer Invoices', SupplierInvoice: 'Supplier Invoices' };
 
+/* The cash flow chart is bucketed by the Report Interval, so the title
+   has to say which one — it was hard-coded "Monthly Cash Flow" and read
+   as a lie whenever the report ran weekly or daily. Driven by
+   `reportInterval` (what the report actually used), not by the dropdown
+   model, so the title never gets ahead of the rendered data: changing
+   the dropdown alone does nothing until Apply reloads the page. */
+const intervalLabels = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' };
+const cashFlowChartTitle = computed(() => `${intervalLabels[props.reportInterval] || 'Periodic'} Cash Flow`);
+
 /* Monthly Cash Flow / Accumulated Net Cash — already the exact shape
    the original amCharts4 config consumed ({date, cash_in, cash_out}
    and {date, value} respectively). */
@@ -138,20 +147,25 @@ function chequeChartData(modelType) {
             <DashboardTabs active="forecast" :urls="dashboardTabUrls" />
 
             <div class="cvr-card-bg cvr-border border rounded-lg p-3 mb-6 flex items-end gap-3 flex-wrap">
+                <!-- The select was as narrow as its shortest option and clipped
+                     the label; w-44 gives every option room. "Daily" is offered
+                     here now too — CashFlowReportController has always accepted
+                     it, the dropdown just never listed it. -->
                 <div>
                     <label class="cvr-form-label">Report Interval</label>
-                    <select v-model="reportIntervalModel" class="cvr-input px-3 py-2 rounded">
+                    <select v-model="reportIntervalModel" class="cvr-input px-3 py-2 rounded w-44">
+                        <option value="daily">Daily</option>
                         <option value="weekly">Weekly</option>
                         <option value="monthly">Monthly</option>
                     </select>
                 </div>
                 <div>
                     <label class="cvr-form-label">Start Date</label>
-                    <input v-model="startDateModel" type="date" class="cvr-input px-3 py-2 rounded" />
+                    <input v-model="startDateModel" type="date" class="cvr-input px-3 py-2 rounded w-44" />
                 </div>
                 <div>
                     <label class="cvr-form-label">End Date</label>
-                    <input v-model="endDateModel" type="date" class="cvr-input px-3 py-2 rounded" />
+                    <input v-model="endDateModel" type="date" class="cvr-input px-3 py-2 rounded w-44" />
                 </div>
                 <button class="cvr-btn-primary px-4 py-2 rounded" @click="applyFilter">Apply</button>
                 <span v-if="contractCode" class="cvr-badge cvr-badge-info self-center">Contract: {{ contractCode }}</span>
@@ -174,7 +188,7 @@ function chequeChartData(modelType) {
             <div class="cvr-section-heading"><h2>Cash Flow Projection [{{ activeCurrency }}]</h2></div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
                 <div class="cvr-chart-card" style="border-top-color: var(--cvr-green-bright)">
-                    <h4 class="text-sm font-semibold cvr-text-primary mb-2">Monthly Cash Flow</h4>
+                    <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ cashFlowChartTitle }}</h4>
                     <MultiLineChart :data="cashFlowReport?.[activeCurrency]?.total_cash_in_out_flow || []" :series="cashFlowSeries" :height="300" />
                 </div>
                 <div class="cvr-chart-card" style="border-top-color: var(--cvr-blue)">

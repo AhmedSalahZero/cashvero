@@ -42,14 +42,23 @@ function cvrColor(varName) {
 }
 
 function build() {
-    if (!el.value) return;
+    // dispose() first, unconditionally: when the data empties out, the
+    // template swaps the chart host for the placeholder and `el` goes
+    // null. Returning before disposing would strand the old chart.
     dispose();
+    if (!el.value) return;
     if (!(props.data || []).length) return;
 
     chart = am4core.create(el.value, am4charts.XYChart);
     chart.logo.disabled = true;
     chart.data = props.data;
     chart.dateFormatter.inputDateFormat = props.dateFormat;
+    // Whole numbers everywhere the chart prints one — axis labels, axis
+    // tooltips, legend values. Without this amCharts falls back to raw
+    // floats, which is where the 12-decimal hover values came from: the
+    // series tooltip below was already formatted, but the value-axis
+    // tooltip that follows the cursor was not.
+    chart.numberFormatter.numberFormat = '#,###';
     chart.paddingRight = 12;
 
     const textColor = cvrColor('--cvr-text-secondary');
@@ -70,6 +79,10 @@ function build() {
         sharedValueAxis.renderer.grid.template.stroke = gridColor;
         sharedValueAxis.renderer.grid.template.strokeOpacity = 0.25;
         sharedValueAxis.renderer.labels.template.fill = textColor;
+        // The cursor's own axis tooltip — an interpolated pixel position,
+        // not a data point, so it is meaningless at 12 decimal places and
+        // just competes with the series tooltip for attention.
+        sharedValueAxis.cursorTooltipEnabled = false;
     }
 
     (props.series || []).forEach((seriesDef, index) => {
@@ -82,6 +95,7 @@ function build() {
             valueAxis.renderer.grid.template.stroke = gridColor;
             valueAxis.renderer.grid.template.strokeOpacity = 0.2;
             valueAxis.renderer.opposite = !!seriesDef.opposite;
+            valueAxis.cursorTooltipEnabled = false;
         }
 
         const color = seriesDef.color ? cvrColor(seriesDef.color) : chart.colors.getIndex(index);
@@ -172,9 +186,19 @@ watch(() => props.data, async () => {
 </script>
 
 <template>
-    <div ref="el" :style="{ height: typeof height === 'number' ? height + 'px' : height }">
+    <!-- amCharts and Vue must never own the same DOM node. am4core.create()
+         empties the element it is handed and fills it with its own nodes —
+         including the placeholder below, when the placeholder lived INSIDE
+         the chart host. Vue's vdom kept pointing at those deleted nodes, so
+         the next patch threw "Cannot read properties of null (reading
+         'insertBefore')" / "'parentNode'" / "Cannot destructure property
+         'bum' of 'h' as it is null" on unmount. The host div is now empty
+         and a v-if/v-else sibling of the placeholder, so exactly one of the
+         two exists at a time and amCharts only ever touches its own. -->
+    <div :style="{ height: typeof height === 'number' ? height + 'px' : height }">
         <div v-if="!(data || []).length" class="h-full flex items-center justify-center text-xs cvr-text-muted">
             No data for this selection yet.
         </div>
+        <div v-else ref="el" class="h-full"></div>
     </div>
 </template>

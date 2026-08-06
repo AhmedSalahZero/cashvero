@@ -155,6 +155,10 @@ class BalancesController
 				'client_id' => $row->{$clientIdColumnName},
 				'client_name' => $row->{$clientNameColumnName},
 				'currency' => $currency,
+				// The two halves of net_balance, shown as their own columns so
+				// the number is auditable instead of just asserted.
+				'invoices' => (float) ($row->invoices_amount ?? 0),
+				'down_payments' => (float) ($row->down_payment_amount ?? 0),
 				'net_balance' => (float) $row->net_balance,
 				// "Invoice Report" never existed for the main-currency
 				// pseudo-row in the original Blade either (confirmed,
@@ -246,9 +250,33 @@ class BalancesController
 		
 		
 	}
+	/**
+	 * Applies each partner's down payments to their invoice balances.
+	 *
+	 * Two things are recorded on every row on the way through, both new:
+	 *   - invoices_amount / down_payment_amount — the two halves of
+	 *     net_balance, so the table can show the breakdown instead of
+	 *     only the net. net_balance itself is untouched and still equals
+	 *     invoices_amount - down_payment_amount on every row.
+	 *   - rows for down payments that used to fall through the cracks —
+	 *     see rowsForDownPaymentsWithoutMatchingInvoice() for why.
+	 */
 	protected function subtractQuery($invoicesBalances,$downPayments,$clientIdColumnName,$clientNameColumnName){
 		$newRecords = [];
 		$partnersWithoutInvoices = [];
+		// Snapshot BEFORE the loop below runs — it mutates rows in place,
+		// including overwriting `currency` on the no-invoices branch, so
+		// asking these questions afterwards gives the wrong answer.
+		$invoicedPairs = [];
+		$partnerNames = [];
+		foreach($invoicesBalances as $invoiceBalanceStdClass){
+			$partnerNames[$invoiceBalanceStdClass->{$clientIdColumnName}] = $invoiceBalanceStdClass->{$clientNameColumnName};
+			if($invoiceBalanceStdClass->currency){
+				$invoicedPairs[$invoiceBalanceStdClass->{$clientIdColumnName}.'|'.$invoiceBalanceStdClass->currency] = true;
+			}
+			$invoiceBalanceStdClass->invoices_amount = $invoiceBalanceStdClass->net_balance;
+			$invoiceBalanceStdClass->down_payment_amount = 0;
+		}
 		$hasInvoiceBalances = count($invoicesBalances);
 		foreach($hasInvoiceBalances ? $invoicesBalances : [null] as $invoiceBalanceStdClass ){
 			
@@ -274,6 +302,7 @@ class BalancesController
 				if($downPaymentCurrency == $invoiceCurrency && $downPaymentPartnerId == $invoicePartnerId
 				){
 					$invoiceBalanceStdClass->net_balance = $invoiceBalanceStdClass->net_balance - $downPaymentStdClass->down_payment_balance;
+					$invoiceBalanceStdClass->down_payment_amount = $invoiceBalanceStdClass->down_payment_amount + $downPaymentStdClass->down_payment_balance;
 					continue;
 				}
 				if(is_null($invoiceCurrency) && $downPaymentPartnerId == $invoicePartnerId ){
@@ -281,13 +310,17 @@ class BalancesController
 					if(!$addNewRecord){
 						$invoiceBalanceStdClass->currency = $downPaymentCurrency ;
 						$invoiceBalanceStdClass->net_balance = 0 - $downPaymentStdClass->down_payment_balance;
+						$invoiceBalanceStdClass->invoices_amount = 0;
+						$invoiceBalanceStdClass->down_payment_amount = $downPaymentStdClass->down_payment_balance;
 						$addNewRecord = true;
 					}else{
-						
+
 						$newRecords[] = json_decode(json_encode([
 							$clientIdColumnName=>$invoicePartnerId,
 							$clientNameColumnName=>$invoicePartnerName,
 							'currency'=>$downPaymentCurrency,
+							'invoices_amount'=>0,
+							'down_payment_amount'=>$downPaymentStdClass->down_payment_balance,
 							'net_balance'=>0 - $downPaymentStdClass->down_payment_balance,
 							'net_balance_in_main_currency'=>0 - $downPaymentStdClass->down_payment_balance
 						]));
@@ -297,8 +330,63 @@ class BalancesController
 		}
 			return [
 				'partners_without_invoices'=>$partnersWithoutInvoices ,
-				'data'=>array_merge($invoicesBalances,$newRecords)
+				'data'=>array_merge(
+					$invoicesBalances,
+					$newRecords,
+					$this->rowsForDownPaymentsWithoutMatchingInvoice($downPayments,$invoicedPairs,$partnerNames,$partnersWithoutInvoices,$clientIdColumnName,$clientNameColumnName)
+				)
 			] ;
+	}
+
+	/**
+	 * Down payments that no per-currency tab was showing at all.
+	 *
+	 * The loop in subtractQuery() only applies a down payment when the
+	 * partner has an invoice row in that SAME currency, and it has a
+	 * fallback for partners with NO invoices whatsoever (it turns their
+	 * empty row into a negative one). What it never had is a fallback for
+	 * the case in between: a partner who HAS invoices, just not in the
+	 * currency they were paid an advance in. Those down payments were
+	 * silently dropped from every per-currency tab — while
+	 * addMainCurrency() counted them in full, because it subtracts a
+	 * partner's down payments regardless of currency. That is exactly how
+	 * a Main Currency total could come out negative while every
+	 * individual currency tab looked positive.
+	 *
+	 * This method closes that gap: one row per orphaned down payment, in
+	 * the currency it was actually paid in, with no invoices behind it.
+	 */
+	protected function rowsForDownPaymentsWithoutMatchingInvoice(array $downPayments,array $invoicedPairs,array $partnerNames,array $partnersWithoutInvoices,string $clientIdColumnName,string $clientNameColumnName):array
+	{
+		$rows = [];
+		foreach($downPayments as $downPaymentStdClass){
+			$partnerId = $downPaymentStdClass->{$clientIdColumnName};
+			// Partners with no invoices at all already got their row from
+			// subtractQuery()'s own branch — adding another here would
+			// count the same down payment twice.
+			if(isset($partnersWithoutInvoices[$partnerId])){
+				continue;
+			}
+			if(isset($invoicedPairs[$partnerId.'|'.$downPaymentStdClass->currency])){
+				continue;
+			}
+			$partnerName = $partnerNames[$partnerId] ?? optional(Partner::find($partnerId))->getName();
+			$rows[] = json_decode(json_encode([
+				$clientIdColumnName=>$partnerId,
+				$clientNameColumnName=>$partnerName,
+				'currency'=>$downPaymentStdClass->currency,
+				'invoices_amount'=>0,
+				'down_payment_amount'=>$downPaymentStdClass->down_payment_balance,
+				'net_balance'=>0 - $downPaymentStdClass->down_payment_balance,
+				// Deliberately 0, NOT the negative balance: addMainCurrency()
+				// sums this column and then subtracts the partner's down
+				// payments in main currency itself. Anything non-zero here
+				// would subtract them twice and move the Main Currency total,
+				// which was already the correct number.
+				'net_balance_in_main_currency'=>0
+			]));
+		}
+		return $rows;
 	}
 		
 		protected function addMainCurrency(array $items,array $downPaymentsInMainCurrency,array $partnersWithoutInvoices,string $clientNameColumnName,string $clientIdColumnName ){
@@ -314,13 +402,19 @@ class BalancesController
 			}
 			foreach($totalPerCustomerForMainCurrency as $partnerId => $total){
 				$downPaymentForPartner = $downPaymentsInMainCurrency[$partnerId] ?? 0 ;
-				$total = in_array($partnerId,$partnersWithoutInvoices) ? -1*$downPaymentForPartner : $total-$downPaymentForPartner  ;
+				// Same arithmetic as before — `in_array ? -dp : total-dp` — just
+				// split in two so the invoice side can be its own column. The
+				// resulting net_balance is byte-for-byte what it always was.
+				$invoicesForPartner = in_array($partnerId,$partnersWithoutInvoices) ? 0 : $total ;
+				$total = $invoicesForPartner - $downPaymentForPartner ;
 				$formattedResult[] = json_decode(json_encode([
 					$clientIdColumnName=>$partnerId,
 					$clientNameColumnName=>$partnerNames[$partnerId],
 					'currency'=>'main_currency',
+					'invoices_amount'=>$invoicesForPartner,
+					'down_payment_amount'=>$downPaymentForPartner,
 					'net_balance'=>$total,
-					'net_balance_in_main_currency'=>$total 
+					'net_balance_in_main_currency'=>$total
 				]));
 			}
 			return $formattedResult;

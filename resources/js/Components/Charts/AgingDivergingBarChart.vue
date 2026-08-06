@@ -40,14 +40,18 @@ function cvrColor(varName) {
 }
 
 function build() {
-    if (!el.value) return;
+    // dispose() before the guards: when the data empties out the template
+    // swaps this chart's host for the placeholder and `el` goes null, so
+    // an early return would strand the previous chart.
     dispose();
+    if (!el.value) return;
     const rows = props.data || [];
     if (!rows.length) return;
 
     chart = am4core.create(el.value, am4charts.XYChart);
     chart.logo.disabled = true;
     chart.data = rows;
+    chart.numberFormatter.numberFormat = '#,###';
     chart.paddingLeft = 0;
 
     const textColor = cvrColor('--cvr-text-secondary');
@@ -73,6 +77,9 @@ function build() {
     valueAxis.extraMax = 0.12;
     valueAxis.extraMin = 0.12;
     valueAxis.numberFormatter.numberFormat = '#,###';
+    // Cursor axis tooltip — an interpolated pixel position, not a data
+    // point, and unformatted, so it showed a long float on hover.
+    valueAxis.cursorTooltipEnabled = false;
 
     // Emphasize the zero line — the visual "hinge" the whole chart
     // diverges around (past due to the left, due/coming due to the right).
@@ -156,9 +163,14 @@ watch(() => props.data, async () => {
 </script>
 
 <template>
-    <div ref="el" :style="{ height: typeof height === 'number' ? height + 'px' : height }">
+    <!-- Chart host and placeholder are v-if/v-else siblings, never nested:
+         am4core.create() wipes the element it is given, and Vue crashed
+         patching the placeholder nodes amCharts had deleted. Same fix as
+         MultiLineChart.vue — see its template comment. -->
+    <div :style="{ height: typeof height === 'number' ? height + 'px' : height }">
         <div v-if="!(data || []).length" class="h-full flex items-center justify-center text-xs cvr-text-muted">
             No aging data for this selection.
         </div>
+        <div v-else ref="el" class="h-full"></div>
     </div>
 </template>

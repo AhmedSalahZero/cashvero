@@ -461,7 +461,13 @@ class CustomerInvoiceDashboardController extends Controller
 			'pastDueCustomerInvoices'=>$pastDueCustomerInvoices??[],
 			'pastDueSupplierInvoices'=>$pastDueSupplierInvoices,
 			'pastDueInstallments'=>$pastDueInstallments,
-			'selectedReportInterval'=>$request->get('report_interval','weekly'),
+			// The interval the report ACTUALLY ran at, not a guess at it.
+			// CashFlowReportController::result() falls back to 'monthly' when
+			// report_interval is missing or invalid, so reading the raw query
+			// param with a 'weekly' default made the filter contradict the
+			// charts on first entry: monthly buckets rendered, "Weekly"
+			// selected. $reportInterval comes straight back from the report.
+			'selectedReportInterval'=>$reportInterval,
 			'cashFlowStartDate'=>$cashFlowStartDate,
 			'cashFlowEndDate'=>$cashFlowEndDate,
 			'selectedPartnerId'=>$request->get('partner_id'),

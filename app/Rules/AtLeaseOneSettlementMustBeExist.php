@@ -40,6 +40,6 @@ class AtLeaseOneSettlementMustBeExist implements ImplicitRule
      */
     public function message()
     {
-        return __('At Lease One Settlement Is Required');
+        return __('At Least One Settlement Is Required');
     }
 }

@@ -45,8 +45,11 @@ function cvrColor(varName) {
 const defaultPalette = ['--cvr-blue', '--cvr-green-bright', '--cvr-copper-bright', '--cvr-num-amber', '--cvr-num-red', '--cvr-copper'];
 
 function build() {
-    if (!el.value) return;
+    // dispose() before the guards: when the data empties out the template
+    // swaps this chart's host for the placeholder and `el` goes null, so
+    // an early return would strand the previous chart.
     dispose();
+    if (!el.value) return;
 
     const rows = (props.data || []).filter(r => Number(r[props.valueField]) > 0);
     if (!rows.length) return;
@@ -128,9 +131,14 @@ watch(() => props.data, async () => {
 </script>
 
 <template>
-    <div ref="el" :style="{ height: typeof height === 'number' ? height + 'px' : height }">
+    <!-- Chart host and placeholder are v-if/v-else siblings, never nested:
+         am4core.create() wipes the element it is given, and Vue crashed
+         patching the placeholder nodes amCharts had deleted. Same fix as
+         MultiLineChart.vue — see its template comment. -->
+    <div :style="{ height: typeof height === 'number' ? height + 'px' : height }">
         <div v-if="!(data || []).some(r => Number(r[valueField]) > 0)" class="h-full flex items-center justify-center text-xs cvr-text-muted">
             No data for this selection.
         </div>
+        <div v-else ref="el" class="h-full"></div>
     </div>
 </template>
