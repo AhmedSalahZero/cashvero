@@ -199,18 +199,17 @@ watch(
     { immediate: true },
 );
 
-/** Per selected bank: Limit / Outstanding / Available Room for the donut. */
+/** All banks' available_room for the donut (legacy: category = bank name). */
 function roomDonutData(section) {
-    const state = stateFor(section.type);
-    const bank = (section.banks || []).find(b => String(b.id) === String(state.bankId));
-    const rows = (section.room?.[activeCurrency.value] || []).filter(r => bank && r.item === bank.name);
-    if (!rows.length) return [];
-    const sum = (key) => rows.reduce((s, r) => s + Number(r[key] || 0), 0);
-    return [
-        { category: 'Limit', value: sum('limit') },
-        { category: 'Outstanding', value: sum('end_balance') },
-        { category: 'Available Room', value: sum('available_room') },
-    ];
+    const rows = section.room?.[activeCurrency.value] || [];
+    const byBank = {};
+    for (const row of rows) {
+        const name = row.item || '—';
+        byBank[name] = (byBank[name] || 0) + Number(row.available_room || 0);
+    }
+    return Object.entries(byBank)
+        .filter(([, value]) => value !== 0)
+        .map(([category, value]) => ({ category, value }));
 }
 
 const movementSeries = [
@@ -447,9 +446,9 @@ const expandedLoanId = ref(null);
                         <div class="cvr-chart-card" style="border-top-color: var(--cvr-copper-bright)">
                             <h4 class="text-sm font-semibold cvr-text-primary mb-2">Available Room by Bank</h4>
                             <DonutChart3D
-                                :key="`${section.type}-${activeCurrency}-${stateFor(section.type).bankId}`"
+                                :key="`${section.type}-${activeCurrency}`"
                                 :data="roomDonutData(section)"
-                                :colors="['--cvr-blue', '--cvr-num-amber', '--cvr-green-bright']"
+                                :colors="['--cvr-blue', '--cvr-green-bright', '--cvr-copper-bright', '--cvr-num-amber', '--cvr-num-red']"
                             />
                         </div>
                         <div class="cvr-chart-card lg:col-span-2" style="border-top-color: var(--cvr-blue)">
