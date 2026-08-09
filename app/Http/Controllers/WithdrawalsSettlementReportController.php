@@ -78,15 +78,10 @@ class WithdrawalsSettlementReportController
      */
     public function index(Company $company)
     {
-        $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyHasOverdrafts()->get();
         $accountTypes = AccountType::onlyOverdraftsAccounts()->where('id', '!=', 32)->get();
 
         return \Inertia\Inertia::render('Statements/WithdrawalStatement/Index', [
             'company' => ['id' => $company->id],
-            'financialInstitutionBanks' => $financialInstitutionBanks->map(fn ($bank) => [
-                'id' => $bank->id,
-                'name' => $bank->getName(),
-            ])->values(),
             'accountTypes' => $accountTypes->map(fn ($type) => [
                 'id' => $type->id,
                 'name' => $type->getName(),
@@ -96,8 +91,47 @@ class WithdrawalsSettlementReportController
                 // Same POST route the Cash Forecast dashboard also submits to
                 // directly — see class docblock. Left completely unchanged.
                 'result' => route('result.withdrawals.settlement.report', ['company' => $company->id]),
+                'banks' => route('withdrawals.settlement.banks', ['company' => $company->id]),
             ],
         ]);
+    }
+
+    /**
+     * JSON: banks that have overdrafts of the selected Account Type
+     * (same model family as overdraftWithdrawalsQuery).
+     */
+    public function banksByAccountType(Company $company, Request $request)
+    {
+        $validated = $request->validate([
+            'account_type' => ['required', 'integer', 'exists:account_types,id'],
+        ]);
+
+        $accountType = AccountType::findOrFail((int) $validated['account_type']);
+        $fullClassName = '\\App\\Models\\'.$accountType->model_name;
+
+        if (! class_exists($fullClassName)) {
+            return response()->json(['banks' => []]);
+        }
+
+        $financialInstitutionIds = $fullClassName::query()
+            ->where('company_id', $company->id)
+            ->distinct()
+            ->pluck('financial_institution_id')
+            ->filter()
+            ->values()
+            ->all();
+
+        $banks = FinancialInstitution::onlyForCompany($company->id)
+            ->whereIn('id', $financialInstitutionIds)
+            ->get()
+            ->map(fn ($bank) => [
+                'id' => $bank->id,
+                'name' => $bank->getName(),
+            ])
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
+
+        return response()->json(['banks' => $banks]);
     }
 
     /**

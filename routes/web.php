@@ -625,6 +625,7 @@ Route::middleware([])->group(function () {
                     Route::get('withdrawals-settlements-report', 'WithdrawalsSettlementReportController@index')->name('view.withdrawals.settlement.report');
                     Route::post('withdrawals-settlements-report', 'WithdrawalsSettlementReportController@result')->name('result.withdrawals.settlement.report');
                     Route::get('withdrawals-settlements-report/export', 'WithdrawalsSettlementReportController@exportExcel')->name('export.withdrawals.settlement.report');
+                    Route::get('withdrawals-settlements-report/banks', 'WithdrawalsSettlementReportController@banksByAccountType')->name('withdrawals.settlement.banks');
 
                     Route::get('refresh-withdrawal-dues-report', 'WithdrawalsSettlementReportController@refreshReport')->name('refresh.withdrawal.report'); // ajax
 

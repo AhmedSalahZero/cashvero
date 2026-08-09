@@ -3,25 +3,24 @@
  * Statements/WithdrawalStatement/Index.vue
  * ------------------------------------------------------------------
  * Served by WithdrawalsSettlementReportController@index. Filter form:
- * date range, Banks (via the shared MultiSelectDropdown component —
- * same one used on the Aging report's form), Account Type, Currency.
+ * date range, Account Type, Currency, then Banks (cascading multi-select
+ * reloaded via banksByAccountType when Account Type changes).
  *
  * Submits via POST (router.post), not GET — this page's result route
  * is also posted to directly by the still-Blade Cash Forecast
  * dashboard, so its HTTP verb was deliberately left unchanged (see
  * the controller's docblock).
  */
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import MultiSelectDropdown from '@/Components/MultiSelectDropdown.vue';
 
 const props = defineProps({
     company: Object,
-    financialInstitutionBanks: Array, // [{ id, name }]
     accountTypes: Array, // [{ id, name }]
     currencies: Object, // { code: label }
-    urls: Object, // { result }
+    urls: Object, // { result, banks }
 });
 
 const selectedBankIds = ref([]);
@@ -30,7 +29,29 @@ const currency = ref('');
 const startDate = ref(new Date(new Date().setFullYear(new Date().getFullYear() - 1)).toISOString().slice(0, 10));
 const endDate = ref(new Date().toISOString().slice(0, 10));
 
-const bankOptions = computed(() => props.financialInstitutionBanks.map(b => ({ value: b.id, label: b.name })));
+const bankOptions = ref([]);
+const loadingBanks = ref(false);
+const loadError = ref('');
+
+async function loadBanks() {
+    selectedBankIds.value = [];
+    bankOptions.value = [];
+    loadError.value = '';
+    if (!accountTypeId.value) return;
+    loadingBanks.value = true;
+    try {
+        const { data } = await window.axios.get(props.urls.banks, {
+            params: { account_type: accountTypeId.value },
+        });
+        bankOptions.value = (data.banks || []).map(b => ({ value: b.id, label: b.name }));
+    } catch (error) {
+        loadError.value = 'Could not load banks for this account type. Please try again.';
+        console.error('Failed to load banks by account type:', error);
+    } finally {
+        loadingBanks.value = false;
+    }
+}
+watch(accountTypeId, loadBanks);
 
 const canSubmit = computed(() =>
     selectedBankIds.value.length > 0 && accountTypeId.value && currency.value && startDate.value && endDate.value
@@ -84,7 +105,15 @@ function submit() {
 
                 <div class="max-w-xl mb-5">
                     <label class="cvr-form-label">Banks * <span class="cvr-text-muted font-normal">(pick one or more)</span></label>
-                    <MultiSelectDropdown v-model="selectedBankIds" :options="bankOptions" placeholder="Select banks" />
+                    <MultiSelectDropdown
+                        v-model="selectedBankIds"
+                        :options="bankOptions"
+                        :placeholder="!accountTypeId ? 'Select account type first' : (loadingBanks ? 'Loading banks…' : 'Select banks')"
+                    />
+                    <p v-if="loadError" class="text-xs mt-1" style="color: var(--cvr-danger-text);">{{ loadError }}</p>
+                    <p v-else-if="accountTypeId && !loadingBanks && bankOptions.length === 0" class="text-xs mt-1 cvr-text-muted">
+                        No banks have this account type.
+                    </p>
                 </div>
 
                 <button
@@ -100,7 +129,7 @@ function submit() {
                     <li v-if="!endDate">— End Date is not set.</li>
                     <li v-if="!accountTypeId">— Account Type is not selected.</li>
                     <li v-if="!currency">— Currency is not selected.</li>
-                    <li v-if="selectedBankIds.length === 0">— No bank is selected yet (open the Banks dropdown and pick at least one, or Select All).</li>
+                    <li v-if="accountTypeId && selectedBankIds.length === 0">— No bank is selected yet (open the Banks dropdown and pick at least one, or Select All).</li>
                 </ul>
             </div>
         </div>
