@@ -198,6 +198,7 @@ class OverdraftCashDashboardHelper
             ->join($overdraftTable.' as overdrafts', 'overdrafts.id', '=', 'statements.'.$foreignKeyColumn)
             ->where('statements.company_id', $companyId)
             ->whereRaw('YEAR(statements.date) = ?', [$year])
+            ->where('statements.date', '<=', $date)
             ->where('overdrafts.currency', $currencyName)
             ->whereIn('statements.'.$foreignKeyColumn, $overdraftIds)
             ->sum('statements.interest_amount');

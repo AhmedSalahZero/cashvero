@@ -92,10 +92,13 @@ class BankStatementController
 
         return \Inertia\Inertia::render('Statements/BankStatement/Index', [
             'company' => ['id' => $company->id],
-            'financialInstitutionBanks' => $financialInstitutionBanks->map(fn ($bank) => [
-                'id' => $bank->id,
-                'name' => $bank->getName(),
-            ])->values(),
+            'financialInstitutionBanks' => $financialInstitutionBanks
+                ->map(fn ($bank) => [
+                    'id' => $bank->id,
+                    'name' => $bank->getName(),
+                ])
+                ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+                ->values(),
             'accountTypes' => $accountTypes->map(fn ($type) => [
                 'id' => $type->id,
                 'name' => $type->getName(),
