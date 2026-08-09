@@ -21,8 +21,11 @@ const props = defineProps({
     noRowHeaders: Number,
     title: String,
     currencyName: String,
+    mainFunctionalCurrency: String,
     contractCode: String,
     letterOfGuaranteeModelData: Object,
+    incomingTransferModelData: Object,
+    crossCurrencyNotes: Object,
     cashflowReport: Object, // null | { id, name, is_contract }
     cashProjections: Object, // { in: [{id,name,amounts}], out: [...] }
     urls: Object,
@@ -30,6 +33,26 @@ const props = defineProps({
 
 const weekKeys = computed(() => Object.keys(props.weeks || {}));
 const isContract = computed(() => !!props.contractCode);
+
+/* ── Display-only currency tab label ─────────────────────────────
+   A Contract Cash Flow Report is always fully converted into the
+   company's main functional currency under the hood, even when the
+   contract itself is in a foreign currency (e.g. a USD contract's
+   report is entirely EGP-equivalent figures) — see
+   CashFlowContractDetailPeriodBatchLoader, which unconditionally
+   converts every movement via the FX rate at each date. The tab used
+   to just show the raw currency code (e.g. "USD"), which read as if
+   the numbers underneath were real USD amounts. This only changes
+   what's shown on the tab button — `c` itself (used as the lookup
+   key into finalResult/pastDueCustomerInvoices/etc., and sent back
+   to the server on export and on due-invoice adjustments) is
+   untouched, so no server-side filtering logic is affected. */
+function tabLabel(currency) {
+    if (isContract.value && props.mainFunctionalCurrency && currency !== props.mainFunctionalCurrency) {
+        return `${currency} (${props.mainFunctionalCurrency} Equivalent)`;
+    }
+    return currency;
+}
 
 /* ── Row-name constants that never get an expandable breakdown and
    are computed on the fly (accumulated from every other row), not
@@ -42,6 +65,13 @@ const NO_SUBROW_NAMES = new Set([
 const HIGHLIGHT_NAMES = new Set([
     'Total Cash Inflow', 'Total Cash Outflow', 'Total Cash',
     'Net Cash (+/-)', 'Accumulated Net Cash (+/-)',
+]);
+// Rows where an invoice issued in the currently-viewed currency can have
+// been collected in a different currency. On those rows a per-cell "ℹ️"
+// marker surfaces the informational, non-cash-additive equivalent so the
+// user isn't confused by an invoice appearing uncollected on its own tab.
+const CROSS_CURRENCY_ROW_NAMES = new Set([
+    'Checks Collected', 'Bank Deposits', 'Cash Collections', 'Incoming Transfers',
 ]);
 
 function sumAllRowsAtWeek(allTotals, weekKey) {
@@ -186,8 +216,18 @@ function buildSubRow(local, mainReportKey, parentKeyName, subKey, customerDue, s
         currentSubTotal += currentValue;
         return currentValue;
     });
-    const lgBreakdown = parentKeyName === 'Cancelled LGs Cash Cover'
-        ? weekKeys.value.map(weekKey => props.letterOfGuaranteeModelData?.[subKey]?.weeks?.[weekKey] || [])
+    const lgBreakdown = (parentKeyName === 'Cancelled LGs Cash Cover' || parentKeyName === 'Issued LG Cash Cover')
+        ? weekKeys.value.map(weekKey =>
+            // New shape (Company Cash Flow): namespaced by row name first,
+            // so Cancelled and Issued don't collide on the same lgType.
+            // Falls back to the old flat shape (still used by Contract Cash
+            // Flow, untouched) so that report keeps working unchanged.
+            props.letterOfGuaranteeModelData?.[parentKeyName]?.[subKey]?.weeks?.[weekKey]
+            ?? props.letterOfGuaranteeModelData?.[subKey]?.weeks?.[weekKey]
+            ?? [])
+        : null;
+    const incomingTransferBreakdown = parentKeyName === 'Incoming Transfers'
+        ? weekKeys.value.map(weekKey => props.incomingTransferModelData?.[subKey]?.weeks?.[weekKey] || [])
         : null;
     return {
         key: subKey,
@@ -195,8 +235,8 @@ function buildSubRow(local, mainReportKey, parentKeyName, subKey, customerDue, s
         cells,
         total: currentSubTotal,
         lgBreakdown,
+        incomingTransferBreakdown,
         checksCollectedInfo: subData.checks_collected_info || null,
-        incomingTransferInfo: subData.incoming_transfer_info || null,
     };
 }
 
@@ -391,7 +431,7 @@ async function submitLoanInstallmentModal() {
         week_start_date: {},
     };
     for (const row of rows) {
-        payload.invoice_amount[row.id] = row.remaining;
+        payload.invoice_amount[row.id] = row.remaining_in_main_currency ?? row.remaining;
         payload.percentage[row.id] = loanInstallmentForm[row.id]?.percentage ?? 100;
         payload.week_start_date[row.id] = loanInstallmentForm[row.id]?.week_start_date ?? '';
     }
@@ -401,20 +441,28 @@ async function submitLoanInstallmentModal() {
     }
 }
 
-/* ── LG breakdown popover (Cancelled LGs Cash Cover sub-rows) ───── */
-const lgBreakdownModal = ref(null); // { label, weekKey, items }
-function openLgBreakdown(subKey, weekKey, items) {
-    lgBreakdownModal.value = { label: subKey, weekKey, items: items || [] };
+/* ── Breakdown popover (Cancelled LGs Cash Cover + Incoming Transfers) ── */
+const lgBreakdownModal = ref(null); // { label, weekKey, items, type: 'lg' | 'incoming_transfer' }
+function openLgBreakdown(subKey, weekKey, items, type = 'lg') {
+    lgBreakdownModal.value = { label: subKey, weekKey, items: items || [], type };
+}
+
+/* ── Cross-currency collection notes (informational only, not part of
+   any tab's totals) ─────────────────────────────────────────────── */
+function crossCurrencyNotesFor(rowName, weekKey) {
+    return props.crossCurrencyNotes?.[rowName]?.weeks?.[weekKey] || [];
+}
+function crossCurrencySumFor(rowName, weekKey) {
+    return crossCurrencyNotesFor(rowName, weekKey).reduce((s, item) => s + (Number(item.amount_in_invoice_currency) || 0), 0);
+}
+const crossCurrencyModal = ref(null); // { label, items }
+function openCrossCurrencyNotes(rowName, weekKey) {
+    crossCurrencyModal.value = { label: rowName, items: crossCurrencyNotesFor(rowName, weekKey) };
 }
 
 const checksCollectedModal = ref(null);
 function openChecksCollectedModal(subRow) {
     checksCollectedModal.value = subRow?.checksCollectedInfo || null;
-}
-
-const incomingTransferModal = ref(null);
-function openIncomingTransferModal(subRow) {
-    incomingTransferModal.value = subRow?.incomingTransferInfo || null;
 }
 
 /* ── Projected Cash In / Out repeater tabs ───────────────────────
@@ -496,7 +544,7 @@ function saveProjectionTab(type) {
                     @click="activeTab = c"
                     class="px-4 py-2 text-sm font-medium border-b-2 -mb-px"
                     :class="activeTab === c ? 'border-current cvr-text-primary' : 'border-transparent cvr-text-muted'">
-                    {{ c }}
+                    {{ tabLabel(c) }}
                 </button>
                 <button @click="activeTab = 'projection-in'"
                     class="px-4 py-2 text-sm font-medium border-b-2 -mb-px"
@@ -540,7 +588,13 @@ function saveProjectionTab(type) {
                                     <button v-if="row.name === 'Suppliers Past Due Invoices'" @click.stop="openDueInvoiceModal('SupplierInvoice')" class="cvr-btn-secondary px-2 py-0.5 rounded border text-xs ml-2">View</button>
                                     <button v-if="row.name === 'Loan Past Due Installments'" @click.stop="openLoanInstallmentModal()" class="cvr-btn-secondary px-2 py-0.5 rounded border text-xs ml-2">View</button>
                                 </td>
-                                <td v-for="(cell, i) in row.cells" :key="i" class="px-2 py-2 text-center cvr-num whitespace-nowrap">{{ fmt(cell) }}</td>
+                                <td v-for="(cell, i) in row.cells" :key="i" class="px-2 py-2 text-center cvr-num whitespace-nowrap">
+                                    {{ fmt(cell) }}
+                                    <i v-if="CROSS_CURRENCY_ROW_NAMES.has(row.name) && crossCurrencyNotesFor(row.name, weekKeys[i]).length"
+                                        @click.stop="openCrossCurrencyNotes(row.name, weekKeys[i])"
+                                        class="ml-1 cursor-pointer" style="opacity:0.7"
+                                        :title="`Also collected in a different currency: ${fmt(crossCurrencySumFor(row.name, weekKeys[i]))} ${currencyName}-equivalent — see details`">ℹ️</i>
+                                </td>
                                 <td class="px-2 py-2 text-center cvr-num font-semibold whitespace-nowrap">{{ fmt(row.total) }}</td>
                             </tr>
                             <tr v-if="row.hasSubRows && expandedRows.has(row.key)" v-for="sub in row.subRows" :key="row.key + ':' + sub.key" class="cvr-subrow">
@@ -555,20 +609,14 @@ function saveProjectionTab(type) {
                                     >
                                         i
                                     </button>
-                                    <button
-                                        v-if="row.name === 'Incoming Transfers' && sub.incomingTransferInfo"
-                                        @click.stop="openIncomingTransferModal(sub)"
-                                        type="button"
-                                        class="ml-1 text-xs cvr-btn-secondary px-1.5 py-0.5 rounded border"
-                                        title="Details"
-                                    >
-                                        i
-                                    </button>
                                 </td>
                                 <td v-for="(cell, i) in sub.cells" :key="i" class="px-2 py-2 text-center cvr-num whitespace-nowrap text-xs">
                                     {{ fmt(cell) }}
-                                    <i v-if="row.name === 'Cancelled LGs Cash Cover' && cell"
-                                        @click.stop="openLgBreakdown(sub.key, weekKeys[i], sub.lgBreakdown?.[i])"
+                                    <i v-if="(row.name === 'Cancelled LGs Cash Cover' || row.name === 'Issued LG Cash Cover') && cell"
+                                        @click.stop="openLgBreakdown(sub.label, weekKeys[i], sub.lgBreakdown?.[i])"
+                                        class="ml-1 cursor-pointer" title="Breakdown">ℹ️</i>
+                                    <i v-if="row.name === 'Incoming Transfers' && cell"
+                                        @click.stop="openLgBreakdown(sub.label, weekKeys[i], sub.incomingTransferBreakdown?.[i], 'incoming_transfer')"
                                         class="ml-1 cursor-pointer" title="Breakdown">ℹ️</i>
                                 </td>
                                 <td class="px-2 py-2 text-center cvr-num whitespace-nowrap text-xs">{{ fmt(sub.total) }}</td>
@@ -653,7 +701,8 @@ function saveProjectionTab(type) {
                             <tr>
                                 <th class="px-2 py-2 text-left">{{ dueInvoiceModal.invoiceType === 'CustomerInvoice' ? 'Customer Name' : 'Supplier Name' }}</th>
                                 <th class="px-2 py-2 text-left">Invoice No.</th>
-                                <th class="px-2 py-2 text-right">Net Balance</th>
+                                <th class="px-2 py-2 text-left">Currency</th>
+                                <th class="px-2 py-2 text-right">Net Balance{{ activeTab === mainFunctionalCurrency ? ' (in ' + mainFunctionalCurrency + ')' : '' }}</th>
                                 <th class="px-2 py-2 text-left">Due Date</th>
                                 <th class="px-2 py-2 text-center">Collection %</th>
                                 <th class="px-2 py-2 text-left">Collection Week</th>
@@ -663,6 +712,7 @@ function saveProjectionTab(type) {
                             <tr v-for="row in dueInvoiceModal.rows" :key="row.id" class="cvr-table-row">
                                 <td class="px-2 py-2">{{ row.customer_name || row.supplier_name }}</td>
                                 <td class="px-2 py-2">{{ row.invoice_number }}</td>
+                                <td class="px-2 py-2">{{ row.currency }}</td>
                                 <td class="px-2 py-2 text-right cvr-num">{{ fmt(row.net_balance_in_main_currency) }}</td>
                                 <td class="px-2 py-2">{{ row.invoice_due_date }}</td>
                                 <td class="px-2 py-2">
@@ -694,7 +744,8 @@ function saveProjectionTab(type) {
                         <thead class="cvr-table-head">
                             <tr>
                                 <th class="px-2 py-2 text-left">Name</th>
-                                <th class="px-2 py-2 text-right">Remaining</th>
+                                <th class="px-2 py-2 text-left">Currency</th>
+                                <th class="px-2 py-2 text-right">Remaining{{ activeTab === mainFunctionalCurrency ? ' (in ' + mainFunctionalCurrency + ')' : '' }}</th>
                                 <th class="px-2 py-2 text-left">Due Date</th>
                                 <th class="px-2 py-2 text-center">Collection %</th>
                                 <th class="px-2 py-2 text-left">Collection Week</th>
@@ -703,7 +754,8 @@ function saveProjectionTab(type) {
                         <tbody>
                             <tr v-for="row in pastDueInstallments" :key="row.id" class="cvr-table-row">
                                 <td class="px-2 py-2">{{ row.loan_name }}</td>
-                                <td class="px-2 py-2 text-right cvr-num">{{ fmt(row.remaining) }}</td>
+                                <td class="px-2 py-2">{{ row.currency }}</td>
+                                <td class="px-2 py-2 text-right cvr-num">{{ fmt(row.remaining_in_main_currency ?? row.remaining) }}</td>
                                 <td class="px-2 py-2">{{ row.date }}</td>
                                 <td class="px-2 py-2">
                                     <input v-model.number="loanInstallmentForm[row.id].percentage" type="number" step="any" class="cvr-input px-2 py-1 rounded w-20 text-center" />
@@ -728,16 +780,27 @@ function saveProjectionTab(type) {
 
             <!-- LG Breakdown modal -->
             <div v-if="lgBreakdownModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                <div class="cvr-modal rounded-lg p-6 w-full max-w-lg">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-4xl">
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">Breakdown [{{ lgBreakdownModal.label }}]</h2>
                     <table class="min-w-full text-sm mb-4">
                         <thead class="cvr-table-head">
-                            <tr><th class="px-2 py-2 text-left">Name</th><th class="px-2 py-2 text-left">LG Code</th><th class="px-2 py-2 text-right">Amount</th></tr>
+                            <tr v-if="lgBreakdownModal.type === 'incoming_transfer'">
+                                <th class="px-2 py-2 text-left">Bank Name</th><th class="px-2 py-2 text-left">Date</th><th class="px-2 py-2 text-right">Amount</th>
+                            </tr>
+                            <tr v-else>
+                                <th class="px-2 py-2 text-left">Name</th><th class="px-2 py-2 text-left">LG Code</th><th class="px-2 py-2 text-right">Amount</th>
+                            </tr>
                         </thead>
                         <tbody>
                             <tr v-for="(item, i) in lgBreakdownModal.items" :key="i" class="cvr-table-row">
-                                <td class="px-2 py-2">{{ item.name }}</td>
-                                <td class="px-2 py-2">{{ item.lg_code }}</td>
+                                <template v-if="lgBreakdownModal.type === 'incoming_transfer'">
+                                    <td class="px-2 py-2">{{ item.bank_name || '—' }}</td>
+                                    <td class="px-2 py-2">{{ item.movement_date }}</td>
+                                </template>
+                                <template v-else>
+                                    <td class="px-2 py-2">{{ item.name }}</td>
+                                    <td class="px-2 py-2">{{ item.lg_code }}</td>
+                                </template>
                                 <td class="px-2 py-2 text-right cvr-num">{{ fmt(item.amount) }}</td>
                             </tr>
                             <tr v-if="!lgBreakdownModal.items.length"><td colspan="3" class="px-2 py-4 text-center cvr-text-muted">No breakdown entries.</td></tr>
@@ -745,6 +808,36 @@ function saveProjectionTab(type) {
                     </table>
                     <div class="flex justify-end">
                         <button @click="lgBreakdownModal = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cross-currency collection notes (informational only) -->
+            <div v-if="crossCurrencyModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-4xl">
+                    <h2 class="text-lg font-medium cvr-text-primary mb-2">Collected in a Different Currency [{{ crossCurrencyModal.label }}]</h2>
+                    <p class="text-xs cvr-text-muted mb-4">These amounts are shown for reference only and are not included in this tab's totals — the cash itself is counted under the currency it was actually collected in.</p>
+                    <table class="min-w-full text-sm mb-4">
+                        <thead class="cvr-table-head">
+                            <tr>
+                                <th class="px-2 py-2 text-left">Name</th>
+                                <th class="px-2 py-2 text-left">Date</th>
+                                <th class="px-2 py-2 text-right">{{ currencyName }}-Equivalent</th>
+                                <th class="px-2 py-2 text-right">Actually Collected</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="(item, i) in crossCurrencyModal.items" :key="i" class="cvr-table-row">
+                                <td class="px-2 py-2">{{ item.partner_name }}</td>
+                                <td class="px-2 py-2">{{ item.movement_date }}</td>
+                                <td class="px-2 py-2 text-right cvr-num">{{ fmt(item.amount_in_invoice_currency) }}</td>
+                                <td class="px-2 py-2 text-right cvr-num">{{ fmt(item.collected_amount) }} {{ item.collected_currency }}</td>
+                            </tr>
+                            <tr v-if="!crossCurrencyModal.items.length"><td colspan="4" class="px-2 py-4 text-center cvr-text-muted">No entries.</td></tr>
+                        </tbody>
+                    </table>
+                    <div class="flex justify-end">
+                        <button @click="crossCurrencyModal = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
                     </div>
                 </div>
             </div>
@@ -779,35 +872,7 @@ function saveProjectionTab(type) {
                 </div>
             </div>
 
-            <!-- Incoming Transfers modal -->
-            <div v-if="incomingTransferModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                <div class="cvr-modal rounded-lg p-6 w-full max-w-lg">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Incoming Transfer Details</h2>
-                    <table class="min-w-full text-sm mb-4">
-                        <tbody>
-                            <tr class="cvr-table-row">
-                                <td class="px-2 py-2 font-semibold">Customer Name</td>
-                                <td class="px-2 py-2">{{ incomingTransferModal.customer_name }}</td>
-                            </tr>
-                            <tr class="cvr-table-row">
-                                <td class="px-2 py-2 font-semibold">Bank Name</td>
-                                <td class="px-2 py-2">{{ incomingTransferModal.bank_name || '—' }}</td>
-                            </tr>
-                            <tr class="cvr-table-row">
-                                <td class="px-2 py-2 font-semibold">Transfer Date</td>
-                                <td class="px-2 py-2">{{ incomingTransferModal.movement_date }}</td>
-                            </tr>
-                            <tr class="cvr-table-row">
-                                <td class="px-2 py-2 font-semibold">Amount</td>
-                                <td class="px-2 py-2 text-right cvr-num">{{ fmt(incomingTransferModal.amount) }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <div class="flex justify-end">
-                        <button @click="incomingTransferModal = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                    </div>
-                </div>
-            </div>
+            <!-- Incoming Transfers breakdown reuses the Breakdown modal above -->
         </div>
     </AppLayout>
 </template>

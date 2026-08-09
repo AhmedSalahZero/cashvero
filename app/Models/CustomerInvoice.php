@@ -167,6 +167,20 @@ class CustomerInvoice extends Model implements IInvoice
 	const ODOO_COLLETED_OR_PAID_AMOUNT_IN_MAIN_CURRENCY = 'odoo_collected_amount_in_main_currency';
 	const EXCEL_COLLETED_OR_PAID_AMOUNT = 'excel_collected_amount';
 	const EXCEL_COLLETED_OR_PAID_AMOUNT_IN_MAIN_CURRENCY = 'excel_collected_amount_in_main_currency';
+
+	/**
+	 * The "Excel Collected Amount" upload template column was renamed
+	 * to "Previous Collection" (view-only change, tables_fields.view_name).
+	 * This keeps files/templates that still use the old header text
+	 * importing correctly — App\Imports\ImportData::resolveImportFieldValue()
+	 * checks this before giving up on a column.
+	 */
+	public static function getImportHeaderAliases(): array
+	{
+		return [
+			self::EXCEL_COLLETED_OR_PAID_AMOUNT => ['Excel Collected Amount', __('Excel Collected Amount')],
+		];
+	}
 	const COLLETED_OR_PAID_AMOUNT_IN_MAIN_CURRENCY = 'collected_amount_in_main_currency';
 	const PARTIALLY_COLLECTED_OR_PAID_AND_PAST_DUE = 'partially_collected_and_past_due';
 	const MONEY_MODEL_NAME = 'MoneyReceived';
@@ -432,14 +446,22 @@ class CustomerInvoice extends Model implements IInvoice
 		->get()
 		->unique('currency')->pluck('currency','currency')->toArray();
 	}
-	public static function getCustomerInvoicesUnderCollectionAtDatesForContracts(array &$result  , int $companyId   , ?string $contractCode , array $datesWithWeekNumber , string $endDate ):void
+	public static function getCustomerInvoicesUnderCollectionAtDatesForContracts(array &$result  , int $companyId   , ?string $contractCode , array $datesWithWeekNumber , string $endDate , ?string $currency = null , ?string $mainFunctionalCurrency = null ):void
 	{
 		$totalCashInFlowKey = __('Total Cash Inflow');
 		$key = __('Customers Invoices') ;
+		// Company-wide + main functional currency tab: keep every currency
+		// (net_balance_in_main_currency already carries the converted
+		// equivalent). Any specific foreign-currency tab, or a single-
+		// currency contract, narrows down to that currency's own invoices.
+		$showAllCurrenciesConverted = ! $contractCode && $mainFunctionalCurrency !== null && $currency === $mainFunctionalCurrency;
 		$items = self::
 		where('company_id',$companyId)
 		->when($contractCode,function($builder) use ($contractCode){
 			$builder->where('contract_code',$contractCode);
+		})
+		->when(! $showAllCurrenciesConverted && $currency !== null, function($builder) use ($currency){
+			$builder->where('currency',$currency);
 		})
 		->where('net_balance','>',0)
 		->
@@ -460,18 +482,24 @@ class CustomerInvoice extends Model implements IInvoice
 			}
 	
 	}
-	public static function getCashAndBankBalanceAtDate(array &$result  ,$foreignExchangeRates , $mainFunctionalCurrency , string $startDate , string $currentWeekYear    , $companyId = null):void
+	public static function getCashAndBankBalanceAtDate(array &$result  ,$foreignExchangeRates , $mainFunctionalCurrency , string $startDate , string $currentWeekYear    , $companyId = null , ?string $currency = null):void
 	{
 		/**
 		 * 
 		 * * في حالة لو مرر العقد فا مش محتاجين عمله لان العقد الواحد مربوط بعملة واحدة
 		 */
 		$totalCashInFlowKey = __('Total Cash Inflow');
+		// Main functional currency tab -> every currency's balance, each
+		// converted below. A specific foreign-currency tab -> that
+		// currency's own balances only, unconverted.
+		$showAllCurrenciesConverted = $currency === null || $currency === $mainFunctionalCurrency;
 		
 		$currentTypeText = 'Cash & Banks Balance';
 		$rows = DB::table('cash_in_safe_statements')
 		->where('cash_in_safe_statements.company_id',$companyId)
-		// ->where('cash_in_safe_statements.currency',$currency)
+		->when(! $showAllCurrenciesConverted, function($q) use ($currency) {
+			$q->where('cash_in_safe_statements.currency',$currency);
+		})
 		->where('cash_in_safe_statements.date','<=',$startDate)
 		->join('branch','branch.id','=','cash_in_safe_statements.branch_id')
 		->orderByRaw('cash_in_safe_statements.date desc , cash_in_safe_statements.id desc')
@@ -486,7 +514,7 @@ class CustomerInvoice extends Model implements IInvoice
 			$currentCurrency = $row->currency;
 			$exchangeRate  = ForeignExchangeRate::getExchangeRateAt($currentCurrency,$mainFunctionalCurrency,$date,$companyId,$foreignExchangeRates);
 			$invoiceNumber =   $row->name  ;
-			$amountInExchangeRate = $row->received_amount * $exchangeRate;
+			$amountInExchangeRate = $showAllCurrenciesConverted ? $row->received_amount * $exchangeRate : (float) $row->received_amount;
 			 $result['customers'][$currentTypeText][$invoiceNumber]['weeks'][$currentWeekYear] = isset($result['customers'][$currentTypeText][$invoiceNumber]['weeks'][$currentWeekYear]) ? $result['customers'][$currentTypeText][$invoiceNumber]['weeks'][$currentWeekYear]+  $amountInExchangeRate :$amountInExchangeRate;
 			$result['customers'][$currentTypeText][$invoiceNumber]['total'] = isset($result['customers'][$currentTypeText][$invoiceNumber]['total']) ? $result['customers'][$currentTypeText][$invoiceNumber]['total']  + $amountInExchangeRate : $amountInExchangeRate;
 			$currentTotal =$amountInExchangeRate;
@@ -496,7 +524,9 @@ class CustomerInvoice extends Model implements IInvoice
 		
 		$rows = DB::table('current_account_bank_statements')
 		->where('current_account_bank_statements.company_id',$companyId)
-		// ->where('financial_institution_accounts.currency',$currency)
+		->when(! $showAllCurrenciesConverted, function($q) use ($currency) {
+			$q->where('financial_institution_accounts.currency',$currency);
+		})
 		->where('current_account_bank_statements.date','<=',$startDate)
 		->join('financial_institution_accounts','financial_institution_accounts.id','=','current_account_bank_statements.financial_institution_account_id')
 		->join('financial_institutions','financial_institutions.id','=','financial_institution_accounts.financial_institution_id')
@@ -516,7 +546,7 @@ class CustomerInvoice extends Model implements IInvoice
 			$exchangeRate  = ForeignExchangeRate::getExchangeRateAt($currentCurrency,$mainFunctionalCurrency,$date,$companyId,$foreignExchangeRates);
 			
 			$invoiceNumber =   $row->name . ' [ ' . $row->account_number . ' ]' . ' [ ' .  $currentCurrency .' ]'   ;
-			$amountInExchangeRate = $row->received_amount*$exchangeRate ; 
+			$amountInExchangeRate = $showAllCurrenciesConverted ? $row->received_amount*$exchangeRate : (float) $row->received_amount ; 
 			 $result['customers'][$currentTypeText][$invoiceNumber]['weeks'][$currentWeekYear] = isset($result['customers'][$currentTypeText][$invoiceNumber]['weeks'][$currentWeekYear]) ? $result['customers'][$currentTypeText][$invoiceNumber]['weeks'][$currentWeekYear]+  $amountInExchangeRate :$amountInExchangeRate;
 			$result['customers'][$currentTypeText][$invoiceNumber]['total'] = isset($result['customers'][$currentTypeText][$invoiceNumber]['total']) ? $result['customers'][$currentTypeText][$invoiceNumber]['total']  + $amountInExchangeRate : $amountInExchangeRate;
 			$currentTotal = $amountInExchangeRate;
@@ -638,11 +668,18 @@ class CustomerInvoice extends Model implements IInvoice
 		 */
 		$totalCashInFlowKey = __('Total Cash Inflow');
 		$currentTypeText = 'Forecasted Project Collection';
+		// Company-wide + main functional currency tab -> include contracts in
+		// every currency (each gets converted below via its own currency's
+		// FX rate). Any specific foreign-currency tab, or a single contract,
+		// keeps the original same-currency-only filter.
+		$showAllCurrenciesConverted = ! $contractId && $mainFunctionalCurrency !== null && $currency === $mainFunctionalCurrency;
 		
 		$contracts = Contract::where('company_id',$companyId)
 		// ->where('end_date','>=',now()->format('Y-m-d'))
 		->where('end_date','<=',$endDate)
-		->where('currency',$currency)
+		->when(! $showAllCurrenciesConverted, function($query) use ($currency){
+			$query->where('currency',$currency);
+		})
 		->when($contractId,function($query) use ($contractId){
 			$query->where('id',$contractId);
 		})
@@ -683,7 +720,7 @@ class CustomerInvoice extends Model implements IInvoice
 				$contractName = $contract->getName();
 				$soNumber = $soArr['so_number']; 
 				$customerName = $contract->getClientName();
-				$currentInvoiceAmount = DB::table('customer_invoices')->where('company_id',$companyId)->where('currency',$currency)->where('sales_order_number',$soNumber)->where('contract_code',$contractCode)->sum('invoice_amount');
+				$currentInvoiceAmount = DB::table('customer_invoices')->where('company_id',$companyId)->where('currency',$contract->getCurrency())->where('sales_order_number',$soNumber)->where('contract_code',$contractCode)->sum('invoice_amount');
 				$salesOrderDownPayments = DB::table('down_payment_settlements')->where('company_id',$companyId)->where('sales_order_id',$soId)->where('contract_id',$contractId)->sum('down_payment_amount');
 				$salesOrderNetPayments = $salesOrderDownPayments - $currentInvoiceAmount;
 				

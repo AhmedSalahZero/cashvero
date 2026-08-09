@@ -772,11 +772,32 @@ class CustomerInvoiceDashboardController extends Controller
 					->where($letterOfFacilityTableName.'.financial_institution_id', '=', $financialInstitutionBankId)
 					->orderBy('contract_end_date', 'desc')
 					->get();
-					foreach($lastLetterOfGuaranteeOrCreditFacilities as $currentLastLetterOfGuaranteeOrCreditFacility){
-						foreach($lgOrLcTypes as $currentLgType => $currentLgTitle){
-							$statementTableFullClassName::getDashboardOutstandingTableFormattedData($tablesData,$company,$currencyName , $date ,$financialInstitutionBankId,$currentLgType,$currentFinancialInstitution->getName(),$currentLastLetterOfGuaranteeOrCreditFacility,$source);
+
+					// ⚠️ Bug fix (LC only — see the 'lg' branch after this
+					// per-institution loop for how the LG table is built
+					// instead): the table used to be built from the SAME
+					// contract_end_date >= $date query as the KPI totals
+					// above, which silently dropped any facility whose
+					// contract had already expired. Per explicit product
+					// decision, the LC table lists BOTH Running and Expired
+					// facilities (with a Status column to tell them apart)
+					// — the KPI cards above (Limit/Room/Outstanding/Cash
+					// Cover totals) intentionally keep using only the
+					// active-facility query above, unchanged.
+					if ($currentLgOrLcType === 'lc') {
+						$allLetterOfGuaranteeOrCreditFacilitiesForTable = DB::table($letterOfFacilityTableName)
+						->where($letterOfFacilityTableName.'.company_id', $company->id)
+						->where('currency', $currencyName)
+						->where($letterOfFacilityTableName.'.financial_institution_id', '=', $financialInstitutionBankId)
+						->orderBy('contract_end_date', 'desc')
+						->get();
+						foreach($allLetterOfGuaranteeOrCreditFacilitiesForTable as $currentFacilityForTable){
+							$currentFacilityStatus = $currentFacilityForTable->contract_end_date >= $date ? __('Running') : __('Expired');
+							foreach($lgOrLcTypes as $currentLgType => $currentLgTitle){
+								$statementTableFullClassName::getDashboardOutstandingTableFormattedData($tablesData,$company,$currencyName , $date ,$financialInstitutionBankId,$currentLgType,$currentFinancialInstitution->getName(),$currentFacilityForTable,$source,$currentFacilityStatus);
+							}
+							
 						}
-						
 					}
 						
 						foreach($lastLetterOfGuaranteeOrCreditFacilities as $currentLastLetterOfGuaranteeOrCreditFacility){
@@ -807,6 +828,89 @@ class CustomerInvoiceDashboardController extends Controller
 				$reports[$currentLgOrLcType][$currencyName]['outstanding_balance'] = $total[$currentLgOrLcType][$currencyName]['outstanding_balance'] ?? 0 ;
 				$reports[$currentLgOrLcType][$currencyName]['room'] = $total[$currentLgOrLcType][$currencyName]['room'] ?? 0 ;
 				$reports[$currentLgOrLcType][$currencyName]['cash_cover'] = $total[$currentLgOrLcType][$currencyName]['cash_cover'] ?? 0 ;
+
+				// "Limit" KPI card breakdown — clicking it opens a per-bank
+				// table (Limit / Outstanding / Room / Cash Cover), one row
+				// per bank, plus a totals row. Reuses the exact same
+				// per-facility figures already computed just above into
+				// $details (active facilities only, LG-Facility-source-only
+				// outstanding via getTotalOutstandingBalanceForAllTypes) —
+				// just grouped by bank name instead of listed per facility,
+				// so the totals here always foot to the same Limit/
+				// Outstanding/Room/Cash Cover KPI values shown on the cards.
+				$limitDetailsByBank = [];
+				foreach ($details[$currencyName][$currentLgOrLcType] ?? [] as $facilityRow) {
+					$bankName = $facilityRow['financial_institution_name'];
+					if (! isset($limitDetailsByBank[$bankName])) {
+						$limitDetailsByBank[$bankName] = [
+							'financial_institution_name' => $bankName,
+							'limit' => 0.0,
+							'outstanding' => 0.0,
+							'room' => 0.0,
+							'cash_cover' => 0.0,
+						];
+					}
+					$limitDetailsByBank[$bankName]['limit'] += $facilityRow['limit'];
+					$limitDetailsByBank[$bankName]['outstanding'] += $facilityRow['outstanding_balance'];
+					$limitDetailsByBank[$bankName]['room'] += $facilityRow['room'];
+					$limitDetailsByBank[$bankName]['cash_cover'] += $facilityRow['cash_cover'];
+				}
+				$reports[$currentLgOrLcType][$currencyName]['limitDetailsByBank'] = array_values($limitDetailsByBank);
+
+				// LG table — per explicit product decision, this is built
+				// entirely differently from LC's: one row per (Bank, LG
+				// Type, Source, Status), listing every individual LG
+				// issuance (Running or Expired, never Cancelled) grouped
+				// together with a count, rather than one row per facility.
+				// 'Outstanding' here means the LGs' own face amount
+				// (lg_amount) — NOT the shared facility ledger balance used
+				// by the KPI cards above (getTotalOutstandingBalanceForAllTypes) —
+				// per explicit clarification, since lg_amount is a real,
+				// per-issuance figure the ledger can't be split into by
+				// individual LG status. Cash Cover is likewise each LG's
+				// own cash_cover_amount, summed per group. Status reuses
+				// LetterOfGuaranteeIssuance::getStatus() — the exact same
+				// cancelled > expired (renewal_date passed) > running logic
+				// already used on the LG Index page — so this table's
+				// Running/Expired split matches what the person sees there.
+				if ($currentLgOrLcType === 'lg') {
+					// ⚠️ Bug fix: FinancialInstitution has no 'name_en' column
+					// of its own — the real bank name lives on the related
+					// Bank model via getName()/getBankName(). Plucking
+					// 'name_en' straight off financial_institutions rows
+					// returned null for every row, so this column showed
+					// blank for every LG. Building the lookup from getName()
+					// instead, same as CashDashboardService's bankNameResolver.
+					$financialInstitutionNamesById = $financialInstitutionBanks->mapWithKeys(fn ($fi) => [$fi->id => $fi->getName()]);
+					$lgGroups = [];
+					LetterOfGuaranteeIssuance::where('company_id', $company->id)
+						->where('lg_currency', $currencyName)
+						->whereIn('financial_institution_id', $selectedFinancialInstitutionBankIds)
+						->where('status', '!=', LetterOfGuaranteeIssuance::CANCELLED)
+						->get()
+						->each(function ($lg) use (&$lgGroups, $financialInstitutionNamesById, $lgTypes) {
+							$status = $lg->getStatus();
+							if ($status === LetterOfGuaranteeIssuance::CANCELLED) {
+								return;
+							}
+							$groupKey = $lg->financial_institution_id.'|'.$lg->lg_type.'|'.$lg->getSource().'|'.$status;
+							if (! isset($lgGroups[$groupKey])) {
+								$lgGroups[$groupKey] = [
+									'financial_institution_name' => $financialInstitutionNamesById->get($lg->financial_institution_id, __('N/A')),
+									'type' => $lgTypes[$lg->lg_type] ?? $lg->lg_type,
+									'source' => LetterOfGuaranteeIssuance::lgSources()[$lg->getSource()] ?? $lg->getSource(),
+									'status' => ucfirst($status),
+									'count' => 0,
+									'outstanding' => 0.0,
+									'cash_cover' => 0.0,
+								];
+							}
+							$lgGroups[$groupKey]['count']++;
+							$lgGroups[$groupKey]['outstanding'] += (float) $lg->lg_amount;
+							$lgGroups[$groupKey]['cash_cover'] += (float) $lg->cash_cover_amount;
+						});
+					$tablesData['lg_outstanding_for_table'][$currencyName] = array_values($lgGroups);
+				}
 			}
 			
 			

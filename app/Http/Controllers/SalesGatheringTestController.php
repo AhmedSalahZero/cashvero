@@ -554,7 +554,14 @@ class SalesGatheringTestController extends Controller
 				$type = 'business_sector_select';
 				$options = \App\Models\CashVeroBusinessSector::where('company_id', $company->id)->pluck('name', 'name');
 				$value = $model->business_sector ?? null;
-			} elseif (str_contains($label, 'Project Name')) {
+			} elseif (str_contains($label, 'Project Name') || str_contains($label, 'Contract Name')) {
+				// SupplierInvoice's cascading field is labeled 'Contract Name'
+				// (CustomerInvoice's equivalent is 'Project Name') — same
+				// project_select cascade (Partner → Contract →
+				// Sales/Purchase Order) applies to both; see
+				// getProjectsForCustomerOrSupplierController, which already
+				// returns whichever contracts belong to the selected
+				// customer/supplier regardless of what this field is called.
 				$type = 'project_select';
 				$submitField = 'contract_id';
 				$value = $currentContractId;
@@ -562,7 +569,15 @@ class SalesGatheringTestController extends Controller
 				$type = 'sales_order_select';
 				$submitField = 'sales_order_id';
 				$value = $currentSalesOrderId;
-			} elseif (str_contains($label, 'Purchase') && str_contains($label, 'Order')) {
+			} elseif (str_contains($label, 'Purchase') && str_contains($label, 'Order') && str_contains($label, 'Number')) {
+				// Bug fix: this used to only check for 'Purchase' + 'Order',
+				// which also matched the 'Purchases Order Date' label —
+				// turning it into a second dropdown bound to the same
+				// purchases_order_id field as the real Purchases Order
+				// Number dropdown (so it displayed the PO number instead of
+				// a date, and silently dropped the real date value on
+				// submit). Requiring 'Number' too, matching how 'Sales
+				// Order Number' is already matched by exact phrase above.
 				$type = 'purchase_order_select';
 				$submitField = 'purchases_order_id';
 				$value = $currentPurchaseOrderId;

@@ -34,9 +34,10 @@ final class CashFlowContractDetailPeriodBatchLoader
         string $periodStart,
         string $periodEnd,
         array $periodsByWeekKey,
+        array &$incomingTransferModelData = [],
     ): void {
-        self::applySettlementMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractCode, $periodStart, $periodEnd, $periodsByWeekKey);
-        self::applyDownPaymentMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractId, $periodStart, $periodEnd, $periodsByWeekKey);
+        self::applySettlementMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractCode, $periodStart, $periodEnd, $periodsByWeekKey, $incomingTransferModelData);
+        self::applyDownPaymentMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractId, $periodStart, $periodEnd, $periodsByWeekKey, $incomingTransferModelData);
         self::applySettlementAllocations($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractId, $customerId, $periodStart, $periodEnd, $periodsByWeekKey);
         self::applyMoneyPaymentMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractId, $periodStart, $periodEnd, $periodsByWeekKey);
         self::applyLetterOfGuaranteeMovements($result, $letterOfGuaranteeModelData, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractId, $periodStart, $periodEnd, $periodsByWeekKey);
@@ -53,14 +54,15 @@ final class CashFlowContractDetailPeriodBatchLoader
         string $periodStart,
         string $periodEnd,
         array $periodsByWeekKey,
+        array &$incomingTransferModelData,
     ): void {
         $totalCashInFlowKey = __('Total Cash Inflow');
 
         self::applyContractChequeSettlements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractCode, $periodStart, $periodEnd, $periodsByWeekKey, Cheque::UNDER_COLLECTION, 'cheques.expected_collection_date', __('Cheques Under Collection'), $totalCashInFlowKey);
         self::applyContractChequeSettlements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractCode, $periodStart, $periodEnd, $periodsByWeekKey, Cheque::COLLECTED, 'cheques.actual_collection_date', __('Checks Collected'), $totalCashInFlowKey);
-        self::applyContractMoneyReceivedByType($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractCode, $periodStart, $periodEnd, $periodsByWeekKey, MoneyReceived::INCOMING_TRANSFER, __('Incoming Transfers'), $totalCashInFlowKey);
-        self::applyContractMoneyReceivedByType($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractCode, $periodStart, $periodEnd, $periodsByWeekKey, MoneyReceived::CASH_IN_BANK, __('Bank Deposits'), $totalCashInFlowKey);
-        self::applyContractMoneyReceivedByType($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractCode, $periodStart, $periodEnd, $periodsByWeekKey, MoneyReceived::CASH_IN_SAFE, __('Cash Collections'), $totalCashInFlowKey);
+        self::applyContractMoneyReceivedByType($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractCode, $periodStart, $periodEnd, $periodsByWeekKey, MoneyReceived::INCOMING_TRANSFER, __('Incoming Transfers'), $totalCashInFlowKey, $incomingTransferModelData);
+        self::applyContractMoneyReceivedByType($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractCode, $periodStart, $periodEnd, $periodsByWeekKey, MoneyReceived::CASH_IN_BANK, __('Bank Deposits'), $totalCashInFlowKey, $incomingTransferModelData);
+        self::applyContractMoneyReceivedByType($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractCode, $periodStart, $periodEnd, $periodsByWeekKey, MoneyReceived::CASH_IN_SAFE, __('Cash Collections'), $totalCashInFlowKey, $incomingTransferModelData);
         self::applyContractChequeSettlements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractCode, $periodStart, $periodEnd, $periodsByWeekKey, Cheque::IN_SAFE, 'cheques.due_date', __('Cheques In Safe'), $totalCashInFlowKey);
     }
 
@@ -152,9 +154,10 @@ final class CashFlowContractDetailPeriodBatchLoader
         string $moneyType,
         string $resultKey,
         string $totalCashInFlowKey,
+        array &$incomingTransferModelData,
     ): void {
         if ($moneyType === MoneyReceived::INCOMING_TRANSFER) {
-            self::applyContractIncomingTransferMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractCode, $periodStart, $periodEnd, $periodsByWeekKey, $resultKey, $totalCashInFlowKey);
+            self::applyContractIncomingTransferMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractCode, $periodStart, $periodEnd, $periodsByWeekKey, $resultKey, $totalCashInFlowKey, $incomingTransferModelData);
 
             return;
         }
@@ -189,6 +192,7 @@ final class CashFlowContractDetailPeriodBatchLoader
         array $periodsByWeekKey,
         string $resultKey,
         string $totalCashInFlowKey,
+        array &$incomingTransferModelData,
     ): void {
         $settlementAmountExpression = self::settlementAmountInReceivingCurrencySql();
         $query = DB::table('money_received')
@@ -210,7 +214,7 @@ final class CashFlowContractDetailPeriodBatchLoader
             ->selectRaw('money_received.id as money_received_id, money_received.receiving_currency, money_received.receiving_date as movement_date, partners.name as customer_name, '.financial_institution_display_name_sql().', sum('.$settlementAmountExpression.') as received_amount');
 
         foreach ($query->cursor() as $row) {
-            self::accumulateContractIncomingTransferRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodsByWeekKey, $resultKey, $totalCashInFlowKey, $row);
+            self::accumulateContractIncomingTransferRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodsByWeekKey, $resultKey, $totalCashInFlowKey, $row, $incomingTransferModelData);
         }
     }
 
@@ -324,6 +328,7 @@ final class CashFlowContractDetailPeriodBatchLoader
         string $typeKey,
         string $totalCashInFlowKey,
         object $row,
+        array &$incomingTransferModelData,
     ): void {
         $weekKey = CashFlowWeekBucketer::resolveWeekKey((string) $row->movement_date, $periodsByWeekKey);
         if ($weekKey === null) {
@@ -347,12 +352,6 @@ final class CashFlowContractDetailPeriodBatchLoader
                 'weeks' => [],
                 'total' => 0,
                 'label' => $label,
-                'incoming_transfer_info' => [
-                    'customer_name' => $label,
-                    'bank_name' => (string) ($row->bank_name ?? __('N/A')),
-                    'amount' => $amount,
-                    'movement_date' => (string) $row->movement_date,
-                ],
             ];
         }
         if (! isset($result['customers'][$typeKey][$subRowKey]['weeks'][$weekKey])) {
@@ -369,6 +368,20 @@ final class CashFlowContractDetailPeriodBatchLoader
         $result['customers'][$typeKey][$subRowKey]['total'] += $amount;
         $result['customers'][$typeKey]['total'][$weekKey] += $amount;
         $result['customers'][$totalCashInFlowKey]['total'][$weekKey] += $amount;
+
+        // ⚠️ Bug fix: this row used to build a breakdown payload
+        // ('incoming_transfer_info') that nothing ever read — the "ℹ️"
+        // breakdown popup on this row reads from the separate
+        // incomingTransferModelData structure (same one the already-working
+        // Company Cash Flow report populates), keyed by this row's own key
+        // (one row per transfer here, vs. per-customer on the company
+        // report) and bucketed by week, matching what Result.vue's
+        // buildSubRow() actually looks up.
+        $incomingTransferModelData[$subRowKey]['weeks'][$weekKey][] = [
+            'amount' => $amount,
+            'bank_name' => (string) ($row->bank_name ?? __('N/A')),
+            'movement_date' => (string) $row->movement_date,
+        ];
     }
 
     private static function applyDownPaymentMovements(
@@ -380,6 +393,7 @@ final class CashFlowContractDetailPeriodBatchLoader
         string $periodStart,
         string $periodEnd,
         array $periodsByWeekKey,
+        array &$incomingTransferModelData,
     ): void {
         $configs = [
             [MoneyReceived::CHEQUE, 'expected_collection_date', Cheque::UNDER_COLLECTION],
@@ -394,6 +408,7 @@ final class CashFlowContractDetailPeriodBatchLoader
 
         foreach ($configs as [$moneyType, $dateColumn, $chequeStatus]) {
             $typeKey = self::moneyReceivedTypeLabel($moneyType, $chequeStatus);
+            $isIncomingTransfer = $moneyType === MoneyReceived::INCOMING_TRANSFER;
 
             $query = DB::table('money_received')
                 ->where('money_received.company_id', $companyId)
@@ -409,11 +424,49 @@ final class CashFlowContractDetailPeriodBatchLoader
                 ? 'cheques.'.$dateColumn
                 : 'money_received.'.$dateColumn;
 
-            $query->whereBetween($qualifiedDate, [$periodStart, $periodEnd])
-                ->selectRaw('money_received.received_amount, money_received.receiving_currency, '.$qualifiedDate.' as movement_date');
+            $query->whereBetween($qualifiedDate, [$periodStart, $periodEnd]);
+
+            // ⚠️ Bug fix: down-payment collections received by Incoming
+            // Transfer land in this same combined "Down Payment" row as
+            // every other down-payment collection method, but — unlike the
+            // regular (non-down-payment) Incoming Transfer rows above —
+            // this loop never joined the bank tables or recorded anything
+            // into incomingTransferModelData, so the "ℹ️" breakdown on this
+            // row always showed "No breakdown entries." even when the row
+            // had a real total. Joining the bank tables only for this one
+            // money type (the others have no meaningful "bank" to show)
+            // and recording each contributing transaction the same way
+            // accumulateContractIncomingTransferRow() already does.
+            if ($isIncomingTransfer) {
+                $query->leftJoin('incoming_transfers', 'incoming_transfers.money_received_id', '=', 'money_received.id')
+                    ->leftJoin('financial_institutions', 'financial_institutions.id', '=', 'incoming_transfers.receiving_bank_id')
+                    ->leftJoin('banks', 'banks.id', '=', 'financial_institutions.bank_id')
+                    ->selectRaw('money_received.received_amount, money_received.receiving_currency, '.$qualifiedDate.' as movement_date, '.financial_institution_display_name_sql());
+            } else {
+                $query->selectRaw('money_received.received_amount, money_received.receiving_currency, '.$qualifiedDate.' as movement_date');
+            }
 
             foreach ($query->cursor() as $row) {
                 self::accumulateContractMoneyReceivedRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodsByWeekKey, $typeKey, $totalCashInFlowKey, $row, $label);
+
+                if ($isIncomingTransfer) {
+                    $weekKey = CashFlowWeekBucketer::resolveWeekKey((string) $row->movement_date, $periodsByWeekKey);
+                    if ($weekKey === null) {
+                        continue;
+                    }
+                    $exchangeRate = ForeignExchangeRate::getExchangeRateAt(
+                        (string) $row->receiving_currency,
+                        $mainFunctionalCurrency,
+                        (string) $row->movement_date,
+                        $companyId,
+                        $foreignExchangeRates,
+                    );
+                    $incomingTransferModelData[$label]['weeks'][$weekKey][] = [
+                        'amount' => (float) $row->received_amount * $exchangeRate,
+                        'bank_name' => (string) ($row->bank_name ?? __('N/A')),
+                        'movement_date' => (string) $row->movement_date,
+                    ];
+                }
             }
         }
     }
@@ -631,20 +684,34 @@ final class CashFlowContractDetailPeriodBatchLoader
             $result[$mainType][$subTypeFees]['total'][$weekKey] = ($result[$mainType][$subTypeFees]['total'][$weekKey] ?? 0) + $amount;
         }
 
-        $coverQuery = DB::table('letter_of_guarantee_cash_cover_statements')
+        // ⚠️ Bug fix: this used to be a single, unfiltered query that read
+        // the 'debit' column (money being LOCKED AWAY at issuance — an
+        // outflow) but mislabeled it 'Cancelled LGs Cash Cover' and placed
+        // it in the Cash IN section. It also never captured genuine
+        // cancellation refunds (the 'credit' column, type=for-cancellation)
+        // at all. Split into the two correct rows below, matching the
+        // already-correct Company Cash Flow logic
+        // (CashFlowCompanyPeriodBatchLoader::applyLetterOfGuaranteeMovements).
+
+        // "Cancelled LGs Cash Cover" (Cash In) — money returned when an LG
+        // is cancelled. Per explicit product decision, this includes LGs of
+        // EITHER issuance type (New Issuance and Opening Balance) — no
+        // category_name filter here, unlike the Issued row below.
+        $cancelledCoverQuery = DB::table('letter_of_guarantee_cash_cover_statements')
             ->join('letter_of_guarantee_issuances', 'letter_of_guarantee_issuances.id', '=', 'letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id')
             ->join('partners', 'partners.id', '=', 'letter_of_guarantee_issuances.partner_id')
-            ->where('letter_of_guarantee_cash_cover_statements.company_id', $companyId);
-        $coverQuery = LgCashCoverEffectiveDate::joinTo($coverQuery);
+            ->where('letter_of_guarantee_cash_cover_statements.company_id', $companyId)
+            ->where('letter_of_guarantee_cash_cover_statements.type', LetterOfGuaranteeIssuance::FOR_CANCELLATION)
+            ->where('letter_of_guarantee_issuances.contract_id', $contractId);
+        $cancelledCoverQuery = LgCashCoverEffectiveDate::joinTo($cancelledCoverQuery);
         $effectiveDateSql = LgCashCoverEffectiveDate::sql();
-        $coverRows = $coverQuery
+        $cancelledCoverRows = $cancelledCoverQuery
             ->whereBetween(DB::raw($effectiveDateSql), [$periodStart, $periodEnd])
             ->where('letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id', '>', 0)
-            ->where('letter_of_guarantee_issuances.contract_id', $contractId)
-            ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, letter_of_guarantee_cash_cover_statements.debit as total_amount, letter_of_guarantee_cash_cover_statements.currency as currency, '.$effectiveDateSql.' as movement_date, partners.name as partner_name, letter_of_guarantee_issuances.lg_code as lg_code')
+            ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, letter_of_guarantee_cash_cover_statements.credit as total_amount, letter_of_guarantee_cash_cover_statements.currency as currency, '.$effectiveDateSql.' as movement_date, partners.name as partner_name, letter_of_guarantee_issuances.lg_code as lg_code')
             ->get();
 
-        foreach ($coverRows as $row) {
+        foreach ($cancelledCoverRows as $row) {
             $weekKey = CashFlowWeekBucketer::resolveWeekKey((string) $row->movement_date, $periodsByWeekKey);
             if ($weekKey === null) {
                 continue;
@@ -668,7 +735,55 @@ final class CashFlowContractDetailPeriodBatchLoader
             $result[$inflowMainType][$subTypeCover]['total'][$weekKey] = ($result[$inflowMainType][$subTypeCover]['total'][$weekKey] ?? 0) + $amount;
             $result['customers'][$totalCashInFlowKey]['total'][$weekKey] = ($result['customers'][$totalCashInFlowKey]['total'][$weekKey] ?? 0) + $amount;
 
-            $letterOfGuaranteeModelData[$lgType]['weeks'][$weekKey][] = [
+            $letterOfGuaranteeModelData[$subTypeCover][$lgType]['weeks'][$weekKey][] = [
+                'amount' => $amount,
+                'lg_code' => $row->lg_code,
+                'name' => $row->partner_name,
+            ];
+        }
+
+        // "Issued LG Cash Cover" (Cash Out) — money LOCKED AWAY when an LG
+        // is issued. Restricted to category_name = New Issuance only,
+        // excluding Opening Balance, per explicit product decision — this
+        // is the row previously missing from the Contract Cash Flow report
+        // entirely.
+        $subTypeIssued = __('Issued LG Cash Cover');
+        $issuedCoverRows = DB::table('letter_of_guarantee_cash_cover_statements')
+            ->join('letter_of_guarantee_issuances', 'letter_of_guarantee_issuances.id', '=', 'letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id')
+            ->join('partners', 'partners.id', '=', 'letter_of_guarantee_issuances.partner_id')
+            ->where('letter_of_guarantee_cash_cover_statements.company_id', $companyId)
+            ->where('letter_of_guarantee_cash_cover_statements.type', 'debit-lg-amount')
+            ->where('letter_of_guarantee_issuances.contract_id', $contractId)
+            ->where('letter_of_guarantee_issuances.category_name', LetterOfGuaranteeIssuance::NEW_ISSUANCE)
+            ->where('letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id', '>', 0)
+            ->whereBetween('letter_of_guarantee_cash_cover_statements.date', [$periodStart, $periodEnd])
+            ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, letter_of_guarantee_cash_cover_statements.debit as total_amount, letter_of_guarantee_cash_cover_statements.currency as currency, letter_of_guarantee_cash_cover_statements.date as movement_date, partners.name as partner_name, letter_of_guarantee_issuances.lg_code as lg_code')
+            ->get();
+
+        foreach ($issuedCoverRows as $row) {
+            $weekKey = CashFlowWeekBucketer::resolveWeekKey((string) $row->movement_date, $periodsByWeekKey);
+            if ($weekKey === null) {
+                continue;
+            }
+
+            $lgType = $lgsTypes[$row->lg_type] ?? $row->lg_type;
+            $exchangeRate = ForeignExchangeRate::getExchangeRateAt(
+                (string) $row->currency,
+                $mainFunctionalCurrency,
+                (string) $row->movement_date,
+                $companyId,
+                $foreignExchangeRates,
+            );
+            $amount = (float) $row->total_amount * $exchangeRate;
+
+            if (! isset($result[$mainType][$subTypeIssued][$lgType]['weeks'][$weekKey])) {
+                $result[$mainType][$subTypeIssued][$lgType]['weeks'][$weekKey] = 0;
+            }
+            $result[$mainType][$subTypeIssued][$lgType]['weeks'][$weekKey] += $amount;
+            $result[$mainType][$subTypeIssued][$lgType]['total'] = ($result[$mainType][$subTypeIssued][$lgType]['total'] ?? 0) + $amount;
+            $result[$mainType][$subTypeIssued]['total'][$weekKey] = ($result[$mainType][$subTypeIssued]['total'][$weekKey] ?? 0) + $amount;
+
+            $letterOfGuaranteeModelData[$subTypeIssued][$lgType]['weeks'][$weekKey][] = [
                 'amount' => $amount,
                 'lg_code' => $row->lg_code,
                 'name' => $row->partner_name,

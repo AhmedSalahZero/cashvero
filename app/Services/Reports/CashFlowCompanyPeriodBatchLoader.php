@@ -32,38 +32,60 @@ final class CashFlowCompanyPeriodBatchLoader
         string $periodEnd,
         array $periodsByWeekKey,
         array &$letterOfGuaranteeModelData = [],
+        ?string $reportCurrency = null,
+        array &$incomingTransferModelData = [],
+        array &$crossCurrencyNotes = [],
     ): void {
-        self::applyMoneyReceivedMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey);
-        self::applyMoneyPaymentMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey);
-        self::applyTimeOfDepositMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey);
-        self::applyLetterOfGuaranteeMovements($result, $letterOfGuaranteeModelData, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey);
-        self::applyLetterOfCreditMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey);
-        self::applyCashExpenseMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey);
+        // The currency tab the user picked. Falls back to the main
+        // functional currency (old always-convert behaviour) if the
+        // caller doesn't pass one, so nothing breaks for callers that
+        // haven't been updated yet.
+        $reportCurrency = $reportCurrency ?? $mainFunctionalCurrency;
+        self::applyMoneyReceivedMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, $incomingTransferModelData);
+        self::applyCrossCurrencyCollectionNotes($crossCurrencyNotes, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, $reportCurrency, $mainFunctionalCurrency);
+        self::applyMoneyPaymentMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey);
+        self::applyTimeOfDepositMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey);
+        self::applyLetterOfGuaranteeMovements($result, $letterOfGuaranteeModelData, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey);
+        self::applyLetterOfCreditMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey);
+        self::applyCashExpenseMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey);
+    }
+
+    /**
+     * Shared helper: amount stays in its own currency (no conversion) when
+     * the user is viewing that currency's own tab; gets converted into the
+     * main functional currency only when the EGP/main-currency tab is active.
+     */
+    private static function convertedAmount(float $rawAmount, float $exchangeRate, string $mainFunctionalCurrency, string $reportCurrency): float
+    {
+        return $reportCurrency === $mainFunctionalCurrency ? $rawAmount * $exchangeRate : $rawAmount;
     }
 
     private static function applyMoneyReceivedMovements(
         array &$result,
         Collection $foreignExchangeRates,
         string $mainFunctionalCurrency,
+        string $reportCurrency,
         int $companyId,
         string $periodStart,
         string $periodEnd,
         array $periodsByWeekKey,
+        array &$incomingTransferModelData,
     ): void {
         $totalCashInFlowKey = __('Total Cash Inflow');
 
-        self::applyChequeSettlements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, Cheque::UNDER_COLLECTION, __('Cheques Under Collection'), $totalCashInFlowKey);
-        self::applyChequeSettlements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, Cheque::COLLECTED, __('Checks Collected'), $totalCashInFlowKey);
-        self::applyMoneyReceivedByType($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, MoneyReceived::INCOMING_TRANSFER, __('Incoming Transfers'), $totalCashInFlowKey);
-        self::applyMoneyReceivedByType($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, MoneyReceived::CASH_IN_BANK, __('Bank Deposits'), $totalCashInFlowKey);
-        self::applyMoneyReceivedByType($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, MoneyReceived::CASH_IN_SAFE, __('Cash Collections'), $totalCashInFlowKey);
-        self::applyChequeInSafe($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, $totalCashInFlowKey);
+        self::applyChequeSettlements($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, Cheque::UNDER_COLLECTION, __('Cheques Under Collection'), $totalCashInFlowKey);
+        self::applyChequeSettlements($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, Cheque::COLLECTED, __('Checks Collected'), $totalCashInFlowKey);
+        self::applyMoneyReceivedByType($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, MoneyReceived::INCOMING_TRANSFER, __('Incoming Transfers'), $totalCashInFlowKey, $incomingTransferModelData);
+        self::applyMoneyReceivedByType($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, MoneyReceived::CASH_IN_BANK, __('Bank Deposits'), $totalCashInFlowKey);
+        self::applyMoneyReceivedByType($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, MoneyReceived::CASH_IN_SAFE, __('Cash Collections'), $totalCashInFlowKey);
+        self::applyChequeInSafe($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, $totalCashInFlowKey);
     }
 
     private static function applyChequeSettlements(
         array &$result,
         Collection $foreignExchangeRates,
         string $mainFunctionalCurrency,
+        string $reportCurrency,
         int $companyId,
         string $periodStart,
         string $periodEnd,
@@ -73,7 +95,7 @@ final class CashFlowCompanyPeriodBatchLoader
         string $totalCashInFlowKey,
     ): void {
         if ($chequeStatus === Cheque::COLLECTED) {
-            self::applyCollectedChequeMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, $resultKey, $totalCashInFlowKey);
+            self::applyCollectedChequeMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, $resultKey, $totalCashInFlowKey);
 
             return;
         }
@@ -92,11 +114,14 @@ final class CashFlowCompanyPeriodBatchLoader
                 $q->whereNull('money_received.down_payment_type')
                     ->orWhere('money_received.down_payment_type', '=', 'general');
             })
+            ->when($reportCurrency !== $mainFunctionalCurrency, function ($q) use ($reportCurrency) {
+                $q->where('money_received.receiving_currency', $reportCurrency);
+            })
             ->whereBetween($dateColumn, [$periodStart, $periodEnd])
             ->selectRaw('customer_invoices.contract_code as contract_code, '.$settlementAmountExpression.' as received_amount, money_received.receiving_currency, '.$dateColumn.' as movement_date, customer_invoices.invoice_number');
 
         foreach ($query->cursor() as $row) {
-            self::accumulateMoneyReceivedRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodsByWeekKey, $resultKey, $totalCashInFlowKey, $row, true);
+            self::accumulateMoneyReceivedRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodsByWeekKey, $resultKey, $totalCashInFlowKey, $row, true);
         }
     }
 
@@ -104,6 +129,7 @@ final class CashFlowCompanyPeriodBatchLoader
         array &$result,
         Collection $foreignExchangeRates,
         string $mainFunctionalCurrency,
+        string $reportCurrency,
         int $companyId,
         string $periodStart,
         string $periodEnd,
@@ -123,12 +149,15 @@ final class CashFlowCompanyPeriodBatchLoader
                 $q->whereNull('money_received.down_payment_type')
                     ->orWhere('money_received.down_payment_type', '=', 'general');
             })
+            ->when($reportCurrency !== $mainFunctionalCurrency, function ($q) use ($reportCurrency) {
+                $q->where('money_received.receiving_currency', $reportCurrency);
+            })
             ->whereBetween('cheques.actual_collection_date', [$periodStart, $periodEnd])
             ->groupByRaw('money_received.id, money_received.receiving_currency, cheques.actual_collection_date, cheques.cheque_number, partners.name')
             ->selectRaw('money_received.id as money_received_id, money_received.receiving_currency, cheques.actual_collection_date as movement_date, cheques.cheque_number, '.partner_display_name_sql('partners', 'partner_name').', sum('.$settlementAmountExpression.') as received_amount');
 
         foreach ($query->cursor() as $row) {
-            self::accumulateCollectedChequeRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodsByWeekKey, $resultKey, $totalCashInFlowKey, $row);
+            self::accumulateCollectedChequeRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodsByWeekKey, $resultKey, $totalCashInFlowKey, $row);
         }
     }
 
@@ -136,6 +165,7 @@ final class CashFlowCompanyPeriodBatchLoader
         array &$result,
         Collection $foreignExchangeRates,
         string $mainFunctionalCurrency,
+        string $reportCurrency,
         int $companyId,
         string $periodStart,
         string $periodEnd,
@@ -154,11 +184,14 @@ final class CashFlowCompanyPeriodBatchLoader
                 $q->whereNull('money_received.down_payment_type')
                     ->orWhere('money_received.down_payment_type', '=', 'general');
             })
+            ->when($reportCurrency !== $mainFunctionalCurrency, function ($q) use ($reportCurrency) {
+                $q->where('money_received.receiving_currency', $reportCurrency);
+            })
             ->whereBetween('cheques.due_date', [$periodStart, $periodEnd])
             ->selectRaw('customer_invoices.contract_code as contract_code, '.$settlementAmountExpression.' as received_amount, money_received.receiving_currency, cheques.due_date as movement_date, customer_invoices.invoice_number');
 
         foreach ($query->cursor() as $row) {
-            self::accumulateMoneyReceivedRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodsByWeekKey, __('Cheques In Safe'), $totalCashInFlowKey, $row, true);
+            self::accumulateMoneyReceivedRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodsByWeekKey, __('Cheques In Safe'), $totalCashInFlowKey, $row, true);
         }
     }
 
@@ -166,6 +199,7 @@ final class CashFlowCompanyPeriodBatchLoader
         array &$result,
         Collection $foreignExchangeRates,
         string $mainFunctionalCurrency,
+        string $reportCurrency,
         int $companyId,
         string $periodStart,
         string $periodEnd,
@@ -173,9 +207,10 @@ final class CashFlowCompanyPeriodBatchLoader
         string $moneyType,
         string $resultKey,
         string $totalCashInFlowKey,
+        array &$incomingTransferModelData = [],
     ): void {
         if ($moneyType === MoneyReceived::INCOMING_TRANSFER) {
-            self::applyIncomingTransferMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, $resultKey, $totalCashInFlowKey);
+            self::applyIncomingTransferMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, $resultKey, $totalCashInFlowKey, $incomingTransferModelData);
 
             return;
         }
@@ -184,11 +219,14 @@ final class CashFlowCompanyPeriodBatchLoader
             ->join('partners', 'partners.id', '=', 'money_received.partner_id')
             ->where('money_received.company_id', $companyId)
             ->where('money_received.type', $moneyType)
+            ->when($reportCurrency !== $mainFunctionalCurrency, function ($q) use ($reportCurrency) {
+                $q->where('money_received.receiving_currency', $reportCurrency);
+            })
             ->whereBetween('money_received.receiving_date', [$periodStart, $periodEnd])
             ->selectRaw('money_received.received_amount, money_received.receiving_currency, money_received.receiving_date as movement_date, '.partner_display_name_sql('partners', 'partner_name'));
 
         foreach ($query->cursor() as $row) {
-            self::accumulateMoneyReceivedRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodsByWeekKey, $resultKey, $totalCashInFlowKey, $row, false);
+            self::accumulateMoneyReceivedRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodsByWeekKey, $resultKey, $totalCashInFlowKey, $row, false);
         }
     }
 
@@ -196,12 +234,14 @@ final class CashFlowCompanyPeriodBatchLoader
         array &$result,
         Collection $foreignExchangeRates,
         string $mainFunctionalCurrency,
+        string $reportCurrency,
         int $companyId,
         string $periodStart,
         string $periodEnd,
         array $periodsByWeekKey,
         string $resultKey,
         string $totalCashInFlowKey,
+        array &$incomingTransferModelData,
     ): void {
         $query = DB::table('money_received')
             ->join('partners', 'partners.id', '=', 'money_received.partner_id')
@@ -210,11 +250,14 @@ final class CashFlowCompanyPeriodBatchLoader
             ->leftJoin('banks', 'banks.id', '=', 'financial_institutions.bank_id')
             ->where('money_received.company_id', $companyId)
             ->where('money_received.type', MoneyReceived::INCOMING_TRANSFER)
+            ->when($reportCurrency !== $mainFunctionalCurrency, function ($q) use ($reportCurrency) {
+                $q->where('money_received.receiving_currency', $reportCurrency);
+            })
             ->whereBetween('money_received.receiving_date', [$periodStart, $periodEnd])
             ->selectRaw('money_received.id as money_received_id, money_received.received_amount, money_received.receiving_currency, money_received.receiving_date as movement_date, '.partner_display_name_sql('partners', 'partner_name').', '.financial_institution_display_name_sql());
 
         foreach ($query->cursor() as $row) {
-            self::accumulateIncomingTransferRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodsByWeekKey, $resultKey, $totalCashInFlowKey, $row);
+            self::accumulateIncomingTransferRow($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodsByWeekKey, $resultKey, $totalCashInFlowKey, $row, $incomingTransferModelData);
         }
     }
 
@@ -222,6 +265,7 @@ final class CashFlowCompanyPeriodBatchLoader
         array &$result,
         Collection $foreignExchangeRates,
         string $mainFunctionalCurrency,
+        string $reportCurrency,
         int $companyId,
         array $periodsByWeekKey,
         string $typeKey,
@@ -242,7 +286,7 @@ final class CashFlowCompanyPeriodBatchLoader
             $foreignExchangeRates,
         );
 
-        $amount = (float) $row->received_amount * $exchangeRate;
+        $amount = self::convertedAmount((float) $row->received_amount, $exchangeRate, $mainFunctionalCurrency, $reportCurrency);
         $label = $useInvoiceDetail && isset($row->invoice_number)
             ? (string) $row->invoice_number
             : (string) ($row->partner_name ?? '');
@@ -269,6 +313,7 @@ final class CashFlowCompanyPeriodBatchLoader
         array &$result,
         Collection $foreignExchangeRates,
         string $mainFunctionalCurrency,
+        string $reportCurrency,
         int $companyId,
         array $periodsByWeekKey,
         string $typeKey,
@@ -288,7 +333,7 @@ final class CashFlowCompanyPeriodBatchLoader
             $foreignExchangeRates,
         );
 
-        $amount = (float) $row->received_amount * $exchangeRate;
+        $amount = self::convertedAmount((float) $row->received_amount, $exchangeRate, $mainFunctionalCurrency, $reportCurrency);
         $subRowKey = 'money_received_'.$row->money_received_id;
         $label = (string) ($row->partner_name ?: __('Unknown Customer'));
 
@@ -328,11 +373,13 @@ final class CashFlowCompanyPeriodBatchLoader
         array &$result,
         Collection $foreignExchangeRates,
         string $mainFunctionalCurrency,
+        string $reportCurrency,
         int $companyId,
         array $periodsByWeekKey,
         string $typeKey,
         string $totalCashInFlowKey,
         object $row,
+        array &$incomingTransferModelData,
     ): void {
         $weekKey = CashFlowWeekBucketer::resolveWeekKey((string) $row->movement_date, $periodsByWeekKey);
         if ($weekKey === null) {
@@ -347,28 +394,19 @@ final class CashFlowCompanyPeriodBatchLoader
             $foreignExchangeRates,
         );
 
-        $amount = (float) $row->received_amount * $exchangeRate;
-        $subRowKey = 'money_received_'.$row->money_received_id;
+        $amount = self::convertedAmount((float) $row->received_amount, $exchangeRate, $mainFunctionalCurrency, $reportCurrency);
+        // Grouped by source name (not by individual transaction) so the same
+        // sender collapses into one row instead of one row per transfer; the
+        // per-transaction detail (bank, date, amount) is kept separately
+        // below and shown via a per-cell "ℹ️" breakdown, the same pattern
+        // already used for Cancelled LGs Cash Cover.
         $label = (string) ($row->partner_name ?: __('Unknown Customer'));
 
-        if (! isset($result['customers'][$typeKey][$subRowKey])) {
-            $result['customers'][$typeKey][$subRowKey] = [
-                'weeks' => [],
-                'total' => [],
-                'label' => $label,
-                'incoming_transfer_info' => [
-                    'customer_name' => $label,
-                    'bank_name' => (string) ($row->bank_name ?? __('N/A')),
-                    'amount' => $amount,
-                    'movement_date' => (string) $row->movement_date,
-                ],
-            ];
+        if (! isset($result['customers'][$typeKey][$label])) {
+            $result['customers'][$typeKey][$label] = ['weeks' => [], 'total' => []];
         }
-        if (! isset($result['customers'][$typeKey][$subRowKey]['weeks'][$weekKey])) {
-            $result['customers'][$typeKey][$subRowKey]['weeks'][$weekKey] = 0;
-        }
-        if (! isset($result['customers'][$typeKey][$subRowKey]['total'][$weekKey])) {
-            $result['customers'][$typeKey][$subRowKey]['total'][$weekKey] = 0;
+        if (! isset($result['customers'][$typeKey][$label]['weeks'][$weekKey])) {
+            $result['customers'][$typeKey][$label]['weeks'][$weekKey] = 0;
         }
         if (! isset($result['customers'][$typeKey]['total'][$weekKey])) {
             $result['customers'][$typeKey]['total'][$weekKey] = 0;
@@ -377,31 +415,39 @@ final class CashFlowCompanyPeriodBatchLoader
             $result['customers'][$totalCashInFlowKey]['total'][$weekKey] = 0;
         }
 
-        $result['customers'][$typeKey][$subRowKey]['weeks'][$weekKey] += $amount;
-        $result['customers'][$typeKey][$subRowKey]['total'][$weekKey] += $amount;
+        $result['customers'][$typeKey][$label]['weeks'][$weekKey] += $amount;
+        $result['customers'][$typeKey][$label]['total'][$weekKey] = ($result['customers'][$typeKey][$label]['total'][$weekKey] ?? 0) + $amount;
         $result['customers'][$typeKey]['total'][$weekKey] += $amount;
         $result['customers'][$totalCashInFlowKey]['total'][$weekKey] += $amount;
+
+        $incomingTransferModelData[$label]['weeks'][$weekKey][] = [
+            'amount' => $amount,
+            'bank_name' => (string) ($row->bank_name ?? __('N/A')),
+            'movement_date' => (string) $row->movement_date,
+        ];
     }
 
     private static function applyMoneyPaymentMovements(
         array &$result,
         Collection $foreignExchangeRates,
         string $mainFunctionalCurrency,
+        string $reportCurrency,
         int $companyId,
         string $periodStart,
         string $periodEnd,
         array $periodsByWeekKey,
     ): void {
-        self::applyMoneyPaymentByType($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, MoneyPayment::OUTGOING_TRANSFER, null);
-        self::applyMoneyPaymentByType($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, MoneyPayment::CASH_PAYMENT, null);
-        self::applyMoneyPaymentByType($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, MoneyPayment::PAYABLE_CHEQUE, PayableCheque::PAID);
-        self::applyMoneyPaymentByType($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, MoneyPayment::PAYABLE_CHEQUE, PayableCheque::PENDING);
+        self::applyMoneyPaymentByType($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, MoneyPayment::OUTGOING_TRANSFER, null);
+        self::applyMoneyPaymentByType($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, MoneyPayment::CASH_PAYMENT, null);
+        self::applyMoneyPaymentByType($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, MoneyPayment::PAYABLE_CHEQUE, PayableCheque::PAID);
+        self::applyMoneyPaymentByType($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, MoneyPayment::PAYABLE_CHEQUE, PayableCheque::PENDING);
     }
 
     private static function applyMoneyPaymentByType(
         array &$result,
         Collection $foreignExchangeRates,
         string $mainFunctionalCurrency,
+        string $reportCurrency,
         int $companyId,
         string $periodStart,
         string $periodEnd,
@@ -420,7 +466,10 @@ final class CashFlowCompanyPeriodBatchLoader
         $query = DB::table('money_payments')
             ->join('partners', 'partners.id', '=', 'money_payments.partner_id')
             ->where('money_payments.company_id', $companyId)
-            ->where('money_payments.type', $moneyType);
+            ->where('money_payments.type', $moneyType)
+            ->when($reportCurrency !== $mainFunctionalCurrency, function ($q) use ($reportCurrency) {
+                $q->where('money_payments.payment_currency', $reportCurrency);
+            });
 
         if ($chequeStatus !== null) {
             $query->join('payable_cheques', 'payable_cheques.money_payment_id', '=', 'money_payments.id')
@@ -447,7 +496,7 @@ final class CashFlowCompanyPeriodBatchLoader
                 $foreignExchangeRates,
             );
 
-            $amount = (float) $row->paid_amount * $exchangeRate;
+            $amount = self::convertedAmount((float) $row->paid_amount, $exchangeRate, $mainFunctionalCurrency, $reportCurrency);
             $supplierName = (string) $row->partner_name;
 
             if (! isset($result['suppliers'][$typeLabel][$supplierName])) {
@@ -460,9 +509,8 @@ final class CashFlowCompanyPeriodBatchLoader
                 $result['suppliers'][$typeLabel][$supplierName]['total'][$weekKey] = 0;
             }
 
-            $rawPaid = (float) $row->paid_amount;
-            $result['suppliers'][$typeLabel][$supplierName]['weeks'][$weekKey] += $rawPaid;
-            $result['suppliers'][$typeLabel][$supplierName]['total'][$weekKey] += $rawPaid;
+            $result['suppliers'][$typeLabel][$supplierName]['weeks'][$weekKey] += $amount;
+            $result['suppliers'][$typeLabel][$supplierName]['total'][$weekKey] += $amount;
 
             if (! isset($result['suppliers'][$typeLabel]['total'][$weekKey])) {
                 $result['suppliers'][$typeLabel]['total'][$weekKey] = 0;
@@ -475,6 +523,7 @@ final class CashFlowCompanyPeriodBatchLoader
         array &$result,
         Collection $foreignExchangeRates,
         string $mainFunctionalCurrency,
+        string $reportCurrency,
         int $companyId,
         string $periodStart,
         string $periodEnd,
@@ -492,6 +541,9 @@ final class CashFlowCompanyPeriodBatchLoader
 
         $rows = DB::table('time_of_deposits')
             ->where('time_of_deposits.company_id', $companyId)
+            ->when($reportCurrency !== $mainFunctionalCurrency, function ($q) use ($reportCurrency) {
+                $q->where('time_of_deposits.currency', $reportCurrency);
+            })
             ->whereRaw("(CASE 
                     WHEN status = 'broken' THEN break_date 
                     WHEN status = 'matured' THEN deposit_date 
@@ -530,7 +582,7 @@ final class CashFlowCompanyPeriodBatchLoader
                 $foreignExchangeRates,
             );
 
-            $currentPaidAmount = (float) $row->total_amount * $exchangeRate;
+            $currentPaidAmount = self::convertedAmount((float) $row->total_amount, $exchangeRate, $mainFunctionalCurrency, $reportCurrency);
 
             if (! isset($result[$mainType][$subType][$currentStatus])) {
                 $result[$mainType][$subType][$currentStatus] = ['weeks' => [], 'total' => []];
@@ -556,6 +608,7 @@ final class CashFlowCompanyPeriodBatchLoader
         array &$letterOfGuaranteeModelData,
         Collection $foreignExchangeRates,
         string $mainFunctionalCurrency,
+        string $reportCurrency,
         int $companyId,
         string $periodStart,
         string $periodEnd,
@@ -576,6 +629,9 @@ final class CashFlowCompanyPeriodBatchLoader
             ->where(function ($q) {
                 $q->where('is_renewal_fees', 1)->orWhere('is_commission_fees', 1)->orWhere('is_issuance_fees', 1);
             })
+            ->when($reportCurrency !== $mainFunctionalCurrency, function ($q) use ($reportCurrency) {
+                $q->where('financial_institution_accounts.currency', $reportCurrency);
+            })
             ->groupByRaw('letter_of_guarantee_issuances.lg_type, financial_institution_accounts.currency, current_account_bank_statements.date')
             ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, sum(credit) as paid_amount, financial_institution_accounts.currency as currency, current_account_bank_statements.date as movement_date')
             ->get();
@@ -594,7 +650,7 @@ final class CashFlowCompanyPeriodBatchLoader
                 $companyId,
                 $foreignExchangeRates,
             );
-            $amount = (float) $row->paid_amount * $exchangeRate;
+            $amount = self::convertedAmount((float) $row->paid_amount, $exchangeRate, $mainFunctionalCurrency, $reportCurrency);
 
             if (! isset($result[$mainType][$subTypeFees][$lgType])) {
                 $result[$mainType][$subTypeFees][$lgType] = ['weeks' => [], 'total' => []];
@@ -615,8 +671,18 @@ final class CashFlowCompanyPeriodBatchLoader
         }
 
         $inflowMainType = 'customers';
+        // Cancelled LGs Cash Cover = cash cover being RELEASED BACK to the
+        // company on cancellation. handleLetterOfGuaranteeCashCoverStatement()
+        // writes cancellation rows as credit=amount, debit=0, type='for-cancellation'
+        // (see LetterOfGuaranteeIssuanceController::cancel...()). The row used
+        // to read `debit`, which is actually the ISSUANCE amount (see below),
+        // so it was showing the wrong figure and — since every LG has both an
+        // issuance row (debit>0) and a cancellation row (credit>0) with the
+        // same effective date — a confusing zero-value duplicate per LG in
+        // the breakdown popup.
         $coverQuery = DB::table('letter_of_guarantee_cash_cover_statements')
             ->where('letter_of_guarantee_cash_cover_statements.company_id', $companyId)
+            ->where('letter_of_guarantee_cash_cover_statements.type', LetterOfGuaranteeIssuance::FOR_CANCELLATION)
             ->join('letter_of_guarantee_issuances', 'letter_of_guarantee_issuances.id', '=', 'letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id')
             ->join('partners', 'partners.id', '=', 'letter_of_guarantee_issuances.partner_id');
         $coverQuery = LgCashCoverEffectiveDate::joinTo($coverQuery);
@@ -624,7 +690,10 @@ final class CashFlowCompanyPeriodBatchLoader
         $coverRows = $coverQuery
             ->whereBetween(DB::raw($effectiveDateSql), [$periodStart, $periodEnd])
             ->where('letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id', '>', 0)
-            ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, letter_of_guarantee_cash_cover_statements.debit as total_amount, letter_of_guarantee_cash_cover_statements.currency as currency, '.$effectiveDateSql.' as movement_date, partners.name as partner_name, letter_of_guarantee_issuances.lg_code as lg_code')
+            ->when($reportCurrency !== $mainFunctionalCurrency, function ($q) use ($reportCurrency) {
+                $q->where('letter_of_guarantee_cash_cover_statements.currency', $reportCurrency);
+            })
+            ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, letter_of_guarantee_cash_cover_statements.credit as total_amount, letter_of_guarantee_cash_cover_statements.currency as currency, '.$effectiveDateSql.' as movement_date, partners.name as partner_name, letter_of_guarantee_issuances.lg_code as lg_code')
             ->get();
 
         foreach ($coverRows as $row) {
@@ -641,7 +710,7 @@ final class CashFlowCompanyPeriodBatchLoader
                 $companyId,
                 $foreignExchangeRates,
             );
-            $amount = (float) $row->total_amount * $exchangeRate;
+            $amount = self::convertedAmount((float) $row->total_amount, $exchangeRate, $mainFunctionalCurrency, $reportCurrency);
 
             if (! isset($result[$inflowMainType][$subTypeCover][$lgType])) {
                 $result[$inflowMainType][$subTypeCover][$lgType] = ['weeks' => [], 'total' => []];
@@ -668,7 +737,68 @@ final class CashFlowCompanyPeriodBatchLoader
             // every popup was empty by construction, not a display bug.
             // Same capture shape as the already-working Contract Cash Flow
             // path (CashFlowContractDetailPeriodBatchLoader::applyLetterOfGuaranteeMovements()).
-            $letterOfGuaranteeModelData[$lgType]['weeks'][$weekKey][] = [
+            // Namespaced by row name ($subTypeCover) — not just lgType — so
+            // this doesn't collide with the Issued LG Cash Cover row below,
+            // which uses the same lgType values but is a different movement.
+            $letterOfGuaranteeModelData[$subTypeCover][$lgType]['weeks'][$weekKey][] = [
+                'amount' => $amount,
+                'lg_code' => $row->lg_code,
+                'name' => $row->partner_name,
+            ];
+        }
+
+        // Issued LG Cash Cover = cash cover being FUNDED/LOCKED AWAY at
+        // issuance — an outflow, the mirror image of the cancellation row
+        // above. Issuance rows are written as debit=amount, credit=0,
+        // type='debit-lg-amount' (see LetterOfGuaranteeIssuanceController).
+        $subTypeIssued = __('Issued LG Cash Cover');
+        $issuedCoverQuery = DB::table('letter_of_guarantee_cash_cover_statements')
+            ->where('letter_of_guarantee_cash_cover_statements.company_id', $companyId)
+            ->where('letter_of_guarantee_cash_cover_statements.type', 'debit-lg-amount')
+            ->join('letter_of_guarantee_issuances', 'letter_of_guarantee_issuances.id', '=', 'letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id')
+            ->join('partners', 'partners.id', '=', 'letter_of_guarantee_issuances.partner_id')
+            ->where('letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id', '>', 0)
+            ->whereBetween('letter_of_guarantee_cash_cover_statements.date', [$periodStart, $periodEnd])
+            ->when($reportCurrency !== $mainFunctionalCurrency, function ($q) use ($reportCurrency) {
+                $q->where('letter_of_guarantee_cash_cover_statements.currency', $reportCurrency);
+            })
+            ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, letter_of_guarantee_cash_cover_statements.debit as total_amount, letter_of_guarantee_cash_cover_statements.currency as currency, letter_of_guarantee_cash_cover_statements.date as movement_date, partners.name as partner_name, letter_of_guarantee_issuances.lg_code as lg_code')
+            ->get();
+
+        foreach ($issuedCoverQuery as $row) {
+            $weekKey = CashFlowWeekBucketer::resolveWeekKey((string) $row->movement_date, $periodsByWeekKey);
+            if ($weekKey === null) {
+                continue;
+            }
+
+            $lgType = $lgsTypes[$row->lg_type] ?? $row->lg_type;
+            $exchangeRate = ForeignExchangeRate::getExchangeRateAt(
+                (string) $row->currency,
+                $mainFunctionalCurrency,
+                (string) $row->movement_date,
+                $companyId,
+                $foreignExchangeRates,
+            );
+            $amount = self::convertedAmount((float) $row->total_amount, $exchangeRate, $mainFunctionalCurrency, $reportCurrency);
+
+            if (! isset($result[$mainType][$subTypeIssued][$lgType])) {
+                $result[$mainType][$subTypeIssued][$lgType] = ['weeks' => [], 'total' => []];
+            }
+            if (! isset($result[$mainType][$subTypeIssued][$lgType]['weeks'][$weekKey])) {
+                $result[$mainType][$subTypeIssued][$lgType]['weeks'][$weekKey] = 0;
+            }
+            if (! isset($result[$mainType][$subTypeIssued][$lgType]['total'][$weekKey])) {
+                $result[$mainType][$subTypeIssued][$lgType]['total'][$weekKey] = 0;
+            }
+            if (! isset($result[$mainType][$subTypeIssued]['total'][$weekKey])) {
+                $result[$mainType][$subTypeIssued]['total'][$weekKey] = 0;
+            }
+
+            $result[$mainType][$subTypeIssued][$lgType]['weeks'][$weekKey] += $amount;
+            $result[$mainType][$subTypeIssued][$lgType]['total'][$weekKey] += $amount;
+            $result[$mainType][$subTypeIssued]['total'][$weekKey] += $amount;
+
+            $letterOfGuaranteeModelData[$subTypeIssued][$lgType]['weeks'][$weekKey][] = [
                 'amount' => $amount,
                 'lg_code' => $row->lg_code,
                 'name' => $row->partner_name,
@@ -680,6 +810,7 @@ final class CashFlowCompanyPeriodBatchLoader
         array &$result,
         Collection $foreignExchangeRates,
         string $mainFunctionalCurrency,
+        string $reportCurrency,
         int $companyId,
         string $periodStart,
         string $periodEnd,
@@ -699,6 +830,9 @@ final class CashFlowCompanyPeriodBatchLoader
             ->where(function ($q) {
                 $q->where('is_renewal_fees', 1)->orWhere('is_commission_fees', 1)->orWhere('is_issuance_fees', 1);
             })
+            ->when($reportCurrency !== $mainFunctionalCurrency, function ($q) use ($reportCurrency) {
+                $q->where('financial_institution_accounts.currency', $reportCurrency);
+            })
             ->groupByRaw('letter_of_credit_issuances.lc_type, financial_institution_accounts.currency, current_account_bank_statements.date')
             ->selectRaw('letter_of_credit_issuances.lc_type as lc_type, sum(credit) as paid_amount, financial_institution_accounts.currency as currency, current_account_bank_statements.date as movement_date')
             ->get();
@@ -717,7 +851,7 @@ final class CashFlowCompanyPeriodBatchLoader
                 $companyId,
                 $foreignExchangeRates,
             );
-            $amount = (float) $row->paid_amount * $exchangeRate;
+            $amount = self::convertedAmount((float) $row->paid_amount, $exchangeRate, $mainFunctionalCurrency, $reportCurrency);
 
             if (! isset($result[$mainType][$subTypeFees][$lcType])) {
                 $result[$mainType][$subTypeFees][$lcType] = ['weeks' => [], 'total' => []];
@@ -741,6 +875,9 @@ final class CashFlowCompanyPeriodBatchLoader
             ->where('letter_of_credit_issuances.company_id', $companyId)
             ->where('status', LetterOfCreditIssuance::RUNNING)
             ->whereBetween('letter_of_credit_issuances.due_date', [$periodStart, $periodEnd])
+            ->when($reportCurrency !== $mainFunctionalCurrency, function ($q) use ($reportCurrency) {
+                $q->where('lc_cash_cover_currency', $reportCurrency);
+            })
             ->selectRaw('letter_of_credit_issuances.due_date as movement_date, letter_of_credit_issuances.lc_type as lc_type, transaction_name, (amount_in_main_currency - cash_cover_amount) as paid_amount, lc_cash_cover_currency as currency')
             ->get();
 
@@ -758,7 +895,7 @@ final class CashFlowCompanyPeriodBatchLoader
                 $companyId,
                 $foreignExchangeRates,
             );
-            $amount = (float) $row->paid_amount * $exchangeRate;
+            $amount = self::convertedAmount((float) $row->paid_amount, $exchangeRate, $mainFunctionalCurrency, $reportCurrency);
 
             if (! isset($result[$mainType][$subTypeRemaining][$lcType])) {
                 $result[$mainType][$subTypeRemaining][$lcType] = ['weeks' => [], 'total' => []];
@@ -783,21 +920,23 @@ final class CashFlowCompanyPeriodBatchLoader
         array &$result,
         Collection $foreignExchangeRates,
         string $mainFunctionalCurrency,
+        string $reportCurrency,
         int $companyId,
         string $periodStart,
         string $periodEnd,
         array $periodsByWeekKey,
     ): void {
-        self::applyCashExpenseType($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, CashExpense::OUTGOING_TRANSFER, 'payment_date', null);
-        self::applyCashExpenseType($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, CashExpense::CASH_PAYMENT, 'payment_date', null);
-        self::applyCashExpenseType($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, CashExpense::PAYABLE_CHEQUE, 'actual_payment_date', PayableCheque::PAID);
-        self::applyCashExpenseType($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, CashExpense::PAYABLE_CHEQUE, 'due_date', PayableCheque::PENDING);
+        self::applyCashExpenseType($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, CashExpense::OUTGOING_TRANSFER, 'payment_date', null);
+        self::applyCashExpenseType($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, CashExpense::CASH_PAYMENT, 'payment_date', null);
+        self::applyCashExpenseType($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, CashExpense::PAYABLE_CHEQUE, 'actual_payment_date', PayableCheque::PAID);
+        self::applyCashExpenseType($result, $foreignExchangeRates, $mainFunctionalCurrency, $reportCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey, CashExpense::PAYABLE_CHEQUE, 'due_date', PayableCheque::PENDING);
     }
 
     private static function applyCashExpenseType(
         array &$result,
         Collection $foreignExchangeRates,
         string $mainFunctionalCurrency,
+        string $reportCurrency,
         int $companyId,
         string $periodStart,
         string $periodEnd,
@@ -823,6 +962,9 @@ final class CashFlowCompanyPeriodBatchLoader
             ->when($chequeStatus !== null, function ($builder) use ($chequeStatus, $mainTable) {
                 $builder->where($mainTable.'.status', $chequeStatus);
             })
+            ->when($reportCurrency !== $mainFunctionalCurrency, function ($builder) use ($reportCurrency, $subTable) {
+                $builder->where($subTable.'.currency', $reportCurrency);
+            })
             ->whereBetween($dateColumn, [$periodStart, $periodEnd])
             ->groupByRaw('cash_expense_category_name_id, cash_expense_categories.name, cash_expense_category_names.name, '.$dateColumn)
             ->selectRaw('cash_expense_categories.name as category_name, cash_expense_category_names.name as expense_name, sum(paid_amount) as paid_amount, '.$subTable.'.currency as currency, '.$dateColumn.' as movement_date');
@@ -843,7 +985,7 @@ final class CashFlowCompanyPeriodBatchLoader
 
             $categoryName = (string) $row->category_name;
             $expenseName = (string) $row->expense_name;
-            $amount = (float) $row->paid_amount * $exchangeRate;
+            $amount = self::convertedAmount((float) $row->paid_amount, $exchangeRate, $mainFunctionalCurrency, $reportCurrency);
 
             if (! isset($result['cash_expenses'][$categoryName][$expenseName])) {
                 $result['cash_expenses'][$categoryName][$expenseName] = ['weeks' => [], 'total' => []];
@@ -881,5 +1023,85 @@ final class CashFlowCompanyPeriodBatchLoader
             THEN settlements.settlement_amount
             ELSE settlements.settlement_amount * money_received.exchange_rate
         END';
+    }
+
+    /**
+     * Informational-only markers for invoices whose OWN currency matches the
+     * tab being viewed, but that were actually collected in a different
+     * currency (e.g. a USD invoice collected in EGP). These never add to
+     * that tab's totals — they exist purely so the user isn't confused by a
+     * USD invoice appearing to have never been collected while viewing the
+     * USD tab. Only meaningful on a specific foreign-currency tab; the main
+     * functional currency tab already shows everything converted in.
+     */
+    public static function applyCrossCurrencyCollectionNotes(
+        array &$crossCurrencyNotes,
+        int $companyId,
+        string $periodStart,
+        string $periodEnd,
+        array $periodsByWeekKey,
+        string $reportCurrency,
+        string $mainFunctionalCurrency,
+    ): void {
+        if ($reportCurrency === $mainFunctionalCurrency) {
+            return;
+        }
+
+        // Cheques collected against an invoice issued in $reportCurrency
+        // but banked in a different currency.
+        $chequeRows = DB::table('money_received')
+            ->join('cheques', 'cheques.money_received_id', '=', 'money_received.id')
+            ->join('settlements', 'money_received.id', '=', 'settlements.money_received_id')
+            ->join('customer_invoices', 'customer_invoices.id', '=', 'settlements.invoice_id')
+            ->join('partners', 'partners.id', '=', 'money_received.partner_id')
+            ->where('money_received.company_id', $companyId)
+            ->where('cheques.status', Cheque::COLLECTED)
+            ->where('money_received.type', MoneyReceived::CHEQUE)
+            ->where('money_received.currency', $reportCurrency)
+            ->whereNotNull('money_received.receiving_currency')
+            ->where('money_received.receiving_currency', '!=', $reportCurrency)
+            ->whereBetween('cheques.actual_collection_date', [$periodStart, $periodEnd])
+            ->selectRaw('cheques.actual_collection_date as movement_date, money_received.amount_in_invoice_currency, money_received.received_amount, money_received.receiving_currency, '.partner_display_name_sql('partners', 'partner_name'))
+            ->get();
+        self::appendCrossCurrencyNotes($crossCurrencyNotes, __('Checks Collected'), $chequeRows, $periodsByWeekKey);
+
+        // Bank deposits / cash collections / incoming transfers issued in
+        // $reportCurrency but received in a different currency.
+        $typeRowLabels = [
+            MoneyReceived::CASH_IN_BANK => __('Bank Deposits'),
+            MoneyReceived::CASH_IN_SAFE => __('Cash Collections'),
+            MoneyReceived::INCOMING_TRANSFER => __('Incoming Transfers'),
+        ];
+        foreach ($typeRowLabels as $moneyType => $rowLabel) {
+            $rows = DB::table('money_received')
+                ->join('partners', 'partners.id', '=', 'money_received.partner_id')
+                ->where('money_received.company_id', $companyId)
+                ->where('money_received.type', $moneyType)
+                ->where('money_received.currency', $reportCurrency)
+                ->whereNotNull('money_received.receiving_currency')
+                ->where('money_received.receiving_currency', '!=', $reportCurrency)
+                ->whereBetween('money_received.receiving_date', [$periodStart, $periodEnd])
+                ->selectRaw('money_received.receiving_date as movement_date, money_received.amount_in_invoice_currency, money_received.received_amount, money_received.receiving_currency, '.partner_display_name_sql('partners', 'partner_name'))
+                ->get();
+            self::appendCrossCurrencyNotes($crossCurrencyNotes, $rowLabel, $rows, $periodsByWeekKey);
+        }
+    }
+
+    private static function appendCrossCurrencyNotes(array &$crossCurrencyNotes, string $rowLabel, $rows, array $periodsByWeekKey): void
+    {
+        foreach ($rows as $row) {
+            $weekKey = CashFlowWeekBucketer::resolveWeekKey((string) $row->movement_date, $periodsByWeekKey);
+            if ($weekKey === null) {
+                continue;
+            }
+
+            $crossCurrencyNotes[$rowLabel]['weeks'][$weekKey][] = [
+                'partner_name' => (string) ($row->partner_name ?: __('Unknown Customer')),
+                'amount_in_invoice_currency' => (float) ($row->amount_in_invoice_currency ?: $row->received_amount),
+                'collected_currency' => (string) $row->receiving_currency,
+                'collected_amount' => (float) $row->received_amount,
+                'movement_date' => (string) $row->movement_date,
+            ];
+        }
     }
 }

@@ -169,6 +169,20 @@ class SupplierInvoice extends Model implements IInvoice
 	const ODOO_COLLETED_OR_PAID_AMOUNT_IN_MAIN_CURRENCY = 'odoo_paid_amount_in_main_currency';
 	const EXCEL_COLLETED_OR_PAID_AMOUNT = 'excel_paid_amount';
 	const EXCEL_COLLETED_OR_PAID_AMOUNT_IN_MAIN_CURRENCY = 'excel_paid_amount_in_main_currency';
+
+	/**
+	 * The "Excel Paid Amount" upload template column was renamed to
+	 * "Previous Payments" (view-only change, tables_fields.view_name).
+	 * This keeps files/templates that still use the old header text
+	 * importing correctly — App\Imports\ImportData::resolveImportFieldValue()
+	 * checks this before giving up on a column.
+	 */
+	public static function getImportHeaderAliases(): array
+	{
+		return [
+			self::EXCEL_COLLETED_OR_PAID_AMOUNT => ['Excel Paid Amount', __('Excel Paid Amount')],
+		];
+	}
 	const COLLETED_OR_PAID_AMOUNT_IN_MAIN_CURRENCY = 'paid_amount_in_main_currency';
 	const PARTIALLY_COLLECTED_OR_PAID_AND_PAST_DUE = 'partially_paid_and_past_due';
 	const MONEY_MODEL_NAME = 'MoneyPayment';
@@ -424,11 +438,18 @@ class SupplierInvoice extends Model implements IInvoice
 		->get()
 		->unique('currency')->pluck('currency','currency')->toArray();
 	}
-	public static function getSupplierInvoicesUnderCollectionAtDates(array &$result  , int $companyId ,array $datesWithWeekNumber,string $startDate,string $endDate  ):void
+	public static function getSupplierInvoicesUnderCollectionAtDates(array &$result  , int $companyId ,array $datesWithWeekNumber,string $startDate,string $endDate , ?string $currency = null , ?string $mainFunctionalCurrency = null ):void
 	{
 		$key = __('Suppliers Invoices') ;
+		// This method is only ever called for the Company (non-contract)
+		// report. Main functional currency tab -> keep every currency
+		// (net_balance_in_main_currency is already the converted
+		// equivalent); a specific foreign-currency tab -> that currency only.
+		$showAllCurrenciesConverted = $mainFunctionalCurrency !== null && $currency === $mainFunctionalCurrency;
 		$items = self::where('company_id',$companyId)
-		// ->where('currency',$currency)
+		->when(! $showAllCurrenciesConverted && $currency !== null, function($builder) use ($currency){
+			$builder->where('currency',$currency);
+		})
 		->where('net_balance','>',0)
 	
 		->whereBetween('invoice_due_date',[$startDate,$endDate])->get();
@@ -505,10 +526,17 @@ class SupplierInvoice extends Model implements IInvoice
 		 */
 		$key = 'Forecasted Suppliers Contract Payments';
 
+		// Company-wide + main functional currency tab -> include contracts in
+		// every currency (each gets converted below via its own currency's
+		// FX rate). Any specific foreign-currency tab, or a single contract,
+		// keeps the original same-currency-only filter.
+		$showAllCurrenciesConverted = ! $contractId && $mainFunctionalCurrency !== null && $currency === $mainFunctionalCurrency;
 		
 		$contracts = Contract::where('company_id',$companyId)
 		->where('end_date','<=',$endDate)
-		->where('currency',$currency)
+		->when(! $showAllCurrenciesConverted, function($query) use ($currency){
+			$query->where('currency',$currency);
+		})
 		->when($contractId,function($query) use ($contractId){
 			$query->where('id',$contractId);
 		})
@@ -549,7 +577,7 @@ class SupplierInvoice extends Model implements IInvoice
 				$contractName = $contract->getName();
 				$poNumber = $soArr['po_number']; 
 				$customerName = $contract->getClientName();
-				$currentInvoiceAmount = DB::table('supplier_invoices')->where('company_id',$companyId)->where('currency',$currency)->where('purchases_order_number',$poNumber)->where('contract_code',$contractCode)->sum('invoice_amount');
+				$currentInvoiceAmount = DB::table('supplier_invoices')->where('company_id',$companyId)->where('currency',$contract->getCurrency())->where('purchases_order_number',$poNumber)->where('contract_code',$contractCode)->sum('invoice_amount');
 				
 				$salesOrderDownPayments = DB::table('down_payment_money_payment_settlements')->where('company_id',$companyId)->where('purchase_order_id',$soId)->where('contract_id',$contractId)->sum('down_payment_amount');
 				$purchaseOrderNetPayments = $salesOrderDownPayments - $currentInvoiceAmount;

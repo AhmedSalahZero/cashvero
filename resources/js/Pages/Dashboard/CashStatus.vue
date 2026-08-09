@@ -271,23 +271,25 @@ const expandedLoanId = ref(null);
                         <thead class="cvr-table-head">
                             <tr>
                                 <th class="px-4 py-2 text-left">Source</th>
-                                <th class="px-4 py-2 text-left">Bank / Branch</th>
+                                <th class="px-4 py-2 text-left">Financial Institution / Branch Name</th>
                                 <th class="px-4 py-2 text-left">Account Number</th>
-                                <th class="px-4 py-2 text-right">Amount</th>
+                                <th class="px-4 py-2 text-right">Amount [ {{ activeCurrency }} ]</th>
+                                <th v-if="activeCurrency !== mainFunctionalCurrency" class="px-4 py-2 text-right">Exchange Rate</th>
+                                <th v-if="activeCurrency !== mainFunctionalCurrency" class="px-4 py-2 text-right">Amount [ {{ mainFunctionalCurrency }} ]</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="(row, i) in (details?.[activeCurrency]?.current_account || [])" :key="'ca'+i" class="cvr-table-row">
-                                <td class="px-4 py-2">Current Account</td>
+                            <!-- Sorted largest balance first (per explicit product decision) —
+                                 done server-side in CashDashboardService, combining Current
+                                 Account (bank) and Cash In Safe (branch) rows into one list so
+                                 they sort together rather than as two separate sections. -->
+                            <tr v-for="(row, i) in (details?.[activeCurrency]?.cash_and_banks || [])" :key="i" class="cvr-table-row">
+                                <td class="px-4 py-2">{{ row.source }}</td>
                                 <td class="px-4 py-2">{{ row.financial_institution_name }}</td>
                                 <td class="px-4 py-2">{{ row.account_number }}</td>
                                 <td class="px-4 py-2 text-right cvr-num">{{ fmt(row.amount) }}</td>
-                            </tr>
-                            <tr v-for="(row, i) in (details?.[activeCurrency]?.cash_in_safe || [])" :key="'cs'+i" class="cvr-table-row">
-                                <td class="px-4 py-2">Cash In Safe</td>
-                                <td class="px-4 py-2">{{ row.branch_name }}</td>
-                                <td class="px-4 py-2">—</td>
-                                <td class="px-4 py-2 text-right cvr-num">{{ fmt(row.amount) }}</td>
+                                <td v-if="activeCurrency !== mainFunctionalCurrency" class="px-4 py-2 text-right cvr-num">{{ row.exchange_rate }}</td>
+                                <td v-if="activeCurrency !== mainFunctionalCurrency" class="px-4 py-2 text-right cvr-num">{{ fmt(row.amount_in_main_currency) }}</td>
                             </tr>
                         </tbody>
                     </table>

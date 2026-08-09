@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $field_name
  * @property string|null $view_name
  * @property int $is_sales_trend
+ * @property int|null $sort_order
  * @property int|null $company_id
  * @property \Illuminate\Support\Carbon|null $created_at
  * @property \Illuminate\Support\Carbon|null $updated_at

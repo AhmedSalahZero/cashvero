@@ -190,7 +190,7 @@ function submit() {
                 <!-- Main Information -->
                 <div class="cvr-card">
                     <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Main Information</h2>
-                    <div class="cvr-form-grid-7-3-2">
+                    <div class="cvr-form-grid-6-4-2">
                         <div>
                             <label class="cvr-form-label">Bank Name *</label>
                             <select v-model="form.financial_institution_id" class="cvr-input w-full px-3 py-2 rounded">

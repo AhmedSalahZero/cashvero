@@ -190,7 +190,7 @@ function destroyRow() {
                             <td v-if="permissions.update" class="px-4 py-3 text-center">
                                 <div class="flex items-center justify-center gap-2">
                                     <Link :href="row.edit_url" class="cvr-action-btn" title="Edit">✎</Link>
-                                    <button v-if="permissions.delete" @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" title="Delete">🗑</button>
+                                    <button v-if="permissions.delete && !companyHasOdoo" @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" title="Delete">🗑</button>
                                 </div>
                             </td>
                         </tr>

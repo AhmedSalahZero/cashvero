@@ -273,6 +273,31 @@ class CashDashboardService
                 }
             }
 
+            // "Cash & Banks" detail panel — combines Current Account (bank)
+            // rows and Cash In Safe (branch) rows into one list, sorted by
+            // largest balance first (per explicit product decision), with
+            // each row's equivalent in the company's main functional
+            // currency exposed alongside it. $exchangeRates[$currencyName]
+            // is already the same single FX rate used everywhere else on
+            // this dashboard for this currency (computed above, before this
+            // per-currency loop), so every row here shares one rate — there
+            // is no per-row rate, only a per-currency one.
+            $cashAndBankRows = array_merge(
+                array_map(fn (array $row) => $row + ['source' => __('Current Account')], $details[$currencyName]['current_account'] ?? []),
+                array_map(fn (array $row) => [
+                    'amount' => $row['amount'],
+                    'account_number' => '-',
+                    'financial_institution_name' => $row['branch_name'],
+                    'source' => __('Cash In Safe'),
+                ], $details[$currencyName]['cash_in_safe'] ?? [])
+            );
+            usort($cashAndBankRows, fn (array $a, array $b) => $b['amount'] <=> $a['amount']);
+            $cashAndBankExchangeRate = $exchangeRates[$currencyName] ?? 1.0;
+            $details[$currencyName]['cash_and_banks'] = array_map(fn (array $row) => $row + [
+                'exchange_rate' => $cashAndBankExchangeRate,
+                'amount_in_main_currency' => $row['amount'] * $cashAndBankExchangeRate,
+            ], $cashAndBankRows);
+
             $certificateRows = DepositCashDashboardHelper::certificatesForCurrency(
                 $companyId,
                 $currencyName,

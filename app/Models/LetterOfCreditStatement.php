@@ -361,7 +361,7 @@ class LetterOfCreditStatement extends Model
 		}
 		$charts['lc_outstanding_per_financial_institution'][$currencyName][] = ['type'=>$financialInstitutionName , 'outstanding'=>$totalEndBalance] ;
 	}
-	public static function getDashboardOutstandingTableFormattedData(array &$tablesData , Company $company  , string $currencyName , string $date , int $financialInstitutionId,string $lcTypeId , string $financialInstitutionName ,  $lastLetterOfCreditFacility , ?string $source ):void
+	public static function getDashboardOutstandingTableFormattedData(array &$tablesData , Company $company  , string $currencyName , string $date , int $financialInstitutionId,string $lcTypeId , string $financialInstitutionName ,  $lastLetterOfCreditFacility , ?string $source , ?string $status = null ):void
 	{
 		$allSources = $source ? [$source => $source] : LetterOfCreditIssuance::lcSources() ; ;
 		foreach($allSources as $currentSourceId => $currentSourceTitle){
@@ -377,7 +377,7 @@ class LetterOfCreditStatement extends Model
 				if(!$rowPerType){continue ;}
 				$currentOutstandingBalance = abs($rowPerType->end_balance) ;
 				$currentLimit = $lastLetterOfCreditFacility ? $lastLetterOfCreditFacility->limit : 0 ;
-				$tablesData['lc_outstanding_for_table'][$currencyName][] = ['financial_institution_name'=>$financialInstitutionName , 'outstanding'=>$currentOutstandingBalance , 'source'=>LetterOfCreditIssuance::lcSources()[$rowPerType->source] , 'type'=>LcTypes::getAll()[$rowPerType->lc_type] , 'limit'=>$currentLimit , 'cash_cover'=>LetterOfCreditStatement::getTotalCashCoverForAllTypes($lastLetterOfCreditFacility->id,$company->id,$financialInstitutionId,$currencyName,$lcTypeId,$currentSourceId)] ;
+				$tablesData['lc_outstanding_for_table'][$currencyName][] = ['financial_institution_name'=>$financialInstitutionName , 'outstanding'=>$currentOutstandingBalance , 'source'=>LetterOfCreditIssuance::lcSources()[$rowPerType->source] , 'type'=>LcTypes::getAll()[$rowPerType->lc_type] , 'limit'=>$currentLimit , 'cash_cover'=>LetterOfCreditStatement::getTotalCashCoverForAllTypes($lastLetterOfCreditFacility->id,$company->id,$financialInstitutionId,$currencyName,$lcTypeId,$currentSourceId) , 'status'=>$status] ;
 			
 		}
 		}

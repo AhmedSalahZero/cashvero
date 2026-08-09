@@ -695,6 +695,12 @@ body {
     grid-template-columns: 2fr 1fr 1fr;
     gap: 1rem;
 }
+/* Unequal ratio — 6:4:2 out of 12 */
+.cvr-form-grid-6-4-2 {
+    display: grid;
+    grid-template-columns: 6fr 4fr 2fr;
+    gap: 1rem;
+}
 /* Unequal ratio — 2:2:1:4:1:2 out of 12, for the Money Received /
    Money Payment header row: Receiving Date, Partner Type, Invoice
    Currency, Name (needs real room — customer/partner names run long),

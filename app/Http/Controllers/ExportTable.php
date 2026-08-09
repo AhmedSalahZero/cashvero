@@ -245,10 +245,12 @@ class ExportTable extends Controller
 
 			$columnsWithViewingNames = TablesField::where('model_name', $model_name)
 				->whereIn('field_name', $selected_fields)
+				->orderByRaw('COALESCE(sort_order, id)')
 				->pluck('view_name', 'field_name')
 				->toArray();
 			} else {
 				$columnsWithViewingNames = TablesField::where('model_name', $model_name)
+				->orderByRaw('COALESCE(sort_order, id)')
 				->pluck('view_name', 'field_name')
 				->toArray();
 			}

@@ -368,7 +368,7 @@ class LetterOfGuaranteeStatement extends Model
 		}
 		$charts['lg_outstanding_per_financial_institution'][$currencyName][] = ['type'=>$financialInstitutionName , 'outstanding'=>$totalEndBalance] ;
 	}
-	public static function getDashboardOutstandingTableFormattedData(array &$tablesData , Company $company  , string $currencyName , string $date , int $financialInstitutionId,string $lgTypeId , string $financialInstitutionName ,  $lastLetterOfGuaranteeFacility , ?string $source ):void
+	public static function getDashboardOutstandingTableFormattedData(array &$tablesData , Company $company  , string $currencyName , string $date , int $financialInstitutionId,string $lgTypeId , string $financialInstitutionName ,  $lastLetterOfGuaranteeFacility , ?string $source , ?string $status = null ):void
 	{
 		$allSources = $source ? [$source => $source] : LetterOfGuaranteeIssuance::lgSources() ; ;
 		foreach($allSources as $currentSourceId => $currentSourceTitle){
@@ -384,7 +384,7 @@ class LetterOfGuaranteeStatement extends Model
 				if(!$rowPerType){continue ;}
 				$currentOutstandingBalance = abs($rowPerType->end_balance) ;
 				$currentLimit = $lastLetterOfGuaranteeFacility ? $lastLetterOfGuaranteeFacility->limit : 0 ;
-				$tablesData['lg_outstanding_for_table'][$currencyName][] = ['financial_institution_name'=>$financialInstitutionName , 'outstanding'=>$currentOutstandingBalance , 'source'=>LetterOfGuaranteeIssuance::lgSources()[$rowPerType->source] , 'type'=>LgTypes::getAll()[$rowPerType->lg_type] , 'limit'=>$currentLimit , 'cash_cover'=>LetterOfGuaranteeStatement::getTotalCashCoverForAllTypes($lastLetterOfGuaranteeFacility->id,$company->id,$financialInstitutionId,$currencyName,$lgTypeId,$currentSourceId)] ;
+				$tablesData['lg_outstanding_for_table'][$currencyName][] = ['financial_institution_name'=>$financialInstitutionName , 'outstanding'=>$currentOutstandingBalance , 'source'=>LetterOfGuaranteeIssuance::lgSources()[$rowPerType->source] , 'type'=>LgTypes::getAll()[$rowPerType->lg_type] , 'limit'=>$currentLimit , 'cash_cover'=>LetterOfGuaranteeStatement::getTotalCashCoverForAllTypes($lastLetterOfGuaranteeFacility->id,$company->id,$financialInstitutionId,$currencyName,$lgTypeId,$currentSourceId) , 'status'=>$status] ;
 			
 		}
 		}

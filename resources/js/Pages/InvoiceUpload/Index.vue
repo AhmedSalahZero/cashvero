@@ -28,6 +28,11 @@
  * two model types (see SalesGatheringController@index); every other
  * upload type (SalesGathering, LoanSchedule, etc.) is unaffected.
  *
+ * Business-rule update: for Odoo-synced companies, Edit is now
+ * allowed (per explicit product decision) — only Create and Delete
+ * stay hidden, since those rows should still originate from and be
+ * removed via Odoo itself, not this app.
+ *
  * NOT built here (see controller docblock): bulk row-checkbox delete
  * (shared DeletingClass, out of scope) and "Close Period" (the
  * original's own backend method is empty — a dead feature, not
@@ -170,7 +175,7 @@ function destroyRow() {
                             <td class="px-4 py-2 text-center">
                                 <div class="flex items-center justify-center gap-2">
                                     <a v-if="row.settlementUrl" :href="row.settlementUrl" class="cvr-action-btn" title="Settlement">💲</a>
-                                    <Link v-if="canUpload && !companyHasOdoo" :href="row.editUrl" class="cvr-action-btn" title="Edit">✎</Link>
+                                    <Link v-if="canUpload" :href="row.editUrl" class="cvr-action-btn" title="Edit">✎</Link>
                                     <button v-if="canDelete && !companyHasOdoo" @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" title="Delete">🗑</button>
                                 </div>
                             </td>

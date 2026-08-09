@@ -292,6 +292,8 @@ class CashFlowReportController
 		// $reportInterval = 'daily';
 		$result = [];
 		$letterOfGuaranteeModelData = [];
+		$incomingTransferModelData = [];
+		$crossCurrencyNotes = [];
 		// $cashExpenseCategoryNamesArr = [];
 		$pastDueSupplierInvoicesForContracts = collect([]);
 		$result['customers']=[
@@ -314,7 +316,20 @@ class CashFlowReportController
 			unset($result['customers']['Cash & Banks Balance']);
 			unset($result['customers']['Time Of Deposits']);
 		}
-		$result['suppliers'] = [];
+		$result['suppliers'] = [
+			// ⚠️ Bug fix: unlike 'Customers Past Due Invoices' (pre-seeded
+			// above under $result['customers']), this key was never added
+			// anywhere, so the row — and its "View" button, which the Vue
+			// template already supports — never rendered on the Company
+			// Cash Flow report even though data existed for it.
+			'Suppliers Past Due Invoices'=>[],
+		];
+		if(! $contractId){
+			// Loan installments are company-wide, not tied to any single
+			// contract, so this row is deliberately excluded from the
+			// Contract Cash Flow report.
+			$result['suppliers']['Loan Past Due Installments'] = [];
+		}
 		$result['cash_expenses'] = [];
 		$noRowHeaders =  $reportInterval == 'weekly' ? 3 : 1 ;
 		if ($sharedTimelineContext === null) {
@@ -349,9 +364,9 @@ class CashFlowReportController
 		$rangedWeeks = [];
 		CashExpense::getProjectionOtherCashOut($result ,$company,$cashflowReportId,$isContract) ;
 		  if(!$contractId){
-		      CustomerInvoice::getCashAndBankBalanceAtDate($result ,$foreignExchangeRates,$mainFunctionalCurrency,$startDate ,array_keys($weeks)[0],$company->id) ;
-			  LoanSchedule::getLoanInstallmentsAtDates($result,$foreignExchangeRates,$mainFunctionalCurrency,$company->id,$datesWithWeekNumber,$endDate);
-			  ContractLoanSchedule::getContractLoanInstallmentsAtDates($result,$foreignExchangeRates,$mainFunctionalCurrency,$company->id,$datesWithWeekNumber,$endDate);
+		      CustomerInvoice::getCashAndBankBalanceAtDate($result ,$foreignExchangeRates,$mainFunctionalCurrency,$startDate ,array_keys($weeks)[0],$company->id,$currency) ;
+			  LoanSchedule::getLoanInstallmentsAtDates($result,$foreignExchangeRates,$mainFunctionalCurrency,$company->id,$datesWithWeekNumber,$endDate,$currency);
+			  ContractLoanSchedule::getContractLoanInstallmentsAtDates($result,$foreignExchangeRates,$mainFunctionalCurrency,$company->id,$datesWithWeekNumber,$endDate,$currency);
 		}
 		
 		  CustomerInvoice::getProjectionOtherCashIn($result ,$company,$cashflowReportId,$isContract) ;
@@ -365,9 +380,9 @@ class CashFlowReportController
 		   * ! end postponed
 		   */
 		  
-		  CustomerInvoice::getCustomerInvoicesUnderCollectionAtDatesForContracts($result,$company->id,$contractCode,$datesWithWeekNumber,$endDate);
+		  CustomerInvoice::getCustomerInvoicesUnderCollectionAtDatesForContracts($result,$company->id,$contractCode,$datesWithWeekNumber,$endDate,$currency,$mainFunctionalCurrency);
 		
-		  $isContract ? SupplierInvoice::getSupplierInvoicesForPoUnderCollectionAtDates($result,$company->id,$datesWithWeekNumber,$startDate,$endDate,$poAllocations,$pastDueSupplierInvoicesForContracts) : SupplierInvoice::getSupplierInvoicesUnderCollectionAtDates($result,$company->id,$datesWithWeekNumber,$startDate,$endDate);
+		  $isContract ? SupplierInvoice::getSupplierInvoicesForPoUnderCollectionAtDates($result,$company->id,$datesWithWeekNumber,$startDate,$endDate,$poAllocations,$pastDueSupplierInvoicesForContracts) : SupplierInvoice::getSupplierInvoicesUnderCollectionAtDates($result,$company->id,$datesWithWeekNumber,$startDate,$endDate,$currency,$mainFunctionalCurrency);
 
 		if ($sharedTimelineContext === null && $dates === []) {
 			$dates = $this->buildPeriodDatesMap(
@@ -395,6 +410,9 @@ class CashFlowReportController
 					$periodEnd,
 					$dates,
 					$letterOfGuaranteeModelData,
+					$currency,
+					$incomingTransferModelData,
+					$crossCurrencyNotes,
 				);
 			} else {
 				CashFlowContractDetailPeriodBatchLoader::apply(
@@ -409,14 +427,17 @@ class CashFlowReportController
 					$periodStart,
 					$periodEnd,
 					$dates,
+					$incomingTransferModelData,
 				);
 			}
 		} finally {
 			ForeignExchangeRate::endRequestMemo();
 		}
-		$pastDueCustomerInvoices = $this->getPastDueCustomerInvoices('CustomerInvoice',$currency,$company->id,$contractCode);
-		$pastDueSupplierInvoices = $isContract ? $pastDueSupplierInvoicesForContracts->toArray() : $this->getPastDueCustomerInvoices('SupplierInvoice', $currency, $company->id, $contractCode);
-		$pastDueInstallments = $this->getPastDueLoanSchedules($currency, $company->id);
+		$pastDueCustomerInvoices = $this->getPastDueCustomerInvoices('CustomerInvoice',$currency,$company->id,$contractCode,$mainFunctionalCurrency);
+		$pastDueSupplierInvoices = $isContract ? $pastDueSupplierInvoicesForContracts->toArray() : $this->getPastDueCustomerInvoices('SupplierInvoice', $currency, $company->id, $contractCode, $mainFunctionalCurrency);
+		// Loan installments are company-wide, not tied to any single
+		// contract, so this list is deliberately empty on Contract Cash Flow.
+		$pastDueInstallments = $isContract ? [] : $this->getPastDueLoanSchedules($currency, $company->id, $mainFunctionalCurrency, $foreignExchangeRates);
 		$supplierContractCodes = $pastDueSupplierInvoicesForContracts->pluck('contract_code')->toArray();
 		$currentContractCode = $isContract ? $supplierContractCodes : [$contractCode];
 		$supplierDueInvoices = json_decode(json_encode(DB::table('weekly_cashflow_custom_due_invoices')->where('weekly_cashflow_custom_due_invoices.company_id', $company->id)
@@ -505,6 +526,8 @@ class CashFlowReportController
 			'pastDueInstallments' => $pastDueInstallments,
 			'pastDueLoanInstallments' => $pastDueLoanInstallments,
 			'letterOfGuaranteeModelData' => $letterOfGuaranteeModelData,
+			'incomingTransferModelData' => $incomingTransferModelData,
+			'crossCurrencyNotes' => $crossCurrencyNotes,
 			'months' => $months,
 			'days' => $days,
 			'reportInterval' => $reportInterval,
@@ -595,6 +618,7 @@ class CashFlowReportController
 		return [
 			'company' => ['id' => $company->id, 'name' => $company->getName()],
 			'currencyName' => $currencyName,
+			'mainFunctionalCurrency' => $company->getMainFunctionalCurrency(),
 			'contractCode' => $contractCode,
 			'letterOfGuaranteeModelData' => $letterOfGuaranteeModelData,
 			'cashflowReport' => $cashflowReport ? [
@@ -766,13 +790,22 @@ class CashFlowReportController
 
 	
 	
-	public function getPastDueCustomerInvoices(string $invoiceType,string $currency , int $companyId , ?string $contractCode = null ){
+	public function getPastDueCustomerInvoices(string $invoiceType,string $currency , int $companyId , ?string $contractCode = null , ?string $mainFunctionalCurrency = null ){
 		$fullClassName = '\App\Models\\'.$invoiceType;
+
+		// Company-wide + viewing the main functional currency tab: show
+		// past-due invoices in EVERY currency (their net_balance_in_main_currency
+		// column already carries the converted equivalent). Any other tab
+		// (a specific foreign currency, or a single-currency contract) keeps
+		// the original strict same-currency filter.
+		$showAllCurrenciesConverted = ! $contractCode && $mainFunctionalCurrency !== null && $currency === $mainFunctionalCurrency;
 
 		$items  = $fullClassName::where('company_id',$companyId)
 		->where('net_balance','>',0)
 		->whereIn('invoice_status',['past_due','partially_collected_and_past_due'])
-		->where('currency',$currency)
+		->when(! $showAllCurrenciesConverted, function($query) use ($currency) {
+			$query->where('currency',$currency);
+		})
 		->where('invoice_due_date','<',now()->format('Y-m-d'))
 		->when($contractCode , function($query) use($contractCode) {
 			$query->where('contract_code',$contractCode);
@@ -782,16 +815,40 @@ class CashFlowReportController
 		
 		return $items;
 	}
-	public function getPastDueLoanSchedules(string $currency , int $companyId  ){
+	public function getPastDueLoanSchedules(string $currency , int $companyId , ?string $mainFunctionalCurrency = null , ?Collection $foreignExchangeRates = null ){
+		$showAllCurrenciesConverted = $mainFunctionalCurrency !== null && $currency === $mainFunctionalCurrency;
+
 		$items  = LoanSchedule::where('loan_schedules.company_id',$companyId)
 		->where('remaining','>',0)
 		->join('medium_term_loans','medium_term_loans.id','=','loan_schedules.medium_term_loan_id')
-		->where('medium_term_loans.currency',$currency)
+		->when(! $showAllCurrenciesConverted, function($query) use ($currency) {
+			$query->where('medium_term_loans.currency',$currency);
+		})
 		->whereIn('loan_schedules.status',['past_due','partially_collected_and_past_due'])
 		->where('date','<',now()->format('Y-m-d'))
 		->orderBy('date')
-		->selectRaw('loan_schedules.*,medium_term_loans.currency,medium_term_loans.name as loan_name')->get()->toArray() ;
-		return $items;
+		->selectRaw('loan_schedules.*,medium_term_loans.currency,medium_term_loans.name as loan_name')->get();
+
+		if ($showAllCurrenciesConverted) {
+			$items = $items->map(function($item) use ($mainFunctionalCurrency, $companyId, $foreignExchangeRates) {
+				$rate = ForeignExchangeRate::getExchangeRateAt(
+					(string) $item->currency,
+					$mainFunctionalCurrency,
+					(string) $item->date,
+					$companyId,
+					$foreignExchangeRates ?? collect(),
+				);
+				$item->remaining_in_main_currency = (float) $item->remaining * $rate;
+				return $item;
+			});
+		} else {
+			$items = $items->map(function($item) {
+				$item->remaining_in_main_currency = (float) $item->remaining;
+				return $item;
+			});
+		}
+
+		return $items->toArray();
 	}
 	
 	
@@ -873,12 +930,14 @@ class CashFlowReportController
 	
 		$cashflowReportId = $request->get('cashFlowReportId');
 		$model  = $cashflowReportId ? CashFlowReport::find($cashflowReportId) : $company;
+		$mainFunctionalCurrency = $company->getMainFunctionalCurrency();
+		$foreignExchangeRates = ForeignExchangeRate::where('company_id',$company->id)->get();
 		// for loans 
 		if($cashflowReportId && $cashflowReportId > 0){
 			$oldReportData = json_decode($model->report_data,true);
 			$oldReportData ? extract($oldReportData) : null;
 			// for customers 
-			$pastDueCustomerInvoices = $this->getPastDueCustomerInvoices('CustomerInvoice',$currency,$company->id,$contractCode);
+			$pastDueCustomerInvoices = $this->getPastDueCustomerInvoices('CustomerInvoice',$currency,$company->id,$contractCode,$mainFunctionalCurrency);
 			// $excludeIds = $pastDueCustomerInvoices->where('net_balance_until_date','<=',0)->pluck('id')->toArray() ;
 			$customerDueInvoices=json_decode(json_encode(DB::table('weekly_cashflow_custom_due_invoices')->where('company_id',$company->id)
 			->where('invoice_type','CustomerInvoice')
@@ -888,7 +947,7 @@ class CashFlowReportController
 			->groupBy('week_start_date')->selectRaw('week_start_date,sum(amount) as amount')->get()),true);
 		
 		// for suppliers 
-			$pastDueSupplierInvoices = $this->getPastDueCustomerInvoices('SupplierInvoice',$currency,$company->id,$contractCode);
+			$pastDueSupplierInvoices = $this->getPastDueCustomerInvoices('SupplierInvoice',$currency,$company->id,$contractCode,$mainFunctionalCurrency);
 			$supplierDueInvoices=json_decode(json_encode(DB::table('weekly_cashflow_custom_due_invoices')->where('company_id',$company->id)
 			->where('invoice_type','SupplierInvoice')
 			->where('cashflow_report_id',$cashflowReportId)
@@ -896,7 +955,7 @@ class CashFlowReportController
 			// ->whereNotIn('invoice_id',$excludeIds)
 			->groupBy('week_start_date')->selectRaw('week_start_date,sum(amount) as amount')->get()),true);
 		
-			$pastDueInstallments = $this->getPastDueLoanSchedules($currency,$company->id);
+			$pastDueInstallments = $isContract ? [] : $this->getPastDueLoanSchedules($currency,$company->id,$mainFunctionalCurrency,$foreignExchangeRates);
 			$pastDueLoanInstallments=json_decode(json_encode(DB::table('weekly_cashflow_custom_past_due_schedules')->where('company_id',$company->id)
 			->groupBy('week_start_date')->selectRaw('week_start_date,sum(amount) as amount')->get()),true);
 			$pastDueCustomerInvoicesPerCurrency[$currency] = $pastDueCustomerInvoices;
