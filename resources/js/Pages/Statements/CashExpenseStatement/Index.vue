@@ -15,10 +15,13 @@
  * backup (see the controller's docblock) — rebuilt from what the
  * result() query actually filters by, not copied from a missing file.
  */
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import MultiSelectDropdown from '@/Components/MultiSelectDropdown.vue';
+import { todayDate, clampDateToToday } from '@/composables/today';
+
+const maxDate = todayDate();
 
 const props = defineProps({
     company: Object,
@@ -29,8 +32,15 @@ const props = defineProps({
 
 const currency = ref('');
 const startDate = ref(new Date(new Date().setFullYear(new Date().getFullYear() - 1)).toISOString().slice(0, 10));
-const endDate = ref(new Date().toISOString().slice(0, 10));
+const endDate = ref(todayDate());
 const selectedSubCategoryIds = ref([]);
+
+watch(endDate, (value) => {
+    const clamped = clampDateToToday(value);
+    if (clamped !== value) {
+        endDate.value = clamped;
+    }
+});
 
 const subCategoryOptions = computed(() =>
     props.categories.flatMap(category =>
@@ -38,10 +48,11 @@ const subCategoryOptions = computed(() =>
     )
 );
 
-const canSubmit = computed(() => currency.value && startDate.value && endDate.value && selectedSubCategoryIds.value.length > 0);
+const canSubmit = computed(() => currency.value && startDate.value && endDate.value && endDate.value <= maxDate && selectedSubCategoryIds.value.length > 0);
 
 function submit() {
     if (!canSubmit.value) return;
+    endDate.value = clampDateToToday(endDate.value);
     router.get(props.urls.result, {
         start_date: startDate.value,
         end_date: endDate.value,
@@ -67,7 +78,7 @@ function submit() {
                     </div>
                     <div>
                         <label class="cvr-form-label">End Date *</label>
-                        <input v-model="endDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                        <input v-model="endDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
                         <label class="cvr-form-label">Currency *</label>

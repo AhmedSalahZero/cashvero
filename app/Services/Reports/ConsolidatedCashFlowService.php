@@ -129,12 +129,10 @@ class ConsolidatedCashFlowService
 
             $sumInflow = [];
             $sumOutflow = [];
-            $sumNet = [];
 
             foreach ($contractsSection as $row) {
                 $sumInflow = $this->sumByWeek($sumInflow, $row['cash_inflow']);
                 $sumOutflow = $this->sumByWeek($sumOutflow, $row['cash_outflow']);
-                $sumNet = $this->sumByWeek($sumNet, $row['net_cash']);
             }
 
             $companyUnallocatedCashOut = $this->computeUnallocatedCashOut(
@@ -143,7 +141,11 @@ class ConsolidatedCashFlowService
                 $weeks,
             );
 
+            $cashAndBanks = $banksSection[self::CASH_AND_BANKS_BALANCE_KEY]['total'] ?? [];
+            $sumNet = $this->netCashWithBanks($sumInflow, $cashAndBanks, $sumOutflow, $weeks);
+
             $grandTotal = [
+                'cash_and_banks' => $cashAndBanks,
                 'cash_inflow' => $sumInflow,
                 'cash_outflow' => $sumOutflow,
                 'net_cash' => $sumNet,
@@ -492,6 +494,27 @@ class ConsolidatedCashFlowService
         $out = [];
         foreach ($keys as $k) {
             $out[$k] = (float) ($a[$k] ?? 0) + (float) ($b[$k] ?? 0);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Section C Net Cash: Total Cash Inflow + Cash & Banks Balance − Total Cash Outflow.
+     *
+     * @param  array<string, float|int>  $inflow
+     * @param  array<string, float|int>  $cashAndBanks
+     * @param  array<string, float|int>  $outflow
+     * @param  array<string, string|int>  $weeks
+     * @return array<string, float|int>
+     */
+    private function netCashWithBanks(array $inflow, array $cashAndBanks, array $outflow, array $weeks): array
+    {
+        $out = [];
+        foreach (array_keys($weeks) as $wk) {
+            $out[$wk] = (float) ($inflow[$wk] ?? 0)
+                + (float) ($cashAndBanks[$wk] ?? 0)
+                - (float) ($outflow[$wk] ?? 0);
         }
 
         return $out;

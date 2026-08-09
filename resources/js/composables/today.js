@@ -17,3 +17,17 @@ export function todayDate() {
 
     return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
+
+/**
+ * لو التاريخ أكبر من النهاردة رجّعه لـ today (الـ HTML max
+ * بيمنع الاختيار من الـ picker بس مش الكتابة اليدوية).
+ */
+export function clampDateToToday(date) {
+    if (!date) {
+        return date;
+    }
+
+    const today = todayDate();
+
+    return date > today ? today : date;
+}

@@ -153,7 +153,9 @@ class ConsolidatedCashFlowReportController
         $rows[] = ['label' => __('Company cash out (unallocated)'), 'type' => 'section', 'values' => [], 'total' => 0];
         $rows[] = ['label' => __('Company cash out (unallocated)'), 'type' => 'row', 'values' => $unallocated, 'total' => $rowTotal($unallocated)];
 
-        $rows[] = ['label' => __('Section C — Grand total (contracts only, bank rows excluded)'), 'type' => 'section', 'values' => [], 'total' => 0];
+        $rows[] = ['label' => __('Section C — Grand total'), 'type' => 'section', 'values' => [], 'total' => 0];
+        $gtBanks = $valuesFor($payload['grandTotal']['cash_and_banks'] ?? []);
+        $rows[] = ['label' => __('Cash & Banks Balance'), 'type' => 'row', 'values' => $gtBanks, 'total' => $rowTotal($gtBanks)];
         $gtInflow = $valuesFor($payload['grandTotal']['cash_inflow'] ?? []);
         $rows[] = ['label' => __('Total Cash Inflow'), 'type' => 'row', 'values' => $gtInflow, 'total' => $rowTotal($gtInflow)];
         $gtOutflow = $valuesFor($payload['grandTotal']['cash_outflow'] ?? []);

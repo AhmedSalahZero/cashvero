@@ -12,6 +12,9 @@
 import { computed, ref, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { todayDate, clampDateToToday } from '@/composables/today';
+
+const maxDate = todayDate();
 
 const props = defineProps({
     company: Object,
@@ -21,14 +24,21 @@ const props = defineProps({
     urls: Object, // { result, lgOrLcTypes, lcFacilitiesByBank }
 });
 
-const startDate = ref(new Date().toISOString().slice(0, 10));
-const endDate = ref(new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().slice(0, 10));
+const startDate = ref(todayDate());
+const endDate = ref(todayDate());
 const currency = ref('');
 const financialInstitutionId = ref('');
 const reportType = ref('');
 const source = ref('');
 const type = ref('');
 const lcFacilityId = ref('');
+
+watch(endDate, (value) => {
+    const clamped = clampDateToToday(value);
+    if (clamped !== value) {
+        endDate.value = clamped;
+    }
+});
 
 const isLcOverdraft = computed(() => reportType.value === 'LCOverdraft');
 
@@ -70,7 +80,7 @@ const needsType = computed(() => Object.keys(typeOptions.value).length > 0);
 const needsSource = computed(() => Object.keys(sourceOptions.value).length > 0);
 
 const canSubmit = computed(() => {
-    if (!startDate.value || !endDate.value || !currency.value || !financialInstitutionId.value || !reportType.value) return false;
+    if (!startDate.value || !endDate.value || endDate.value > maxDate || !currency.value || !financialInstitutionId.value || !reportType.value) return false;
     if (needsType.value && !type.value) return false;
     if (needsSource.value && !source.value) return false;
     if (isLcOverdraft.value && !lcFacilityId.value) return false;
@@ -79,6 +89,7 @@ const canSubmit = computed(() => {
 
 function submit() {
     if (!canSubmit.value) return;
+    endDate.value = clampDateToToday(endDate.value);
     router.get(props.urls.result, {
         start_date: startDate.value,
         end_date: endDate.value,
@@ -108,7 +119,7 @@ function submit() {
                     </div>
                     <div>
                         <label class="cvr-form-label">End Date *</label>
-                        <input v-model="endDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                        <input v-model="endDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
                         <label class="cvr-form-label">Currency *</label>

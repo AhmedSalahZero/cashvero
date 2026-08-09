@@ -15,6 +15,9 @@
 import { ref, computed, watch } from 'vue'
 import { router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import { todayDate, clampDateToToday } from '@/composables/today'
+
+const maxDate = todayDate()
 
 const props = defineProps({
 	company: Object,
@@ -31,7 +34,7 @@ const accountTypeId = ref('')
 const accountNumber = ref('')
 const currency = ref(props.selectedCurrency || '')
 const startDate = ref(new Date(new Date().setFullYear(new Date().getFullYear() - 1)).toISOString().slice(0, 10))
-const endDate = ref(new Date().toISOString().slice(0, 10))
+const endDate = ref(todayDate())
 // const endDate = ref(new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().slice(0, 10));
 // const startDate = ref(new Date().toISOString().slice(0, 10));
 
@@ -68,12 +71,20 @@ async function loadAccountNumbers() {
 }
 watch([financialInstitutionId, accountTypeId, currency], loadAccountNumbers)
 
+watch(endDate, (value) => {
+	const clamped = clampDateToToday(value)
+	if (clamped !== value) {
+		endDate.value = clamped
+	}
+})
+
 const canSubmit = computed(() =>
-	financialInstitutionId.value && accountTypeId.value && accountNumber.value && currency.value && startDate.value && endDate.value
+	financialInstitutionId.value && accountTypeId.value && accountNumber.value && currency.value && startDate.value && endDate.value && endDate.value <= maxDate
 )
 
 function submit() {
 	if (!canSubmit.value) return
+	endDate.value = clampDateToToday(endDate.value)
 	router.get(props.urls.result, {
 		start_date: startDate.value,
 		end_date: endDate.value,
@@ -98,7 +109,7 @@ function submit() {
 					</div>
 					<div>
 						<label class="cvr-form-label">End Date *</label>
-						<input v-model="endDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+						<input v-model="endDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
 					</div>
 					<div>
 						<label class="cvr-form-label">Currency *</label>

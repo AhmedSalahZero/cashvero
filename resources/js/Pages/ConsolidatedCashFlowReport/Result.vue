@@ -11,7 +11,7 @@ const props = defineProps({
     banksSection: Object,             // { label: { total: { weekKey: amount } } }
     contractsSection: Array,          // [{ contract_id, contract_name, contract_code, cash_inflow, cash_outflow, net_cash }]
     companyUnallocatedCashOut: Object,
-    grandTotal: Object,               // { cash_inflow, cash_outflow, net_cash, accumulated_net }
+    grandTotal: Object,               // { cash_and_banks, cash_inflow, cash_outflow, net_cash, accumulated_net }
     currencyName: String,              // عملة الفلتر — تختار العقود فقط
     displayCurrency: String,           // العملة الوظيفية — كل الأرقام المعروضة بها
     title: String,
@@ -145,7 +145,12 @@ const accumulatedTotal = computed(() => {
 
                         <!-- Section C: Grand total -->
                         <tr class="cvr-table-head">
-                            <td :colspan="weekKeys.length + 2" class="px-2 py-2 font-semibold">Section C — Grand total (contracts only, bank rows excluded)</td>
+                            <td :colspan="weekKeys.length + 2" class="px-2 py-2 font-semibold">Section C — Grand total</td>
+                        </tr>
+                        <tr class="cvr-table-row cvr-summary-row">
+                            <td class="px-2 py-2 whitespace-nowrap">Cash &amp; Banks Balance</td>
+                            <td v-for="wk in weekKeys" :key="wk" class="px-2 py-2 text-center cvr-num whitespace-nowrap">{{ fmt(grandTotal.cash_and_banks?.[wk]) }}</td>
+                            <td class="px-2 py-2 text-center cvr-num font-semibold whitespace-nowrap">{{ fmt(rowTotal(grandTotal.cash_and_banks)) }}</td>
                         </tr>
                         <tr class="cvr-table-row cvr-summary-row">
                             <td class="px-2 py-2 whitespace-nowrap">Total Cash Inflow</td>
