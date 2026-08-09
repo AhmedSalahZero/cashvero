@@ -178,6 +178,41 @@ async function onAccountChange(section) {
     }
 }
 
+async function ensureDefaultBank(section) {
+    const banks = section.banks || [];
+    if (!banks.length) return;
+    const state = stateFor(section.type);
+    const firstId = String(banks[0].id);
+    if (!state.bankId || !banks.some(b => String(b.id) === String(state.bankId))) {
+        state.bankId = firstId;
+        await onBankChange(section);
+    }
+}
+
+watch(
+    [overdraftSections, activeCurrency],
+    async ([sections]) => {
+        for (const section of sections || []) {
+            await ensureDefaultBank(section);
+        }
+    },
+    { immediate: true },
+);
+
+/** Per selected bank: Limit / Outstanding / Available Room for the donut. */
+function roomDonutData(section) {
+    const state = stateFor(section.type);
+    const bank = (section.banks || []).find(b => String(b.id) === String(state.bankId));
+    const rows = (section.room?.[activeCurrency.value] || []).filter(r => bank && r.item === bank.name);
+    if (!rows.length) return [];
+    const sum = (key) => rows.reduce((s, r) => s + Number(r[key] || 0), 0);
+    return [
+        { category: 'Limit', value: sum('limit') },
+        { category: 'Outstanding', value: sum('end_balance') },
+        { category: 'Available Room', value: sum('available_room') },
+    ];
+}
+
 const movementSeries = [
     { field: 'debit', name: 'Cash In', color: '--cvr-green-bright' },
     { field: 'credit', name: 'Cash Out', color: '--cvr-num-red' },
@@ -359,8 +394,9 @@ const expandedLoanId = ref(null);
                         <div class="cvr-chart-card" style="border-top-color: var(--cvr-copper-bright)">
                             <h4 class="text-sm font-semibold cvr-text-primary mb-2">Available Room by Bank</h4>
                             <DonutChart3D
-                                :data="(section.room?.[activeCurrency] || []).map(r => ({ category: r.item, value: r.available_room }))"
-                                :colors="['--cvr-blue', '--cvr-green-bright', '--cvr-copper-bright', '--cvr-num-amber', '--cvr-num-red']"
+                                :key="`${section.type}-${activeCurrency}-${stateFor(section.type).bankId}`"
+                                :data="roomDonutData(section)"
+                                :colors="['--cvr-blue', '--cvr-num-amber', '--cvr-green-bright']"
                             />
                         </div>
                         <div class="cvr-chart-card lg:col-span-2" style="border-top-color: var(--cvr-blue)">
@@ -368,8 +404,7 @@ const expandedLoanId = ref(null);
                                 <h4 class="text-sm font-semibold cvr-text-primary">Bank Movement</h4>
                                 <div class="flex gap-2">
                                     <select v-model="stateFor(section.type).bankId" class="cvr-input px-2 py-1 rounded text-xs" @change="onBankChange(section)">
-                                        <option value="">Select Bank</option>
-                                        <option v-for="bank in section.banks" :key="bank.id" :value="bank.id">{{ bank.name }}</option>
+                                        <option v-for="bank in section.banks" :key="bank.id" :value="String(bank.id)">{{ bank.name }}</option>
                                     </select>
                                     <select v-model="stateFor(section.type).accountNumber" class="cvr-input px-2 py-1 rounded text-xs" @change="onAccountChange(section)">
                                         <option value="">Select Account</option>
