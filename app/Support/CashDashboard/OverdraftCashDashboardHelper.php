@@ -143,11 +143,7 @@ class OverdraftCashDashboardHelper
             $totalRoomForEachCurrency[$currencyName][] = [
                 'item' => $financialInstitutionName,
                 'available_room' => $room,
-                // NOTE: intentionally the overdraft's own contract limit (not the statement's
-                // point-in-time limit) so this stays consistent with the card total, which is
-                // always a sum of contract limits (see yearCardData()). Falls back to 0 when no
-                // statement exists yet for this overdraft, matching legacy behavior.
-                'limit' => $statement ? (float) $meta->limit : 0.0,
+                'limit' => $statement ? (float) $statement->limit : 0.0,
                 'end_balance' => $statement ? (float) $statement->end_balance : 0.0,
             ];
         }
@@ -187,9 +183,11 @@ class OverdraftCashDashboardHelper
             $overdraftIds
         );
 
+        $limit = 0.0;
         $outstanding = 0.0;
         $room = 0.0;
         foreach ($latestStatements as $statement) {
+            $limit += (float) ($statement->limit ?? 0);
             $outstanding += (float) ($statement->end_balance ?? 0);
             $room += (float) ($statement->room ?? 0);
         }
@@ -204,7 +202,7 @@ class OverdraftCashDashboardHelper
             ->sum('statements.interest_amount');
 
         return [
-            'limit' => (float) $limitQuery->sum('limit'),
+            'limit' => $limit,
             'outstanding' => $outstanding,
             'room' => $room,
             'interest_amount' => $interestAmount,
