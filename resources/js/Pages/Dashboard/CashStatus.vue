@@ -233,6 +233,19 @@ function toggleDetail(key) {
     openDetail.value = openDetail.value === key ? null : key;
 }
 
+const openLimitDetail = ref(null); // overdraft section.type or null
+function toggleLimitDetail(sectionType) {
+    openLimitDetail.value = openLimitDetail.value === sectionType ? null : sectionType;
+}
+
+function limitDetailRows(section) {
+    return section.room?.[activeCurrency.value] || [];
+}
+
+function sumLimitDetail(section, key) {
+    return limitDetailRows(section).reduce((s, r) => s + Number(r[key] || 0), 0);
+}
+
 const expandedLoanId = ref(null);
 </script>
 
@@ -384,10 +397,50 @@ const expandedLoanId = ref(null);
                     </div>
 
                     <div class="cvr-form-grid-4 mb-4">
-                        <div class="cvr-mini-kpi"><p class="cvr-mini-kpi-label">Limit</p><p class="cvr-mini-kpi-value cvr-num-blue">{{ fmt(section.cardData?.[activeCurrency]?.limit) }}</p></div>
+                        <div
+                            class="cvr-mini-kpi cursor-pointer"
+                            :class="{ 'ring-1 ring-[var(--cvr-blue)]': openLimitDetail === section.type }"
+                            @click="toggleLimitDetail(section.type)"
+                        >
+                            <p class="cvr-mini-kpi-label">Limit</p>
+                            <p class="cvr-mini-kpi-value cvr-num-blue">{{ fmt(section.cardData?.[activeCurrency]?.limit) }}</p>
+                        </div>
                         <div class="cvr-mini-kpi"><p class="cvr-mini-kpi-label">Outstanding</p><p class="cvr-mini-kpi-value cvr-num-amber">{{ fmt(section.cardData?.[activeCurrency]?.outstanding) }}</p></div>
                         <div class="cvr-mini-kpi"><p class="cvr-mini-kpi-label">Available Room</p><p class="cvr-mini-kpi-value cvr-num-green">{{ fmt(section.cardData?.[activeCurrency]?.room) }}</p></div>
                         <div class="cvr-mini-kpi"><p class="cvr-mini-kpi-label">Interest</p><p class="cvr-mini-kpi-value cvr-num">{{ fmt(section.cardData?.[activeCurrency]?.interest_amount) }}</p></div>
+                    </div>
+
+                    <div v-if="openLimitDetail === section.type" class="cvr-card-bg cvr-border border rounded-lg overflow-hidden mb-4">
+                        <table class="min-w-full text-sm">
+                            <thead class="cvr-table-head">
+                                <tr>
+                                    <th class="px-4 py-2 text-left">Bank Name</th>
+                                    <th class="px-4 py-2 text-right">Limit</th>
+                                    <th class="px-4 py-2 text-right">Outstanding</th>
+                                    <th class="px-4 py-2 text-right">Available Room</th>
+                                    <th class="px-4 py-2 text-right">Interest</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(row, i) in limitDetailRows(section)" :key="i" class="cvr-table-row">
+                                    <td class="px-4 py-2">{{ row.item || '—' }}</td>
+                                    <td class="px-4 py-2 text-right cvr-num-blue">{{ fmt(row.limit) }}</td>
+                                    <td class="px-4 py-2 text-right cvr-num-amber">{{ fmt(row.end_balance) }}</td>
+                                    <td class="px-4 py-2 text-right cvr-num-green">{{ fmt(row.available_room) }}</td>
+                                    <td class="px-4 py-2 text-right cvr-num">{{ fmt(row.interest) }}</td>
+                                </tr>
+                                <tr v-if="!limitDetailRows(section).length">
+                                    <td colspan="5" class="px-4 py-4 text-center cvr-text-muted">No facility rows for this currency.</td>
+                                </tr>
+                                <tr v-else class="cvr-table-row cvr-summary-row">
+                                    <td class="px-4 py-2 font-semibold">Total</td>
+                                    <td class="px-4 py-2 text-right cvr-num-blue font-semibold">{{ fmt(sumLimitDetail(section, 'limit')) }}</td>
+                                    <td class="px-4 py-2 text-right cvr-num-amber font-semibold">{{ fmt(sumLimitDetail(section, 'end_balance')) }}</td>
+                                    <td class="px-4 py-2 text-right cvr-num-green font-semibold">{{ fmt(sumLimitDetail(section, 'available_room')) }}</td>
+                                    <td class="px-4 py-2 text-right cvr-num font-semibold">{{ fmt(sumLimitDetail(section, 'interest')) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
 
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">

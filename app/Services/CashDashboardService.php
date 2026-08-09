@@ -206,6 +206,47 @@ class CashDashboardService
             $commercialMeta = OverdraftCashDashboardHelper::overdraftMetaById('overdraft_against_commercial_papers', $overdraftAgainstCommercialPaperIds);
             $assignmentMeta = OverdraftCashDashboardHelper::overdraftMetaById('overdraft_against_assignment_of_contracts', $overdraftAgainstAssignmentOfContractIds);
 
+            $fullySecuredInterest = OverdraftCashDashboardHelper::interestByOverdraftId(
+                'fully_secured_overdraft_bank_statements',
+                'fully_secured_overdrafts',
+                'fully_secured_overdraft_id',
+                $companyId,
+                $currencyName,
+                $date,
+                $year,
+                $fullySecuredOverdraftIds
+            );
+            $cleanInterest = OverdraftCashDashboardHelper::interestByOverdraftId(
+                'clean_overdraft_bank_statements',
+                'clean_overdrafts',
+                'clean_overdraft_id',
+                $companyId,
+                $currencyName,
+                $date,
+                $year,
+                $cleanOverdraftIds
+            );
+            $commercialInterest = OverdraftCashDashboardHelper::interestByOverdraftId(
+                'overdraft_against_commercial_paper_bank_statements',
+                'overdraft_against_commercial_papers',
+                'overdraft_against_commercial_paper_id',
+                $companyId,
+                $currencyName,
+                $date,
+                $year,
+                $overdraftAgainstCommercialPaperIds
+            );
+            $assignmentInterest = OverdraftCashDashboardHelper::interestByOverdraftId(
+                'overdraft_against_assignment_of_contract_bank_statements',
+                'overdraft_against_assignment_of_contracts',
+                'overdraft_against_assignment_of_contract_id',
+                $companyId,
+                $currencyName,
+                $date,
+                $year,
+                $overdraftAgainstAssignmentOfContractIds
+            );
+
             $accountsForCurrency = collect($currentAccountsByCurrency[$currencyName] ?? []);
 
             foreach ($selectedFinancialInstitutionBankIds as $financialInstitutionBankId) {
@@ -225,7 +266,8 @@ class CashDashboardService
                     $cleanLatest,
                     $financialInstitutionBankId,
                     $institutionName,
-                    $unusedRoom
+                    $unusedRoom,
+                    $cleanInterest
                 );
                 OverdraftCashDashboardHelper::applyFinancialInstitutionRoomData(
                     $totalRoomForEachFullySecuredOverdraftId,
@@ -235,7 +277,8 @@ class CashDashboardService
                     $fullySecuredLatest,
                     $financialInstitutionBankId,
                     $institutionName,
-                    $unusedRoom
+                    $unusedRoom,
+                    $fullySecuredInterest
                 );
                 OverdraftCashDashboardHelper::applyFinancialInstitutionRoomData(
                     $totalRoomForEachOverdraftAgainstCommercialPaperId,
@@ -245,7 +288,8 @@ class CashDashboardService
                     $commercialLatest,
                     $financialInstitutionBankId,
                     $institutionName,
-                    $unusedRoom
+                    $unusedRoom,
+                    $commercialInterest
                 );
                 OverdraftCashDashboardHelper::applyFinancialInstitutionRoomData(
                     $totalRoomForEachOverdraftAgainstAssignmentOfContractId,
@@ -255,7 +299,8 @@ class CashDashboardService
                     $assignmentLatest,
                     $financialInstitutionBankId,
                     $institutionName,
-                    $unusedRoom
+                    $unusedRoom,
+                    $assignmentInterest
                 );
 
                 foreach ($accountsForCurrency as $accountRow) {

@@ -119,6 +119,44 @@ class OverdraftCashDashboardHelper
         );
     }
 
+    /**
+     * YTD interest_amount per overdraft id (same filters as yearCardData interest).
+     *
+     * @return array<int, float>
+     */
+    public static function interestByOverdraftId(
+        string $statementTable,
+        string $overdraftTable,
+        string $foreignKeyColumn,
+        int $companyId,
+        string $currencyName,
+        string $date,
+        int $year,
+        array $overdraftIds
+    ): array {
+        if ($overdraftIds === []) {
+            return [];
+        }
+
+        $rows = DB::table($statementTable.' as statements')
+            ->join($overdraftTable.' as overdrafts', 'overdrafts.id', '=', 'statements.'.$foreignKeyColumn)
+            ->where('statements.company_id', $companyId)
+            ->whereRaw('YEAR(statements.date) = ?', [$year])
+            ->where('statements.date', '<=', $date)
+            ->where('overdrafts.currency', $currencyName)
+            ->whereIn('statements.'.$foreignKeyColumn, $overdraftIds)
+            ->groupBy('statements.'.$foreignKeyColumn)
+            ->selectRaw('statements.'.$foreignKeyColumn.' as overdraft_id, sum(statements.interest_amount) as total_interest')
+            ->get();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(int) $row->overdraft_id] = (float) $row->total_interest;
+        }
+
+        return $out;
+    }
+
     public static function applyFinancialInstitutionRoomData(
         array &$totalRoomForEachCurrency,
         string $currencyName,
@@ -127,7 +165,8 @@ class OverdraftCashDashboardHelper
         array $latestStatementsByOverdraftId,
         int $financialInstitutionBankId,
         string $financialInstitutionName,
-        float &$totalRoomAccumulator
+        float &$totalRoomAccumulator,
+        array $interestByOverdraftId = []
     ): void {
         foreach ($overdraftIds as $overdraftId) {
             $meta = $overdraftMetaById[$overdraftId] ?? null;
@@ -145,6 +184,7 @@ class OverdraftCashDashboardHelper
                 'available_room' => $room,
                 'limit' => $statement ? (float) $statement->limit : 0.0,
                 'end_balance' => $statement ? (float) $statement->end_balance : 0.0,
+                'interest' => (float) ($interestByOverdraftId[$overdraftId] ?? 0),
             ];
         }
     }
