@@ -53,6 +53,15 @@ class SyncOdooPaymentMethodIdsJob implements ShouldQueue
      */
     public int $tries = 1;
 
+    /**
+     * * الـ timeout الافتراضي للـ worker دقيقة واحدة و دي مش كفاية
+     * * لان كل حساب بياخد كذا نداء على اودو و اودو نفسه بطيء احيانا
+     * * القيمة اللي هنا بتغلب اللي على الـ worker من غير ما نغير امر التشغيل
+     * * ملحوظة : لازم تفضل اقل من retry_after في config/queue.php
+     * * (متظبطة عندنا على قيمة عالية جدا فمفيش مشكلة)
+     */
+    public int $timeout = 900;
+
     public function __construct(private int $userId)
     {
     }

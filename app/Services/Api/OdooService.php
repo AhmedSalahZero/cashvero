@@ -822,22 +822,27 @@ class OdooService
 		}
 		return $odooExpenseItem ;
 	}
+	/**
+	 * * شجرة حسابات اودو كاملة , بتتسحب مرة واحدة بس لكل instance
+	 * * قبل كدا كانت بتتسحب مع كل حساب لوحده , يعني مزامنة ٢٠ حساب = ٢٠ نداء تقيل
+	 * * و دا اللي كان بيعمل timeout في الجوب
+	 */
+	private ?array $chartOfAccountsKeyedByCode = null ;
+
+	private function getChartOfAccountsKeyedByCode(): array
+	{
+		if ($this->chartOfAccountsKeyedByCode === null) {
+			$chartOfAccounts = $this->fetchData('account.account',['id','code'],[[]]);
+			$this->chartOfAccountsKeyedByCode = collect($chartOfAccounts)->keyBy('code')->toArray();
+		}
+
+		return $this->chartOfAccountsKeyedByCode ;
+	}
+
 	public function getChartOfAccountIdFromOdooCode(string $odooCode)
 	{
-			$fields = [
-				'id',
-				'code'
-			];
-			$filters = [
-				[
-					
-				]
-		];
-		
-		$chartOfAccounts = $this->fetchData('account.account',$fields,$filters);
-			$chartOfAccounts = collect($chartOfAccounts)->keyBy('code')->toArray();
-			return  $chartOfAccounts[$odooCode]['id']??null;
-			 
+		return  $this->getChartOfAccountsKeyedByCode()[$odooCode]['id']??null;
+
 	}
 	/**
 	 * * بترجع true لو الحساب اترط فعلا بحساب في شجرة حسابات اودو
@@ -847,19 +852,8 @@ class OdooService
 	public function syncFinancialInstitutions(FinancialInstitutionAccount $financialInstitutionAccount): bool
 	{
 		$odooSetting = $this->company->odooSetting;
-	
-			$fields = [
-				'id',
-				'code'
-			];
-			$filters = [
-				[
-					
-				]
-		];
-		$chartOfAccounts = $this->fetchData('account.account',$fields,$filters);
-		
-		$chartOfAccounts = collect($chartOfAccounts)->keyBy('code')->toArray();
+
+		$chartOfAccounts = $this->getChartOfAccountsKeyedByCode();
 	//		$financialInstitutionAccounts = FinancialInstitutionAccount::where('company_id',$this->company_id)->whereNotNull('odoo_code')->get();
 
 		//	foreach($financialInstitutionAccounts as $financialInstitutionAccount){
