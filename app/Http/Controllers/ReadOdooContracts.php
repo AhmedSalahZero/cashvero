@@ -17,7 +17,7 @@ class ReadOdooContracts extends Controller
 		try{
 			$odoo->startImportContracts($startDate,$endDate,$company->id);
 		}catch(\Exception $e){
-			session()->put('fail', $e->getMessage());
+			session()->flash('fail', $e->getMessage());
 			return back();
 		}
 		return redirect()->back()->with('success',__('Contracts Reading Has Been Completed'));

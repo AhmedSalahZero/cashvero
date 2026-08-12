@@ -162,7 +162,7 @@ class OdooSync
         self::flagModel($model, $message);
 
         try {
-            session()->put('fail', __('Error While Connecting With Odoo : ').$message);
+            session()->flash('fail', __('Error While Connecting With Odoo : ').$message);
         } catch (Throwable $ignored) {
             // no session in console context
         }

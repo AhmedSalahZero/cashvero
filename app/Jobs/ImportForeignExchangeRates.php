@@ -39,7 +39,7 @@ class ImportForeignExchangeRates implements ShouldQueue
 		try{
 			ForeignExchangeRate::importOdooExchangeRates($company);
 		}catch(\Exception $e){
-			session()->put('fail',__('Can Not Connect To Odoo'));
+			session()->flash('fail',__('Can Not Connect To Odoo'));
 		}
     }
 	

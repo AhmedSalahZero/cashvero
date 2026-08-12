@@ -3,6 +3,7 @@ import { Link, usePage, router } from '@inertiajs/vue3';
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useTheme } from '@/composables/useTheme';
 import ToastStack from '@/Components/ToastStack.vue';
+import { useToasts } from '@/composables/useToasts';
 import NavIcon from '@/Components/NavIcon.vue';
 
 const { theme, toggleTheme } = useTheme();
@@ -152,27 +153,19 @@ async function openNotificationDetail(sub) {
  * 3. Deduplicate by token so the two channels never double-toast.
  * 4. Clear consumed native flash after handling so partial reloads don't
  *    re-fire it (inertiajs/inertia#3015).
+ *
+ * ⚠️ The queue and the dedup token live at MODULE scope (useToasts.js),
+ * not inside setup(). This layout is not a persistent Inertia layout —
+ * every page component renders its own <AppLayout>, so a visit tears one
+ * instance down and builds another. The `flash` event fires while the
+ * response is being applied, which can be before the incoming instance
+ * exists: with a per-instance queue that toast was pushed into the
+ * outgoing instance and disappeared with it, which is the "the message
+ * only shows up if I reload" half of the report. Shared scope means
+ * whichever instance is on screen renders the same queue, and a token
+ * handled by one instance is not re-toasted by the next.
  */
-const toasts = ref([]);
-let toastSeed = 0;
-let lastHandledToken = null;
-function pushToast(type, message, duration = 5000) {
-    const id = ++toastSeed;
-    toasts.value.push({ id, type, message, duration });
-    setTimeout(() => dismissToast(id), duration);
-}
-function dismissToast(id) {
-    toasts.value = toasts.value.filter(t => t.id !== id);
-}
-function handleFlashPayload(flash) {
-    if (!flash) return;
-    const token = flash.token || `${flash.success || ''}|${flash.error || ''}`;
-    if (!flash.success && !flash.error) return;
-    if (token && token === lastHandledToken) return;
-    lastHandledToken = token;
-    if (flash.success) pushToast('success', flash.success);
-    if (flash.error) pushToast('error', flash.error);
-}
+const { toasts, dismissToast, handleFlashPayload } = useToasts();
 const removeFlashListener = router.on('flash', (event) => {
     handleFlashPayload(event.detail.flash);
     router.flash(() => ({}));

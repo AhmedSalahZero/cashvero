@@ -21,7 +21,7 @@ class ReadOdooPartners extends Controller
 		try {
 			$odoo->getPartners($startDate, $endDate, $company->id);
 		} catch (\Exception $e) {
-			session()->put('fail', $e->getMessage());
+			session()->flash('fail', $e->getMessage());
 
 			return back();
 		}

@@ -18,7 +18,7 @@ class ReadOdooInvoices extends Controller
 			$odoo->startImportContracts($startDate,$endDate,$company->id);
 			$odoo->startImportInvoices($startDate,$endDate,$company->id);
 		}catch(\Exception $e){
-			session()->put('fail', $e->getMessage());
+			session()->flash('fail', $e->getMessage());
 			return back();
 		}
 		return redirect()->back()->with('success',__('Invoices Reading Has Been Completed'));

@@ -237,4 +237,72 @@ class PaginationSmokeTest extends TestCase
 
         $this->assertPagesLoad($uri, ['', 'page=2']);
     }
+
+    /**
+     * The Contracts list paginates each of its three status tabs under its
+     * own `<status>_page` name, so the shared `page` parameter is not what
+     * moves it. Both types are exercised because they eager-load different
+     * relations (purchasesOrders.allocations vs salesOrders) and the
+     * Supplier query is the one that can hit a HasMany/Builder mismatch.
+     *
+     * @dataProvider contractTypes
+     */
+    public function test_contracts_list_paginates_per_tab(string $type): void
+    {
+        $uri = route('contracts.index', ['company' => $this->company->id, 'type' => $type]);
+
+        $this->assertPagesLoad($uri, [
+            '',
+            'running_page=2',
+            'active=finished&finished_page=2',
+            // Every tab moving at once — each paginator must read only its own name
+            'running_page=2&running_and_against_page=2&finished_page=2',
+        ]);
+
+        // The page reads these off every row / at the top level; a missing
+        // one is a blank render, not an error, so assert them here.
+        $props = $this->actingAs($this->actor)->get($uri)->viewData('page')['props'];
+
+        $this->assertArrayHasKey('hasOdooCredentials', $props);
+        $this->assertArrayHasKey('paginators', $props);
+
+        foreach ($props['contracts'] as $rows) {
+            foreach ($rows as $row) {
+                $this->assertArrayHasKey('related_contracts', $row);
+                $this->assertArrayHasKey('related_contracts_totals', $row);
+            }
+        }
+    }
+
+    public static function contractTypes(): array
+    {
+        return [
+            'customer' => ['Customer'],
+            'supplier' => ['Supplier'],
+        ];
+    }
+
+    /**
+     * Page 2 of a tab must not repeat page 1 — the failure mode when a
+     * paginator is built with a page name nobody sends.
+     */
+    public function test_contracts_tab_page_two_differs_from_page_one(): void
+    {
+        $uri = route('contracts.index', ['company' => $this->company->id, 'type' => 'Customer']);
+
+        $first = $this->actingAs($this->actor)->get($uri)->viewData('page')['props'] ?? null;
+
+        if (! $first || ($first['paginators']['running']['last_page'] ?? 1) < 2) {
+            $this->markTestSkipped('Development data has only one page of running customer contracts.');
+        }
+
+        $second = $this->actingAs($this->actor)->get($uri.'?running_page=2')->viewData('page')['props'];
+
+        $this->assertSame(2, $second['paginators']['running']['current_page']);
+        $this->assertNotEquals(
+            array_column($first['contracts']['running'], 'id'),
+            array_column($second['contracts']['running'], 'id'),
+            'Page 2 returned the same contracts as page 1 — the paginator is ignoring running_page.'
+        );
+    }
 }

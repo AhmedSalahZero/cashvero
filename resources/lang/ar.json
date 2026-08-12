@@ -1341,5 +1341,10 @@
 "Installments":"الأقساط",
 "All amounts are shown in":"جميع المبالغ معروضة بما يعادل",
 "Contracts filter currency":"عملة فلتر العقود",
-"This contract code is already used by another contract in this company":"كود العقد ده مستخدم بالفعل في عقد تاني بنفس الشركة"
+"This contract code is already used by another contract in this company":"كود العقد ده مستخدم بالفعل في عقد تاني بنفس الشركة",
+"Supplier Contracts":"عقود الموردين",
+"Related Supplier Contracts":"عقود الموردين المرتبطة",
+"Supplier Name":"اسم المورد",
+"Contract Name":"اسم التعاقد",
+"Contract Code":"كود التعاقد"
 }

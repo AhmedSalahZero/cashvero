@@ -80,16 +80,34 @@ class ContractsController
 			Contract::FINISHED 
 		];
 		
-		$runningContracts = Contract::where('contracts.company_id',$company->id)->where('status',Contract::RUNNING )->where('model_type',$type)->join('partners','partners.id','=','contracts.partner_id')->selectRaw('contracts.*,partners.name as partner_name')->orderByRaw('start_date desc , partner_name asc')->with(['relatedContracts'])->get();
-		$runningAndAgainstContracts = Contract::where('contracts.company_id',$company->id)->where('status',Contract::RUNNING_AND_AGAINST )->join('partners','partners.id','=','contracts.partner_id')->selectRaw('contracts.*,partners.name as partner_name')->orderByRaw('start_date desc , partner_name asc')->with(['relatedContracts'])->where('model_type',$type)->get();
-		$finishedContracts = Contract::where('contracts.company_id',$company->id)->where('status',Contract::FINISHED )->where('model_type',$type)->join('partners','partners.id','=','contracts.partner_id')->selectRaw('contracts.*,partners.name as partner_name')->orderByRaw('start_date desc , partner_name asc')->with(['relatedContracts'])->get();
-	
-		$contracts = [
-			Contract::RUNNING=>$runningContracts ,
-			Contract::RUNNING_AND_AGAINST=>$runningAndAgainstContracts,
-			Contract::FINISHED=>$finishedContracts
-		];
-		
+		/**
+		 * * كل تاب ليها بيچينيشن مستقلة بالـ page parameter بتاعها ، عشان
+		 * * التنقل في تاب ما يحركش التابات التانية.
+		 * * والـ eager loading هنا مهم: من غيره الصفحة كانت بتعمل كويري
+		 * * لكل عقد (فواتيره وأوامره وتوزيعاتها) — دي كانت سبب البطء
+		 */
+		$contracts = [];
+		$paginators = [];
+		foreach($contractStatues as $contractStatus){
+			$pageName = $this->pageNameForStatus($contractStatus);
+			$paginator = Contract::where('contracts.company_id',$company->id)
+				->where('status',$contractStatus)
+				->where('model_type',$type)
+				->join('partners','partners.id','=','contracts.partner_id')
+				->selectRaw('contracts.*,partners.name as partner_name')
+				->orderByRaw('start_date desc , partner_name asc')
+				->with($this->relationsToEagerLoad($type))
+				->paginate(GeneralFunctions::getPaginationLimit(),['*'],$pageName)
+				/**
+				 * * active بيخلي التاب المفتوحة تفضل مفتوحة بعد التنقل ،
+				 * * وباقي البراميترز بتفضل عشان بيچينيشن التابات التانية
+				 * * ما تترجعش لصفحة 1
+				 */
+				->appends(array_merge($request->except($pageName),['active'=>$contractStatus]));
+			$paginators[$contractStatus] = $paginator;
+			$contracts[$contractStatus] = $paginator->getCollection();
+		}
+
 		$customerOrSupplierContractsText = $type == 'Supplier' ? __('Supplier Contracts') : __('Customer Contracts');
 		$items = [];
 		foreach($contractStatues as $contractStatus){
@@ -105,7 +123,11 @@ class ContractsController
 					'end_date'=>$contract->getEndDateFormatted(),
 					'currency'=> $contract->getCurrency() ,
 					'amount'=>$contract->getAmountFormatted(),
-					'invoices'=>$invoices
+					'invoices'=>$invoices,
+					/**
+					 * * عقود الموردين المربوطة بعقد العميل ده (parent_id)
+					 */
+					'related_contracts'=>$contract->relatedContracts
 				];
 				foreach($contract->getOrders() as $order){
 					$items[$contractStatus][$contractId]['sub_items'][$order->id][$order->getOrderColumnName()] =$order->getNumber() ;
@@ -167,12 +189,55 @@ class ContractsController
 			];
 		};
 
+		/**
+		 * * صف واحد لكل عقد مورّد مربوط بعقد العميل ، ومعاه أرقام أوامر
+		 * * الشراء بتاعته (عقد المورّد الجاي من أودو ليه PO واحد ، بس
+		 * * العقد المتعمل بإيد ممكن يكون ليه أكتر من واحد)
+		 */
+		$mapRelatedContract = function ($relatedContract) {
+			return [
+				'id' => $relatedContract->id,
+				'client_name' => $relatedContract->getClientName(),
+				'name' => $relatedContract->getName(),
+				'contract_code' => $relatedContract->getCode(),
+				'purchase_order_numbers' => $relatedContract->purchasesOrders->map(fn ($purchaseOrder) => $purchaseOrder->getNumber())->filter()->implode(' , '),
+				'start_date' => $relatedContract->getStartDateFormatted(),
+				'end_date' => $relatedContract->getEndDateFormatted(),
+				'currency' => $relatedContract->getCurrency(),
+				'amount' => (float) $relatedContract->getAmount(),
+				'amount_formatted' => $relatedContract->getAmountFormatted(),
+			];
+		};
+
+		/**
+		 * * الإجمالي بيتحسب لكل عملة لوحدها — عقود الموردين على المشروع
+		 * * الواحد ممكن تكون بعملات مختلفة
+		 */
+		$totalsPerCurrency = function ($relatedContracts) {
+			$totals = [];
+			foreach ($relatedContracts as $relatedContract) {
+				$currency = $relatedContract['currency'] ?: '-';
+				$totals[$currency] = ($totals[$currency] ?? 0) + $relatedContract['amount'];
+			}
+
+			return collect($totals)->map(fn ($total, $currency) => [
+				'currency' => $currency,
+				'total_formatted' => number_format($total),
+			])->values();
+		};
+
 		$contractsForTabs = [];
 		foreach ($contractStatues as $contractStatus) {
 			$rows = [];
 			foreach (($items[$contractStatus] ?? []) as $mainItemId => $parentAndSubData) {
 				$parent = $parentAndSubData['parent'];
 				$subItems = $parentAndSubData['sub_items'] ?? [];
+				/**
+				 * * عقود الموردين بتتعرض تحت عقد العميل بس
+				 */
+				$relatedContracts = $type === 'Customer'
+					? collect($parent['related_contracts'])->map($mapRelatedContract)->values()
+					: collect();
 
 				$rows[] = [
 					'id' => $mainItemId,
@@ -188,6 +253,8 @@ class ContractsController
 					'mark_finished_url' => route('contract.mark.as.finished', ['company' => $company->id, 'contract' => $mainItemId, 'type' => $type]),
 					'mark_running_and_against_url' => route('contract.mark.as.running.and.against', ['company' => $company->id, 'contract' => $mainItemId, 'type' => $type]),
 					'invoices' => collect($parent['invoices'])->map($mapInvoice)->values(),
+					'related_contracts' => $relatedContracts,
+					'related_contracts_totals' => $totalsPerCurrency($relatedContracts),
 					'sub_items' => collect($subItems)->map(function ($subItem) use ($type, $mapAllocation) {
 						return [
 							'id' => $subItem['id'],
@@ -211,8 +278,14 @@ class ContractsController
 			'canCreate' => $canCreate,
 			'canUpdate' => $canUpdate,
 			'hasProjectNameColumn' => $hasProjectNameColumn,
+			/**
+			 * * لما الشركة مربوطة بأودو ، توزيع أوامر الشراء بيتحدد من
+			 * * أودو نفسه ، فزرار الـ Allocate بيتشال من عقود الموردين
+			 */
+			'hasOdooCredentials' => $company->hasOdooIntegrationCredentials(),
 			'contractStatues' => $contractStatues,
 			'contracts' => $contractsForTabs,
+			'paginators' => collect($paginators)->map(fn ($paginator) => $paginator->toArray()),
 			'createUrl' => route('contracts.create', ['company' => $company->id, 'type' => $type]),
 			'tabUrls' => collect($contractStatues)->mapWithKeys(function ($status) use ($company, $type) {
 				return [$status => route('contracts.index', ['company' => $company->id, 'type' => $type, 'active' => $status])];
@@ -224,6 +297,42 @@ class ContractsController
 			'storePoAllocationUrl' => route('store.po.allocations', ['company' => $company->id]),
 		]);
     }
+	/**
+	 * * اسم الـ page parameter لكل تاب ، عشان كل تاب تتنقل لوحدها
+	 */
+	public function pageNameForStatus(string $contractStatus):string
+	{
+		return $contractStatus.'_page';
+	}
+	/**
+	 * * العلاقات اللي الصفحة بتقراها لكل عقد. من غيرها بيحصل N+1
+	 * * (كويري للفواتير وكويري للأوامر وكويري للتوزيعات لكل عقد لوحده)
+	 *
+	 * @return array<string>
+	 */
+	protected function relationsToEagerLoad(string $type):array
+	{
+		$isSupplier = $type == 'Supplier';
+
+		/**
+		 * * ملحوظة مهمة: فواتير العقد (supplierInvoices / customerInvoices)
+		 * * **مينفعش** تتحط هنا. العلاقة دي فيها where('company_id',$this->company_id)
+		 * * ولارافيل وقت الـ eager loading بيبني العلاقة من موديل فاضي ،
+		 * * فالشرط بيتحول لـ company_id = null والفواتير بترجع صفر.
+		 * * وشيل الشرط مش حل لأن الفهرس الفريد على العقود هو (company_id , code)
+		 * * يعني نفس الكود ممكن يتكرر في شركة تانية. البيچينيشن أصلاً بتحدد
+		 * * الكويريات دي بعدد صفوف الصفحة الواحدة
+		 */
+		return [
+			'client',
+			/**
+			 * * التوزيعات موجودة على أمر الشراء بس ، مش على أمر البيع
+			 */
+			$isSupplier ? 'purchasesOrders.allocations' : 'salesOrders',
+			'relatedContracts.client',
+			'relatedContracts.purchasesOrders',
+		];
+	}
 	/**
 	 * Add Contract form.
 	 *

@@ -102,7 +102,7 @@ class OdooPayment
             );
     
             if (is_array($paymentId) && isset($paymentId['faultString'])) {
-                session()->put('fail', $paymentId['faultString']);
+                session()->flash('fail', $paymentId['faultString']);
                 $moneyModel->update([
                     'synced_with_odoo'=>false ,
                     'odoo_error_message'=>$paymentId['faultString']
@@ -118,7 +118,7 @@ class OdooPayment
                 'odoo_error_message'=>null
             ]);
         } catch (\Exception $e) {
-            session()->put('fail', __('Error While Connecting With Odoo : ' . $e->getMessage()));
+            session()->flash('fail', __('Error While Connecting With Odoo : ' . $e->getMessage()));
             $moneyModel->update([
                 'synced_with_odoo'=>false ,
                 'odoo_error_message'=>$e->getMessage()
@@ -193,7 +193,7 @@ class OdooPayment
                 [[$paymentId]],
             );
             if (is_array($paymentId) && isset($paymentId['faultString'])) {
-                session()->put('fail', $paymentId['faultString']);
+                session()->flash('fail', $paymentId['faultString']);
                 $moneyModel->update([
                     'synced_with_odoo'=>false ,
                     'odoo_error_message'=>$paymentId['faultString']
@@ -212,7 +212,7 @@ class OdooPayment
             ]);
                 
         } catch (\Exception $e) {
-            session()->put('fail', __('Error While Connecting With Odoo : ' . $e->getMessage()));
+            session()->flash('fail', __('Error While Connecting With Odoo : ' . $e->getMessage()));
             $moneyModel->update([
                 'synced_with_odoo'=>false ,
                 'odoo_error_message'=>$e->getMessage()
@@ -292,7 +292,7 @@ class OdooPayment
             ['context' => $context]
         );
         if (is_array($paymentResult) && isset($paymentResult['faultString'])) {
-            session()->put('fail', $paymentResult['faultString']);
+            session()->flash('fail', $paymentResult['faultString']);
             $moneyModel->update([
                 'synced_with_odoo'=>false ,
                 'odoo_error_message'=>$paymentResult['faultString']
@@ -544,7 +544,7 @@ class OdooPayment
                     );
                     // Handle success
                 } catch (Exception $e) {
-                    session()->put('fail', $e->getMessage());
+                    session()->flash('fail', $e->getMessage());
                 
                     // Log or handle error
                     Log::error('Odoo reconciliation failed: ' . $e->getMessage());
@@ -591,7 +591,7 @@ class OdooPayment
             ];
 
         } catch (\Exception $e) {
-            session()->put('fail', 'Error in chequeCollection: ' . $e->getMessage());
+            session()->flash('fail', 'Error in chequeCollection: ' . $e->getMessage());
             return [
                 'error' => true,
                 'message' => 'Failed to process cheque collection: ' . $e->getMessage()

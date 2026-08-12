@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Dropdown from '@/Components/Dropdown.vue';
+import Pagination from '@/Components/Pagination.vue';
 
 /*
  * Contracts/Index.vue
@@ -38,6 +39,16 @@ import Dropdown from '@/Components/Dropdown.vue';
  * differs from the company's main functional currency — same
  * condition and same two figures (Amount In Main Currency, Exchange
  * Rate) as the original Blade's admin/reports/invoice-report-td.blade.php.
+ *
+ * Customer contracts also get a "Supplier Contracts" button, listing
+ * the supplier contracts hanging off this one (Contract.parent_id).
+ * Those rows are created by the Odoo sync — one supplier contract per
+ * purchase order booked against the project — so the modal is the only
+ * place the customer→supplier link is visible in the UI.
+ *
+ * Each tab paginates on the server independently (its own `<status>_page`
+ * query parameter), so paging one tab leaves the other two where they
+ * were. Search stays client-side, on the current page's rows.
  */
 
 const props = defineProps({
@@ -48,8 +59,13 @@ const props = defineProps({
     canCreate: Boolean,
     canUpdate: Boolean,
     hasProjectNameColumn: Boolean,
+    // When the company is wired to Odoo, PO allocation is driven from
+    // Odoo itself, so the Allocate action is removed from Supplier
+    // contracts rather than left there to fight the sync.
+    hasOdooCredentials: Boolean,
     contractStatues: Array,
     contracts: Object, // { running: [...], running_and_against: [...], finished: [...] }
+    paginators: Object, // { running: {...}, running_and_against: {...}, finished: {...} } — Laravel paginator arrays
     createUrl: String,
     tabUrls: Object,
     clientsWithContracts: Array, // Supplier side only — customers to allocate a PO across
@@ -66,15 +82,19 @@ const tabLabels = {
 const activeTab = ref(props.activeTab || 'running');
 function switchTab(key) {
     activeTab.value = key;
-    // Data for every tab already arrived on first load (same shape the
-    // old Blade rendered all three tab-panes at once) — switching is
-    // instant, no reload needed.
+    // The first page of every tab already arrived on first load (same
+    // shape the old Blade rendered all three tab-panes at once) —
+    // switching is instant, no reload needed. Only paging within a tab
+    // goes back to the server.
 }
 
 const currentRows = computed(() => props.contracts[activeTab.value] || []);
+const currentPaginator = computed(() => props.paginators?.[activeTab.value] || null);
 
 /* ── KPIs ─────────────────────────────────────────────────────── */
-const totalCount = computed(() => currentRows.value.length);
+// The paginator's `total` is the real contract count; currentRows is
+// only the rows on this page.
+const totalCount = computed(() => currentPaginator.value?.total ?? currentRows.value.length);
 const totalOrders = computed(() =>
     currentRows.value.reduce((sum, c) => sum + (c.sub_items?.length || 0), 0)
 );
@@ -122,6 +142,14 @@ function submitStatusChange() {
 /* ── Invoices modal (both Customer and Supplier — see class docblock) ── */
 const invoicesTarget = ref(null);
 function openInvoices(row) { invoicesTarget.value = row; }
+
+/* ── Related supplier contracts modal (Customer side only) ────────
+   The supplier contracts created under this customer contract by the
+   Odoo purchase-order sync. Totals come pre-summed per currency from
+   the controller — supplier contracts on one project can be in
+   different currencies, so a single total would be meaningless. */
+const relatedContractsTarget = ref(null);
+function openRelatedContracts(row) { relatedContractsTarget.value = row; }
 
 /* ── FX breakdown popover (the ℹ️ icon on foreign-currency invoice
    rows) — same two figures the original Blade's invoice-report-td
@@ -303,6 +331,14 @@ function submitAllocations() {
                                             title="Invoices"
                                         >🧾</button>
 
+                                        <!-- Supplier contracts hanging off this customer contract -->
+                                        <button
+                                            v-if="type === 'Customer' && row.related_contracts.length"
+                                            @click="openRelatedContracts(row)"
+                                            class="cvr-tag"
+                                            title="Supplier Contracts"
+                                        >Supplier Contracts ({{ row.related_contracts.length }})</button>
+
                                         <button
                                             v-if="activeTab === 'running'"
                                             @click="confirmMarkFinished(row)"
@@ -346,8 +382,9 @@ function submitAllocations() {
                                     <td class="px-4 py-2 cvr-text-muted text-xs">Amount</td>
                                     <td class="px-4 py-2 cvr-num text-xs" colspan="2">{{ subItem.amount_formatted }}</td>
                                     <td class="px-4 py-2">
+                                        <!-- Hidden once the company is on Odoo — allocation comes from there -->
                                         <button
-                                            v-if="type === 'Supplier'"
+                                            v-if="type === 'Supplier' && !hasOdooCredentials"
                                             @click="openAllocationModal(subItem)"
                                             class="cvr-btn-secondary px-2 py-1 rounded border text-xs"
                                         >
@@ -366,6 +403,10 @@ function submitAllocations() {
                     </tbody>
                 </table>
             </div>
+
+            <!-- Each tab pages independently — its links carry `active` so
+                 the same tab stays open after the visit -->
+            <Pagination :paginator="currentPaginator" label="contracts" />
 
             <!-- Delete confirmation -->
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -387,6 +428,63 @@ function submitAllocations() {
                     <div class="flex justify-end gap-2">
                         <button @click="statusChangeTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
                         <button @click="submitStatusChange" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Related supplier contracts modal (Customer side only) -->
+            <div v-if="relatedContractsTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-6xl max-h-[85vh] overflow-y-auto">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-medium cvr-text-primary">
+                            Related Supplier Contracts — {{ relatedContractsTarget.name }}
+                            ({{ relatedContractsTarget.amount_formatted }} {{ relatedContractsTarget.currency }})
+                        </h2>
+                        <button @click="relatedContractsTarget = null" class="cvr-btn-secondary px-2 py-1 rounded border text-xs">✕</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-xs">
+                            <thead class="cvr-table-head">
+                                <tr>
+                                    <th class="px-3 py-2 text-left">Supplier Name</th>
+                                    <th class="px-3 py-2 text-left">Contract Name</th>
+                                    <th class="px-3 py-2 text-left">Contract Code</th>
+                                    <th class="px-3 py-2 text-left">Purchase Order Number</th>
+                                    <th class="px-3 py-2 text-left">Start Date</th>
+                                    <th class="px-3 py-2 text-left">End Date</th>
+                                    <th class="px-3 py-2 text-left">Currency</th>
+                                    <th class="px-3 py-2 text-right">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="related in relatedContractsTarget.related_contracts" :key="related.id" class="cvr-table-row">
+                                    <td class="px-3 py-2 cvr-text-primary">{{ related.client_name }}</td>
+                                    <td class="px-3 py-2 cvr-text-secondary">{{ related.name }}</td>
+                                    <td class="px-3 py-2 whitespace-nowrap cvr-text-secondary">{{ related.contract_code }}</td>
+                                    <td class="px-3 py-2 whitespace-nowrap cvr-text-secondary">{{ related.purchase_order_numbers }}</td>
+                                    <td class="px-3 py-2 whitespace-nowrap cvr-text-secondary">{{ related.start_date }}</td>
+                                    <td class="px-3 py-2 whitespace-nowrap cvr-text-secondary">{{ related.end_date }}</td>
+                                    <td class="px-3 py-2 uppercase cvr-text-secondary">{{ related.currency }}</td>
+                                    <td class="px-3 py-2 text-right cvr-num whitespace-nowrap">{{ related.amount_formatted }}</td>
+                                </tr>
+                            </tbody>
+                            <!-- One total row per currency — supplier contracts on
+                                 one project can be in different currencies -->
+                            <tfoot>
+                                <tr
+                                    v-for="total in relatedContractsTarget.related_contracts_totals"
+                                    :key="total.currency"
+                                    class="cvr-table-head font-semibold"
+                                >
+                                    <td class="px-3 py-2" colspan="6">Total</td>
+                                    <td class="px-3 py-2 uppercase">{{ total.currency }}</td>
+                                    <td class="px-3 py-2 text-right cvr-num whitespace-nowrap">{{ total.total_formatted }}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <div class="flex justify-end mt-4">
+                        <button @click="relatedContractsTarget = null" class="cvr-btn-primary px-3 py-1.5 rounded">Close</button>
                     </div>
                 </div>
             </div>

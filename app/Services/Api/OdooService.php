@@ -12,6 +12,7 @@ use App\Models\CustomerInvoice;
 use App\Models\FinancialInstitutionAccount;
 use App\Models\MoneyReceived;
 use App\Models\Partner;
+use App\Models\PurchaseOrder;
 use App\Models\SalesOrder;
 use App\Models\SupplierInvoice;
 use App\Models\User;
@@ -278,8 +279,13 @@ class OdooService
 			 */
 			$code = Contract::generateRandomContract($companyId,$currentOdooCustomerName,$currentProjectStartDate,$modelType);
 			$partnerId = Partner::handlePartnerForOdoo($currentOdooCustomerId ,$currentOdooCustomerName,1,0,false,false,$companyId  );
-			$oldProject = Contract::where('odoo_id',$currentOdooProjectId)->first();
-			
+			/**
+			 * * لازم نقيّد البحث بالشركة والنوع: عقود الموردين بقت كمان
+			 * * بتتخزن بـ odoo_id (بس بتاع الـ PO) ، ومن غير التقييد ده
+			 * * ممكن مشروع رقمه 5 يلاقي عقد مورّد من PO رقمه 5
+			 */
+			$oldProject = Contract::where('odoo_id',$currentOdooProjectId)->where('company_id',$companyId)->where('model_type',$modelType)->first();
+
 			$projectFormatted = [
 				'odoo_id'=>$currentOdooProjectId,
 				'code'=>$code,
@@ -316,6 +322,7 @@ class OdooService
 				$salesOrders = $this->models->execute_kw($this->db, $this->uid, $this->password, 'sale.order', 'read', array($salesOrderIds),[
 					'fields'=>[
 						'id',
+						'name', // الاسم المجرد ، ودا اللي بيتكتب في origin بتاع الـ PO
 						'display_name', // so_number
 						'currency_id',
 						'amount_total',
@@ -323,13 +330,19 @@ class OdooService
 					]
 				]);
 				$salesOrderFormatted = [];
+				$salesOrderOdooIds = [];
+				$salesOrderNames = [];
 				foreach($salesOrders as $orderIndex => $salesOrderArr){
 					$projectFormatted['currency']=$salesOrderArr['currency_id'][1];
 					$currentOrderIndex =$orderIndex+1;
 					$currentSalesOrderId = $salesOrderArr['id'];
 					$currentSalesOrderAmount = $salesOrderArr['amount_total'];
 					$projectAmount += $currentSalesOrderAmount;
-					
+					$salesOrderOdooIds[] = $currentSalesOrderId;
+					if(! empty($salesOrderArr['name'])){
+						$salesOrderNames[] = $salesOrderArr['name'];
+					}
+
 					$currentSalesOrderArr = [
 						'odoo_id'=>$currentSalesOrderId,
 						'so_number'=>$salesOrderArr['display_name'],
@@ -354,15 +367,352 @@ class OdooService
 				if(count($salesOrderFormatted) && $projectAmount){
 					$projectFormatted['salesOrders']=$salesOrderFormatted;
 					$contract = $oldProject ? $oldProject : new Contract ;
-			
+
 					$request = (new Request())->merge($projectFormatted);
 					$contract->storeBasicForm($request);
+					/**
+					 * * كل PO مربوط بالـ SOs بتاعة المشروع ده بيبقى عقد مورّد
+					 * * تحت عقد العميل ، وفواتير الـ PO بتتربط بعقد المورّد
+					 */
+					$this->syncSupplierContractsFromPurchaseOrders($contract,$salesOrderOdooIds,$salesOrderNames,$projectArr['account_id'][0] ?? null,$currentProjectEndDate,$companyId);
 				}
-				
+
 		}
 
-		
-		
+
+
+	}
+
+	/**
+	 * * بتجيب الـ POs المربوطة بالـ SOs بتاعة المشروع من أودو ، وبتعمل
+	 * * لكل PO عقد مورّد تحت عقد العميل — نفس الشكل اللي في الجداول
+	 * * عندنا (عقد المورّد ليه PO واحد و parent_id بيشاور على عقد العميل)
+	 *
+	 * @param  array<int>  $salesOrderOdooIds
+	 * @param  array<string>  $salesOrderNames
+	 * @return array<Contract>
+	 */
+	public function syncSupplierContractsFromPurchaseOrders(Contract $customerContract, array $salesOrderOdooIds, array $salesOrderNames, ?int $projectAnalyticAccountId, string $projectEndDate, int $companyId): array
+	{
+		$purchaseOrders = $this->getPurchaseOrdersForProject($salesOrderOdooIds, $salesOrderNames, $projectAnalyticAccountId);
+
+		return $this->storeSupplierContractsFromPurchaseOrders($customerContract, $purchaseOrders, $projectEndDate, $companyId);
+	}
+
+	/**
+	 * * في أودو 18 فيه ٣ طرق قياسية للربط ، وبناخد الاتحاد بينهم:
+	 * *   1) purchase.order.line.sale_order_id — بيتملي لما أودو نفسه
+	 * *      يولّد الـ PO من الـ SO (موديول sale_purchase وهو auto_install)
+	 * *   2) purchase.order.origin — المستند المصدر ، بيتكتب من الـ
+	 * *      procurement أو بإيد المشتري
+	 * *   3) analytic_distribution على سطور الـ PO فيها الحساب التحليلي
+	 * *      بتاع المشروع — دي أوسع طريقة وبتمسك أوامر الشراء اللي
+	 * *      اتحجزت على المشروع من غير ما حد يكتب الـ SO عليها
+	 *
+	 * @param  array<int>  $salesOrderOdooIds
+	 * @param  array<string>  $salesOrderNames
+	 * @return array<array<string,mixed>>
+	 */
+	protected function getPurchaseOrdersForProject(array $salesOrderOdooIds, array $salesOrderNames, ?int $projectAnalyticAccountId): array
+	{
+		$purchaseOrderIds = array_merge(
+			$this->purchaseOrderIdsFromSaleOrderLines($salesOrderOdooIds),
+			$this->purchaseOrderIdsFromOrigin($salesOrderNames),
+			$this->purchaseOrderIdsFromProjectAnalyticAccount($projectAnalyticAccountId)
+		);
+		$purchaseOrderIds = array_values(array_unique($purchaseOrderIds));
+
+		if (! count($purchaseOrderIds)) {
+			return [];
+		}
+
+		$purchaseOrders = $this->readFromOdoo('purchase.order', 'read', [$purchaseOrderIds], [
+			'fields'=>[
+				'id',
+				'name', // po_number
+				'origin',
+				'partner_id', // المورّد
+				'currency_id',
+				'amount_total',
+				'date_order',
+				'state',
+				'invoice_ids', // فواتير المورّد المربوطة بالـ PO — حقل مخزّن في أودو 18
+			],
+		]);
+
+		return is_array($purchaseOrders) ? $purchaseOrders : [];
+	}
+
+	/**
+	 * @param  array<int>  $salesOrderOdooIds
+	 * @return array<int>
+	 */
+	protected function purchaseOrderIdsFromSaleOrderLines(array $salesOrderOdooIds): array
+	{
+		if (! count($salesOrderOdooIds)) {
+			return [];
+		}
+
+		$purchaseOrderLines = $this->readFromOdoo('purchase.order.line', 'search_read', [
+			[['sale_order_id', 'in', array_values($salesOrderOdooIds)]],
+			['order_id'],
+		]);
+
+		if (! is_array($purchaseOrderLines)) {
+			return [];
+		}
+
+		$purchaseOrderIds = [];
+		foreach ($purchaseOrderLines as $purchaseOrderLine) {
+			if (is_array($purchaseOrderLine['order_id'] ?? null)) {
+				$purchaseOrderIds[] = $purchaseOrderLine['order_id'][0];
+			}
+		}
+
+		return array_values(array_unique($purchaseOrderIds));
+	}
+
+	/**
+	 * @param  array<string>  $salesOrderNames
+	 * @return array<int>
+	 */
+	protected function purchaseOrderIdsFromOrigin(array $salesOrderNames): array
+	{
+		$salesOrderNames = array_values(array_filter($salesOrderNames));
+
+		if (! count($salesOrderNames)) {
+			return [];
+		}
+
+		/**
+		 * * origin ممكن يكون فيه أكتر من مستند مفصولين بفاصلة ، فبنفلتر
+		 * * في أودو بـ ilike (فلترة تقريبية سريعة) وبعدين بنتأكد بالظبط
+		 * * في PHP عشان S00001 ماتمسكش S000012
+		 */
+		$domain = [];
+		foreach ($salesOrderNames as $index => $salesOrderName) {
+			if ($index > 0) {
+				array_unshift($domain, '|');
+			}
+			$domain[] = ['origin', 'ilike', $salesOrderName];
+		}
+
+		$purchaseOrders = $this->readFromOdoo('purchase.order', 'search_read', [$domain, ['id', 'origin']]);
+
+		if (! is_array($purchaseOrders)) {
+			return [];
+		}
+
+		$purchaseOrderIds = [];
+		foreach ($purchaseOrders as $purchaseOrder) {
+			foreach (explode(',', (string) ($purchaseOrder['origin'] ?? '')) as $origin) {
+				if (in_array(trim($origin), $salesOrderNames, true)) {
+					$purchaseOrderIds[] = $purchaseOrder['id'];
+					break;
+				}
+			}
+		}
+
+		return array_values(array_unique($purchaseOrderIds));
+	}
+
+	/**
+	 * * أوامر الشراء المحجوزة على الحساب التحليلي بتاع المشروع.
+	 * * analytic_distribution في أودو 17+ حقل Json ، وبيقبل البحث بـ in
+	 * * على أرقام الحسابات التحليلية
+	 *
+	 * @return array<int>
+	 */
+	protected function purchaseOrderIdsFromProjectAnalyticAccount(?int $projectAnalyticAccountId): array
+	{
+		if (is_null($projectAnalyticAccountId)) {
+			return [];
+		}
+
+		$purchaseOrderLines = $this->readFromOdoo('purchase.order.line', 'search_read', [
+			[['analytic_distribution', 'in', [$projectAnalyticAccountId]]],
+			['order_id'],
+		]);
+
+		if (! is_array($purchaseOrderLines)) {
+			return [];
+		}
+
+		$purchaseOrderIds = [];
+		foreach ($purchaseOrderLines as $purchaseOrderLine) {
+			if (is_array($purchaseOrderLine['order_id'] ?? null)) {
+				$purchaseOrderIds[] = $purchaseOrderLine['order_id'][0];
+			}
+		}
+
+		return array_values(array_unique($purchaseOrderIds));
+	}
+
+	/**
+	 * * الجزء اللي بيكتب عندنا — مش بيكلم أودو خالص ، بياخد صفوف الـ POs
+	 * * زي ما هي راجعة من أودو
+	 *
+	 * @param  array<array<string,mixed>>  $purchaseOrders
+	 * @return array<Contract>
+	 */
+	public function storeSupplierContractsFromPurchaseOrders(Contract $customerContract, array $purchaseOrders, string $projectEndDate, int $companyId): array
+	{
+		$supplierContracts = [];
+
+		foreach ($purchaseOrders as $purchaseOrderArr) {
+			/**
+			 * * الـ RFQ الملغي مش عقد
+			 */
+			if (($purchaseOrderArr['state'] ?? null) === 'cancel') {
+				continue;
+			}
+
+			$vendor = $purchaseOrderArr['partner_id'] ?? null;
+
+			if (! is_array($vendor)) {
+				continue;
+			}
+
+			$odooPurchaseOrderId = $purchaseOrderArr['id'];
+			$purchaseOrderNumber = $purchaseOrderArr['name'];
+			$amount = $purchaseOrderArr['amount_total'] ?? 0;
+			$currency = is_array($purchaseOrderArr['currency_id'] ?? null) ? $purchaseOrderArr['currency_id'][1] : $customerContract->currency;
+			$startDate = substr((string) ($purchaseOrderArr['date_order'] ?? ''), 0, 10) ?: $customerContract->start_date;
+			$endDate = $projectEndDate < $startDate ? $startDate : $projectEndDate;
+			$partnerId = Partner::handlePartnerForOdoo($vendor[0], $vendor[1], 0, 1, false, false, $companyId);
+
+			$oldSupplierContract = Contract::where('odoo_id', $odooPurchaseOrderId)->where('company_id', $companyId)->where('model_type', 'Supplier')->first();
+			$oldPurchaseOrder = PurchaseOrder::where('odoo_id', $odooPurchaseOrderId)->where('company_id', $companyId)->first();
+
+			/**
+			 * * لو نفس الـ PO اتحجز على أكتر من مشروع هيتنقل لآخر عقد
+			 * * عميل بيطالب بيه — بنسجّلها عشان تبان بدل ما تعدي في صمت
+			 */
+			if ($oldSupplierContract && $oldSupplierContract->parent_id && (int) $oldSupplierContract->parent_id !== (int) $customerContract->id) {
+				Log::warning('Odoo purchase order moved to another customer contract', [
+					'company_id' => $companyId,
+					'purchase_order_odoo_id' => $odooPurchaseOrderId,
+					'from_contract_id' => $oldSupplierContract->parent_id,
+					'to_contract_id' => $customerContract->id,
+				]);
+			}
+
+			$purchaseOrderFormatted = [
+				'odoo_id'=>$odooPurchaseOrderId,
+				'po_number'=>$purchaseOrderNumber,
+				'amount'=>$amount,
+				'execution_percentage_1'=>100,
+				'start_date_1'=>$startDate,
+				'end_date_1'=>$endDate,
+				'collection_days_1'=>0,
+				'company_id'=>$companyId,
+			];
+
+			/**
+			 * * بنمرر الـ id عشان الصف يتحدّث مش يتمسح ويتعمل من جديد ،
+			 * * وبالتالي الـ po allocations المربوطة بيه ما تضيعش
+			 */
+			if ($oldPurchaseOrder) {
+				$purchaseOrderFormatted['id'] = $oldPurchaseOrder->id;
+			}
+
+			$supplierContractFormatted = [
+				'odoo_id'=>$odooPurchaseOrderId,
+				'code'=>$oldSupplierContract ? $oldSupplierContract->code : Contract::generateRandomContract($companyId, $vendor[1], $startDate, 'Supplier'),
+				/**
+				 * * اسم العقد = اسم المشروع ، مش رقم الـ PO. رقم الـ PO
+				 * * مكانه po_number وبيظهر في صف الأمر تحت العقد ، والمورّد
+				 * * ليه عمود Partner Name لوحده
+				 */
+				'name'=>$customerContract->name,
+				'model_type'=>'Supplier',
+				'partner_id'=>$partnerId,
+				'parent_id'=>$customerContract->id,
+				'start_date'=>$startDate,
+				'end_date'=>$endDate,
+				'currency'=>$currency,
+				'amount'=>$amount,
+				'company_id'=>$companyId,
+				/**
+				 * * نفس فيكس Carbon 3 اللي في عقد العميل فوق — $absolute = true
+				 * * عشان الفرق ما يرجعش بالسالب
+				 */
+				'duration'=>Carbon::make($endDate)->diffInMonths($startDate, true),
+				'purchasesOrders'=>[$purchaseOrderFormatted],
+			];
+
+			if ($oldSupplierContract) {
+				$supplierContractFormatted['id'] = $oldSupplierContract->id;
+			}
+
+			$supplierContract = $oldSupplierContract ?: new Contract;
+			$supplierContract->storeBasicForm((new Request())->merge($supplierContractFormatted));
+
+			$this->linkSupplierInvoicesToContract($purchaseOrderArr['invoice_ids'] ?? [], $purchaseOrderNumber, $supplierContract, $companyId);
+
+			$supplierContracts[] = $supplierContract;
+		}
+
+		return $supplierContracts;
+	}
+
+	/**
+	 * * ربط فواتير المورّد بعقد المورّد. بنمشي بالـ odoo_id الجاي من
+	 * * purchase.order.invoice_ids (ربط محاسبي حقيقي مش مطابقة نصوص) ،
+	 * * وبنسند كمان على رقم الـ PO للفواتير اللي اتسحبت قبل العقد
+	 *
+	 * @param  array<int>  $billOdooIds
+	 */
+	protected function linkSupplierInvoicesToContract(array $billOdooIds, string $purchaseOrderNumber, Contract $supplierContract, int $companyId): void
+	{
+		$contractData = [
+			'contract_code'=>$supplierContract->code,
+			'contract_name'=>$supplierContract->name,
+			'project_name'=>$supplierContract->name,
+		];
+
+		if (count($billOdooIds)) {
+			SupplierInvoice::where('company_id', $companyId)->whereIn('odoo_id', $billOdooIds)->update($contractData);
+		}
+
+		SupplierInvoice::where('company_id', $companyId)
+			->where(SupplierInvoice::SO_OR_PO_NUMBER, $purchaseOrderNumber)
+			/**
+			 * * بنربط الفواتير اللي لسه من غير عقد ، وبنحدّث كمان اللي
+			 * * مربوطة بالعقد ده أصلاً عشان اسم العقد يفضل متزامن —
+			 * * من غير ما نخطف فاتورة مربوطة بعقد تاني
+			 */
+			->where(function ($query) use ($supplierContract) {
+				$query->whereNull('contract_code')->orWhere('contract_code', $supplierContract->code);
+			})
+			->update($contractData);
+	}
+
+	/**
+	 * * أودو بيرجّع array فيها faultCode بدل ما يرمي استثناء ، فلو الحقل
+	 * * أو الموديول مش موجود ما ينفعش نكمل على الراجع ده كأنه داتا
+	 */
+	protected function readFromOdoo(string $model, string $method, array $args, array $kwargs = [])
+	{
+		try {
+			$result = $this->models->execute_kw($this->db, $this->uid, $this->password, $model, $method, $args, $kwargs);
+		} catch (\Throwable $e) {
+			Log::error('Odoo read failed: '.$model.'.'.$method.' — '.$e->getMessage(), [
+				'company_id' => $this->company_id ?? null,
+			]);
+
+			return null;
+		}
+
+		if (is_array($result) && isset($result['faultCode'])) {
+			Log::error('Odoo read returned a fault: '.$model.'.'.$method.' — '.($result['faultString'] ?? ''), [
+				'company_id' => $this->company_id ?? null,
+			]);
+
+			return null;
+		}
+
+		return $result;
 	}
 	protected function getInvoices(string $startDate,string $endDate)
 	{

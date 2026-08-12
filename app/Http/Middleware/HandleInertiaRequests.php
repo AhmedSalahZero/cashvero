@@ -116,8 +116,34 @@ class HandleInertiaRequests extends Middleware
              * the redirected GET and are shared here.
              */
             'flash' => Inertia::always(function () use ($request) {
-                $success = $request->session()->get('success');
-                $error = $request->session()->get('fail') ?? $request->session()->get('error');
+                /**
+                 * ⚠️ pull(), not get() — this is the "the error toast never
+                 * goes away, even after a reload" bug.
+                 *
+                 * A dozen call sites (the Odoo readers, OdooPayment,
+                 * OdooSync) used session()->put('fail', ...) instead of
+                 * flash()/->with(). put() writes a PERMANENT session key:
+                 * nothing ages it out, and reading it with get() here left
+                 * it in place. So one failed Odoo sync re-toasted the same
+                 * message on every single page for the rest of the session,
+                 * and rode along with unrelated success messages afterwards.
+                 * Those call sites now flash properly, and consuming the
+                 * keys here means a stray put() anywhere can never wedge a
+                 * message on screen again — a message is shown exactly once.
+                 *
+                 * Safe against non-Inertia responses: this closure only runs
+                 * while an Inertia page response is being built, so a Blade
+                 * or JSON response never consumes anything.
+                 */
+                $success = $request->session()->pull('success');
+                /**
+                 * Both keys are pulled unconditionally — with ?? between two
+                 * pull() calls the second never runs when the first hits, and
+                 * the loser would be the one left wedged in the session.
+                 */
+                $fail = $request->session()->pull('fail');
+                $legacyError = $request->session()->pull('error');
+                $error = $fail ?? $legacyError;
                 $token = ($success || $error) ? uniqid('', true) : null;
 
                 if ($success || $error) {

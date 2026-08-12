@@ -193,10 +193,9 @@ const amountInInvoiceCurrency = computed(() => {
 
 /* ── Settlement Information (invoices repeater) — suppliers only ── */
 const showSettlementCard = computed(() => partnerType.value === 'is_supplier');
-const invoices = ref([]); // [{ id, invoice_number, invoice_date, invoice_due_date, currency, net_invoice_amount, paid_amount, net_balance, settlement_amount, withhold_amount, allocations: [...] }]
+const invoices = ref([]); // [{ id, invoice_number, invoice_date, invoice_due_date, currency, net_invoice_amount, paid_amount, net_balance, settlement_amount, withhold_amount }]
 const invoicesFetchFailed = ref(null);
 const supplierInvoiceCurrencies = ref([]);
-const clientsWithContracts = ref([]); // server sends { id: name } — customers (with contracts) available for the Allocate modal
 
 async function fetchInvoices() {
     if (!showSettlementCard.value || !supplierId.value) { invoices.value = []; invoicesFetchFailed.value = null; supplierInvoiceCurrencies.value = []; return; }
@@ -220,21 +219,11 @@ async function fetchInvoices() {
             ...inv,
             settlement_amount: Number(inv.settlement_amount) || 0,
             withhold_amount: Number(inv.withhold_amount) || 0,
-            allocations: (inv.settlement_allocations || []).map(a => ({
-                id: a.id,
-                partner_id: a.partner_id,
-                contract_id: a.contract_id,
-                contract_code: a.contract_code,
-                contract_amount: a.contract_amount,
-                allocation_amount: Number(a.allocation_amount) || 0,
-                contracts: [],
-            })),
         }));
         if (props.singleModel) {
             fetchedInvoices = fetchedInvoices.filter(inv => String(inv.id) === String(props.singleModel));
         }
         invoices.value = fetchedInvoices;
-        clientsWithContracts.value = Object.entries(data.clientsWithContracts || {}).map(([id, name]) => ({ id, name }));
         supplierInvoiceCurrencies.value = Object.keys(data.currencies || {});
     } catch (e) {
         invoices.value = [];
@@ -257,57 +246,18 @@ const unappliedAmountInPaymentCurrency = computed(() => {
     return Math.round((remaining || 0) * 100) / 100;
 });
 
-/* ── Allocate modal (per invoice row) ─────────────────────────────
-   ⚠️ Real fix, not a guess: the original always submitted new/edited
-   allocation rows under the WRONG top-level key (`settlements[...]`
-   instead of `allocations[...]`), so anything pre-filled from an
-   existing record was silently dropped on save — and the Contract
-   dropdown inside this modal was never wired to any endpoint at all
-   (verified: no handler for it exists anywhere in the real JS). Both
-   are fixed here: allocations are tracked in clean Vue state and
-   submitted under the correct `allocations[invoiceId]` key regardless
-   of whether they're new or pre-filled, and the Contract dropdown
-   reuses the same real, working getContractsForCustomer endpoint
-   Money Received's own down-payment picker uses. */
-const allocationModalInvoiceIndex = ref(null);
-
-function openAllocationModal(invoiceIndex) {
-    allocationModalInvoiceIndex.value = invoiceIndex;
-    invoices.value[invoiceIndex].allocations.forEach(row => {
-        if (row.partner_id && (!row.contracts || row.contracts.length === 0)) {
-            fetchAllocationContractsKeepingSelection(row);
-        }
-    });
-}
-function closeAllocationModal() {
-    allocationModalInvoiceIndex.value = null;
-}
-function addAllocationRow() {
-    if (allocationModalInvoiceIndex.value === null) return;
-    invoices.value[allocationModalInvoiceIndex.value].allocations.push({
-        id: null, partner_id: '', contract_id: '', contract_code: '', contract_amount: '', allocation_amount: 0, contracts: [],
-    });
-}
-function removeAllocationRow(rowIndex) {
-    if (allocationModalInvoiceIndex.value === null) return;
-    invoices.value[allocationModalInvoiceIndex.value].allocations.splice(rowIndex, 1);
-}
-async function fetchAllocationContracts(row) {
-    row.contracts = [];
-    row.contract_id = '';
-    if (!row.partner_id) return;
-    const params = new URLSearchParams({ customerId: row.partner_id, currency: paymentCurrency.value });
-    const result = await fetchJson(`${props.urls.getContractsForCustomer}?${params.toString()}`);
-    row.contracts = Object.entries(result.data?.contracts || {}).map(([id, name]) => ({ id, name }));
-}
-async function fetchAllocationContractsKeepingSelection(row) {
-    if (!row.partner_id) return;
-    const params = new URLSearchParams({ customerId: row.partner_id, currency: paymentCurrency.value });
-    const result = await fetchJson(`${props.urls.getContractsForCustomer}?${params.toString()}`);
-    row.contracts = Object.entries(result.data?.contracts || {}).map(([id, name]) => ({ id, name }));
-}
-const currentAllocationInvoice = computed(() => allocationModalInvoiceIndex.value !== null ? invoices.value[allocationModalInvoiceIndex.value] : null);
-const currentAllocationTotal = computed(() => (currentAllocationInvoice.value?.allocations || []).reduce((sum, a) => sum + (Number(a.allocation_amount) || 0), 0));
+/* ── Allocate (removed) ───────────────────────────────────────────
+   Splitting a supplier payment's settlement across a customer's
+   contracts used to live here as a per-invoice "Allocate" modal. It
+   was dropped from this form on both Create and Edit, so nothing is
+   posted under `allocations` any more.
+   The server side is deliberately untouched: MoneyPaymentController
+   still reads `$request->get('allocations', [])` and MoneyPayment
+   still has settlementAllocations()/storeNewAllocation(), so any other
+   caller keeps working. Note the consequence for existing records —
+   an update clears settlementAllocations() before re-creating them
+   from the request, so editing a payment that already had allocations
+   now leaves it with none. */
 
 /* ── "Choose Contract For Down Payment" — same mechanism as Money
    Received's Form.vue, using purchase orders instead of sales orders. */
@@ -492,7 +442,6 @@ onMounted(() => {
 /* ── Submit ───────────────────────────────────────────────────── */
 function buildPayload() {
     const settlements = {};
-    const allocations = {};
     invoices.value.forEach(inv => {
         if ((Number(inv.settlement_amount) || 0) > 0 || (Number(inv.withhold_amount) || 0) > 0) {
             settlements[inv.id] = {
@@ -502,11 +451,6 @@ function buildPayload() {
                 settlement_amount: inv.settlement_amount,
                 withhold_amount: inv.withhold_amount,
             };
-        }
-        if (inv.allocations && inv.allocations.length) {
-            allocations[inv.id] = inv.allocations
-                .filter(a => a.partner_id && a.contract_id)
-                .map(a => ({ partner_id: a.partner_id, contract_id: a.contract_id, allocation_amount: a.allocation_amount }));
         }
     });
 
@@ -537,7 +481,6 @@ function buildPayload() {
         exchange_rate: { [moneyType.value]: exchangeRate.value },
         amount_in_invoice_currency: { [moneyType.value]: amountInInvoiceCurrency.value },
         settlements,
-        allocations,
         unapplied_amount: showDownPaymentPicker.value ? unappliedAmount.value : 0,
         contract_id: showDownPaymentPicker.value && contractId.value !== 'general-down' ? contractId.value : null,
         purchases_orders_amounts: showDownPaymentPicker.value ? purchasesOrdersAmounts : [],
@@ -803,7 +746,7 @@ function submit() {
                     This supplier has no open invoices in {{ invoiceCurrency }}.
                 </div>
 
-                <div v-for="(inv, i) in invoices" :key="inv.id" class="cvr-border border rounded-lg p-4 mb-3">
+                <div v-for="inv in invoices" :key="inv.id" class="cvr-border border rounded-lg p-4 mb-3">
                     <div class="cvr-form-grid-6-2-2-2 mb-3">
                         <div>
                             <label class="cvr-form-label">Invoice Number</label>
@@ -840,12 +783,6 @@ function submit() {
                             <label class="cvr-form-label">Withhold Amount</label>
                             <input v-model.number="inv.withhold_amount" type="number" step="any" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
-                    </div>
-                    <div class="mt-3 flex items-center justify-between">
-                        <button @click="openAllocationModal(i)" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
-                            📎 Allocate{{ inv.allocations.length ? ` (${inv.allocations.length})` : '' }}
-                        </button>
-                        <span v-if="errors.allocations" class="text-xs" style="color: var(--cvr-danger-text)">{{ errors.allocations }}</span>
                     </div>
                 </div>
 
@@ -906,45 +843,6 @@ function submit() {
                 <button @click="submit" class="cvr-btn-primary px-4 py-2 rounded">{{ isEdit ? 'Update' : 'Save' }}</button>
             </div>
 
-            <!-- Allocate modal -->
-            <div v-if="currentAllocationInvoice" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div class="cvr-modal rounded-lg p-6 w-full max-w-6xl">
-                    <div class="flex items-start justify-between mb-1">
-                        <h2 class="text-lg font-medium cvr-text-primary">Allocate — Invoice {{ currentAllocationInvoice.invoice_number }}</h2>
-                        <button @click="closeAllocationModal" class="cvr-text-muted text-xl leading-none px-2" title="Close">✕</button>
-                    </div>
-                    <p class="text-xs cvr-text-muted mb-4">Split this invoice's settlement across one or more customer contracts. Total allocated must not exceed the Settlement Amount ({{ currentAllocationInvoice.settlement_amount }}).</p>
-
-                    <div v-for="(row, rowIndex) in currentAllocationInvoice.allocations" :key="rowIndex" class="cvr-form-grid-4-5-2-1 mb-3 items-end">
-                        <div>
-                            <label class="cvr-form-label">Customer</label>
-                            <select v-model="row.partner_id" @change="fetchAllocationContracts(row)" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
-                                <option v-for="c in clientsWithContracts" :key="c.id" :value="c.id">{{ c.name }}</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="cvr-form-label">Project Name</label>
-                            <select v-model="row.contract_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
-                                <option v-for="c in row.contracts" :key="c.id" :value="c.id">{{ c.name }}</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="cvr-form-label">Allocation Amount *</label>
-                            <input v-model.number="row.allocation_amount" type="number" step="any" min="0" class="cvr-input w-full px-3 py-2 rounded" />
-                        </div>
-                        <button @click="removeAllocationRow(rowIndex)" class="cvr-btn-danger px-3 py-2 rounded border">Remove</button>
-                    </div>
-                    <button @click="addAllocationRow" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm mb-4">+ Add Row</button>
-
-                    <p class="text-sm cvr-text-secondary mb-4">Total allocated: {{ currentAllocationTotal }}</p>
-
-                    <div class="flex justify-end">
-                        <button @click="closeAllocationModal" class="cvr-btn-secondary px-4 py-2 rounded border">Close</button>
-                    </div>
-                </div>
-            </div>
         </div>
     </AppLayout>
 </template>
