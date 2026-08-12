@@ -13,6 +13,38 @@ use Illuminate\Support\Facades\Log;
 class OdooPayment
 {
     use AuthTrait,HasPayment,HasJournal,HasUnlinkAccountBankStatementLine ;
+
+    /**
+     * * بترجع رقم الـ payment method line المتخزن للحساب او الخزنة المستخدمة في العملية
+     * * و null لو مش متظبط في اودو
+     * * الاعمدة القديمة ممكن تكون متخزن فيها '[]' (نتيجة بحث فاضي في اودو اتخزنت كنص)
+     * * علشان كدا بنتاكد ان القيمة رقم فعلا مش مجرد نكاست لصفر
+     */
+    private function getPaymentMethodLineId($moneyModel): ?int
+    {
+        $paymentMethodLineId = $moneyModel->getPaymentMethodLineId();
+
+        return is_numeric($paymentMethodLineId) && (int) $paymentMethodLineId > 0
+            ? (int) $paymentMethodLineId
+            : null ;
+    }
+
+    /**
+     * * من غير الرسالة دي كنا بنبعت 0 لاودو و المستخدم كان بيشوف
+     * * "Please define a payment method line on your payment"
+     * * من غير ما يعرف ان السبب ان الحساب/الخزنة دي مش متظبطة في اودو
+     */
+    private function failWithMissingPaymentMethodLine($moneyModel, $journalId): void
+    {
+        $message = __('There Is No Payment Method Line Configured In Odoo For The Account Or Safe Used In This Transaction')
+            . ' ( journal : ' . $journalId . ' )' ;
+
+        session()->flash('fail', $message);
+        $moneyModel->update([
+            'synced_with_odoo'=>false ,
+            'odoo_error_message'=>$message
+        ]);
+    }
     
     public function createDownPayment($moneyModel)
     {
@@ -44,6 +76,12 @@ class OdooPayment
             $customerOrSupplier = $moneyModel->getCustomerOrSupplier();
 
 
+            $paymentMethodLineId = $this->getPaymentMethodLineId($moneyModel);
+            if (! $paymentMethodLineId) {
+                $this->failWithMissingPaymentMethodLine($moneyModel, $journalId);
+                return ;
+            }
+
             // Step 2: Register payment using account.payment.register
             $context = [
                 'active_model' => 'account.move',
@@ -58,7 +96,7 @@ class OdooPayment
                 'partner_id' => $odooPartnerId,
                 'payment_type' => $inBoundOrOutBound,
                 'partner_type' => $customerOrSupplier ,
-                'payment_method_line_id'=>(int)$moneyModel->getPaymentMethodLineId(),
+                'payment_method_line_id'=>$paymentMethodLineId,
                 'memo'=>$moneyModel->generateDownPaymentMessage(),
             ];
 
@@ -158,6 +196,12 @@ class OdooPayment
             $customerOrSupplier = $moneyModel->getCustomerOrSupplier();
     
        
+            $paymentMethodLineId = $this->getPaymentMethodLineId($moneyModel);
+            if (! $paymentMethodLineId) {
+                $this->failWithMissingPaymentMethodLine($moneyModel, $journalId);
+                return ;
+            }
+
             // Step 2: Register payment using account.payment.register
             $context = [
                 'active_model' => 'account.move',
@@ -178,7 +222,7 @@ class OdooPayment
                     'partner_id' => $odooPartnerId,
                     'payment_type' => $inBoundOrOutBound,
                     'partner_type' => $customerOrSupplier ,
-                    'payment_method_line_id'=>(int)$moneyModel->getPaymentMethodLineId()
+                    'payment_method_line_id'=>$paymentMethodLineId
                 ]],
                 ['context' => $context]
             );
@@ -256,6 +300,12 @@ class OdooPayment
         $customerOrSupplier = $moneyModel->getCustomerOrSupplier();
     
        
+        $paymentMethodLineId = $this->getPaymentMethodLineId($moneyModel);
+        if (! $paymentMethodLineId) {
+            $this->failWithMissingPaymentMethodLine($moneyModel, $journalId);
+            return ;
+        }
+
         $context = [
             'active_model' => 'account.move',
             'active_ids' => [$invoiceId],
@@ -276,7 +326,7 @@ class OdooPayment
                 'partner_id' => $odooPartnerId,
                 'payment_type' => $inBoundOrOutBound,
                 'partner_type' => $customerOrSupplier ,
-                 'payment_method_line_id'=>$moneyModel->getPaymentMethodLineId(),
+                 'payment_method_line_id'=>$paymentMethodLineId,
 				 
             ]],
             ['context' => $context]

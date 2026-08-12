@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\FinancialInstitutionAccount;
 use App\Rules\AtLeastOneMainFunctionalCurrencyExistAtAccountRule;
+use App\Rules\CanNotChangeCurrencyWhenAccountHasStatementsRule;
 use App\Rules\DateMustBeGreaterThanOrEqualDate;
 use App\Rules\UniqueAccountNumberRule;
 use App\Rules\DateCanNotBeAfterAnyStatementRule;
@@ -49,7 +50,11 @@ class UpdateCurrentAccountRequest extends StoreCurrentAccountRequest
 			)],
 			'account_number'=>new UniqueAccountNumberRule($excludeAccountNumbers),
 			'account_interests.*.start_date'=>['required',new DateMustBeGreaterThanOrEqualDate(null,$balanceDate,__('Interest Date Must Be Greater Than Or Equal Beginning Balance Date'),true)],
-			'currency'=>['required',new AtLeastOneMainFunctionalCurrencyExistAtAccountRule($this->old_currency,$mainFunctionalCurrency,$financialInstitutionId)]
+			'currency'=>[
+				'required',
+				new AtLeastOneMainFunctionalCurrencyExistAtAccountRule($this->old_currency,$mainFunctionalCurrency,$financialInstitutionId),
+				new CanNotChangeCurrencyWhenAccountHasStatementsRule($financialInstitutionAccount),
+			]
 		];
     }
 }

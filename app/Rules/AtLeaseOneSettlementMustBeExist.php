@@ -2,6 +2,7 @@
 
 namespace App\Rules;
 
+use App\Helpers\HArr;
 use Illuminate\Contracts\Validation\ImplicitRule;
 
 class AtLeaseOneSettlementMustBeExist implements ImplicitRule
@@ -30,7 +31,13 @@ class AtLeaseOneSettlementMustBeExist implements ImplicitRule
 		if(Request()->get('is_down_payment')){
 			return true ;
 		}
-		return array_sum(array_column($this->settlements,'settlement_amount')) > 0 ;
+		/**
+		 * * المبالغ جاية من الفورم كنصوص متفرمتة (1,000.00) ، و PHP 8.4
+		 * * بترمي فاتال على array_sum لو فيها نص مش رقمي
+		 * * (Addition is not supported on type string)
+		 */
+		$amounts = HArr::unformatValues(array_column($this->settlements,'settlement_amount'));
+		return array_sum($amounts) > 0 ;
     }
 
     /**

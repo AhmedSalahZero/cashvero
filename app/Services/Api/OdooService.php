@@ -839,7 +839,12 @@ class OdooService
 			return  $chartOfAccounts[$odooCode]['id']??null;
 			 
 	}
-	public function syncFinancialInstitutions(FinancialInstitutionAccount $financialInstitutionAccount)
+	/**
+	 * * بترجع true لو الحساب اترط فعلا بحساب في شجرة حسابات اودو
+	 * * و false لو الكود مش موجود في اودو (ساعتها الربط القديم بيفضل زي ما هو)
+	 * * علشان اللي بينده يقدر يعرف المستخدم بدل ما الموضوع يعدي في صمت
+	 */
+	public function syncFinancialInstitutions(FinancialInstitutionAccount $financialInstitutionAccount): bool
 	{
 		$odooSetting = $this->company->odooSetting;
 	
@@ -886,14 +891,16 @@ class OdooService
 							'odoo_inbound_cheque_payment_method_id'=>$odooInboundChequePaymentMethodId??null ,
 							'odoo_outbound_cheque_payment_method_id'=>$odooOutboundChequePaymentMethodId??null,
 						]);
+
+						return true ;
 					}
-					
+
 				}
 		//	}
-			
-			
-	
-		
+
+
+		return false ;
+
 	}
 	public function syncBranchSafe(?string $odooCode,int $companyId)
 	{
@@ -1096,7 +1103,12 @@ class OdooService
 	
 		
 	
-	public function getPaymentMethodId(int $journalId , int $accountId , string $inboundOrOutbound )
+	/**
+	 * * بترجع null لو اودو مالوش payment method line على الجورنال دا بالحساب دا
+	 * * (قبل كدا كانت بترجع [] و دي كانت بتتخزن في العمود كنص '[]'
+	 * * و بعدين تتحول لصفر وتتبعت لاودو فيطلع ايرور مبهم)
+	 */
+	public function getPaymentMethodId(int $journalId , int $accountId , string $inboundOrOutbound ): ?int
 	{
 		try {
             $filters = [
@@ -1112,7 +1124,7 @@ class OdooService
             $records = $this->fetchData('account.payment.method.line', $fields,$filters);
             if (empty($records)) {
      //           Log::info("Odoo: No outgoing payment methods found for journal {$journalId} and account {$accountId}");
-                return [];
+                return null;
             }
          //   Log::info("Odoo: Fetched " . count($records) . " outgoing payment methods", ['records' => $records]);
             return $records[0]['id']??null;

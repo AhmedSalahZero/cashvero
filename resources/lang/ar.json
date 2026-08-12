@@ -1346,5 +1346,9 @@
 "Related Supplier Contracts":"عقود الموردين المرتبطة",
 "Supplier Name":"اسم المورد",
 "Contract Name":"اسم التعاقد",
-"Contract Code":"كود التعاقد"
+"Contract Code":"كود التعاقد",
+    "The Account Has Been Saved But Syncing With Odoo Failed":"تم حفظ الحساب و لكن فشلت المزامنة مع أودو",
+    "The Account Has Been Saved But The Odoo Code Was Not Found In Odoo Chart Of Accounts":"تم حفظ الحساب و لكن لم يتم العثور على كود أودو في شجرة حسابات أودو , لذلك لم يتم تحديث الربط مع أودو",
+    "Currency Can Not Be Changed Because There Are Transactions On This Account":"لا يمكن تغيير العملة لأنه يوجد حركات على هذا الحساب , يجب إقفال الحساب و فتح حساب جديد بالعملة المطلوبة",
+    "There Is No Payment Method Line Configured In Odoo For The Account Or Safe Used In This Transaction":"لا يوجد payment method line معرّف في أودو للحساب أو الخزنة المستخدمة في هذه العملية , برجاء ضبطها في أودو ثم حفظ الحساب مرة أخرى"
 }
