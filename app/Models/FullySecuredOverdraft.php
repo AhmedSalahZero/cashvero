@@ -144,6 +144,23 @@ class FullySecuredOverdraft extends Model implements IHaveStatement
 	{
 		return $this->cd_or_td_account_id;
 	}
+
+	/**
+	 * Resolves the currently-linked CD/TD account's own amount, so a
+	 * renewal's limit can be recalculated authoritatively server-side
+	 * (amount × new percentage) rather than trusting whatever number
+	 * the browser computed and sent.
+	 */
+	public function getLinkedCdOrTdAmount():float
+	{
+		$accountType = AccountType::find($this->getCdOrTdAccountTypeId());
+		if (!$accountType || !$this->getCdOrTdId()) {
+			return 0;
+		}
+		$modelClass = '\\App\\Models\\'.$accountType->getModelName();
+		$record = $modelClass::find($this->getCdOrTdId());
+		return $record ? (float) $record->getAmount() : 0;
+	}
 	public  function getStatementTableName():string
 	 {
 		return 'fully_secured_overdraft_bank_statements';	
@@ -277,6 +294,227 @@ class FullySecuredOverdraft extends Model implements IHaveStatement
 	{
 		return $this->belongsTo(Company::class,'company_id');
 	}
+
+	/**
+	 * Facility Renewal — Phase 2. Mirrors CleanOverdraft's implementation
+	 * exactly (including every bug found and fixed there — the correct
+	 * reorder() usage, the missing-Original safety net in renew(), and
+	 * the marker-row label/pinning below).
+	 */
+	public function termsHistories()
+	{
+		return $this->hasMany(FullySecuredOverdraftTermsHistory::class,'fully_secured_overdraft_id','id')->orderBy('effective_date');
+	}
+
+	public function getTermsAsOfDate(string $date):?FullySecuredOverdraftTermsHistory
+	{
+		return $this->termsHistories()
+			->where('effective_date','<=',$date)
+			->reorder('effective_date','desc')
+			->orderByDesc('id')
+			->first();
+	}
+
+	public function getLatestTerms():?FullySecuredOverdraftTermsHistory
+	{
+		return $this->termsHistories()->reorder('effective_date','desc')->orderByDesc('id')->first();
+	}
+
+	public function getCurrentChapterStartDateFormatted():?string
+	{
+		$latest = $this->getLatestTerms();
+		$date = $latest?->effective_date ?: $this->contract_start_date;
+		return $date ? \Carbon\Carbon::make($date)->format('d-m-Y') : null;
+	}
+
+	public function hasRenewals():bool
+	{
+		return $this->termsHistories()->count() > 1;
+	}
+
+	public function hasAnyTransactions():bool
+	{
+		return $this->fullySecuredOverdraftBankStatements()
+			->where(function($q){ $q->where('debit','>',0)->orWhere('credit','>',0); })
+			->exists();
+	}
+
+	public function createOriginalTermsHistory():FullySecuredOverdraftTermsHistory
+	{
+		return $this->termsHistories()->create([
+			'company_id' => $this->company_id,
+			'effective_date' => $this->contract_start_date,
+			'limit' => $this->limit,
+			'cd_or_td_lending_percentage' => $this->cd_or_td_lending_percentage,
+			'highest_debt_balance_rate' => $this->highest_debt_balance_rate,
+			'admin_fees_rate' => $this->admin_fees_rate,
+			'to_be_setteled_max_within_days' => $this->to_be_setteled_max_within_days,
+			'contract_end_date' => $this->contract_end_date,
+			'is_original' => true,
+			'notes' => 'Original facility terms.',
+		]);
+	}
+
+	public function renew(string $effectiveDate, array $newTerms, int $userId):FullySecuredOverdraftTermsHistory
+	{
+		if ($this->termsHistories()->count() === 0) {
+			$this->createOriginalTermsHistory();
+		}
+
+		$previous = $this->getLatestTerms();
+
+		if ($previous && $effectiveDate <= $previous->effective_date) {
+			throw new \InvalidArgumentException(
+				__('A renewal date must be after the facility\'s most recent renewal date (:date).', ['date' => $previous->getEffectiveDateFormatted()])
+			);
+		}
+
+		$currentEndDate = $previous?->contract_end_date ?: $this->contract_end_date;
+		if ($currentEndDate && $effectiveDate <= $currentEndDate) {
+			throw new \InvalidArgumentException(
+				__('A renewal date must be after the current contract end date (:date).', ['date' => \Carbon\Carbon::make($currentEndDate)->format('d-m-Y')])
+			);
+		}
+
+		if (empty($newTerms['contract_end_date'])) {
+			throw new \InvalidArgumentException(
+				__('A renewal must include a new contract end date — the previous end date can no longer apply once the renewal starts after it.')
+			);
+		}
+
+		/**
+		 * Client-flagged (2026-08-11): a renewal can restate the CD/TD
+		 * lending percentage, same as the original facility form — and
+		 * the limit is recalculated from it authoritatively here
+		 * (linked account's own amount × the new percentage), never
+		 * trusted from whatever the browser computed and sent. If no
+		 * new percentage is given, the previous chapter's percentage
+		 * carries forward and the limit is recalculated from THAT,
+		 * so the limit always stays in step with the percentage that's
+		 * actually in force — it's never independently typed.
+		 */
+		$lendingPercentage = $newTerms['cd_or_td_lending_percentage'] ?? $previous?->cd_or_td_lending_percentage ?? $this->cd_or_td_lending_percentage;
+		$linkedAmount = $this->getLinkedCdOrTdAmount();
+		$calculatedLimit = round($linkedAmount * (float) $lendingPercentage / 100, 2);
+
+		$termsRow = $this->termsHistories()->create([
+			'company_id' => $this->company_id,
+			'effective_date' => $effectiveDate,
+			'limit' => $calculatedLimit,
+			'cd_or_td_lending_percentage' => $lendingPercentage,
+			'highest_debt_balance_rate' => $newTerms['highest_debt_balance_rate'] ?? $previous?->highest_debt_balance_rate ?? $this->highest_debt_balance_rate,
+			'admin_fees_rate' => $newTerms['admin_fees_rate'] ?? $previous?->admin_fees_rate ?? $this->admin_fees_rate,
+			'to_be_setteled_max_within_days' => $newTerms['to_be_setteled_max_within_days'] ?? $previous?->to_be_setteled_max_within_days ?? $this->to_be_setteled_max_within_days,
+			'contract_end_date' => $newTerms['contract_end_date'] ?? $previous?->contract_end_date ?? $this->contract_end_date,
+			'notes' => $newTerms['notes'] ?? null,
+			'is_original' => false,
+			'created_by' => $userId,
+		]);
+
+		$this->update([
+			'limit' => $termsRow->limit,
+			'cd_or_td_lending_percentage' => $termsRow->cd_or_td_lending_percentage,
+			'highest_debt_balance_rate' => $termsRow->highest_debt_balance_rate,
+			'admin_fees_rate' => $termsRow->admin_fees_rate,
+			'to_be_setteled_max_within_days' => $termsRow->to_be_setteled_max_within_days,
+			'contract_end_date' => $termsRow->contract_end_date,
+		]);
+
+		$this->updateBankStatementsFromDate($effectiveDate);
+
+		return $termsRow;
+	}
+
+	public function deleteLatestRenewal():void
+	{
+		$latest = $this->getLatestTerms();
+
+		if (!$latest || $latest->is_original) {
+			throw new \InvalidArgumentException(__('There is no renewal to delete — this facility is still on its original terms.'));
+		}
+
+		$blockingTransactionsExist = $this->fullySecuredOverdraftBankStatements()
+			->where('date','>=',$latest->effective_date)
+			->where(function($q){ $q->where('debit','>',0)->orWhere('credit','>',0); })
+			->exists();
+
+		if ($blockingTransactionsExist) {
+			throw new \InvalidArgumentException(
+				__('This renewal cannot be deleted because there are transactions dated on or after its effective date (:date). Please remove those transactions first.', ['date' => $latest->getEffectiveDateFormatted()])
+			);
+		}
+
+		$latest->delete();
+
+		$newLatest = $this->getLatestTerms();
+		$this->update([
+			'limit' => $newLatest->limit,
+			'cd_or_td_lending_percentage' => $newLatest->cd_or_td_lending_percentage,
+			'highest_debt_balance_rate' => $newLatest->highest_debt_balance_rate,
+			'admin_fees_rate' => $newLatest->admin_fees_rate,
+			'to_be_setteled_max_within_days' => $newLatest->to_be_setteled_max_within_days,
+			'contract_end_date' => $newLatest->contract_end_date,
+		]);
+
+		$this->updateBankStatementsFromDate($newLatest->effective_date);
+	}
+
+	/**
+	 * Client-requested (2026-08-11): End Of Month Interest, wired up to
+	 * match Clean Overdraft's exact mechanism. This model's trigger
+	 * already had the calculation logic for `interest_type =
+	 * 'end_of_month'` rows — nothing ever actually created those rows
+	 * in the first place. This generates one scheduled placeholder row
+	 * per month-end within the contract period; the trigger fills in
+	 * the real amount from the account's actual balance history the
+	 * moment each row is inserted. Verbatim copy of
+	 * CleanOverdraft::handleEndOfMonthInterestForContractStatements() —
+	 * it's already generic (built entirely from this model's own
+	 * generateForeignKeyFormModelName()/getBankStatementTableClassName()),
+	 * so nothing facility-specific needed changing.
+	 */
+	public function handleEndOfMonthInterestForContractStatements(string $contractStartDate , string $contractEndDate , int $companyId)
+	{
+		$foreignKeyColumnName = self::generateForeignKeyFormModelName();
+		$fullBankStatement = self::getBankStatementTableClassName();
+
+		$contractStartDateAsCarbon = \Carbon\Carbon::make($contractStartDate);
+
+		$isLastDayOfMonth = $contractStartDateAsCarbon->isSameDay($contractStartDateAsCarbon->endOfMonth());
+
+		$contractEndDateAsCarbon= \Carbon\Carbon::make($contractEndDate);
+
+		$dates = generateDatesBetweenTwoDatesWithoutOverflow($contractStartDateAsCarbon,$contractEndDateAsCarbon) ;
+		$countDates = count($dates);
+		$interestText = 'interest';
+		$interestTypeText = 'end_of_month';
+		$fullBankStatement::where('company_id',$companyId)->where('type',$interestText)->where($foreignKeyColumnName,$this->id)->where('interest_type',$interestTypeText)->where('date','>',$contractEndDate)->delete();
+		foreach($dates as $index => $dateAsString){
+			if($index == 0 && $isLastDayOfMonth){
+				continue;
+			}
+			$isLastLoop = $index == $countDates -1;
+			$currentEndOfMonthDate = $isLastLoop ? \Carbon\Carbon::make($contractEndDate)->format('Y-m-d') : \Carbon\Carbon::make($dateAsString)->endOfMonth()->format('Y-m-d');
+			$isExist = $fullBankStatement::where('company_id',$companyId)->where($foreignKeyColumnName,$this->id)->where('type',$interestText)->where('interest_type',$interestTypeText)->where('date',$currentEndOfMonthDate)->first();
+			if(!$isExist){
+				$data = [
+				'company_id'=>$companyId,
+				$foreignKeyColumnName=>$this->id ,
+				'priority'=>1 ,
+				'type'=>$interestText,
+				'date'=>$currentEndOfMonthDate,
+				'limit'=>$this->limit ,
+				'credit'=>0 ,
+				'interest_type'=>'end_of_month',
+				'comment_en'=>__('End Of Month Interest'),
+				'comment_ar'=>__('End Of Month Interest'),
+				] ;
+				 $fullBankStatement::create($data);
+			}
+
+		}
+	}
+
 	public function updateLimitRaw()
 	{
 		$data = [
@@ -289,16 +527,16 @@ class FullySecuredOverdraft extends Model implements IHaveStatement
 			'limit'=>$this->limit ,
 			'debit'=>0,
 			'credit'=>0,
-			'comment_en'=>__('Limit'),
-			'comment_ar'=>__('Limit',[],'ar'),
+			'comment_en'=>__('Facility Limit Set'),
+			'comment_ar'=>__('Facility Limit Set',[],'ar'),
 		];
 		$row = $this->fullySecuredOverdraftBankStatements()->where('type','active-limit')->first();
 		if($row){
 			$row->update($data);
 		}else{
-			$this->fullySecuredOverdraftBankStatements()->create($data);
+			$row = $this->fullySecuredOverdraftBankStatements()->create($data);
 		}
-		
+		$row->update(['full_date' => $row->date.' 00:00:00']);
 	}
 	public function isOverdraft():bool 
 	{

@@ -3,6 +3,18 @@ import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { router, usePage, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { todayDate } from '@/composables/today';
+
+/**
+ * Client-requested (2026-08-11): invoice/net-balance amounts should
+ * always display to exactly 2 decimal places — raw backend values can
+ * carry more (or fewer) digits depending on the underlying arithmetic.
+ * Display-only; never touches what actually gets submitted.
+ */
+function formatMoney(value) {
+    const n = Number(value);
+    if (isNaN(n)) return value;
+    return n.toFixed(2);
+}
 /* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
    الحماية الحقيقية على السيرفر في الـ Form Request. */
 const maxDate = todayDate();
@@ -455,8 +467,23 @@ onMounted(() => {
         if (moneyType.value === 'cash_payment') fetchCashPaymentBalance();
         if (moneyType.value === 'outgoing-transfer' && outgoingTransfer.accountNumber) fetchAccountBalance(outgoingTransfer.accountTypeId, outgoingTransfer.accountNumber, outgoingTransfer.deliveryBankId, outgoingTransferBalance, outgoingTransferNetBalance);
         if (moneyType.value === 'payable_cheque' && payableCheque.accountNumber) fetchAccountBalance(payableCheque.accountTypeId, payableCheque.accountNumber, payableCheque.deliveryBankId, payableChequeBalance, payableChequeNetBalance);
-    } else if (!props.singleModel) {
-        fetchSuppliersForPartnerType();
+    } else {
+        /**
+         * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-11): fetchInvoices()
+         * used to live INSIDE the `!props.singleModel` branch — meaning
+         * arriving via the "Money Payments" button from a specific
+         * invoice (exactly when props.singleModel IS set) was the one
+         * case where invoices were never fetched at all. The working
+         * Money Received form gets this right: only the SUPPLIER LIST
+         * re-fetch should be skipped when arriving from a single
+         * invoice (the server already scoped it to the one correct
+         * supplier) — invoice fetching itself should always run
+         * whenever there's a supplier to fetch for, regardless of how
+         * the form was reached.
+         */
+        if (!props.singleModel) {
+            fetchSuppliersForPartnerType();
+        }
         if (showSettlementCard.value && supplierId.value) fetchInvoices();
     }
     fetchBranchesForCurrency();
@@ -622,7 +649,7 @@ function submit() {
             <div v-if="moneyType === 'cash_payment'" class="cvr-card-bg cvr-border border rounded-lg p-5 mb-5">
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="text-base font-medium cvr-text-primary">Cash Payment Information</h2>
-                    <div v-if="cashPaymentBalance !== null" class="text-sm cvr-text-secondary">Balance: <span class="cvr-num">{{ Number(cashPaymentBalance).toLocaleString() }}</span></div>
+                    <div v-if="cashPaymentBalance !== null" class="text-sm cvr-text-secondary">Balance: <span class="cvr-num">{{ Number(cashPaymentBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span></div>
                 </div>
                 <div class="cvr-form-grid-6-3-3">
                     <div>
@@ -657,8 +684,8 @@ function submit() {
             <div v-if="moneyType === 'payable_cheque'" class="cvr-card-bg cvr-border border rounded-lg p-5 mb-5">
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="text-base font-medium cvr-text-primary">Payable Cheque Information</h2>
-                    <div v-if="payableChequeBalance !== null" class="text-sm cvr-text-secondary">Balance: <span class="cvr-num">{{ Number(payableChequeBalance).toLocaleString() }}</span></div>
-                    <div v-if="payableChequeNetBalance !== null" class="text-sm cvr-text-secondary">Net Balance: <span class="cvr-num">{{ Number(payableChequeNetBalance).toLocaleString() }}</span></div>
+                    <div v-if="payableChequeBalance !== null" class="text-sm cvr-text-secondary">Balance: <span class="cvr-num">{{ Number(payableChequeBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span></div>
+                    <div v-if="payableChequeNetBalance !== null" class="text-sm cvr-text-secondary">Net Balance: <span class="cvr-num">{{ Number(payableChequeNetBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span></div>
                 </div>
                 <div class="cvr-form-grid-6-2-2-2">
                     <div>
@@ -718,8 +745,8 @@ function submit() {
             <div v-if="moneyType === 'outgoing-transfer'" class="cvr-card-bg cvr-border border rounded-lg p-5 mb-5">
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="text-base font-medium cvr-text-primary">Outgoing Transfer Information</h2>
-                    <div v-if="outgoingTransferBalance !== null" class="text-sm cvr-text-secondary">Balance: <span class="cvr-num">{{ Number(outgoingTransferBalance).toLocaleString() }}</span></div>
-                    <div v-if="outgoingTransferNetBalance !== null" class="text-sm cvr-text-secondary">Net Balance: <span class="cvr-num">{{ Number(outgoingTransferNetBalance).toLocaleString() }}</span></div>
+                    <div v-if="outgoingTransferBalance !== null" class="text-sm cvr-text-secondary">Balance: <span class="cvr-num">{{ Number(outgoingTransferBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span></div>
+                    <div v-if="outgoingTransferNetBalance !== null" class="text-sm cvr-text-secondary">Net Balance: <span class="cvr-num">{{ Number(outgoingTransferNetBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span></div>
                 </div>
                 <div class="cvr-form-grid-6-2-2-2">
                     <div>
@@ -792,17 +819,17 @@ function submit() {
                         </div>
                         <div>
                             <label class="cvr-form-label">Invoice Amount [{{ inv.currency }}]</label>
-                            <input :value="inv.net_invoice_amount" disabled class="cvr-input w-full px-3 py-2 rounded" />
+                            <input :value="formatMoney(inv.net_invoice_amount)" disabled class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
                     <div class="cvr-form-grid-4">
                         <div>
                             <label class="cvr-form-label">Paid Amount</label>
-                            <input :value="inv.paid_amount" disabled class="cvr-input w-full px-3 py-2 rounded" />
+                            <input :value="formatMoney(inv.paid_amount)" disabled class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Net Balance</label>
-                            <input :value="inv.net_balance" readonly class="cvr-input w-full px-3 py-2 rounded" />
+                            <input :value="formatMoney(inv.net_balance)" readonly class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Settlement Amount *</label>

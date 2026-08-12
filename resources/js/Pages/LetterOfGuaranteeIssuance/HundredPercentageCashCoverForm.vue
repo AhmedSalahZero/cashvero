@@ -64,7 +64,30 @@ const addingNewCustomer = ref(false);
 const newCustomerName = ref('');
 
 const contractsForCustomer = computed(() => props.contracts.filter(c => c.partner_id === Number(form.value.partner_id)));
-const purchaseOrdersForContract = computed(() => props.purchaseOrders.filter(po => po.contract_id === Number(form.value.contract_id)));
+const purchaseOrdersForContract = computed(() => props.purchaseOrders.filter(po => Number(po.contract_id) === Number(form.value.contract_id)));
+
+/* ── Bid Bond doesn't link to a Contract/SO — hide those fields and
+   clear out any values so a stale selection never gets submitted. ── */
+const isBidBond = computed(() => form.value.lg_type === 'bid-bond');
+watch(isBidBond, (bidBond) => {
+    if (bidBond) {
+        form.value.contract_id = '';
+        form.value.purchase_order_id = '';
+        form.value.purchase_order_date = '';
+    }
+});
+
+/* ── Picking a specific SO auto-fills its date (and locks the field);
+   picking "All SOs" clears it so the user fills it in themselves. ── */
+const isSpecificSoSelected = computed(() => !!form.value.purchase_order_id && form.value.purchase_order_id !== 'all');
+watch(() => form.value.purchase_order_id, (soId) => {
+    if (soId && soId !== 'all') {
+        const so = props.purchaseOrders.find(p => p.id === Number(soId));
+        form.value.purchase_order_date = so?.so_date ?? '';
+    } else if (soId === 'all') {
+        form.value.purchase_order_date = '';
+    }
+});
 
 /*
  * ⚠️ Confirmed by tracing store(): this source has no separate Cash
@@ -143,7 +166,9 @@ function submit() {
     // the literal string 'null' — an empty string is rejected by MySQL
     // as an invalid foreign key (same confirmed fix as the other 2 forms).
     if (!payload.contract_id) payload.contract_id = 'null';
-    if (!payload.purchase_order_id) payload.purchase_order_id = 'null';
+    // 'all' is the "All SOs" choice — it means "no specific SO",
+    // same as leaving the field empty, so it's stored as null too.
+    if (!payload.purchase_order_id || payload.purchase_order_id === 'all') payload.purchase_order_id = 'null';
     if (isEdit) {
         router.put(props.submitUrl, payload, { onFinish: () => { submitting.value = false; } });
     } else {
@@ -251,23 +276,28 @@ function submit() {
                             <label class="cvr-form-label">Transaction Reference *</label>
                             <input v-model="form.transaction_reference" type="text" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
-                        <div>
-                            <label class="cvr-form-label">Contract</label>
+                        <div v-if="!isBidBond">
+                            <label class="cvr-form-label">Contract *</label>
                             <select v-model="form.contract_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">None</option>
+                                <option value="" disabled>Select</option>
                                 <option v-for="c in contractsForCustomer" :key="c.id" :value="c.id">{{ c.name }}</option>
                             </select>
+                            <p v-if="errorFor('contract_id')" class="text-xs mt-1 cvr-num-red">{{ errorFor('contract_id') }}</p>
                         </div>
-                        <div>
-                            <label class="cvr-form-label">Purchase Order</label>
+                        <div v-if="!isBidBond">
+                            <label class="cvr-form-label">SO *</label>
                             <select v-model="form.purchase_order_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">None</option>
+                                <option value="" disabled>Select</option>
+                                <option value="all">All SOs</option>
                                 <option v-for="po in purchaseOrdersForContract" :key="po.id" :value="po.id">{{ po.po_number }}</option>
                             </select>
                         </div>
-                        <div>
-                            <label class="cvr-form-label">Purchase Order Date *</label>
-                            <input v-model="form.purchase_order_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                        <div v-if="!isBidBond">
+                            <label class="cvr-form-label">Sales Order Date *</label>
+                            <input v-model="form.purchase_order_date" type="date" :disabled="isSpecificSoSelected" class="cvr-input w-full px-3 py-2 rounded" :class="{ 'opacity-70': isSpecificSoSelected }" />
+                            <p class="text-xs cvr-text-muted mt-1">
+                                {{ isSpecificSoSelected ? 'Auto-filled from the selected SO' : 'Pick a date for this contract-wide LG' }}
+                            </p>
                         </div>
                         <div>
                             <label class="cvr-form-label">Transaction Date *</label>

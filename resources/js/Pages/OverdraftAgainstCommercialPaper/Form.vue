@@ -5,6 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 
 const props = defineProps({
     mode: String, // 'create' | 'edit'
+    hasRenewals: Boolean, // edit mode only — true once the facility has a renewal
     company: Object,
     financialInstitution: Object,
     currencies: Object,
@@ -17,6 +18,7 @@ const props = defineProps({
 
 const page = usePage();
 const isEdit = props.mode === 'edit';
+const isLockedByRenewal = isEdit && props.hasRenewals;
 
 /* ── Form state ───────────────────────────────────────────────── */
 const form = ref({
@@ -105,6 +107,23 @@ function submit() {
         delete payload.interest_rate;
         delete payload.min_interest_rate;
     }
+    // Client-directed rework (2026-08-11), applied from the start:
+    // once a renewal exists, onboarding/identity data is never
+    // resubmitted, and — specific to this facility type — the tier
+    // schedule (infos) is dropped too, since Edit must never touch
+    // ANY chapter's tiers once a renewal exists (only Renew adds a
+    // new chapter's tiers; the current chapter's own tiers, set at
+    // renewal time, stay fixed here).
+    if (isLockedByRenewal) {
+        delete payload.contract_start_date;
+        delete payload.account_number;
+        delete payload.odoo_code;
+        delete payload.currency;
+        delete payload.outstanding_balance;
+        delete payload.balance_date;
+        delete payload.outstanding_breakdowns;
+        delete payload.infos;
+    }
     if (isEdit) {
         router.put(props.submitUrl, payload, { onFinish: () => { submitting.value = false; } });
     } else {
@@ -130,6 +149,15 @@ function submit() {
                 Please fix the highlighted field(s) below before saving.
             </div>
 
+            <div v-if="isLockedByRenewal" class="mb-4 px-4 py-3 rounded border border-blue-400 bg-blue-50 text-blue-800 text-sm">
+                This facility has an active renewal, so this edits the <strong>current chapter's</strong> terms only.
+                Account details, onboarding data (Outstanding Balance / Balance Date / Outstanding Breakdown), and the
+                lending-rate tier schedule all belong to a specific chapter and can't be changed here — the tier
+                schedule is set once, at the moment of a renewal, and applies to every cheque deposited under this
+                chapter from then on. To change tiers or the renewal's own start date, delete and re-do the renewal
+                from the Archived Facilities tab instead.
+            </div>
+
             <form @submit.prevent="submit" class="space-y-6">
                 <!-- Main Information -->
                 <div class="cvr-card">
@@ -140,8 +168,8 @@ function submit() {
                             <input disabled :value="financialInstitution.name" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Contract Start Date *</label>
-                            <input v-model="form.contract_start_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                            <label class="cvr-form-label">{{ isLockedByRenewal ? 'Current Chapter Start Date' : 'Contract Start Date *' }}</label>
+                            <input v-model="form.contract_start_date" type="date" :disabled="isLockedByRenewal" class="cvr-input w-full px-3 py-2 rounded" :class="{ 'opacity-60': isLockedByRenewal }" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Contract End Date *</label>
@@ -150,11 +178,11 @@ function submit() {
                         </div>
                         <div>
                             <label class="cvr-form-label">Account Number *</label>
-                            <input v-model="form.account_number" type="text" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="form.account_number" type="text" :disabled="isLockedByRenewal" class="cvr-input w-full px-3 py-2 rounded" :class="{ 'opacity-60': isLockedByRenewal }" />
                             <p v-if="errorFor('account_number')" class="text-xs mt-1 cvr-num-red">{{ errorFor('account_number') }}</p>
                         </div>
                     </div>
-                    <div v-if="hasOdooIntegration" class="cvr-form-grid-4 mt-3">
+                    <div v-if="hasOdooIntegration && !isLockedByRenewal" class="cvr-form-grid-4 mt-3">
                         <div>
                             <label class="cvr-form-label">Odoo Code</label>
                             <input v-model="form.odoo_code" type="text" class="cvr-input w-full px-3 py-2 rounded" />
@@ -168,7 +196,7 @@ function submit() {
                     <div class="cvr-form-grid-4">
                         <div>
                             <label class="cvr-form-label">Currency *</label>
-                            <select v-model="form.currency" class="cvr-input w-full px-3 py-2 rounded">
+                            <select v-model="form.currency" :disabled="isLockedByRenewal" class="cvr-input w-full px-3 py-2 rounded" :class="{ 'opacity-60': isLockedByRenewal }">
                                 <option v-for="(label, code) in currencies" :key="code" :value="code">{{ label }}</option>
                             </select>
                         </div>
@@ -176,15 +204,17 @@ function submit() {
                             <label class="cvr-form-label">Limit *</label>
                             <input v-model="form.limit" type="number" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
-                        <div>
-                            <label class="cvr-form-label">Outstanding Balance *</label>
-                            <input v-model="form.outstanding_balance" type="number" class="cvr-input w-full px-3 py-2 rounded" />
-                        </div>
-                        <div>
-                            <label class="cvr-form-label">Balance Date *</label>
-                            <input v-model="form.balance_date" type="date" required class="cvr-input w-full px-3 py-2 rounded" />
-                            <p v-if="errorFor('balance_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('balance_date') }}</p>
-                        </div>
+                        <template v-if="!isLockedByRenewal">
+                            <div>
+                                <label class="cvr-form-label">Outstanding Balance *</label>
+                                <input v-model="form.outstanding_balance" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            </div>
+                            <div>
+                                <label class="cvr-form-label">Balance Date *</label>
+                                <input v-model="form.balance_date" type="date" required class="cvr-input w-full px-3 py-2 rounded" />
+                                <p v-if="errorFor('balance_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('balance_date') }}</p>
+                            </div>
+                        </template>
 
                         <!-- Rate fields only apply at creation — after that,
                              rate changes go through the Rates modal on the
@@ -228,8 +258,12 @@ function submit() {
                     </div>
                 </div>
 
-                <!-- Lending Information -->
-                <div class="cvr-card">
+                <!-- Lending Information — hidden once locked by a
+                     renewal (see banner above): the current chapter's
+                     tiers were set once, at renewal time, and stay
+                     fixed. Only shown pre-renewal, matching the
+                     client's confirmed "leave this case as-is" call. -->
+                <div v-if="!isLockedByRenewal" class="cvr-card">
                     <div class="flex items-center justify-between mb-4">
                         <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide">Lending Information</h2>
                         <button type="button" @click="addLendingRow" class="cvr-btn-primary px-3 py-1.5 rounded text-sm">
@@ -256,8 +290,10 @@ function submit() {
                     </div>
                 </div>
 
-                <!-- Outstanding Breakdown -->
-                <div class="cvr-card">
+                <!-- Outstanding Breakdown — onboarding-only, so it's
+                     dropped entirely once a renewal exists (see banner
+                     above). -->
+                <div v-if="!isLockedByRenewal" class="cvr-card">
                     <div class="flex items-center justify-between mb-4">
                         <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide">Outstanding Breakdown</h2>
                         <button type="button" @click="addBreakdownRow" class="cvr-btn-primary px-3 py-1.5 rounded text-sm">

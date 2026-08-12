@@ -5,6 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 
 const props = defineProps({
     mode: String, // 'create' | 'edit'
+    hasRenewals: Boolean,
     company: Object,
     financialInstitution: Object,
     currencies: Object,
@@ -18,6 +19,7 @@ const props = defineProps({
 
 const page = usePage();
 const isEdit = props.mode === 'edit';
+const isLockedByRenewal = isEdit && props.hasRenewals;
 
 const form = ref({
     name: props.model?.name ?? '',
@@ -74,6 +76,21 @@ function submit() {
         outstanding_amount: outstandingAmount,
         termAndConditions: termAndConditions.value.map(row => ({ ...row, outstanding_balance: 0 })),
     };
+    /**
+     * Facility Renewal: once a renewal exists, this only ever submits
+     * limit/contract_end_date — name/dates/currency and the Term &
+     * Conditions matrix belong to a specific dated chapter and can't
+     * be changed from this reduced form (same pattern as every other
+     * facility type).
+     */
+    if (isLockedByRenewal) {
+        delete payload.name;
+        delete payload.contract_start_date;
+        delete payload.currency;
+        delete payload.outstanding_date;
+        delete payload.outstanding_amount;
+        delete payload.termAndConditions;
+    }
     if (isEdit) {
         router.put(props.submitUrl, payload, { onFinish: () => { submitting.value = false; } });
     } else {
@@ -99,6 +116,13 @@ function submit() {
                 Please fix the highlighted field(s) below before saving.
             </div>
 
+            <div v-if="isLockedByRenewal" class="mb-4 px-4 py-3 rounded border border-blue-400 bg-blue-50 text-blue-800 text-sm">
+                This facility has an active renewal, so this edits the <strong>current chapter's</strong> terms only —
+                Limit and Contract End Date. The facility name, currency, start date, and Term &amp; Conditions
+                matrix belong to a specific chapter and can't be changed here. To change those, delete and re-do
+                the renewal from the Archived Facilities tab instead.
+            </div>
+
             <form @submit.prevent="submit" class="space-y-6">
                 <div class="cvr-card">
                     <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Main Information</h2>
@@ -109,33 +133,35 @@ function submit() {
                         </div>
                         <div>
                             <label class="cvr-form-label">LG Contract Name *</label>
-                            <input v-model="form.name" type="text" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="form.name" type="text" :disabled="isLockedByRenewal" class="cvr-input w-full px-3 py-2 rounded" :class="{ 'opacity-60': isLockedByRenewal }" />
                             <p v-if="errorFor('name')" class="text-xs mt-1 cvr-num-red">{{ errorFor('name') }}</p>
                         </div>
                     </div>
                     <div class="cvr-form-grid-4">
                         <div>
-                            <label class="cvr-form-label">Contract Start Date *</label>
-                            <input v-model="form.contract_start_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                            <label class="cvr-form-label">{{ isLockedByRenewal ? 'Current Chapter Start Date' : 'Contract Start Date *' }}</label>
+                            <input v-model="form.contract_start_date" type="date" :disabled="isLockedByRenewal" class="cvr-input w-full px-3 py-2 rounded" :class="{ 'opacity-60': isLockedByRenewal }" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Contract End Date *</label>
                             <input v-model="form.contract_end_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                            <p v-if="errorFor('contract_end_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('contract_end_date') }}</p>
                         </div>
                         <div>
                             <label class="cvr-form-label">Limit *</label>
                             <input v-model="form.limit" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <p v-if="errorFor('limit')" class="text-xs mt-1 cvr-num-red">{{ errorFor('limit') }}</p>
                         </div>
                         <div>
                             <label class="cvr-form-label">Currency *</label>
-                            <select v-model="form.currency" class="cvr-input w-full px-3 py-2 rounded">
+                            <select v-model="form.currency" :disabled="isLockedByRenewal" class="cvr-input w-full px-3 py-2 rounded" :class="{ 'opacity-60': isLockedByRenewal }">
                                 <option v-for="(label, code) in currencies" :key="code" :value="code">{{ label }}</option>
                             </select>
                         </div>
                     </div>
                 </div>
 
-                <div class="cvr-card">
+                <div v-if="!isLockedByRenewal" class="cvr-card">
                     <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Term &amp; Conditions — by LG Type</h2>
                     <div class="overflow-x-auto">
                         <table class="min-w-full text-sm">

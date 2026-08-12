@@ -2,6 +2,7 @@
 namespace App\Http\Controllers;
 use App\Http\Requests\StoreFullySecuredOverdraftRequest;
 use App\Http\Requests\UpdateFullySecuredOverdraftRequest;
+use App\Http\Requests\RenewFullySecuredOverdraftRequest;
 use App\Models\AccountType;
 use App\Models\Company;
 use App\Models\FinancialInstitution;
@@ -127,7 +128,7 @@ class FullySecuredOverdraftController
 			'rows' => $fullySecuredOverdrafts->map(function (FullySecuredOverdraft $fso) use ($company, $financialInstitution, $lockableAccountType) {
 				return [
 					'id' => $fso->id,
-					'contract_start_date_formatted' => $fso->getContractStartDateFormatted(),
+					'contract_start_date_formatted' => $fso->getCurrentChapterStartDateFormatted(),
 					'contract_end_date_formatted' => $fso->getContractEndDateFormatted(),
 					'account_number' => $fso->getAccountNumber(),
 					'currency' => $fso->getCurrencyFormatted(),
@@ -140,6 +141,22 @@ class FullySecuredOverdraftController
 					'delete_url' => route('delete.fully.secured.overdraft', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'fullySecuredOverdraft' => $fso->id]),
 					'lock_url' => $lockableAccountType ? route('lock.or.unlock.bank.account', ['company' => $company->id, 'accountType' => $lockableAccountType->id, 'accountId' => $fso->id]) : null,
 					'apply_rate_url' => route('fully-secured-overdraft-apply.rates', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'fullySecuredOverdraft' => $fso->id]),
+					'renew_url' => route('fully-secured-overdraft.renew', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'fullySecuredOverdraft' => $fso->id]),
+					'delete_renewal_url' => route('fully-secured-overdraft.delete-renewal', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'fullySecuredOverdraft' => $fso->id]),
+					'has_renewals' => $fso->hasRenewals(),
+					'cd_or_td_amount' => $fso->getLinkedCdOrTdAmount(),
+					'cd_or_td_lending_percentage' => $fso->cd_or_td_lending_percentage,
+					'terms_history' => $fso->termsHistories->map(fn ($t) => [
+						'id' => $t->id,
+						'effective_date_formatted' => $t->getEffectiveDateFormatted(),
+						'contract_end_date_formatted' => $t->contract_end_date ? \Carbon\Carbon::make($t->contract_end_date)->format('d-m-Y') : null,
+						'limit_formatted' => $t->getLimitFormatted(),
+						'cd_or_td_lending_percentage' => $t->cd_or_td_lending_percentage,
+						'highest_debt_balance_rate' => $t->highest_debt_balance_rate,
+						'admin_fees_rate' => $t->admin_fees_rate,
+						'to_be_setteled_max_within_days' => $t->to_be_setteled_max_within_days,
+						'is_original' => (bool) $t->is_original,
+					])->values(),
 					'rates' => $fso->rates->map(fn ($rate) => [
 						'id' => $rate->id,
 						'date_formatted' => $rate->getDateFormatted(),
@@ -285,23 +302,22 @@ class FullySecuredOverdraftController
 		$fullySecuredOverdraft = $financialInstitution->fullySecuredOverdrafts()->create($data);
 		$type = $request->get('type','fully-secured-over-draft');
 		$activeTab = $type ; 
-		
-		$fullySecuredOverdraft->fullySecuredOverdraftBankStatements()->create([
-			'type'=>'active-limit',
-			'is_debit'=>1 ,
-			'is_credit'=> 0 ,
-			'priority'=>3,
-			'company_id'=>$company->id ,
-			'date'=>$fullySecuredOverdraft->contract_start_date ,
-			'limit'=>$fullySecuredOverdraft->limit ,
-			'debit'=>0,
-			'credit'=>0,
-			'comment_en'=>__('Limit'),
-			'comment_ar'=>__('Limit',[],'ar'),
-			
-		]);
+		/**
+		 * Facility Renewal — Phase 2. Same fixes applied to Clean
+		 * Overdraft, front-loaded here from the start: create the
+		 * Original chapter immediately, and build the marker row through
+		 * the single authoritative updateLimitRaw() rather than
+		 * duplicating the same logic inline.
+		 */
+		$fullySecuredOverdraft->createOriginalTermsHistory();
+		$fullySecuredOverdraft->updateLimitRaw();
 		
 		
+		/**
+		 * Client-requested (2026-08-11): End Of Month Interest, matching
+		 * Clean Overdraft's exact mechanism.
+		 */
+		$fullySecuredOverdraft->handleEndOfMonthInterestForContractStatements($data['contract_start_date'],$data['contract_end_date'],$company->id);
 		$fullySecuredOverdraft->storeOutstandingBreakdown($request,$company);
 		return redirect()->route('view.fully.secured.overdraft',['company'=>$company->id,'financialInstitution'=>$financialInstitution->id,'active'=>$activeTab])->with('success',__('Data Store Successfully'));
 		
@@ -353,6 +369,8 @@ class FullySecuredOverdraftController
 
         return \Inertia\Inertia::render('FullySecuredOverdraft/Form', [
 			'mode' => 'edit',
+			'hasRenewals' => $fullySecuredOverdraft->hasRenewals(),
+			'linkedCdOrTdAmount' => $fullySecuredOverdraft->getLinkedCdOrTdAmount(),
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
 			'currencies' => getCurrencies(),
@@ -361,7 +379,7 @@ class FullySecuredOverdraftController
 			'cdOrTdAccounts' => $accounts,
 			'model' => [
 				'id' => $fullySecuredOverdraft->id,
-				'contract_start_date' => $fullySecuredOverdraft->getContractStartDate(),
+				'contract_start_date' => $fullySecuredOverdraft->hasRenewals() ? $fullySecuredOverdraft->getLatestTerms()->effective_date : $fullySecuredOverdraft->getContractStartDate(),
 				'contract_end_date' => $fullySecuredOverdraft->getContractEndDate(),
 				'account_number' => $fullySecuredOverdraft->getAccountNumber(),
 				'odoo_code' => $fullySecuredOverdraft->getOdooCode(),
@@ -369,13 +387,13 @@ class FullySecuredOverdraftController
 				'cd_or_td_account_type_id' => $fullySecuredOverdraft->getCdOrTdAccountTypeId(),
 				'cd_or_td_id' => $fullySecuredOverdraft->getCdOrTdId(),
 				'limit' => $fullySecuredOverdraft->getLimit(),
-				'outstanding_balance' => $fullySecuredOverdraft->getOutstandingBalance(),
-				'balance_date' => $fullySecuredOverdraft->balance_date,
+				'outstanding_balance' => $fullySecuredOverdraft->hasRenewals() ? null : $fullySecuredOverdraft->getOutstandingBalance(),
+				'balance_date' => $fullySecuredOverdraft->hasRenewals() ? null : $fullySecuredOverdraft->balance_date,
 				'highest_debt_balance_rate' => $fullySecuredOverdraft->highest_debt_balance_rate,
 				'admin_fees_rate' => $fullySecuredOverdraft->admin_fees_rate,
 				'to_be_setteled_max_within_days' => $fullySecuredOverdraft->getMaxSettlementDays(),
 				'cd_or_td_lending_percentage' => $fullySecuredOverdraft->cd_or_td_lending_percentage,
-				'outstanding_breakdowns' => $fullySecuredOverdraft->outstandingBreakdowns->map(fn ($b) => [
+				'outstanding_breakdowns' => $fullySecuredOverdraft->hasRenewals() ? [] : $fullySecuredOverdraft->outstandingBreakdowns->map(fn ($b) => [
 					'settlement_date' => $b->settlement_date,
 					'amount' => $b->amount,
 				])->values(),
@@ -414,13 +432,28 @@ class FullySecuredOverdraftController
 	 * about what gets saved has changed.
 	 */
 	public function update(Company $company , UpdateFullySecuredOverdraftRequest $request , FinancialInstitution $financialInstitution,FullySecuredOverdraft $fullySecuredOverdraft){
-		$data = $request->only($this->getCommonDataArr());
+		$hasRenewals = $fullySecuredOverdraft->hasRenewals();
+		$fieldsToUpdate = $hasRenewals
+			? ['contract_end_date','cd_or_td_lending_percentage','highest_debt_balance_rate','admin_fees_rate','to_be_setteled_max_within_days']
+			: $this->getCommonDataArr();
+		$data = $request->only($fieldsToUpdate);
 		$data['updated_by'] = auth()->user()->id ;
-		$data['cd_or_td_account_id'] = $request->get('cd_or_td_id');
-		foreach(['contract_start_date','contract_end_date','balance_date'] as $dateField){
+		if (! $hasRenewals) {
+			$data['cd_or_td_account_id'] = $request->get('cd_or_td_id');
+		} else {
+			/**
+			 * Client-flagged (2026-08-11): limit is never trusted from
+			 * the request while locked — recalculated authoritatively
+			 * here from the linked CD/TD's own amount × the submitted
+			 * percentage, same rule as renew().
+			 */
+			$data['limit'] = round($fullySecuredOverdraft->getLinkedCdOrTdAmount() * (float) $request->get('cd_or_td_lending_percentage', 0) / 100, 2);
+		}
+		$dateFields = $hasRenewals ? ['contract_end_date'] : ['contract_start_date','contract_end_date','balance_date'];
+		foreach($dateFields as $dateField){
 			$data[$dateField] = $request->get($dateField) ? Carbon::make($request->get($dateField))->format('Y-m-d'):null;
 		}
-		if($company->hasOdooIntegrationCredentials()){
+		if($company->hasOdooIntegrationCredentials() && ! $hasRenewals){
 			$odooService = new OdooService($company);
 			$odooCode = $request->get('odoo_code');
 			$chartOfAccountId = $odooService->getChartOfAccountIdFromOdooCode($odooCode);
@@ -430,7 +463,22 @@ class FullySecuredOverdraftController
 		}
 		
 		$fullySecuredOverdraft->update($data);
-		$fullySecuredOverdraft->storeOutstandingBreakdown($request,$company);
+		$latestChapter = $fullySecuredOverdraft->getLatestTerms();
+		if ($latestChapter) {
+			$latestChapter->update([
+				'effective_date' => $latestChapter->is_original ? $fullySecuredOverdraft->contract_start_date : $latestChapter->effective_date,
+				'limit' => $fullySecuredOverdraft->limit,
+				'cd_or_td_lending_percentage' => $fullySecuredOverdraft->cd_or_td_lending_percentage,
+				'highest_debt_balance_rate' => $fullySecuredOverdraft->highest_debt_balance_rate,
+				'admin_fees_rate' => $fullySecuredOverdraft->admin_fees_rate,
+				'to_be_setteled_max_within_days' => $fullySecuredOverdraft->to_be_setteled_max_within_days,
+				'contract_end_date' => $fullySecuredOverdraft->contract_end_date,
+			]);
+		}
+		$fullySecuredOverdraft->handleEndOfMonthInterestForContractStatements($fullySecuredOverdraft->contract_start_date,$fullySecuredOverdraft->contract_end_date,$company->id);
+		if (! $hasRenewals) {
+			$fullySecuredOverdraft->storeOutstandingBreakdown($request,$company);
+		}
 		$fullySecuredOverdraft->updateLimitRaw();
 		
 		$type = $request->get('type','fully-secured-over-draft');
@@ -440,17 +488,59 @@ class FullySecuredOverdraftController
 	}
 	
 	/**
-	 * Deletes a Fully Secured Overdraft. UNCHANGED, deliberately — the
-	 * model's deleting() hook (see FullySecuredOverdraft::boot())
-	 * already cleans up its rates and bank statements.
+	 * Deletes a Fully Secured Overdraft. Client-directed rule (applied
+	 * here from the start, same as Clean Overdraft): blocked while it
+	 * still has real transactions — see hasAnyTransactions().
 	 */
 	public function destroy(Company $company , FinancialInstitution $financialInstitution , FullySecuredOverdraft $fullySecuredOverdraft)
 	{
-	
+		if ($fullySecuredOverdraft->hasAnyTransactions()) {
+			return redirect()->back()->withErrors([
+				'delete' => __('This facility cannot be deleted because it still has transactions. Please delete all related transactions first.'),
+			]);
+		}
 		$fullySecuredOverdraft->delete();
 		return redirect()->back()->with('success',__('Item Has Been Delete Successfully'));
 	}
 
-	
+	/**
+	 * Facility Renewal — Phase 2.
+	 */
+	public function renew(Company $company, RenewFullySecuredOverdraftRequest $request, FinancialInstitution $financialInstitution, FullySecuredOverdraft $fullySecuredOverdraft)
+	{
+		$effectiveDate = Carbon::make($request->get('effective_date'))->format('Y-m-d');
+		$contractEndDate = $request->get('contract_end_date')
+			? Carbon::make($request->get('contract_end_date'))->format('Y-m-d')
+			: null;
+
+		try {
+			$fullySecuredOverdraft->renew($effectiveDate, [
+				'cd_or_td_lending_percentage' => $request->get('cd_or_td_lending_percentage'),
+				'highest_debt_balance_rate' => $request->get('highest_debt_balance_rate'),
+				'admin_fees_rate' => $request->get('admin_fees_rate'),
+				'to_be_setteled_max_within_days' => $request->get('to_be_setteled_max_within_days'),
+				'contract_end_date' => $contractEndDate,
+				'notes' => $request->get('notes'),
+			], auth()->user()->id);
+		} catch (\InvalidArgumentException $e) {
+			return redirect()->back()->withErrors(['effective_date' => $e->getMessage()]);
+		}
+
+		return redirect()
+			->route('view.fully.secured.overdraft', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id])
+			->with('success', __('Facility Renewed Successfully'));
+	}
+
+	public function deleteRenewal(Company $company, FinancialInstitution $financialInstitution, FullySecuredOverdraft $fullySecuredOverdraft)
+	{
+		try {
+			$fullySecuredOverdraft->deleteLatestRenewal();
+		} catch (\InvalidArgumentException $e) {
+			return redirect()->back()->withErrors(['renewal' => $e->getMessage()]);
+		}
+
+		return redirect()->back()->with('success', __('Renewal Deleted — Facility Reverted To Previous Terms'));
+	}
+
 	
 }

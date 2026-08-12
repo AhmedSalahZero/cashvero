@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Helpers\HArr;
 use App\Interfaces\Models\IInvoice;
+use App\Traits\Models\HasForecastedProjectCollection;
 use App\Traits\Models\IsInvoice;
 use App\Traits\StaticBoot;
 use Carbon\Carbon;
@@ -150,7 +151,7 @@ use Illuminate\Support\Facades\DB;
  */
 class CustomerInvoice extends Model implements IInvoice
 {
-    use StaticBoot , IsInvoice;
+    use StaticBoot , IsInvoice, HasForecastedProjectCollection;
  
 	
 	
@@ -661,88 +662,31 @@ class CustomerInvoice extends Model implements IInvoice
 	
 	public static function getForecastedProjectCollection(array &$result   , string $startDate , string $endDate , $currency  , $companyId  , array $datesWithWeekNumber , ?int $contractId = null , $foreignExchangeRates = null , ?string $mainFunctionalCurrency = null):void
 	{
-		/**
-		 *
-		 * * في حالة لو مرر العقد فا مش محتاجين عمله لان العقد الواحد مربوط بعملة واحدة
-		 * * المبالغ هنا بعملة العقد فلازم تتحول للعملة الوظيفية عشان تتجمع مع باقي الصفوف المحولة
-		 */
-		$totalCashInFlowKey = __('Total Cash Inflow');
-		$currentTypeText = 'Forecasted Project Collection';
-		// Company-wide + main functional currency tab -> include contracts in
-		// every currency (each gets converted below via its own currency's
-		// FX rate). Any specific foreign-currency tab, or a single contract,
-		// keeps the original same-currency-only filter.
-		$showAllCurrenciesConverted = ! $contractId && $mainFunctionalCurrency !== null && $currency === $mainFunctionalCurrency;
-		
-		$contracts = Contract::where('company_id',$companyId)
-		// ->where('end_date','>=',now()->format('Y-m-d'))
-		->where('end_date','<=',$endDate)
-		->when(! $showAllCurrenciesConverted, function($query) use ($currency){
-			$query->where('currency',$currency);
-		})
-		->when($contractId,function($query) use ($contractId){
-			$query->where('id',$contractId);
-		})
-		// ->where('end_date','<=',now()->format('Y-m-d'))
-		->with('salesOrders')->get();
-		$contractWithSalesOrders = [];
-		foreach($contracts as $contract){
-			foreach($contract->salesOrders as $salesOrder){
-				$salesOrders = HArr::getLatestNonZeroExecutionKeys($salesOrder->toArray());
-				if(empty($salesOrders['end_date'])){
-					continue;
-				}
-				$contractWithSalesOrders[$contract->id][$salesOrder->id] = [
-					'contract'=>$contract ,
-					'sales_orders'=>$salesOrders
-				];
-			}
-		}
-		
-		foreach($contractWithSalesOrders as $contractId => $contractWithSos){
-			foreach($contractWithSos as $soId => $ContractWithSoArr){
-				$contract = $ContractWithSoArr['contract'];
-				$soArr = $ContractWithSoArr['sales_orders'];
-				if (empty($soArr)) {
-					continue;
-				}
-				$soEndDate = $soArr['end_date'];
-				$soCollectionDays = $soArr['collection_days'] ?? 0;
-				$currentSoCollectionDays = Carbon::make($soEndDate)->addDays($soCollectionDays);
-				$isBetweenViewInterval = $currentSoCollectionDays->between($startDate,$endDate);
-				if(!$isBetweenViewInterval){
-					continue;
-				}
-				$currentSoCollectionDaysFormatted = $currentSoCollectionDays->format('Y-m-d');
-				$currentWeekYear =$datesWithWeekNumber[$currentSoCollectionDaysFormatted];
-				$salesOrderAmount = $soArr['amount'];
-				$contractCode = $contract->getCode();
-				$contractName = $contract->getName();
-				$soNumber = $soArr['so_number']; 
-				$customerName = $contract->getClientName();
-				$currentInvoiceAmount = DB::table('customer_invoices')->where('company_id',$companyId)->where('currency',$contract->getCurrency())->where('sales_order_number',$soNumber)->where('contract_code',$contractCode)->sum('invoice_amount');
-				$salesOrderDownPayments = DB::table('down_payment_settlements')->where('company_id',$companyId)->where('sales_order_id',$soId)->where('contract_id',$contractId)->sum('down_payment_amount');
-				$salesOrderNetPayments = $salesOrderDownPayments - $currentInvoiceAmount;
-				
-				$salesOrderNetBalance = 0 ;
-				if($salesOrderNetPayments > $salesOrderAmount){
-					$salesOrderNetBalance = 0;
-				}else{
-					$salesOrderNetBalance = $salesOrderAmount - $salesOrderNetPayments;
-				}
-				$exchangeRate = ForeignExchangeRate::getExchangeRateAtOrOne($contract->getCurrency(),$mainFunctionalCurrency,$currentSoCollectionDaysFormatted,$companyId,$foreignExchangeRates);
-				$salesOrderNetBalance = $salesOrderNetBalance * $exchangeRate;
-				$invoiceNumber =   $customerName . '-' . $contractName  ;
-				$result['customers'][$currentTypeText][$invoiceNumber]['weeks'][$currentWeekYear] = isset($result['customers'][$currentTypeText][$invoiceNumber]['weeks'][$currentWeekYear]) ? $result['customers'][$currentTypeText][$invoiceNumber]['weeks'][$currentWeekYear]+  $salesOrderNetBalance :$salesOrderNetBalance;
-				$result['customers'][$currentTypeText][$invoiceNumber]['total'] = isset($result['customers'][$currentTypeText][$invoiceNumber]['total']) ? $result['customers'][$currentTypeText][$invoiceNumber]['total']  + $salesOrderNetBalance : $salesOrderNetBalance;
-				$currentTotal = $salesOrderNetBalance;
-				$result['customers'][$currentTypeText]['total'][$currentWeekYear] = isset($result['customers'][$currentTypeText]['total'][$currentWeekYear]) ? $result['customers'][$currentTypeText]['total'][$currentWeekYear] +  $currentTotal : $currentTotal ;
-				$result['customers'][$totalCashInFlowKey]['total'][$currentWeekYear] = isset($result['customers'][$totalCashInFlowKey]['total'][$currentWeekYear]) ? $result['customers'][$totalCashInFlowKey]['total'][$currentWeekYear] + $salesOrderNetBalance : $salesOrderNetBalance;
-			}
-		}
-
-	
-			
+		// See HasForecastedProjectCollection trait for the full formula
+		// and why it's shared with SupplierInvoice::getForecastedProjectCollection.
+		static::computeForecastedProjectCollection(
+			$result,
+			$startDate,
+			$endDate,
+			$currency,
+			$companyId,
+			$datesWithWeekNumber,
+			$contractId,
+			$foreignExchangeRates,
+			$mainFunctionalCurrency,
+			[
+				'main_result_type' => 'customers',
+				'result_key' => 'Forecasted Project Collection',
+				'invoice_table' => 'customer_invoices',
+				'order_relation' => 'salesOrders',
+				'order_number_key' => 'so_number',
+				'invoice_order_number_column' => 'sales_order_number',
+				'down_payment_table' => 'down_payment_settlements',
+				'down_payment_order_id_column' => 'sales_order_id',
+				'add_to_cash_inflow_total' => true,
+				'paid_or_collected_status' => self::COLLETED_OR_PAID,
+			]
+		);
 	}
 	
 	

@@ -250,7 +250,11 @@ class ImportData implements
 			} else {
 				$cellValue = $this->resolveImportFieldValue($row_with_no_spaces, $field_name, $row_name);
 
-				if (($cellValue === null || $cellValue === '') && ! is_int($row_name)) {
+				if (
+					($cellValue === null || $cellValue === '')
+					&& ! is_int($row_name)
+					&& ! in_array($field_name, $this->fieldsExcludedFromPositionalFallback(), true)
+				) {
 					$cellValue = $this->resolveImportFieldValueByPosition($row_with_no_spaces, $field_name);
 				}
 
@@ -377,6 +381,26 @@ class ImportData implements
 		}
 
 		return $orderedFields;
+	}
+
+	/**
+	 * Fields that must NEVER be guessed by column position when the
+	 * uploaded file has no matching header for them. These drive
+	 * automatic Contract/SO/PO linking (see SalesGatheringTestJob) —
+	 * if the file is genuinely missing a "Contract Name"/"Contract
+	 * Code" column, every column after it shifts by one position, and
+	 * the positional fallback would silently pull an unrelated
+	 * column's value (e.g. Contracted Payment Days) into contract_code.
+	 * Leaving these blank when there's no header match is the safe
+	 * behavior — confirmed with the project owner.
+	 */
+	protected function fieldsExcludedFromPositionalFallback(): array
+	{
+		return [
+			'contract_name', 'contract_code', 'contract_date', 'contract_amount',
+			'purchases_order_number', 'purchases_order_date',
+			'sales_order_number', 'sales_order_date',
+		];
 	}
 
 	protected function resolveImportFieldValueByPosition(array $row, string $fieldName): ?string

@@ -227,6 +227,267 @@ class CleanOverdraft extends Model implements IHaveStatement
 	{
 		return $this->hasMany(CleanOverdraftRate::class,'clean_overdraft_id','id');
 	}
+
+	/**
+	 * Facility Renewal — Phase 1.
+	 */
+	public function termsHistories()
+	{
+		return $this->hasMany(CleanOverdraftTermsHistory::class,'clean_overdraft_id','id')->orderBy('effective_date');
+	}
+
+	/**
+	 * Client-confirmed rule (2026-08-10): editing the facility's basic
+	 * terms via the normal Edit screen is only allowed while it's still
+	 * on its ORIGINAL, never-renewed terms. The moment a renewal exists,
+	 * only Renew (and deleting that renewal) can change limit/rates/
+	 * fees/settlement-days/end-date — Edit is locked, so it can never
+	 * silently rewrite what a past chapter's terms actually were.
+	 */
+	public function hasRenewals():bool
+	{
+		return $this->termsHistories()->count() > 1;
+	}
+	public function canBeEdited():bool
+	{
+		return ! $this->hasRenewals();
+	}
+
+	/**
+	 * Client-confirmed rule (2026-08-10): a facility can't be deleted
+	 * while it still has real transactions against it — the user has to
+	 * remove those first. Deliberately excludes the zero-amount system
+	 * marker rows every facility gets automatically (the 'active-limit'
+	 * placeholder, and scheduled-but-never-accrued 'interest' rows) —
+	 * only rows where money actually moved (debit or credit > 0) count.
+	 */
+	public function hasAnyTransactions():bool
+	{
+		return $this->cleanOverdraftBankStatements()
+			->where(function($q){ $q->where('debit','>',0)->orWhere('credit','>',0); })
+			->exists();
+	}
+
+	/**
+	 * Deletes the most recent renewal only (mirrors the existing rule
+	 * that only the LAST rate-history entry is editable/deletable — same
+	 * idea, applied to renewals). Blocked if any real transaction is
+	 * dated on/after that renewal's effective date, since removing it
+	 * would silently change what terms those transactions are judged
+	 * against — the user must remove those transactions first, same
+	 * reasoning as the whole-facility deletion guard above.
+	 *
+	 * On success, the facility's terms revert to whatever the
+	 * next-most-recent chapter says — which becomes "Original" again
+	 * (and Edit unlocks again) if that was the only renewal.
+	 */
+	public function deleteLatestRenewal():void
+	{
+		$latest = $this->getLatestTerms();
+
+		if (!$latest || $latest->is_original) {
+			throw new \InvalidArgumentException(__('There is no renewal to delete — this facility is still on its original terms.'));
+		}
+
+		$blockingTransactionsExist = $this->cleanOverdraftBankStatements()
+			->where('date','>=',$latest->effective_date)
+			->where(function($q){ $q->where('debit','>',0)->orWhere('credit','>',0); })
+			->exists();
+
+		if ($blockingTransactionsExist) {
+			throw new \InvalidArgumentException(
+				__('This renewal cannot be deleted because there are transactions dated on or after its effective date (:date). Please remove those transactions first.', ['date' => $latest->getEffectiveDateFormatted()])
+			);
+		}
+
+		$latest->delete();
+
+		$newLatest = $this->getLatestTerms();
+		$this->update([
+			'limit' => $newLatest->limit,
+			'highest_debt_balance_rate' => $newLatest->highest_debt_balance_rate,
+			'admin_fees_rate' => $newLatest->admin_fees_rate,
+			'to_be_setteled_max_within_days' => $newLatest->to_be_setteled_max_within_days,
+			'contract_end_date' => $newLatest->contract_end_date,
+		]);
+
+		$this->updateBankStatementsFromDate($newLatest->effective_date);
+	}
+
+	/**
+	 * The single source of truth for "what were this facility's terms on
+	 * a given date" — used by the renewal screen to show current values,
+	 * and mirrored by the SQL trigger (see clean_overdraft_bank_statements.sql)
+	 * so the database itself never trusts a blindly-passed 'limit' again.
+	 */
+	public function getTermsAsOfDate(string $date):?CleanOverdraftTermsHistory
+	{
+		/**
+		 * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-10): the
+		 * termsHistories() relationship has orderBy('effective_date')
+		 * ASCENDING baked into its definition (see below). Chaining
+		 * ->orderByDesc(...) on top of that doesn't replace it — Eloquent
+		 * appends it as a second, lower-priority sort key, so the
+		 * original ascending order still won — reorder() is required to
+		 * actually clear it first.
+		 */
+		return $this->termsHistories()
+			->where('effective_date','<=',$date)
+			->reorder('effective_date','desc')
+			->orderByDesc('id')
+			->first();
+	}
+
+	public function getLatestTerms():?CleanOverdraftTermsHistory
+	{
+		return $this->termsHistories()->reorder('effective_date','desc')->orderByDesc('id')->first();
+	}
+
+	/**
+	 * Bug fixed (client-flagged, 2026-08-10): the Facilities table's
+	 * "Start Date" column was reading the account's true original
+	 * contract_start_date even after a renewal — it should read the
+	 * CURRENT chapter's own start date instead (the renewal's effective
+	 * date, once one exists). Deliberately doesn't touch the actual
+	 * contract_start_date column, which other logic elsewhere (e.g.
+	 * scheduled end-of-month interest, cash dashboard date filters)
+	 * still correctly relies on as the account's true, unchanging origin
+	 * — this is a display-only fix.
+	 */
+	public function getCurrentChapterStartDateFormatted():?string
+	{
+		$latest = $this->getLatestTerms();
+		$date = $latest?->effective_date ?: $this->contract_start_date;
+		return $date ? Carbon::make($date)->format('d-m-Y') : null;
+	}
+
+	/**
+	 * Records a renewal: a new dated row of terms. Anything left null
+	 * simply carries forward the previous chapter's value (per the design
+	 * brief — the user only enters what actually changed).
+	 *
+	 * Deliberately does NOT touch account_number, and does NOT create a
+	 * new clean_overdrafts row — this facility keeps its identity. That's
+	 * what makes the "account number already exists" validation moot for
+	 * renewals: nothing new is ever inserted into clean_overdrafts.
+	 *
+	 * Also deliberately does NOT rewrite any existing bank statement rows'
+	 * stored 'limit' column. Older rows keep whatever was true when they
+	 * were created. Going forward, both the insert and update triggers
+	 * look the correct value up from clean_overdraft_terms_histories by
+	 * date — see the trigger SQL — so this single insert is enough to
+	 * make every future (and correctly-dated backdated) calculation pick
+	 * up the new terms automatically.
+	 */
+	/**
+	 * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-11): brand-new
+	 * facilities created after the renewal feature shipped never got
+	 * this "chapter one" row — only facilities that already existed at
+	 * migration time were backfilled with one. Without it, a facility's
+	 * FIRST-EVER renewal becomes its ONLY terms-history row, so
+	 * hasRenewals() (which checks for more than one row) wrongly reports
+	 * "never renewed" even though a real renewal just happened — exactly
+	 * what caused the Archived Facilities tab to stay empty and the
+	 * Renew popup to show the wrong current end date. Called from
+	 * store() now, immediately after a facility is first created.
+	 */
+	public function createOriginalTermsHistory():CleanOverdraftTermsHistory
+	{
+		return $this->termsHistories()->create([
+			'company_id' => $this->company_id,
+			'effective_date' => $this->contract_start_date,
+			'limit' => $this->limit,
+			'highest_debt_balance_rate' => $this->highest_debt_balance_rate,
+			'admin_fees_rate' => $this->admin_fees_rate,
+			'to_be_setteled_max_within_days' => $this->to_be_setteled_max_within_days,
+			'contract_end_date' => $this->contract_end_date,
+			'is_original' => true,
+			'notes' => 'Original facility terms.',
+		]);
+	}
+
+	public function renew(string $effectiveDate, array $newTerms, int $userId):CleanOverdraftTermsHistory
+	{
+		/**
+		 * Defensive safety net (2026-08-11): if this facility somehow
+		 * still has zero terms-history rows when Renew is used — an
+		 * older facility created before the store() fix above, or one
+		 * brought in through a different path like company data import —
+		 * backfill its Original chapter right here rather than letting
+		 * the same bug resurface. Cheap and harmless if it's already
+		 * there (won't be called in that case).
+		 */
+		if ($this->termsHistories()->count() === 0) {
+			$this->createOriginalTermsHistory();
+		}
+
+		$previous = $this->getLatestTerms();
+
+		if ($previous && $effectiveDate <= $previous->effective_date) {
+			throw new \InvalidArgumentException(
+				__('A renewal date must be after the facility\'s most recent renewal date (:date).', ['date' => $previous->getEffectiveDateFormatted()])
+			);
+		}
+
+		/**
+		 * Real gap fixed here (client-flagged, 2026-08-10): the check
+		 * above only guarded against two renewals landing on/before the
+		 * same date — it never checked the renewal against the CURRENT
+		 * CONTRACT PERIOD itself. Without this, a renewal could start
+		 * while the existing contract still had months left to run.
+		 * The comparison is always against the latest chapter's end
+		 * date (originally the facility's own contract_end_date, and
+		 * after any renewal, that renewal's new end date) — so this
+		 * naturally cascades correctly across any number of renewals.
+		 */
+		$currentEndDate = $previous?->contract_end_date ?: $this->contract_end_date;
+		if ($currentEndDate && $effectiveDate <= $currentEndDate) {
+			throw new \InvalidArgumentException(
+				__('A renewal date must be after the current contract end date (:date).', ['date' => \Carbon\Carbon::make($currentEndDate)->format('d-m-Y')])
+			);
+		}
+
+		if (empty($newTerms['contract_end_date'])) {
+			throw new \InvalidArgumentException(
+				__('A renewal must include a new contract end date — the previous end date can no longer apply once the renewal starts after it.')
+			);
+		}
+
+		$termsRow = $this->termsHistories()->create([
+			'company_id' => $this->company_id,
+			'effective_date' => $effectiveDate,
+			'limit' => $newTerms['limit'] ?? $previous?->limit ?? $this->limit,
+			'highest_debt_balance_rate' => $newTerms['highest_debt_balance_rate'] ?? $previous?->highest_debt_balance_rate ?? $this->highest_debt_balance_rate,
+			'admin_fees_rate' => $newTerms['admin_fees_rate'] ?? $previous?->admin_fees_rate ?? $this->admin_fees_rate,
+			'to_be_setteled_max_within_days' => $newTerms['to_be_setteled_max_within_days'] ?? $previous?->to_be_setteled_max_within_days ?? $this->to_be_setteled_max_within_days,
+			'contract_end_date' => $newTerms['contract_end_date'] ?? $previous?->contract_end_date ?? $this->contract_end_date,
+			'notes' => $newTerms['notes'] ?? null,
+			'is_original' => false,
+			'created_by' => $userId,
+		]);
+
+		// Keep the convenience columns on `clean_overdrafts` itself in
+		// sync with "the latest chapter", since some existing code (e.g.
+		// CleanOverdraftController::store()/update(), the dashboard
+		// summary queries) still reads $cleanOverdraft->limit directly
+		// for brand-new, present-day rows. The trigger is what makes
+		// backdated/old rows correct regardless of what this column says.
+		$this->update([
+			'limit' => $termsRow->limit,
+			'highest_debt_balance_rate' => $termsRow->highest_debt_balance_rate,
+			'admin_fees_rate' => $termsRow->admin_fees_rate,
+			'to_be_setteled_max_within_days' => $termsRow->to_be_setteled_max_within_days,
+			'contract_end_date' => $termsRow->contract_end_date,
+		]);
+
+		// Force every already-posted statement on/after the renewal date
+		// to recalculate, so anyone looking at the facility today sees
+		// up-to-date room/interest immediately rather than only after the
+		// next unrelated transaction happens to touch that date range.
+		$this->updateBankStatementsFromDate($effectiveDate);
+
+		return $termsRow;
+	}
 	public static function getBankStatementTableClassName():string 
 	{
 		return CleanOverdraftBankStatement::class ;
@@ -270,15 +531,36 @@ class CleanOverdraft extends Model implements IHaveStatement
 			'limit'=>$this->limit ,
 			'debit'=>0,
 			'credit'=>0,
-			'comment_en'=>__('Limit'),
-			'comment_ar'=>__('Limit',[],'ar'),
+			/**
+			 * Client-directed rework (2026-08-11): relabeled from a bare
+			 * '-' to something a Bank Statement reader can actually make
+			 * sense of — this row isn't a transaction at all, it's the
+			 * one-time marker that establishes the facility's starting
+			 * limit (created once, at the original facility's setup;
+			 * renewals never create another one of these).
+			 */
+			'comment_en'=>__('Facility Limit Set'),
+			'comment_ar'=>__('Facility Limit Set',[],'ar'),
 		];
 		$row = $this->cleanOverdraftBankStatements()->where('type','active-limit')->first();
 		if($row){
 			$row->update($data);
 		}else{
-			$this->cleanOverdraftBankStatements()->create($data);
+			$row = $this->cleanOverdraftBankStatements()->create($data);
 		}
+		/**
+		 * Client-directed rework (2026-08-11): pin this row to the very
+		 * start of its date rather than whenever it happened to be
+		 * created or last saved. The Bank Statement sorts newest-first
+		 * by full_date (date + time), so without this, this
+		 * non-transaction marker could land ABOVE same-day real
+		 * transactions purely by coincidence of when someone clicked
+		 * Save — reading confusingly like "mid-day, the room reset to
+		 * the full limit." Pinning it to 00:00:00 guarantees it always
+		 * sorts as the earliest entry of its date, i.e. the true
+		 * starting point of the account.
+		 */
+		$row->update(['full_date' => $row->date.' 00:00:00']);
 		
 	}
 	public function isOverdraft():bool 

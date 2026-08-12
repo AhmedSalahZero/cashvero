@@ -39,6 +39,47 @@ class PoAllocation extends Model
 	protected $guarded = ['id'];
 	
 
+	/**
+	 * ⚠️ Bug fix: every existing call site built this same 3-table join
+	 * (po_allocations -> purchase_orders -> contracts) via a plain
+	 * ->get() with NO explicit select — meaning it silently did a raw
+	 * "SELECT *" across all three tables. Several column names collide
+	 * across them (id, contract_id, amount, company_id, created_at,
+	 * updated_at), and PDO keeps only the LAST-selected column for each
+	 * name — so e.g. the hydrated `amount` attribute was actually
+	 * `contracts.amount` (the Customer contract's total value), not
+	 * `purchase_orders.amount` (the PO's own amount) as every caller
+	 * assumed; `contract_id` similarly resolved to the SUPPLIER
+	 * contract's id, not po_allocations' own (Customer) contract_id.
+	 * This scope makes every needed column explicit and unambiguous.
+	 */
+	public function scopeWithSupplierPurchaseOrderDetails(Builder $query): Builder
+	{
+		return $query
+			->join('purchase_orders', 'purchase_orders.id', '=', 'po_allocations.purchase_order_id')
+			->join('contracts', 'contracts.id', '=', 'purchase_orders.contract_id')
+			->select([
+				'po_allocations.id as id',
+				'po_allocations.contract_id as customer_contract_id',
+				'po_allocations.purchase_order_id as purchase_order_id',
+				'po_allocations.partner_id as partner_id',
+				'po_allocations.allocation_percentage as allocation_percentage',
+				'po_allocations.allocation_amount as allocation_amount',
+				'purchase_orders.po_number as po_number',
+				'purchase_orders.amount as amount',
+				'purchase_orders.contract_id as supplier_contract_id',
+				'purchase_orders.start_date_1', 'purchase_orders.end_date_1', 'purchase_orders.execution_percentage_1', 'purchase_orders.execution_days_1', 'purchase_orders.collection_days_1',
+				'purchase_orders.start_date_2', 'purchase_orders.end_date_2', 'purchase_orders.execution_percentage_2', 'purchase_orders.execution_days_2', 'purchase_orders.collection_days_2',
+				'purchase_orders.start_date_3', 'purchase_orders.end_date_3', 'purchase_orders.execution_percentage_3', 'purchase_orders.execution_days_3', 'purchase_orders.collection_days_3',
+				'purchase_orders.start_date_4', 'purchase_orders.end_date_4', 'purchase_orders.execution_percentage_4', 'purchase_orders.execution_days_4', 'purchase_orders.collection_days_4',
+				'purchase_orders.start_date_5', 'purchase_orders.end_date_5', 'purchase_orders.execution_percentage_5', 'purchase_orders.execution_days_5', 'purchase_orders.collection_days_5',
+				'contracts.code as code',
+				'contracts.name as supplier_contract_name',
+				'contracts.currency as supplier_contract_currency',
+				'contracts.partner_id as supplier_contract_partner_id',
+			]);
+	}
+
 	public function moneyPayment():BelongsTo
 	{
 		return $this->belongsTo(MoneyPayment::class,'money_payment_id','id');

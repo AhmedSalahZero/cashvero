@@ -110,7 +110,7 @@ final class ContractCashFlowBatchBuilder
             CashExpense::getProjectionOtherCashOut($result, $company, 0, true);
             CustomerInvoice::getProjectionOtherCashIn($result, $company, 0, true);
             CustomerInvoice::getForecastedProjectCollection($result, $formStartDate, $formEndDate, $currency, $company->id, $datesWithWeekNumber, $contractId, $foreignExchangeRates, $mainFunctionalCurrency);
-            SupplierInvoice::getForecastedProjectCollection($result, $formStartDate, $formEndDate, $currency, $company->id, $datesWithWeekNumber, $contractId, $foreignExchangeRates, $mainFunctionalCurrency);
+            SupplierInvoice::getForecastedProjectCollection($result, $formStartDate, $formEndDate, $currency, $company->id, $datesWithWeekNumber, $contractId, $foreignExchangeRates, $mainFunctionalCurrency, $poAllocations);
             CustomerInvoice::getCustomerInvoicesUnderCollectionAtDatesForContracts($result, $company->id, $contractCode, $datesWithWeekNumber, $formEndDate);
             SupplierInvoice::getSupplierInvoicesForPoUnderCollectionAtDates($result, $company->id, $datesWithWeekNumber, $formStartDate, $formEndDate, $poAllocations, $pastDueSupplierInvoicesForContracts);
         }
@@ -199,6 +199,11 @@ final class ContractCashFlowBatchBuilder
                 'cash_inflow' => is_array($result['customers'][$inflowKey]['total'] ?? null) ? $result['customers'][$inflowKey]['total'] : [],
                 'cash_outflow' => is_array($result['cash_expenses'][$outflowKey]['total'] ?? null) ? $result['cash_expenses'][$outflowKey]['total'] : [],
                 'net_cash' => is_array($result['cash_expenses'][$netKey]['total'] ?? null) ? $result['cash_expenses'][$netKey]['total'] : [],
+                // For ConsolidatedCashFlowService::computeUnallocatedCashIn() —
+                // this contract's Total Cash Inflow minus its own Forecasted
+                // Project Collection, so "unallocated" compares like-for-like
+                // against the company-wide total (which excludes the same row).
+                'cash_inflow_excl_forecast' => ConsolidatedCashFlowService::totalCashInflowExcludingForecast($result['customers'] ?? []),
             ];
         }
 

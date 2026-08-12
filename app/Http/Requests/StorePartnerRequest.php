@@ -17,6 +17,21 @@ class StorePartnerRequest extends FormRequest
         return true;
     }
 
+    /**
+     * ⚠️ REAL BUG FIXED HERE (client-confirmed, 2026-08-11): same class
+     * of bug found and fixed on StoreLetterOfCreditFacilityRequest —
+     * editing without changing the name failed with a false "already
+     * exists" error, since $this->id (used to exclude this record from
+     * its own uniqueness check) was never actually set. Matters most
+     * here since this covers Customers and Suppliers.
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->route('partner')) {
+            $this->merge(['id' => $this->route('partner')->id]);
+        }
+    }
+
 
     public function rules()
     {

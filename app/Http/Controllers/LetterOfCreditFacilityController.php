@@ -536,15 +536,21 @@ class LetterOfCreditFacilityController
 	}
 
 	/**
-	 * Pure AJAX data endpoint — active LC Facilities for a given
-	 * financial institution, used to populate the LC Issuance form's
-	 * facility dropdown. UNCHANGED, deliberately.
+	 * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-11): this filtered
+	 * out any facility whose contract had already expired — correct for
+	 * picking a facility to issue a NEW LC against (a genuinely separate
+	 * code path in LetterOfCreditIssuanceController that doesn't use
+	 * this endpoint at all), but wrong here: this endpoint is used ONLY
+	 * by the LG & LC Statement report, where an expired facility's past
+	 * activity is still legitimate company history the user has every
+	 * right to look up. Confirmed via search that nothing else in the
+	 * app relies on this endpoint filtering by expiry, so removing it
+	 * here is safe.
 	 */
 	public function getLcFacilityBasedOnFinancialInstitution(Request $request){
 		$financialInstitutionId = $request->get('financialInstitutionId');
 		$financialInstitution = FinancialInstitution::find($financialInstitutionId);
 		$letterOfCreditFacilities = $financialInstitution ? $financialInstitution->LetterOfCreditFacilities
-		->where('contract_end_date', '>=', now())
 		->pluck('name','id')->toArray() : [];
 		return response()->json([
 			'letterOfCreditFacilities'=>$letterOfCreditFacilities

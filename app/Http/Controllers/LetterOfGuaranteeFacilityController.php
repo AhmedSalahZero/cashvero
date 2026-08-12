@@ -105,15 +105,18 @@ class LetterOfGuaranteeFacilityController
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
 			'canCreate' => hasAuthFor('create letter of guarantee facility'),
 			'createUrl' => route('create.letter.of.guarantee.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
+			'lgTypes' => \App\Enums\LgTypes::getAll(),
+			'commissionIntervals' => getCommissionInterval(),
 			'rows' => $letterOfGuaranteeFacilities->map(function (LetterOfGuaranteeFacility $lgf) use ($company, $financialInstitution) {
+				$latestChapter = $lgf->getLatestTerms();
 				return [
 					'id' => $lgf->id,
 					'name' => $lgf->getName(),
-					'contract_start_date_formatted' => $lgf->getContractStartDateFormatted(),
+					'contract_start_date_formatted' => $lgf->getCurrentChapterStartDateFormatted(),
 					'contract_end_date_formatted' => $lgf->getContractEndDateFormatted(),
 					'currency' => $lgf->getCurrency(),
 					'limit_formatted' => $lgf->getLimitFormatted(),
-					'term_and_conditions' => $lgf->termAndConditions->map(fn ($tc) => [
+					'term_and_conditions' => ($latestChapter?->termAndConditions ?? $lgf->termAndConditions)->map(fn ($tc) => [
 						'lg_type_formatted' => $tc->getLgTypeFormatted(),
 						'cash_cover_rate_formatted' => $tc->getCashCoverRate() . ' %',
 						'commission_rate_formatted' => $tc->getCommissionRate() . ' %',
@@ -123,6 +126,24 @@ class LetterOfGuaranteeFacilityController
 					])->values(),
 					'edit_url' => route('edit.letter.of.guarantee.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'letterOfGuaranteeFacility' => $lgf->id]),
 					'delete_url' => route('delete.letter.of.guarantee.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'letterOfGuaranteeFacility' => $lgf->id]),
+					'renew_url' => route('letter-of-guarantee-facility.renew', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'letterOfGuaranteeFacility' => $lgf->id]),
+					'delete_renewal_url' => route('letter-of-guarantee-facility.delete-renewal', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'letterOfGuaranteeFacility' => $lgf->id]),
+					'has_renewals' => $lgf->hasRenewals(),
+					'terms_history' => $lgf->termsHistories->map(fn ($t) => [
+						'id' => $t->id,
+						'effective_date_formatted' => $t->getEffectiveDateFormatted(),
+						'contract_end_date_formatted' => $t->getContractEndDateFormatted(),
+						'limit_formatted' => $t->getLimitFormatted(),
+						'is_original' => (bool) $t->is_original,
+						'term_and_conditions' => $t->termAndConditions->map(fn ($tc) => [
+							'lg_type_formatted' => $tc->getLgTypeFormatted(),
+							'cash_cover_rate_formatted' => $tc->getCashCoverRate() . ' %',
+							'commission_rate_formatted' => $tc->getCommissionRate() . ' %',
+							'commission_interval' => $tc->getCommissionInterval(),
+							'min_commission_fees_formatted' => number_format($tc->getMinCommissionFees()),
+							'issuance_fees_formatted' => number_format($tc->getIssuanceFees()),
+						])->values(),
+					])->values(),
 				];
 			})->values(),
 			'backUrl' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
@@ -170,9 +191,11 @@ class LetterOfGuaranteeFacilityController
 	}
 	/**
 	 * Stores a new LG Facility, including its 4-row term & conditions
-	 * matrix. UNCHANGED, deliberately.
+	 * matrix. Now validated by a real request class (see
+	 * StoreLetterOfGuaranteeFacilityRequest) — previously had none at
+	 * all. Original chapter created immediately, per Facility Renewal.
 	 */
-	public function store(Company $company  ,FinancialInstitution $financialInstitution, Request $request){
+	public function store(Company $company  ,FinancialInstitution $financialInstitution, \App\Http\Requests\StoreLetterOfGuaranteeFacilityRequest $request){
 		$data = $request->only( $this->getCommonDataArr());
 		foreach(['contract_start_date','contract_end_date','outstanding_date'] as $dateField){
 			$data[$dateField] = $request->get($dateField) ? Carbon::make($request->get($dateField))->format('Y-m-d'):null;
@@ -186,27 +209,13 @@ class LetterOfGuaranteeFacilityController
 		 */
 
 		$letterOfGuaranteeFacility = $financialInstitution->LetterOfGuaranteeFacilities()->create($data);
-		// $currencyName = $letterOfGuaranteeFacility->getCurrency();
-		// $source = LetterOfGuaranteeIssuance::LG_FACILITY;
+		$originalChapter = $letterOfGuaranteeFacility->createOriginalTermsHistory();
 		foreach($termAndConditions as $termAndConditionArr){
 			$termAndConditionArr['company_id'] = $company->id ;
 			$termAndConditionArr['outstanding_date'] = $request->get('outstanding_date');
-			// $currentOutstandingBalance = $termAndConditionArr['outstanding_balance'] ;
-			// $currentCashCover = $termAndConditionArr['cash_cover_rate'];
-			
-			// $currentLgType = $termAndConditionArr['lg_type'] ;
-			// if($currentOutstandingBalance){
-				$letterOfGuaranteeFacility->termAndConditions()->create(array_merge($termAndConditionArr , [
-				]));
-			// }
-			// if($currentOutstandingBalance > 0){
-			// 	$letterOfGuaranteeFacility->handleLetterOfGuaranteeStatement($financialInstitution->id,$source,$letterOfGuaranteeFacility->id,$currentLgType,$company->id,$termAndConditionArr['outstanding_date'],0,0,$currentOutstandingBalance,$currencyName,0,0,LetterOfGuaranteeIssuance::LG_FACILITY_BEGINNING_BALANCE);
-			// }
-			// $cashCoverOpeningBalance = $currentCashCover / 100 * $currentOutstandingBalance ;
-			// if( $cashCoverOpeningBalance > 0 ){
-			// 	$letterOfGuaranteeFacility->handleLetterOfGuaranteeCashCoverStatement($financialInstitution->id,$source,$letterOfGuaranteeFacility->id,$currentLgType,$company->id,$termAndConditionArr['outstanding_date'],0,$cashCoverOpeningBalance,0,$currencyName,0,LetterOfGuaranteeIssuance::LG_FACILITY_BEGINNING_BALANCE);
-			// }
-
+			$letterOfGuaranteeFacility->termAndConditions()->create(array_merge($termAndConditionArr , [
+				'terms_history_id' => $originalChapter->id,
+			]));
 		}
 		$type = $request->get('type','letter-of-guarantee-facilities');
 		$activeTab = $type ;
@@ -224,8 +233,11 @@ class LetterOfGuaranteeFacilityController
 	 */
 	public function edit(Company $company , Request $request , FinancialInstitution $financialInstitution , LetterOfGuaranteeFacility $letterOfGuaranteeFacility){
 
+		$hasRenewals = $letterOfGuaranteeFacility->hasRenewals();
+		$latestChapter = $letterOfGuaranteeFacility->getLatestTerms();
         return \Inertia\Inertia::render('LetterOfGuaranteeFacility/Form', [
 			'mode' => 'edit',
+			'hasRenewals' => $hasRenewals,
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
 			'currencies' => getCurrencies(),
@@ -234,14 +246,21 @@ class LetterOfGuaranteeFacilityController
 			'model' => [
 				'id' => $letterOfGuaranteeFacility->id,
 				'name' => $letterOfGuaranteeFacility->getName(),
-				'contract_start_date' => $letterOfGuaranteeFacility->getContractStartDate(),
+				'contract_start_date' => $hasRenewals ? $latestChapter->effective_date : $letterOfGuaranteeFacility->getContractStartDate(),
 				'contract_end_date' => $letterOfGuaranteeFacility->getContractEndDate(),
 				'currency' => $letterOfGuaranteeFacility->getCurrency(),
 				'limit' => $letterOfGuaranteeFacility->getLimit(),
 				'outstanding_date' => $letterOfGuaranteeFacility->getOutstandingDate(),
 				'outstanding_amount' => $letterOfGuaranteeFacility->getOutstandingAmount(),
-				'term_and_conditions' => collect(\App\Enums\LgTypes::getAll())->map(function ($label, $lgType) use ($letterOfGuaranteeFacility) {
-					$tc = $letterOfGuaranteeFacility->termAndConditionForLgType($lgType);
+				/**
+				 * Facility Renewal: scoped to the CURRENT (latest)
+				 * chapter's own rows only — never the raw, unscoped
+				 * relation, which would mix every past chapter's rates.
+				 */
+				'term_and_conditions' => collect(\App\Enums\LgTypes::getAll())->map(function ($label, $lgType) use ($latestChapter, $letterOfGuaranteeFacility) {
+					$tc = $latestChapter
+						? $latestChapter->termAndConditions->firstWhere('lg_type', $lgType)
+						: $letterOfGuaranteeFacility->termAndConditionForLgType($lgType);
 					return [
 						'lg_type' => $lgType,
 						'outstanding_balance' => $tc ? $tc->getOutstandingBalance() : 0,
@@ -267,45 +286,48 @@ class LetterOfGuaranteeFacilityController
 	}
 
 	/**
-	 * Updates an existing LG Facility, including replacing its term &
-	 * conditions matrix. UNCHANGED financial logic, deliberately. Only
-	 * fix here: 'updated_by' was being set then immediately wiped out
-	 * by the next line overwriting the whole $data array — same bug
-	 * already found and fixed on every deposit/overdraft controller.
+	 * Updates an existing LG Facility. Now validated by a real request
+	 * class (see UpdateLetterOfGuaranteeFacilityRequest) — previously
+	 * had none. Once a renewal exists, only limit/contract_end_date can
+	 * change, and the Term & Conditions rebuild below is scoped to the
+	 * CURRENT chapter's rows only — never touches older chapters'
+	 * history (same real bug class already fixed on Commercial Paper's
+	 * tiers: the old code wiped every row for the whole facility).
 	 */
-	public function update(Company $company , Request $request , FinancialInstitution $financialInstitution,LetterOfGuaranteeFacility $letterOfGuaranteeFacility){
+	public function update(Company $company , \App\Http\Requests\UpdateLetterOfGuaranteeFacilityRequest $request , FinancialInstitution $financialInstitution,LetterOfGuaranteeFacility $letterOfGuaranteeFacility){
+		$hasRenewals = $letterOfGuaranteeFacility->hasRenewals();
 		$termAndConditions =  $request->get('termAndConditions',[]) ;
-        $source = LetterOfGuaranteeIssuance::LG_FACILITY;
-		$data = $request->only($this->getCommonDataArr());
+		$fieldsToUpdate = $hasRenewals ? ['contract_end_date','limit'] : $this->getCommonDataArr();
+		$data = $request->only($fieldsToUpdate);
 		$data['updated_by'] = auth()->user()->id ;
-		foreach(['contract_start_date','contract_end_date','outstanding_date'] as $dateField){
+		$dateFields = $hasRenewals ? ['contract_end_date'] : ['contract_start_date','contract_end_date','outstanding_date'];
+		foreach($dateFields as $dateField){
 			$data[$dateField] = $request->get($dateField) ? Carbon::make($request->get($dateField))->format('Y-m-d'):null;
 		}
 
-     $letterOfGuaranteeFacility->update($data);
-     $currencyName = $letterOfGuaranteeFacility->getCurrency();
-     LetterOfGuaranteeStatement::deleteButTriggerChangeOnLastElement($letterOfGuaranteeFacility->letterOfGuaranteeStatements->where('type',LetterOfGuaranteeIssuance::LG_FACILITY_BEGINNING_BALANCE));
-     LetterOfGuaranteeCashCoverStatement::deleteButTriggerChangeOnLastElement($letterOfGuaranteeFacility->letterOfGuaranteeCashCoverStatements->where('type',LetterOfGuaranteeIssuance::LG_FACILITY_BEGINNING_BALANCE));
-		$letterOfGuaranteeFacility->termAndConditions->each(function($termAndCondition){
-			$termAndCondition->delete();
-		});
+		$letterOfGuaranteeFacility->update($data);
+		$latestChapter = $letterOfGuaranteeFacility->getLatestTerms();
+		if ($latestChapter) {
+			$latestChapter->update([
+				'effective_date' => $latestChapter->is_original ? $letterOfGuaranteeFacility->contract_start_date : $latestChapter->effective_date,
+				'limit' => $letterOfGuaranteeFacility->limit,
+				'contract_end_date' => $letterOfGuaranteeFacility->contract_end_date,
+			]);
+		}
 
-		foreach($termAndConditions as $termAndConditionArr){
-			$letterOfGuaranteeFacility->termAndConditions()->create(array_merge($termAndConditionArr , [
-			]));
-            $termAndConditionArr['outstanding_date'] = $request->get('outstanding_date');
-			$currentOutstandingBalance = $termAndConditionArr['outstanding_balance'] ;
-			$currentCashCoverRate = $termAndConditionArr['cash_cover_rate'] / 100  ;
-			$currentCashCoverBeginningBalance  = $currentOutstandingBalance * $currentCashCoverRate ; 
-			$currentLgType = $termAndConditionArr['lg_type'] ;
-			// if($currentOutstandingBalance > 0 ){
-			// 	$letterOfGuaranteeFacility->handleLetterOfGuaranteeStatement($financialInstitution->id,$source,$letterOfGuaranteeFacility->id,$currentLgType,$company->id,$termAndConditionArr['outstanding_date'],0,0,$currentOutstandingBalance,$currencyName,0,0,LetterOfGuaranteeIssuance::LG_FACILITY_BEGINNING_BALANCE);
-			// }
-			// if($currentCashCoverBeginningBalance > 0){
-			// 	$letterOfGuaranteeFacility->handleLetterOfGuaranteeCashCoverStatement($financialInstitution->id,$source,$letterOfGuaranteeFacility->id,$currentLgType,$company->id,$termAndConditionArr['outstanding_date'],0,$currentCashCoverBeginningBalance,0,$currencyName,0,LetterOfGuaranteeIssuance::LG_FACILITY_BEGINNING_BALANCE);
-			// }
-			
-
+		if (! $hasRenewals) {
+			$currencyName = $letterOfGuaranteeFacility->getCurrency();
+			LetterOfGuaranteeStatement::deleteButTriggerChangeOnLastElement($letterOfGuaranteeFacility->letterOfGuaranteeStatements->where('type',LetterOfGuaranteeIssuance::LG_FACILITY_BEGINNING_BALANCE));
+			LetterOfGuaranteeCashCoverStatement::deleteButTriggerChangeOnLastElement($letterOfGuaranteeFacility->letterOfGuaranteeCashCoverStatements->where('type',LetterOfGuaranteeIssuance::LG_FACILITY_BEGINNING_BALANCE));
+			if ($latestChapter) {
+				$latestChapter->termAndConditions()->delete();
+				foreach($termAndConditions as $termAndConditionArr){
+					$latestChapter->termAndConditions()->create(array_merge($termAndConditionArr, [
+						'letter_of_guarantee_facility_id' => $letterOfGuaranteeFacility->id,
+						'company_id' => $company->id,
+					]));
+				}
+			}
 		}
 		$type = $request->get('type','letter-of-guarantee-facilities');
 		$activeTab = $type ;
@@ -316,10 +338,17 @@ class LetterOfGuaranteeFacilityController
 
 	/**
 	 * Deletes an LG Facility and its term & conditions rows / opening
-	 * statement entries. UNCHANGED, deliberately.
+	 * statement entries. Client-confirmed rule (applied from the start,
+	 * same as every other facility type): blocked while it still has
+	 * LGs issued against it.
 	 */
 	public function destroy(Company $company , FinancialInstitution $financialInstitution , LetterOfGuaranteeFacility $letterOfGuaranteeFacility)
 	{
+		if ($letterOfGuaranteeFacility->hasAnyTransactions()) {
+			return redirect()->back()->withErrors([
+				'delete' => __('This facility cannot be deleted because it still has LGs issued against it. Please remove those first.'),
+			]);
+		}
 
          LetterOfGuaranteeStatement::deleteButTriggerChangeOnLastElement($letterOfGuaranteeFacility->letterOfGuaranteeStatements->where('type',LetterOfGuaranteeIssuance::LG_FACILITY_BEGINNING_BALANCE));
          LetterOfGuaranteeCashCoverStatement::deleteButTriggerChangeOnLastElement($letterOfGuaranteeFacility->letterOfGuaranteeCashCoverStatements->where('type',LetterOfGuaranteeIssuance::LG_FACILITY_BEGINNING_BALANCE));
@@ -330,6 +359,44 @@ class LetterOfGuaranteeFacilityController
 		});
 		$letterOfGuaranteeFacility->delete();
 		return redirect()->back()->with('success',__('Item Has Been Delete Successfully'));
+	}
+
+	/**
+	 * Facility Renewal — Phase 5 (final facility type). Requires the
+	 * full 4-row Term & Conditions matrix — see
+	 * LetterOfGuaranteeFacility::renew().
+	 */
+	public function renew(Company $company, \App\Http\Requests\RenewLetterOfGuaranteeFacilityRequest $request, FinancialInstitution $financialInstitution, LetterOfGuaranteeFacility $letterOfGuaranteeFacility)
+	{
+		$effectiveDate = Carbon::make($request->get('effective_date'))->format('Y-m-d');
+		$contractEndDate = $request->get('contract_end_date')
+			? Carbon::make($request->get('contract_end_date'))->format('Y-m-d')
+			: null;
+
+		try {
+			$letterOfGuaranteeFacility->renew($effectiveDate, [
+				'limit' => $request->get('limit'),
+				'contract_end_date' => $contractEndDate,
+				'notes' => $request->get('notes'),
+			], $request->get('termAndConditions', []), auth()->user()->id);
+		} catch (\InvalidArgumentException $e) {
+			return redirect()->back()->withErrors(['effective_date' => $e->getMessage()]);
+		}
+
+		return redirect()
+			->route('view.letter.of.guarantee.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id])
+			->with('success', __('Facility Renewed Successfully'));
+	}
+
+	public function deleteRenewal(Company $company, FinancialInstitution $financialInstitution, LetterOfGuaranteeFacility $letterOfGuaranteeFacility)
+	{
+		try {
+			$letterOfGuaranteeFacility->deleteLatestRenewal();
+		} catch (\InvalidArgumentException $e) {
+			return redirect()->back()->withErrors(['renewal' => $e->getMessage()]);
+		}
+
+		return redirect()->back()->with('success', __('Renewal Deleted — Facility Reverted To Previous Terms'));
 	}
 	/**
 	 * Pure AJAX data endpoint consumed by the LG Issuance form —

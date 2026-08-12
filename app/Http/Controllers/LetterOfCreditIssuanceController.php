@@ -165,12 +165,25 @@ class LetterOfCreditIssuanceController
     {
         $source = $source ?? $lc->getSource();
         $lcAmount = $lc->getLcAmount();
+        /**
+         * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-11): LC
+         * currency is stored lowercase ('usd', 'egp' — confirmed from
+         * the LC form's own convention), but supplier_invoices.currency
+         * is stored uppercase ('EGP' — confirmed against real data).
+         * onlyCurrency() does an exact string match, so this silently
+         * excluded every genuinely matching invoice — the dropdown
+         * looked empty even when the right invoice existed. Fixed by
+         * normalizing to uppercase here, at the call site, rather than
+         * changing the shared onlyCurrency() scope itself (used by
+         * other invoice types too, where callers may already pass the
+         * correct case).
+         */
         $supplierInvoices = SupplierInvoice::onlyCompany($company->id)->onlyForPartner($lc->getBeneficiaryId())
             ->where(function ($q) use ($lcAmount) {
                 $q->orHas('letterOfCreditIssuancePaymentSettlements')
                     ->orWhere('net_balance', '>=', $lcAmount);
             })
-            ->onlyCurrency($lc->getLcCurrency())
+            ->onlyCurrency(strtoupper($lc->getLcCurrency()))
             ->get();
 
         $financialInstitutionId = $lc->getFinancialInstitutionBankId();
@@ -189,6 +202,7 @@ class LetterOfCreditIssuanceController
             'is_running' => $lc->isRunning(),
             'is_paid' => $lc->isPaid(),
             'bank_name' => $lc->getFinancialInstitutionBankName(),
+            'financial_institution_id' => $financialInstitutionId,
             'lc_code' => $lc->getLcCode(),
             'lc_amount' => $lc->getLcAmount(),
             'lc_amount_formatted' => $lc->getLcAmountFormatted(),
@@ -199,13 +213,43 @@ class LetterOfCreditIssuanceController
             'has_comment' => $lc->hasComment(),
             'user_comment' => $lc->getUserComment(),
             'edit_url' => route('edit.letter.of.credit.issuance', ['company' => $company->id, 'letterOfCreditIssuance' => $lc->id, 'source' => $source]),
-            'delete_url' => route('delete.letter.of.credit.issuance', ['company' => $company->id, 'letterOfCreditIssuance' => $lc->id]),
+            'delete_url' => route('delete.letter.of.credit.issuance', ['company' => $company->id, 'letterOfCreditIssuance' => $lc->id, 'source' => $source]),
             'back_to_running_url' => route('back.to.running.letter.of.credit.issuance', ['company' => $company->id, 'letterOfCreditIssuance' => $lc->id, 'source' => $source]),
             'mark_as_paid_url' => route('make.letter.of.credit.issuance.as.paid', ['company' => $company->id, 'letterOfCreditIssuance' => $lc->id, 'source' => $source]),
             'apply_expense_url' => route('apply.lc.issuance.expense', ['company' => $company->id, 'letterOfCreditIssuance' => $lc->id]),
             // Mark As Paid modal data
             'supplier_invoice_id' => $lc->getSupplierInvoiceId(),
-            'supplier_invoices' => $supplierInvoices->map(fn ($inv) => ['id' => $inv->id, 'invoice_number' => $inv->getInvoiceNumber()])->values(),
+            /**
+             * Client-flagged (2026-08-11): the original popup shows each
+             * invoice's own currency/net balance/exchange rate so the
+             * person can see exactly what they're settling against —
+             * dropped during the Vue migration along with everything
+             * else below. Restored to match cancel-issuance-modal.blade.php.
+             */
+            'supplier_invoices' => $supplierInvoices->map(fn ($inv) => [
+                'id' => $inv->id,
+                'invoice_number' => $inv->getInvoiceNumber(),
+                'currency' => $inv->getCurrency(),
+                'net_balance' => $inv->getNetBalance(),
+                'exchange_rate' => $inv->getExchangeRate(),
+                'net_balance_in_main_currency' => $inv->getNetBalanceInMainCurrency(),
+            ])->values(),
+            'lc_exchange_rate' => $lc->getExchangeRate(),
+            'lc_amount_in_main_currency' => $lc->getLcAmountInMainCurrency(),
+            'lc_amount_in_main_currency_formatted' => $lc->getAmountInMainCurrencyFormatted(),
+            'cash_cover_amount' => $lc->getCashCoverAmount(),
+            'cash_cover_amount_formatted' => $lc->getCashCoverAmountFormatted(),
+            'lc_cash_cover_currency' => $lc->getLcCashCoverCurrency(),
+            /**
+             * Matches the original's own logic exactly (see
+             * cancel-issuance-modal.blade.php line 77): cash cover's own
+             * exchange rate is 1 when its currency already IS the
+             * company's main currency, otherwise it reuses the LC's own
+             * exchange rate.
+             */
+            'cash_cover_exchange_rate' => $lc->getLcCashCoverCurrency() === $company->getMainFunctionalCurrency() ? 1 : $lc->getExchangeRate(),
+            'cash_cover_rate' => $lc->getCashCoverRate(),
+            'account_number_lookup_url' => route('lc.get.account.numbers.for.account.type', ['company' => $company->id, 'accountType' => '__TYPE__', 'currency' => '__CURRENCY__', 'financialInstitutionId' => $financialInstitutionId]),
             'is_financed_by_self' => $lc->isFinancedBySelf(),
             'company_main_currency' => $company->getMainFunctionalCurrency(),
             'payment_currency' => $lc->getPaymentCurrency(),
@@ -273,6 +317,31 @@ class LetterOfCreditIssuanceController
                 LetterOfCreditIssuance::HUNDRED_PERCENTAGE_CASH_COVER => route('create.letter.of.credit.issuance', ['company' => $company->id, 'source' => LetterOfCreditIssuance::HUNDRED_PERCENTAGE_CASH_COVER]),
             ],
             'tabs' => $tabs,
+            /**
+             * Facility Renewal work uncovered this: the "Allocate
+             * Payment To Customer Contract" table (client-flagged,
+             * 2026-08-11) existed in the original Blade flow but was
+             * dropped entirely during the Vue migration — the current
+             * modal even had a comment admitting it was a known gap.
+             * The backend logic to SAVE these allocations was already
+             * intact and untouched; only this data source and the UI
+             * itself were missing. Matches the original's own query
+             * (Partner::onlyCustomers()->onlyThatHaveContracts()) —
+             * eagerly loaded with each contract's own code/amount so
+             * the modal never needs a live lookup while typing.
+             */
+            'customersWithContracts' => \App\Models\Partner::onlyCompany($company->id)
+                ->onlyCustomers()->onlyThatHaveContracts()->with('contracts')->get()
+                ->map(fn ($p) => [
+                    'id' => $p->id,
+                    'name' => $p->getName(),
+                    'contracts' => $p->contracts->map(fn ($c) => [
+                        'id' => $c->id,
+                        'name' => $c->getName(),
+                        'code' => $c->getCode(),
+                        'amount' => $c->getAmount(),
+                    ])->values(),
+                ])->values(),
             'navUrls' => [
                 'home' => route('home', ['company' => $company->id]),
                 'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
@@ -431,6 +500,7 @@ class LetterOfCreditIssuanceController
                 'user_comment' => $model->getUserComment(),
             ] : null,
             'lookupUrl' => route('update.letter.of.credit.outstanding.balance.and.limit', ['company' => $company->id]),
+            'exchangeRateLookupUrl' => route('get.exchange.rate.for.date.and.currencies', ['company' => $company->id]),
             'submitUrl' => $model
                 ? route('update.letter.of.credit.issuance', ['company' => $company->id, 'letterOfCreditIssuance' => $model->id, 'source' => LetterOfCreditIssuance::LC_FACILITY])
                 : route('store.letter.of.credit.issuance', ['company' => $company->id, 'source' => LetterOfCreditIssuance::LC_FACILITY]),
@@ -517,6 +587,7 @@ class LetterOfCreditIssuanceController
                 'user_comment' => $model->getUserComment(),
             ] : null,
             'lookupUrl' => route('update.letter.of.credit.outstanding.balance.and.limit', ['company' => $company->id]),
+            'exchangeRateLookupUrl' => route('get.exchange.rate.for.date.and.currencies', ['company' => $company->id]),
             'submitUrl' => $model
                 ? route('update.letter.of.credit.issuance', ['company' => $company->id, 'letterOfCreditIssuance' => $model->id, 'source' => LetterOfCreditIssuance::HUNDRED_PERCENTAGE_CASH_COVER])
                 : route('store.letter.of.credit.issuance', ['company' => $company->id, 'source' => LetterOfCreditIssuance::HUNDRED_PERCENTAGE_CASH_COVER]),
@@ -619,6 +690,18 @@ class LetterOfCreditIssuanceController
             $letterOfCreditFacilityId = $letterOfCreditFacility->id;
         }
         $model = new LetterOfCreditIssuance();
+        /**
+         * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-11): company_id
+         * was never explicitly set on this model — storeBasicForm() only
+         * sets a column if the submitted request happens to include a
+         * field with that exact name, and the LC Issuance form doesn't
+         * resubmit company_id (it's already known from the URL). That
+         * left $model->company_id null all the way through to
+         * storeCurrentAccountCreditBankStatement(), which reads it
+         * directly — causing the crash the moment a current-account
+         * statement row tried to save with no company_id at all.
+         */
+        $model->company_id = $company->id;
         // ⚠️ Confirmed bug fix: relying on $request->merge() + storeBasicForm()'s
         // generic re-read of the request to null out contract_id (for the -1
         // "New PO" / -2 "Existing PO" sentinel values) was hitting a foreign
@@ -799,6 +882,38 @@ class LetterOfCreditIssuanceController
      * modal feeds an empty allocations array by default (the same
      * safe fallback this method already has built in).
      */
+    /**
+     * Client-flagged (2026-08-11): the "Do you want to pay this LC?"
+     * popup showed every current account for the bank regardless of
+     * currency — original Cashvero filters by BOTH the selected Payment
+     * Currency and Account Type. Matches the exact working pattern
+     * already used by Money Payment / Money Received / Cash Expense
+     * for the same live lookup, rather than inventing a new one.
+     */
+    /**
+     * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-11): the shared
+     * getAllAccountNumberForCurrency() defaults to keying its results
+     * by account_number (a string), not the real database id — that's
+     * fine for the other callers of this same pattern (Money Payment
+     * etc.), which don't need the real id back. LC payment DOES need
+     * it — payment_account_number_id gets stored as a genuine foreign
+     * key on the resulting statement row — so submitting an account
+     * NUMBER where an ID was expected meant the later lookup for that
+     * account silently found nothing, crashing the moment a statement
+     * row tried to save. Fixed by explicitly requesting 'id' as the
+     * key, only for this endpoint — the shared method and every other
+     * caller of it are untouched.
+     */
+    public function getAccountNumbersForAccountType(Company $company, Request $request, string $accountType, ?string $selectedCurrency = null, ?int $financialInstitutionId = 0)
+    {
+        $accountType = AccountType::find($accountType);
+        $accountNumberModel = ('\App\Models\\'.$accountType->getModelName())::getAllAccountNumberForCurrency($company->id, $selectedCurrency, $financialInstitutionId, 'id');
+        return response()->json([
+            'status' => true,
+            'data' => $accountNumberModel,
+        ]);
+    }
+
     public function markAsPaid(Company $company, StoreNewSettlementWithLcIssuanceRequest $request, LetterOfCreditIssuance $letterOfCreditIssuance, string $source)
     {
         return OdooSync::transaction(function () use ($company, $request, $letterOfCreditIssuance, $source) {

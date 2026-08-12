@@ -42,6 +42,23 @@ class StoreMoneyReceivedRequest extends FormRequest
 				'settlements'=>[],
 			];
 		}
+		/**
+		 * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-11): editing a
+		 * Cheque or Cash In Safe money-received record without changing
+		 * its own Cheque Number / Receipt Number failed with a false
+		 * "already exists" error — same root cause as the other
+		 * uniqueness bugs already fixed elsewhere, but via different
+		 * field names here (current_cheque_id / cash_id, read directly
+		 * off the request by the two Rule classes below) that the form
+		 * never actually submitted. Resolved from the route-bound
+		 * record's own related Cheque/CashInSafe row, only when
+		 * actually editing.
+		 */
+		$moneyReceived = $this->route('moneyReceived');
+		if ($moneyReceived) {
+			$additionalData['current_cheque_id'] = $moneyReceived->cheque?->id;
+			$additionalData['cash_id'] = $moneyReceived->cashInSafe?->id;
+		}
 		$this->merge(array_merge([
 			'received_amount'=>$receivedAmounts,
 			'unapplied_amount'=>number_unformat($this->get('unapplied_amount'))

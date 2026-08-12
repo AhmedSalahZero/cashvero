@@ -135,7 +135,7 @@ function submit() {
                         <label class="cvr-form-label">Bank *</label>
                         <select v-model="financialInstitutionId" class="cvr-input w-full px-3 py-2 rounded">
                             <option value="" disabled>Select bank</option>
-                            <option v-for="bank in financialInstitutionBanks" :key="bank.id" :value="bank.id">{{ bank.name }}</option>
+                            <option v-for="bank in [...financialInstitutionBanks].sort((a, b) => a.name.localeCompare(b.name))" :key="bank.id" :value="bank.id">{{ bank.name }}</option>
                         </select>
                     </div>
                     <div>

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Helpers\HArr;
 use App\Interfaces\Models\IInvoice;
+use App\Traits\Models\HasForecastedProjectCollection;
 use App\Traits\Models\IsInvoice;
 use App\Traits\StaticBoot;
 use Carbon\Carbon;
@@ -147,7 +148,7 @@ use Illuminate\Support\Facades\DB;
  */
 class SupplierInvoice extends Model implements IInvoice
 {
-    use StaticBoot , IsInvoice;
+    use StaticBoot , IsInvoice, HasForecastedProjectCollection;
     
     
     protected $dates = [
@@ -517,87 +518,34 @@ class SupplierInvoice extends Model implements IInvoice
 	{
 		return 'invoice_date';
 	}
-	public static function getForecastedProjectCollection(array &$result  , string $startDate , string $endDate , $currency  , $companyId  , array $datesWithWeekNumber , ?int $contractId = null , $foreignExchangeRates = null , ?string $mainFunctionalCurrency = null):void
+	public static function getForecastedProjectCollection(array &$result  , string $startDate , string $endDate , $currency  , $companyId  , array $datesWithWeekNumber , ?int $contractId = null , $foreignExchangeRates = null , ?string $mainFunctionalCurrency = null , ?\Illuminate\Support\Collection $poAllocations = null):void
 	{
-		/**
-		 *
-		 * * في حالة لو مرر العقد فا مش محتاجين عمله لان العقد الواحد مربوط بعملة واحدة
-		 * * المبالغ هنا بعملة العقد فلازم تتحول للعملة الوظيفية عشان تتجمع مع باقي الصفوف المحولة
-		 */
-		$key = 'Forecasted Suppliers Contract Payments';
-
-		// Company-wide + main functional currency tab -> include contracts in
-		// every currency (each gets converted below via its own currency's
-		// FX rate). Any specific foreign-currency tab, or a single contract,
-		// keeps the original same-currency-only filter.
-		$showAllCurrenciesConverted = ! $contractId && $mainFunctionalCurrency !== null && $currency === $mainFunctionalCurrency;
-		
-		$contracts = Contract::where('company_id',$companyId)
-		->where('end_date','<=',$endDate)
-		->when(! $showAllCurrenciesConverted, function($query) use ($currency){
-			$query->where('currency',$currency);
-		})
-		->when($contractId,function($query) use ($contractId){
-			$query->where('id',$contractId);
-		})
-		->with('purchasesOrders')->get();
-		
-		$contractWithPurchaseOrders = [];
-		foreach($contracts as $contract){
-			foreach($contract->purchasesOrders as $purchaseOrder){
-				$purchaseOrders = HArr::getLatestNonZeroExecutionKeys($purchaseOrder->toArray());
-				if(empty($purchaseOrders['end_date'])){
-					continue;
-				}
-				$contractWithPurchaseOrders[$contract->id][$purchaseOrder->id] = [
-					'contract'=>$contract ,
-					'purchase_orders'=>$purchaseOrders
-				];
-			}
-		}
-		
-		foreach($contractWithPurchaseOrders as $contractId => $contractWithSos){
-			foreach($contractWithSos as $soId => $ContractWithSoArr){
-				$contract = $ContractWithSoArr['contract'];
-				$soArr = $ContractWithSoArr['purchase_orders'];
-				if (empty($soArr)) {
-					continue;
-				}
-				$soEndDate = $soArr['end_date'];
-				$soCollectionDays = $soArr['collection_days'] ?? 0;
-				$currentSoCollectionDays = Carbon::make($soEndDate)->addDays($soCollectionDays);
-				$isBetweenViewInterval = $currentSoCollectionDays->between($startDate,$endDate);
-				if(!$isBetweenViewInterval){
-					continue;
-				}
-				$currentSoCollectionDaysFormatted = $currentSoCollectionDays->format('Y-m-d');
-				$currentWeekYear =$datesWithWeekNumber[$currentSoCollectionDaysFormatted];
-				$purchaseOrderAmount = $soArr['amount'];
-				$contractCode = $contract->getCode();
-				$contractName = $contract->getName();
-				$poNumber = $soArr['po_number']; 
-				$customerName = $contract->getClientName();
-				$currentInvoiceAmount = DB::table('supplier_invoices')->where('company_id',$companyId)->where('currency',$contract->getCurrency())->where('purchases_order_number',$poNumber)->where('contract_code',$contractCode)->sum('invoice_amount');
-				
-				$salesOrderDownPayments = DB::table('down_payment_money_payment_settlements')->where('company_id',$companyId)->where('purchase_order_id',$soId)->where('contract_id',$contractId)->sum('down_payment_amount');
-				$purchaseOrderNetPayments = $salesOrderDownPayments - $currentInvoiceAmount;
-				
-				$purchaseOrderNetBalance = 0 ;
-				if($purchaseOrderNetPayments > $purchaseOrderAmount){
-					$purchaseOrderNetBalance = 0;
-				}else{
-					$purchaseOrderNetBalance = $purchaseOrderAmount - $purchaseOrderNetPayments;
-				}
-				$exchangeRate = ForeignExchangeRate::getExchangeRateAtOrOne($contract->getCurrency(),$mainFunctionalCurrency,$currentSoCollectionDaysFormatted,$companyId,$foreignExchangeRates);
-				$purchaseOrderNetBalance = $purchaseOrderNetBalance * $exchangeRate;
-				$invoiceNumber =   $customerName . '-' . $contractName  ;
-				$result['suppliers'][$key][$invoiceNumber]['weeks'][$currentWeekYear] = isset($result['suppliers'][$key][$invoiceNumber]['weeks'][$currentWeekYear]) ? $result['suppliers'][$key][$invoiceNumber]['weeks'][$currentWeekYear]+  $purchaseOrderNetBalance :$purchaseOrderNetBalance;
-				$result['suppliers'][$key][$invoiceNumber]['total'] = isset($result['suppliers'][$key][$invoiceNumber]['total']) ? $result['suppliers'][$key][$invoiceNumber]['total']  + $purchaseOrderNetBalance : $purchaseOrderNetBalance;
-				// $currentTotal = $purchaseOrderNetBalance;
-				// $result['suppliers'][$key]['total'][$currentWeekYear] = isset($result['suppliers'][$key]['total'][$currentWeekYear]) ? $result['suppliers'][$key]['total'][$currentWeekYear] +  $currentTotal : $currentTotal ;
-				$result['suppliers'][$key]['total'][$currentWeekYear] = isset($result['suppliers'][$key]['total'][$currentWeekYear]) ? $result['suppliers'][$key]['total'][$currentWeekYear] + $purchaseOrderNetBalance : $purchaseOrderNetBalance;
-			}
-		}
+		// See HasForecastedProjectCollection trait for the full formula
+		// and why it's shared with CustomerInvoice::getForecastedProjectCollection.
+		static::computeForecastedProjectCollection(
+			$result,
+			$startDate,
+			$endDate,
+			$currency,
+			$companyId,
+			$datesWithWeekNumber,
+			$contractId,
+			$foreignExchangeRates,
+			$mainFunctionalCurrency,
+			[
+				'main_result_type' => 'suppliers',
+				'result_key' => 'Forecasted Suppliers Contract Payments',
+				'invoice_table' => 'supplier_invoices',
+				'order_relation' => 'purchasesOrders',
+				'order_number_key' => 'po_number',
+				'invoice_order_number_column' => 'purchases_order_number',
+				'down_payment_table' => 'down_payment_money_payment_settlements',
+				'down_payment_order_id_column' => 'purchase_order_id',
+				'add_to_cash_inflow_total' => false,
+				'paid_or_collected_status' => self::COLLETED_OR_PAID,
+			],
+			$poAllocations
+		);
 	}
 	public static function getForecastedProjectPayment(array &$result   , string $startDate , string $endDate , $currency  , $companyId  , array $datesWithWeekNumber ,?int $contractId = null , $foreignExchangeRates = null , ?string $mainFunctionalCurrency = null):void
 	{

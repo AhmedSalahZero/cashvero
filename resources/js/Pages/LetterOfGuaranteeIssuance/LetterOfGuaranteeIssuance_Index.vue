@@ -218,8 +218,8 @@ const odooErrorTarget = ref(null);
                                     <button v-if="row.is_running && row.is_advanced_payment" @click="openAdvancedPayment(row)" class="cvr-action-btn" title="Amount To Be Decreased">⚖️</button>
                                     <button v-if="row.is_cancelled" @click="openBackToRunning(row)" class="cvr-action-btn" title="Back To Running">↩️</button>
 
-                                    <Link :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</Link>
-                                    <button @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
+                                    <Link v-if="!row.is_cancelled" :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</Link>
+                                    <button v-if="!row.is_cancelled" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
                                 </div>
                             </td>
                         </tr>

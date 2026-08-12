@@ -45,6 +45,10 @@ use Illuminate\Database\Eloquent\Model;
 class LetterOfGuaranteeFacilityTermAndCondition extends Model
 {
     protected $guarded = ['id'];
+	public function termsHistory()
+	{
+		return $this->belongsTo(LetterOfGuaranteeFacilityTermsHistory::class,'terms_history_id','id');
+	}
 	public function getLgType()
 	{
 		return $this->lg_type;

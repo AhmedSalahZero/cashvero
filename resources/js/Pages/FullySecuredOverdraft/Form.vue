@@ -5,12 +5,14 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 
 const props = defineProps({
     mode: String, // 'create' | 'edit'
+    hasRenewals: Boolean, // edit mode only — true once the facility has a renewal
     company: Object,
     financialInstitution: Object,
     currencies: Object,
     hasOdooIntegration: Boolean,
     cdOrTdAccountTypes: Array,   // [{id, name}]
     cdOrTdAccounts: Array,       // [{id, account_type_id, account_number, currency, amount, interest_rate}]
+    linkedCdOrTdAmount: { type: Number, default: 0 }, // edit mode, locked-by-renewal: the already-linked account's own amount
     model: Object,               // null in create mode
     submitUrl: String,
     backUrl: String,
@@ -19,6 +21,7 @@ const props = defineProps({
 
 const page = usePage();
 const isEdit = props.mode === 'edit';
+const isLockedByRenewal = isEdit && props.hasRenewals;
 
 /* ── Form state ───────────────────────────────────────────────── */
 const form = ref({
@@ -85,13 +88,18 @@ if (isEdit && form.value.cd_or_td_id) {
     onAccountSelected();
 }
 
-/* ── Limit auto-calculation: CD/TD amount × lending percentage ──── */
+/* ── Limit auto-calculation: CD/TD amount × lending percentage.
+   While locked by a renewal, the CD/TD account can't be changed (see
+   template), but the percentage still can — the amount used is the
+   already-linked account's own (linkedCdOrTdAmount), not
+   cd_or_td_amount (which is only populated when the picker is shown). */
 function recalculateLimit() {
-    const amount = Number(form.value.cd_or_td_amount) || 0;
+    const amount = isLockedByRenewal ? props.linkedCdOrTdAmount : (Number(form.value.cd_or_td_amount) || 0);
     const percentage = Number(form.value.cd_or_td_lending_percentage) || 0;
     form.value.limit = Math.round((amount * percentage / 100) * 100) / 100;
 }
 watch(() => [form.value.cd_or_td_amount, form.value.cd_or_td_lending_percentage], recalculateLimit);
+if (isLockedByRenewal) recalculateLimit();
 
 /* ── Interest rate = borrowing rate + margin rate (create mode only,
    rate changes after creation happen via the Rates modal instead) ─ */
@@ -140,6 +148,28 @@ function submit() {
         delete payload.margin_rate;
         delete payload.interest_rate;
     }
+    // Client-directed rework (2026-08-11), applied from the start here:
+    // once a renewal exists, onboarding/identity data is never
+    // resubmitted — dropping the keys entirely (rather than sending
+    // blank/zero values) is what makes the backend leave them
+    // completely untouched. CD/TD linkage fields are dropped too since
+    // they're hidden in this state (see the template) — Limit becomes
+    // a direct input instead of being derived from them.
+    if (isLockedByRenewal) {
+        delete payload.contract_start_date;
+        delete payload.account_number;
+        delete payload.odoo_code;
+        delete payload.currency;
+        delete payload.outstanding_balance;
+        delete payload.balance_date;
+        delete payload.outstanding_breakdowns;
+        delete payload.cd_or_td_account_type_id;
+        delete payload.cd_or_td_id;
+        delete payload.cd_or_td_amount;
+        delete payload.cd_or_td_interest;
+        // cd_or_td_lending_percentage is kept — it's still editable
+        // while locked, and drives the limit recalculation server-side.
+    }
     if (isEdit) {
         router.put(props.submitUrl, payload, { onFinish: () => { submitting.value = false; } });
     } else {
@@ -165,6 +195,15 @@ function submit() {
                 Please fix the highlighted field(s) below before saving.
             </div>
 
+            <div v-if="isLockedByRenewal" class="mb-4 px-4 py-3 rounded border border-blue-400 bg-blue-50 text-blue-800 text-sm">
+                This facility has an active renewal, so this edits the <strong>current chapter's</strong> terms only.
+                Account details and onboarding data (Outstanding Balance / Balance Date / Outstanding Breakdown)
+                belong to the original setup and can't be changed here. The linked CD/TD account itself can't be
+                swapped here either — only its lending percentage, which recalculates the limit the same way it
+                always has. To change the renewal's own start date, delete and re-do the renewal from the Archived
+                Facilities tab instead.
+            </div>
+
             <form @submit.prevent="submit" class="space-y-6">
                 <!-- Main Information -->
                 <div class="cvr-card">
@@ -175,8 +214,8 @@ function submit() {
                             <input disabled :value="financialInstitution.name" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Contract Start Date *</label>
-                            <input v-model="form.contract_start_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                            <label class="cvr-form-label">{{ isLockedByRenewal ? 'Current Chapter Start Date' : 'Contract Start Date *' }}</label>
+                            <input v-model="form.contract_start_date" type="date" :disabled="isLockedByRenewal" class="cvr-input w-full px-3 py-2 rounded" :class="{ 'opacity-60': isLockedByRenewal }" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Contract End Date *</label>
@@ -185,11 +224,11 @@ function submit() {
                         </div>
                         <div>
                             <label class="cvr-form-label">Account Number *</label>
-                            <input v-model="form.account_number" type="text" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="form.account_number" type="text" :disabled="isLockedByRenewal" class="cvr-input w-full px-3 py-2 rounded" :class="{ 'opacity-60': isLockedByRenewal }" />
                             <p v-if="errorFor('account_number')" class="text-xs mt-1 cvr-num-red">{{ errorFor('account_number') }}</p>
                         </div>
                     </div>
-                    <div v-if="hasOdooIntegration" class="cvr-form-grid-4 mt-3">
+                    <div v-if="hasOdooIntegration && !isLockedByRenewal" class="cvr-form-grid-4 mt-3">
                         <div>
                             <label class="cvr-form-label">Odoo Code</label>
                             <input v-model="form.odoo_code" type="text" class="cvr-input w-full px-3 py-2 rounded" />
@@ -197,8 +236,10 @@ function submit() {
                     </div>
                 </div>
 
-                <!-- CD Or TD Information -->
-                <div class="cvr-card">
+                <!-- CD Or TD Information — hidden once locked by a renewal;
+                     see the Limit field note in Terms & Conditions below
+                     for why. -->
+                <div v-if="!isLockedByRenewal" class="cvr-card">
                     <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">CD Or TD Information</h2>
                     <div class="cvr-form-grid-4">
                         <div>
@@ -244,15 +285,22 @@ function submit() {
                             <input disabled :value="form.limit" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                             <p class="text-xs cvr-text-muted mt-1">CD/TD amount × lending percentage</p>
                         </div>
-                        <div>
-                            <label class="cvr-form-label">Outstanding Balance *</label>
-                            <input v-model="form.outstanding_balance" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                        <div v-if="isLockedByRenewal">
+                            <label class="cvr-form-label">CD Or TD Lending Percentage (%) *</label>
+                            <input v-model="form.cd_or_td_lending_percentage" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
+                            <p v-if="errorFor('cd_or_td_lending_percentage')" class="text-xs mt-1 cvr-num-red">{{ errorFor('cd_or_td_lending_percentage') }}</p>
                         </div>
-                        <div>
-                            <label class="cvr-form-label">Balance Date *</label>
-                            <input v-model="form.balance_date" type="date" required class="cvr-input w-full px-3 py-2 rounded" />
-                            <p v-if="errorFor('balance_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('balance_date') }}</p>
-                        </div>
+                        <template v-if="!isLockedByRenewal">
+                            <div>
+                                <label class="cvr-form-label">Outstanding Balance *</label>
+                                <input v-model="form.outstanding_balance" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            </div>
+                            <div>
+                                <label class="cvr-form-label">Balance Date *</label>
+                                <input v-model="form.balance_date" type="date" required class="cvr-input w-full px-3 py-2 rounded" />
+                                <p v-if="errorFor('balance_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('balance_date') }}</p>
+                            </div>
+                        </template>
 
                         <!-- Rate fields only apply at creation — after that,
                              rate changes go through the Rates modal on the
@@ -287,8 +335,10 @@ function submit() {
                     </div>
                 </div>
 
-                <!-- Outstanding Breakdown -->
-                <div class="cvr-card">
+                <!-- Outstanding Breakdown — onboarding-only, so it's
+                     dropped entirely once a renewal exists (see banner
+                     above). -->
+                <div v-if="!isLockedByRenewal" class="cvr-card">
                     <div class="flex items-center justify-between mb-4">
                         <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide">Outstanding Breakdown</h2>
                         <button type="button" @click="addBreakdownRow" class="cvr-btn-primary px-3 py-1.5 rounded text-sm">

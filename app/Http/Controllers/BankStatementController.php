@@ -213,7 +213,20 @@ class BankStatementController
                  ->where('clean_overdrafts.currency', '=', $currencyName)
                 //  ->leftJoin('money_received','current_account_bank_statements.money_received_id','=','money_received.id')
                 ->orderByRaw('clean_overdraft_bank_statements.full_date desc , clean_overdraft_bank_statements.id desc')
-                ->selectRaw('*,clean_overdraft_bank_statements.id as id');
+                /**
+                 * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-11): both
+                 * `clean_overdraft_bank_statements` and `clean_overdrafts`
+                 * have a column named `limit`. The old `select *` let
+                 * MySQL silently keep whichever one it saw last when
+                 * hydrating same-named columns — which was the FACILITY's
+                 * current limit, quietly overwriting each row's own,
+                 * historically-correct limit. Invisible before renewals
+                 * existed (the two values were always identical then);
+                 * exposed the moment a facility's limit can legitimately
+                 * differ by date. Explicitly re-selecting the statement
+                 * table's own `limit` last forces it to win instead.
+                 */
+                ->selectRaw('*,clean_overdraft_bank_statements.id as id, clean_overdraft_bank_statements.`limit` as `limit`');
 
         } elseif ($accountType->isFullySecuredOverdraftAccount()) {
             $fullySecuredOverdraft  = FullySecuredOverdraft::findByAccountNumber($accountNumber, $company->id, $financialInstitutionId);
@@ -226,7 +239,17 @@ class BankStatementController
                  ->where('fully_secured_overdraft_id', $fullySecuredOverdraft->id)
                  ->join('fully_secured_overdrafts', 'fully_secured_overdraft_bank_statements.fully_secured_overdraft_id', '=', 'fully_secured_overdrafts.id')
                  ->where('fully_secured_overdrafts.currency', '=', $currencyName)
-                 ->selectRaw('*,fully_secured_overdraft_bank_statements.id as id')
+                 /**
+                  * Pre-emptive fix (2026-08-11), same root cause as the
+                  * Clean Overdraft fix just above: `fully_secured_overdraft_bank_statements`
+                  * and `fully_secured_overdrafts` both have a `limit`
+                  * column, and `select *` let the facility's current one
+                  * silently win. Harmless today (Fully Secured Overdraft
+                  * has no renewal feature yet), but fixing now so the
+                  * same bug can't resurface the moment renewal is built
+                  * for this facility type next.
+                  */
+                 ->selectRaw('*,fully_secured_overdraft_bank_statements.id as id, fully_secured_overdraft_bank_statements.`limit` as `limit`')
                  ->orderByRaw('fully_secured_overdraft_bank_statements.full_date desc, fully_secured_overdraft_bank_statements.id desc');
         } elseif ($accountType->isOverdraftAgainstCommercialPaperAccount()) {
             $statementModelName = 'OverdraftAgainstCommercialPaperBankStatement';
@@ -241,7 +264,42 @@ class BankStatementController
                  ->join('overdraft_against_commercial_papers', 'overdraft_against_commercial_paper_bank_statements.overdraft_against_commercial_paper_id', '=', 'overdraft_against_commercial_papers.id')
                  ->where('overdraft_against_commercial_papers.currency', '=', $currencyName)
                  ->orderByRaw('overdraft_against_commercial_paper_bank_statements.full_date desc, overdraft_against_commercial_paper_bank_statements.id desc')
-                 ->selectRaw('* , overdraft_against_commercial_paper_bank_statements.limit as statement_limit,overdraft_against_commercial_paper_bank_statements.id as id');
+                 /**
+                  * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-11):
+                  * same root cause as the Clean Overdraft / Fully Secured
+                  * Overdraft fixes above — `overdraft_against_commercial_paper_bank_statements`
+                  * and `overdraft_against_commercial_papers` both have a
+                  * `limit` column, and `select *` let the facility's
+                  * CURRENT overall limit silently win over the
+                  * statement row's own correctly date-aware value. This
+                  * was already invisible before because a never-renewed
+                  * facility's overall limit never changed — the moment
+                  * it can (via a renewal), every row, old and new alike,
+                  * started showing the new number. `statement_limit`
+                  * already aliased around this correctly, but the
+                  * always-visible main Limit column used the colliding
+                  * one — this makes both agree.
+                  */
+                 /**
+                  * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-11):
+                  * "Limit" and "Actual Limit" are two different concepts
+                  * for this facility type — Actual Limit is the real,
+                  * accumulated total currently extended from deposited
+                  * cheques (what the statement row itself stores as
+                  * `limit`, correctly aliased below as statement_limit).
+                  * The main "Limit" column is supposed to show the
+                  * facility's overall CONTRACTED CEILING instead — which
+                  * this row never actually stored. The previous version
+                  * of this fix made both columns show the same
+                  * (accumulated) number; this correlated subquery
+                  * instead looks up whichever chapter's ceiling was
+                  * actually in force on this row's own date — correctly
+                  * showing the OLD ceiling before a renewal and the NEW
+                  * one after, rather than either the accumulated total
+                  * or (the original bug) the facility's CURRENT ceiling
+                  * applied retroactively to every row.
+                  */
+                 ->selectRaw('* , overdraft_against_commercial_paper_bank_statements.limit as statement_limit, overdraft_against_commercial_paper_bank_statements.id as id, (select oacpth.`limit` from overdraft_against_commercial_paper_terms_histories oacpth where oacpth.overdraft_against_commercial_paper_id = overdraft_against_commercial_paper_bank_statements.overdraft_against_commercial_paper_id and oacpth.effective_date <= overdraft_against_commercial_paper_bank_statements.date order by oacpth.effective_date desc, oacpth.id desc limit 1) as `limit`');
         } elseif ($accountType->isOverdraftAgainstAssignmentOfContractAccount()) {
             $statementModelName = 'OverdraftAgainstAssignmentOfContractBankStatement';
             $statementTable = 'overdraft_against_assignment_of_contract_bank_statements';
@@ -255,7 +313,45 @@ class BankStatementController
                  ->join('overdraft_against_assignment_of_contracts', 'overdraft_against_assignment_of_contract_bank_statements.overdraft_against_assignment_of_contract_id', '=', 'overdraft_against_assignment_of_contracts.id')
                  ->where('overdraft_against_assignment_of_contracts.currency', '=', $currencyName)
                  ->orderByRaw('overdraft_against_assignment_of_contract_bank_statements.full_date desc, overdraft_against_assignment_of_contract_bank_statements.id desc')
-                 ->selectRaw('* , overdraft_against_assignment_of_contract_bank_statements.limit as statement_limit,overdraft_against_assignment_of_contract_bank_statements.id as id');
+                 /**
+                  * Pre-emptive fix (2026-08-11), same root cause found
+                  * and fixed for the other three facility types just
+                  * above: this facility's own table also has a `limit`
+                  * column, colliding with the statement table's under
+                  * `select *`. Harmless today (this facility has no
+                  * renewal feature yet), fixed now so it can't resurface
+                  * the moment renewal is built for this one next.
+                  */
+                 /**
+                  * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-11):
+                  * same root confusion as Commercial Paper's fix — the
+                  * PREVIOUS version of this fix (applied pre-emptively
+                  * before this facility type had been investigated
+                  * properly) made "Limit" show the same accumulated,
+                  * utilized total as "Actual Limit", when it should show
+                  * the facility's own overall CONTRACTED CEILING
+                  * instead. Unlike Commercial Paper, this facility has
+                  * no renewal/dated-chapter system yet, so there's no
+                  * per-date lookup needed — the ceiling is just this
+                  * facility's own current `limit` field, already sitting
+                  * right there via the join. `statement_limit` (Actual
+                  * Limit) is untouched and still correctly shows the
+                  * accumulated total from assigned contracts.
+                  */
+                 /**
+                  * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-11):
+                  * this previously read the facility's single CURRENT
+                  * `limit` field — correct before this facility type had
+                  * a renewal/dated-chapter system, but wrong now that it
+                  * does, since it applied the latest chapter's ceiling
+                  * uniformly to every row regardless of date. Now looks
+                  * up whichever chapter's ceiling was actually in force
+                  * on this row's own date, same fix as Commercial Paper.
+                  * `statement_limit` (Actual Limit) is untouched and
+                  * still correctly shows the accumulated total from
+                  * assigned contracts.
+                  */
+                 ->selectRaw('* , overdraft_against_assignment_of_contract_bank_statements.limit as statement_limit, overdraft_against_assignment_of_contract_bank_statements.id as id, (select oaacth.`limit` from overdraft_against_assignment_of_contract_terms_histories oaacth where oaacth.overdraft_against_assignment_of_contract_id = overdraft_against_assignment_of_contract_bank_statements.overdraft_against_assignment_of_contract_id and oaacth.effective_date <= overdraft_against_assignment_of_contract_bank_statements.date order by oaacth.effective_date desc, oaacth.id desc limit 1) as `limit`');
         }
 
         if (is_null($freshQuery) || ! $freshQuery()->exists()) {
@@ -518,9 +614,10 @@ class BankStatementController
     }
 
     /**
-     * UNCHANGED — real Odoo journal-entry side effects for an
-     * end-of-month interest row. Presentation-layer migration only; this
-     * method's logic was deliberately left untouched.
+     * UNCHANGED for the account types it always worked for — real Odoo
+     * journal-entry side effects for an end-of-month interest row.
+     * Presentation-layer migration only for those; this method's logic
+     * was deliberately left untouched there.
      */
     public function updateBankStatementRow(Company $company, Request $request)
     {
@@ -532,14 +629,35 @@ class BankStatementController
         $date = Carbon::make($request->get('date'))->format('Y-m-d');
         $fullModelClass = 'App\Models\\'.$statementModelName;
         $bankStatementRecord = $fullModelClass::find($statementId) ;
-		$financialInstitutionAccountId = $bankStatementRecord->financial_institution_account_id;
-		$financialInstitutionAccount = FinancialInstitutionAccount::find($financialInstitutionAccountId);
-		$financialInstitution = $financialInstitutionAccount->financialInstitution;
-		$financialInstitutionId= $financialInstitution->id;
-		if($bankStatementRecord && $bankStatementRecord->interest_journal_entry_id){
-			(new CashExpenseOdooService($company))->unlink($bankStatementRecord->interest_journal_entry_id);
+		/**
+		 * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-11): this
+		 * Odoo journal-linking block assumes every statement type has a
+		 * `financial_institution_account_id` column and an
+		 * `interest_journal_entry_id` column to store the result in.
+		 * That's true for Time/Certificate of Deposit and Current
+		 * Account statements — it was NEVER true for Clean Overdraft or
+		 * the other three overdraft-family facility types, which don't
+		 * have either column at all (they carry their own
+		 * financial_institution_id / odoo_id / journal_id directly on
+		 * the facility itself, not through a FinancialInstitutionAccount).
+		 * The old code tried to resolve a FinancialInstitutionAccount
+		 * for those types unconditionally, got null, and crashed on the
+		 * very next line — before ever reaching the actual edit. Now
+		 * this whole block only runs for statement types that genuinely
+		 * have the column to support it; everyone else just gets their
+		 * amount/date updated, which is the only thing they were ever
+		 * able to do anyway.
+		 */
+		if ($bankStatementRecord && \Illuminate\Support\Facades\Schema::hasColumn($bankStatementRecord->getTable(), 'financial_institution_account_id')) {
+			$financialInstitutionAccountId = $bankStatementRecord->financial_institution_account_id;
+			$financialInstitutionAccount = FinancialInstitutionAccount::find($financialInstitutionAccountId);
+			$financialInstitution = $financialInstitutionAccount?->financialInstitution;
+			$financialInstitutionId= $financialInstitution?->id;
+			if($bankStatementRecord && $bankStatementRecord->interest_journal_entry_id){
+				(new CashExpenseOdooService($company))->unlink($bankStatementRecord->interest_journal_entry_id);
+			}
+			(new TimeOfDeposit())->storePeriodInterestOdooRelations($bankStatementRecord,$date,$debit,$financialInstitutionId , $financialInstitutionAccountId,$company);
 		}
-		(new TimeOfDeposit())->storePeriodInterestOdooRelations($bankStatementRecord,$date,$debit,$financialInstitutionId , $financialInstitutionAccountId,$company);
         $bankStatementRecord->handleFullDateAfterDateEdit($date, $debit, $credit);
         return redirect()->back()->with('success', __('Data Updated Successfully'));
     }

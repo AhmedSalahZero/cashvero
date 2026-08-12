@@ -23,6 +23,7 @@ const props = defineProps({
     purchaseOrders: Array,            // [{id, contract_id, po_number}]
     model: Object,                    // null in create mode
     lookupUrl: String,
+    exchangeRateLookupUrl: String,
     submitUrl: String,
     backUrl: String,
     navUrls: Object,
@@ -151,6 +152,41 @@ watch(() => form.value.lc_currency, () => {
         form.value.lc_cash_cover_currency = props.company.mainFunctionalCurrency;
     }
 }, { immediate: true });
+
+/**
+ * Client-requested (2026-08-11): when the LC currency is a foreign
+ * currency, Exchange Rate should auto-fill from the Foreign Exchange
+ * Rate of the nearest date, while still letting the user manually
+ * override it afterward. Reuses the existing, already-working
+ * get.exchange.rate.for.date.and.currencies endpoint (confirmed
+ * correct against the backend — it already does the "nearest date on
+ * or before" lookup) rather than building a new one. Only auto-fills
+ * for a genuinely foreign currency — the main functional currency is
+ * always 1:1 with itself, so there's nothing to fetch there.
+ */
+async function fetchExchangeRateForLcCurrency() {
+    if (!form.value.lc_currency || form.value.lc_currency === props.company.mainFunctionalCurrency) {
+        form.value.exchange_rate = 1;
+        return;
+    }
+    const params = new URLSearchParams({
+        fromCurrency: form.value.lc_currency,
+        toCurrency: props.company.mainFunctionalCurrency,
+        date: form.value.issuance_date || todayDate(),
+    });
+    try {
+        const response = await fetch(`${props.exchangeRateLookupUrl}?${params.toString()}`);
+        const data = await response.json();
+        if (data?.exchange_rate) {
+            form.value.exchange_rate = data.exchange_rate;
+        }
+    } catch (e) {
+        // Silent fail — the field stays editable either way, so the
+        // person can always type the rate in manually if the lookup
+        // doesn't return anything.
+    }
+}
+watch(() => [form.value.lc_currency, form.value.issuance_date], fetchExchangeRateForLcCurrency);
 
 function currencyLabel(code) {
     return props.currencies[code] ?? code?.toUpperCase();
@@ -302,7 +338,7 @@ function submit() {
                             <label class="cvr-form-label">Bank *</label>
                             <select v-model="form.financial_institution_id" class="cvr-input w-full px-3 py-2 rounded">
                                 <option value="" disabled>Select</option>
-                                <option v-for="b in financialInstitutionBanks" :key="b.id" :value="b.id">{{ b.name }}</option>
+                                <option v-for="b in [...financialInstitutionBanks].sort((a, b) => a.name.localeCompare(b.name))" :key="b.id" :value="b.id">{{ b.name }}</option>
                             </select>
                         </div>
                     </div>

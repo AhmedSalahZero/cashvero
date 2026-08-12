@@ -18,7 +18,7 @@ use App\Models\LetterOfGuaranteeIssuance;
 use App\Models\LetterOfGuaranteeIssuanceAdvancedPaymentHistory;
 use App\Models\LetterOfGuaranteeStatement;
 use App\Models\Partner;
-use App\Models\PurchaseOrder;
+use App\Models\SalesOrder;
 use App\Models\TimeOfDeposit;
 use App\Services\Api\LetterOfGuaranteeService;
 use App\Services\Api\OdooSync;
@@ -282,7 +282,10 @@ class LetterOfGuaranteeIssuanceController
             'beneficiaries'=>[],
             // 'beneficiaries'=>Partner::onlyCustomers()->onlyForCompany($company->id)->get(),
             'contracts'=>Contract::onlyForCompany($company->id)->get(),
-            'purchaseOrders'=>PurchaseOrder::onlyForCompany($company->id)->get(),
+            // NOTE: the LG's "purchase_order_id" column actually links to
+            // SalesOrder (see LetterOfGuaranteeIssuance::purchaseOrder()) —
+            // that's the app's own naming, not a typo introduced here.
+            'purchaseOrders'=>SalesOrder::onlyForCompany($company->id)->get(),
             'accountTypes'=> AccountType::onlyCurrentAccount()->get(),
             'cashCoverAccountTypes'=>AccountType::onlyCashCoverAccounts()->get(),
             'source'=>$source,
@@ -378,10 +381,17 @@ class LetterOfGuaranteeIssuanceController
                 'partner_id' => $c->partner_id,
                 'name' => $c->getName(),
             ])->values(),
-            'purchaseOrders' => PurchaseOrder::onlyForCompany($company->id)->get()->map(fn ($po) => [
-                'id' => $po->id,
-                'contract_id' => $po->contract_id,
-                'po_number' => $po->po_number,
+            // NOTE: despite the "purchaseOrders" / "po_number" naming (kept
+            // to match the LG's own purchase_order_id/purchase_order_date
+            // columns), these are actually Sales Orders — the LG's
+            // purchaseOrder() relation belongs to SalesOrder, not
+            // PurchaseOrder. so_date is that SO's own start_date_1, used
+            // to auto-fill the LG's date field once a specific SO is picked.
+            'purchaseOrders' => SalesOrder::onlyForCompany($company->id)->get()->map(fn ($so) => [
+                'id' => $so->id,
+                'contract_id' => $so->contract_id,
+                'po_number' => $so->so_number,
+                'so_date' => $so->start_date_1,
             ])->values(),
             'model' => $model ? [
                 'id' => $model->id,
@@ -476,7 +486,7 @@ class LetterOfGuaranteeIssuanceController
             'tdAccounts' => $tdAccounts,
             'feesAccounts' => $currentAccounts,
             'contracts' => Contract::onlyForCompany($company->id)->get()->map(fn ($c) => ['id' => $c->id, 'partner_id' => $c->partner_id, 'name' => $c->getName()])->values(),
-            'purchaseOrders' => PurchaseOrder::onlyForCompany($company->id)->get()->map(fn ($po) => ['id' => $po->id, 'contract_id' => $po->contract_id, 'po_number' => $po->po_number])->values(),
+            'purchaseOrders' => SalesOrder::onlyForCompany($company->id)->get()->map(fn ($so) => ['id' => $so->id, 'contract_id' => $so->contract_id, 'po_number' => $so->so_number, 'so_date' => $so->start_date_1])->values(),
             'model' => $model ? [
                 'id' => $model->id,
                 'category_name' => $model->getCategoryName(),
@@ -563,7 +573,7 @@ class LetterOfGuaranteeIssuanceController
             'cdAccounts' => $cdAccounts,
             'feesAccounts' => $currentAccounts,
             'contracts' => Contract::onlyForCompany($company->id)->get()->map(fn ($c) => ['id' => $c->id, 'partner_id' => $c->partner_id, 'name' => $c->getName()])->values(),
-            'purchaseOrders' => PurchaseOrder::onlyForCompany($company->id)->get()->map(fn ($po) => ['id' => $po->id, 'contract_id' => $po->contract_id, 'po_number' => $po->po_number])->values(),
+            'purchaseOrders' => SalesOrder::onlyForCompany($company->id)->get()->map(fn ($so) => ['id' => $so->id, 'contract_id' => $so->contract_id, 'po_number' => $so->so_number, 'so_date' => $so->start_date_1])->values(),
             'model' => $model ? [
                 'id' => $model->id,
                 'category_name' => $model->getCategoryName(),
@@ -636,7 +646,7 @@ class LetterOfGuaranteeIssuanceController
             'financialInstitutionBanks' => collect($commonVars['financialInstitutionBanks'])->map(fn ($fi) => ['id' => $fi->id, 'name' => $fi->getName()])->values(),
             'feesAccounts' => $currentAccounts,
             'contracts' => Contract::onlyForCompany($company->id)->get()->map(fn ($c) => ['id' => $c->id, 'partner_id' => $c->partner_id, 'name' => $c->getName()])->values(),
-            'purchaseOrders' => PurchaseOrder::onlyForCompany($company->id)->get()->map(fn ($po) => ['id' => $po->id, 'contract_id' => $po->contract_id, 'po_number' => $po->po_number])->values(),
+            'purchaseOrders' => SalesOrder::onlyForCompany($company->id)->get()->map(fn ($so) => ['id' => $so->id, 'contract_id' => $so->contract_id, 'po_number' => $so->so_number, 'so_date' => $so->start_date_1])->values(),
             'model' => $model ? [
                 'id' => $model->id,
                 'category_name' => $model->getCategoryName(),
@@ -784,6 +794,29 @@ class LetterOfGuaranteeIssuanceController
         $model->company_id = $company->id;
         $model->source = $source;
         $model->created_by = auth()->user()->id;
+        /**
+         * ⚠️ Bug fix (confirmed with project owner): Bid Bond LGs are
+         * never linked to a contract — the Contract/SO fields are
+         * hidden on the form for this type. But the frontend only
+         * clears them when someone actively switches the LG Type
+         * dropdown TO Bid Bond; a record that already loaded as Bid
+         * Bond (e.g. one that had a contract attached before being
+         * changed to Bid Bond, or edited before this fix existed) kept
+         * whatever stale contract_id sat in the hidden field's
+         * underlying value, and re-saving it silently preserved that
+         * stale link — which is exactly why a cancelled Bid Bond was
+         * showing up in a specific contract's Cash Flow report despite
+         * Bid Bonds supposedly never being linked to one. Enforced here
+         * server-side, unconditionally, regardless of what was
+         * submitted or which form/flow it came through.
+         */
+        if ($request->get('lg_type') === LgTypes::BID_BOND) {
+            $request->merge([
+                'contract_id' => 'null',
+                'purchase_order_id' => 'null',
+                'purchase_order_date' => 'null',
+            ]);
+        }
         $model->storeBasicForm($request);
         $transactionName = $request->get('transaction_name');
         $lgType = $request->get('lg_type');
@@ -864,6 +897,11 @@ class LetterOfGuaranteeIssuanceController
      */
     public function edit(Company $company, Request $request, LetterOfGuaranteeIssuance $letterOfGuaranteeIssuance, string $source)
     {
+        // Cancelled LGs can't be edited until they're set back to Running.
+        if ($letterOfGuaranteeIssuance->isCancelled()) {
+            return redirect()->route('view.letter.of.guarantee.issuance', ['company' => $company->id, 'active' => $letterOfGuaranteeIssuance->getLgType()])
+                ->with('fail', __('This LG is cancelled and can no longer be edited. Set it back to Running first.'));
+        }
         $commonVars = $this->commonViewVars($company, $source) ;
         if (!count($commonVars['financialInstitutionBanks']) && isset($commonVars['errorMessage'])) {
             return redirect()->back()->with('fail', $commonVars['errorMessage']);
@@ -895,6 +933,14 @@ class LetterOfGuaranteeIssuanceController
      */
     public function update(Company $company, UpdateLetterOfGuaranteeIssuanceRequest $request, LetterOfGuaranteeIssuance $letterOfGuaranteeIssuance, string $source)
     {
+        // Cancelled LGs can't be edited until they're set back to Running.
+        if ($letterOfGuaranteeIssuance->isCancelled()) {
+            $redirectUrl = route('view.letter.of.guarantee.issuance', ['company' => $company->id, 'active' => $request->get('lg_type', $letterOfGuaranteeIssuance->getLgType())]);
+            if ($request->header('X-Inertia')) {
+                return redirect($redirectUrl)->with('fail', __('This LG is cancelled and can no longer be edited. Set it back to Running first.'));
+            }
+            return response()->json(['redirectTo' => $redirectUrl]);
+        }
         if ($letterOfGuaranteeIssuance->renewalDateHistories->count()  > 1) {
 			if ($request->header('X-Inertia')) {
 				return redirect()->route('view.letter.of.guarantee.issuance', ['company'=>$company->id,'active'=>$request->get('lg_type', $letterOfGuaranteeIssuance->getLgType())])->with('fail', __('This item can no longer be edited.'));
@@ -1261,6 +1307,11 @@ class LetterOfGuaranteeIssuanceController
      */
     public function destroy(Company $company ,  LetterOfGuaranteeIssuance $letterOfGuaranteeIssuance)
     {
+        // Cancelled LGs can't be deleted until they're set back to Running.
+        if ($letterOfGuaranteeIssuance->isCancelled()) {
+            return redirect()->route('view.letter.of.guarantee.issuance', ['company' => $company->id, 'active' => $letterOfGuaranteeIssuance->getLgType()])
+                ->with('fail', __('This LG is cancelled and can no longer be deleted. Set it back to Running first.'));
+        }
         $lgType = $letterOfGuaranteeIssuance->getLgType();
         OdooSync::transaction(function () use ($letterOfGuaranteeIssuance) {
             $letterOfGuaranteeIssuance->deleteAllRelations();

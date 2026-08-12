@@ -118,7 +118,7 @@ class CleanOverdraftController
 			'rows' => $cleanOverdrafts->map(function (CleanOverdraft $co) use ($company, $financialInstitution, $lockableAccountType) {
 				return [
 					'id' => $co->id,
-					'contract_start_date_formatted' => $co->getContractStartDateFormatted(),
+					'contract_start_date_formatted' => $co->getCurrentChapterStartDateFormatted(),
 					'contract_end_date_formatted' => $co->getContractEndDateFormatted(),
 					'account_number' => $co->getAccountNumber(),
 					'currency' => $co->getCurrencyFormatted(),
@@ -131,6 +131,19 @@ class CleanOverdraftController
 					'delete_url' => route('delete.clean.overdraft', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'cleanOverdraft' => $co->id]),
 					'lock_url' => $lockableAccountType ? route('lock.or.unlock.bank.account', ['company' => $company->id, 'accountType' => $lockableAccountType->id, 'accountId' => $co->id]) : null,
 					'apply_rate_url' => route('clean-overdraft-apply.rates', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'cleanOverdraft' => $co->id]),
+					'renew_url' => route('clean-overdraft.renew', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'cleanOverdraft' => $co->id]),
+					'delete_renewal_url' => route('clean-overdraft.delete-renewal', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'cleanOverdraft' => $co->id]),
+					'has_renewals' => $co->hasRenewals(),
+					'terms_history' => $co->termsHistories->map(fn ($t) => [
+						'id' => $t->id,
+						'effective_date_formatted' => $t->getEffectiveDateFormatted(),
+						'contract_end_date_formatted' => $t->contract_end_date ? \Carbon\Carbon::make($t->contract_end_date)->format('d-m-Y') : null,
+						'limit_formatted' => $t->getLimitFormatted(),
+						'highest_debt_balance_rate' => $t->highest_debt_balance_rate,
+						'admin_fees_rate' => $t->admin_fees_rate,
+						'to_be_setteled_max_within_days' => $t->to_be_setteled_max_within_days,
+						'is_original' => (bool) $t->is_original,
+					])->values(),
 					'rates' => $co->rates->map(fn ($rate) => [
 						'id' => $rate->id,
 						'date_formatted' => $rate->getDateFormatted(),
@@ -216,25 +229,24 @@ class CleanOverdraftController
 		 * @var CleanOverdraft $cleanOverdraft 
 		 */
 		$cleanOverdraft = $financialInstitution->cleanOverdrafts()->create($data);
+		/**
+		 * Real bug fixed here (client-flagged, 2026-08-11) — see the
+		 * full explanation on CleanOverdraft::createOriginalTermsHistory().
+		 */
+		$cleanOverdraft->createOriginalTermsHistory();
 		
 		$cleanOverdraft->handleEndOfMonthInterestForContractStatements($data['contract_start_date'],$data['contract_end_date'],$company->id);
 		
 		
-		// a new empty line in clean overdraft bank statement
-		$cleanOverdraft->cleanOverdraftBankStatements()->create([
-			'type'=>'active-limit',
-			'is_debit'=>1 ,
-			'is_credit'=> 0 ,
-			'priority'=>3,
-			'company_id'=>$company->id ,
-			'date'=>$cleanOverdraft->contract_start_date ,
-			'limit'=>$cleanOverdraft->limit ,
-			'debit'=>0,
-			'credit'=>0,
-			'comment_en'=>__('Limit'),
-			'comment_ar'=>__('Limit',[],'ar'),
-			
-		]);
+		/**
+		 * Client-directed rework (2026-08-11): now goes through the
+		 * single authoritative updateLimitRaw() instead of duplicating
+		 * the same row-building logic inline — this is what previously
+		 * caused this row's label to drift out of sync (created here
+		 * with one label, then silently overwritten with a different
+		 * one by update()'s own now-removed duplicate block below).
+		 */
+		$cleanOverdraft->updateLimitRaw();
 		/**
 		 * * Rates Will Be Stored In  Created Observer 
 		 */
@@ -254,26 +266,41 @@ class CleanOverdraftController
 	 * by the `mode: 'edit'` prop.
 	 */
 	public function edit(Company $company , Request $request , FinancialInstitution $financialInstitution , CleanOverdraft $cleanOverdraft){
+		/**
+		 * Client-directed rework (2026-08-10): Outstanding Balance /
+		 * Balance Date / Outstanding Breakdown exist only to capture a
+		 * one-time starting balance from before the facility joined
+		 * CashVero — they have nothing to do with a renewal and must
+		 * never be re-submitted once one exists (doing so would feed
+		 * the trigger data that looks like it belongs to the current
+		 * renewal, which it doesn't). Also: once a renewal exists, the
+		 * "Contract Start Date" shown here is the CURRENT chapter's own
+		 * start date (the renewal's effective date), not the account's
+		 * true original — matching what the Renew popup itself shows.
+		 */
+		$hasRenewals = $cleanOverdraft->hasRenewals();
+		$latestChapter = $cleanOverdraft->getLatestTerms();
         return \Inertia\Inertia::render('CleanOverdraft/Form', [
 			'mode' => 'edit',
+			'hasRenewals' => $hasRenewals,
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
 			'currencies' => getCurrencies(),
 			'hasOdooIntegration' => $company->hasOdooIntegrationCredentials(),
 			'model' => [
 				'id' => $cleanOverdraft->id,
-				'contract_start_date' => $cleanOverdraft->getContractStartDate(),
+				'contract_start_date' => $hasRenewals ? $latestChapter->effective_date : $cleanOverdraft->getContractStartDate(),
 				'contract_end_date' => $cleanOverdraft->getContractEndDate(),
 				'account_number' => $cleanOverdraft->getAccountNumber(),
 				'odoo_code' => $cleanOverdraft->getOdooCode(),
 				'currency' => $cleanOverdraft->getCurrency(),
 				'limit' => $cleanOverdraft->getLimit(),
-				'outstanding_balance' => $cleanOverdraft->getOutstandingBalance(),
-				'balance_date' => $cleanOverdraft->balance_date,
+				'outstanding_balance' => $hasRenewals ? null : $cleanOverdraft->getOutstandingBalance(),
+				'balance_date' => $hasRenewals ? null : $cleanOverdraft->balance_date,
 				'highest_debt_balance_rate' => $cleanOverdraft->highest_debt_balance_rate,
 				'admin_fees_rate' => $cleanOverdraft->admin_fees_rate,
 				'to_be_setteled_max_within_days' => $cleanOverdraft->getMaxSettlementDays(),
-				'outstanding_breakdowns' => $cleanOverdraft->outstandingBreakdowns->map(fn ($b) => [
+				'outstanding_breakdowns' => $hasRenewals ? [] : $cleanOverdraft->outstandingBreakdowns->map(fn ($b) => [
 					'settlement_date' => $b->settlement_date,
 					'amount' => $b->amount,
 				])->values(),
@@ -304,12 +331,27 @@ class CleanOverdraftController
 	 *      plumbing only, nothing about what gets saved has changed.
 	 */
 	public function update(Company $company , UpdateCleanOverdraftRequest $request , FinancialInstitution $financialInstitution,CleanOverdraft $cleanOverdraft){
-		$data = $request->only($this->getCommonDataArr());
+		/**
+		 * Client-directed rework (2026-08-10): once a renewal exists,
+		 * this form no longer submits account_number/currency/odoo_code/
+		 * outstanding_balance/balance_date/contract_start_date at all
+		 * (see edit() and Form.vue) — so only pull the fields that are
+		 * actually still relevant to "correcting the current chapter's
+		 * numbers". Using $request->only() with a smaller field list
+		 * means anything not listed is left completely untouched in the
+		 * database, rather than being overwritten with null.
+		 */
+		$hasRenewals = $cleanOverdraft->hasRenewals();
+		$fieldsToUpdate = $hasRenewals
+			? ['contract_end_date','limit','highest_debt_balance_rate','admin_fees_rate','to_be_setteled_max_within_days']
+			: $this->getCommonDataArr();
+		$data = $request->only($fieldsToUpdate);
 		$data['updated_by'] = auth()->user()->id ;
-		foreach(['contract_start_date','contract_end_date','balance_date'] as $dateField){
+		$dateFields = $hasRenewals ? ['contract_end_date'] : ['contract_start_date','contract_end_date','balance_date'];
+		foreach($dateFields as $dateField){
 			$data[$dateField] = $request->get($dateField) ? Carbon::make($request->get($dateField))->format('Y-m-d'):null;
 		}
-		if($company->hasOdooIntegrationCredentials()){
+		if($company->hasOdooIntegrationCredentials() && ! $hasRenewals){
 			$odooService = new OdooService($company);
 			$odooCode = $request->get('odoo_code');
 			$chartOfAccountId = $odooService->getChartOfAccountIdFromOdooCode($odooCode);
@@ -318,30 +360,46 @@ class CleanOverdraftController
 			$data['journal_id'] = $odooService->getJournalIdFromChartOfAccountId($chartOfAccountId) ;
 		}
 		$cleanOverdraft->update($data);
-		$cleanOverdraft->handleEndOfMonthInterestForContractStatements($data['contract_start_date'],$data['contract_end_date'],$company->id);
-		$cleanOverdraft->storeOutstandingBreakdown($request,$company);
+		/**
+		 * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-10), REVISED
+		 * (client-corrected, 2026-08-10): Edit is always allowed — it's
+		 * editing whichever chapter is CURRENTLY the live, running
+		 * contract (the client's call: only past/superseded chapters
+		 * should ever be frozen, never the current one). So this now
+		 * syncs the LATEST terms-history row, not just the "Original"
+		 * one — covering both "never renewed yet" and "currently on a
+		 * renewal" cases the same way. Deliberately does NOT touch that
+		 * row's `effective_date`: for the Original chapter that's the
+		 * account's true start date (fine to keep in step with
+		 * contract_start_date below), but for a renewal chapter,
+		 * effective_date is the renewal's own date and has nothing to
+		 * do with this form — only Renew/Delete-Renewal ever change it.
+		 */
+		$latestChapter = $cleanOverdraft->getLatestTerms();
+		if ($latestChapter) {
+			$latestChapter->update([
+				'effective_date' => $latestChapter->is_original ? $cleanOverdraft->contract_start_date : $latestChapter->effective_date,
+				'limit' => $cleanOverdraft->limit,
+				'highest_debt_balance_rate' => $cleanOverdraft->highest_debt_balance_rate,
+				'admin_fees_rate' => $cleanOverdraft->admin_fees_rate,
+				'to_be_setteled_max_within_days' => $cleanOverdraft->to_be_setteled_max_within_days,
+				'contract_end_date' => $cleanOverdraft->contract_end_date,
+			]);
+		}
+		$cleanOverdraft->handleEndOfMonthInterestForContractStatements($cleanOverdraft->contract_start_date,$cleanOverdraft->contract_end_date,$company->id);
+		if (! $hasRenewals) {
+			$cleanOverdraft->storeOutstandingBreakdown($request,$company);
+		}
+		/**
+		 * Client-directed rework (2026-08-11): this used to be followed
+		 * by a second, hand-built copy of the exact same "active-limit"
+		 * row logic — which is what was silently overwriting the label
+		 * back to a bare '-' on every single Edit save, right after
+		 * updateLimitRaw() had just set it correctly. Removed; this one
+		 * call is now the only place that ever touches this row.
+		 */
 		$cleanOverdraft->updateLimitRaw();
 		$type = $request->get('type','clean-over-draft');
-		$activeLimitRow = $cleanOverdraft->cleanOverdraftBankStatements->where('type','active-limit')->first();
-		$activeLimitRowData = [
-			'type'=>'active-limit',
-			'is_debit'=>1 ,
-			'is_credit'=> 0 ,
-			'priority'=>3,
-			'company_id'=>$company->id ,
-			'date'=>$cleanOverdraft->contract_start_date ,
-			'limit'=>$cleanOverdraft->limit ,
-			'debit'=>0,
-			'credit'=>0,
-			'comment_en'=>'-',
-			'comment_ar'=>'-',
-			
-		];
-		if($activeLimitRow){
-			$activeLimitRow->update($activeLimitRowData);
-		}else{
-			$cleanOverdraft->cleanOverdraftBankStatements()->create($activeLimitRowData);
-		}
 		$activeTab = $type ;
 		return redirect()->route('view.clean.overdraft',['company'=>$company->id,'financialInstitution'=>$financialInstitution->id,'active'=>$activeTab])->with('success',__('Item Has Been Updated Successfully'));
 	}
@@ -352,8 +410,70 @@ class CleanOverdraftController
 	 */
 	public function destroy(Company $company , FinancialInstitution $financialInstitution , CleanOverdraft $cleanOverdraft)
 	{
+		/**
+		 * Client-confirmed rule (2026-08-10): can't delete a facility
+		 * that still has real transactions against it — remove those
+		 * first. See CleanOverdraft::hasAnyTransactions() for exactly
+		 * what counts (system marker rows with zero amounts don't).
+		 */
+		if ($cleanOverdraft->hasAnyTransactions()) {
+			return redirect()->back()->withErrors([
+				'delete' => __('This facility cannot be deleted because it still has transactions. Please delete all related transactions first.'),
+			]);
+		}
 		$cleanOverdraft->delete();
 		return redirect()->back()->with('success',__('Item Has Been Delete Successfully'));
+	}
+
+	/**
+	 * Facility Renewal — Phase 1.
+	 *
+	 * Records a new dated set of terms for an EXISTING Clean Overdraft.
+	 * Unlike store(), this never creates a new clean_overdrafts row and
+	 * never touches account_number — so the "account number already
+	 * exists" validation never comes into play here, by design.
+	 */
+	public function renew(Company $company, \App\Http\Requests\RenewCleanOverdraftRequest $request, FinancialInstitution $financialInstitution, CleanOverdraft $cleanOverdraft)
+	{
+		$effectiveDate = Carbon::make($request->get('effective_date'))->format('Y-m-d');
+		$contractEndDate = $request->get('contract_end_date')
+			? Carbon::make($request->get('contract_end_date'))->format('Y-m-d')
+			: null;
+
+		try {
+			$cleanOverdraft->renew($effectiveDate, [
+				'limit' => $request->get('limit'),
+				'highest_debt_balance_rate' => $request->get('highest_debt_balance_rate'),
+				'admin_fees_rate' => $request->get('admin_fees_rate'),
+				'to_be_setteled_max_within_days' => $request->get('to_be_setteled_max_within_days'),
+				'contract_end_date' => $contractEndDate,
+				'notes' => $request->get('notes'),
+			], auth()->user()->id);
+		} catch (\InvalidArgumentException $e) {
+			return redirect()->back()->withErrors(['effective_date' => $e->getMessage()]);
+		}
+
+		return redirect()
+			->route('view.clean.overdraft', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id])
+			->with('success', __('Facility Renewed Successfully'));
+	}
+
+	/**
+	 * Deletes the facility's most recent renewal only — see
+	 * CleanOverdraft::deleteLatestRenewal() for the full rules
+	 * (blocked if transactions exist on/after the renewal's date;
+	 * reverts the facility to its previous chapter's terms; Edit
+	 * unlocks again if that previous chapter is the Original one).
+	 */
+	public function deleteRenewal(Company $company, FinancialInstitution $financialInstitution, CleanOverdraft $cleanOverdraft)
+	{
+		try {
+			$cleanOverdraft->deleteLatestRenewal();
+		} catch (\InvalidArgumentException $e) {
+			return redirect()->back()->withErrors(['renewal' => $e->getMessage()]);
+		}
+
+		return redirect()->back()->with('success', __('Renewal Deleted — Facility Reverted To Previous Terms'));
 	}
 
 	

@@ -42,15 +42,26 @@ begin
 		
 		select count(*) , max(full_date) into _number_of_contracts_existence , _max_full_date from overdraft_against_assignment_of_contract_limits where contract_id = new.contract_id and is_active = 1  ; 
 	
-		select lending_rate into _lending_rate from lending_information_against_assignment_of_contracts where overdraft_against_assignment_of_contract_id = new.overdraft_against_assignment_of_contract_id 
-		-- and for_assignment_of_contracts_due_within_days >= _days_count order by for_assignment_of_contracts_due_within_days asc
-		
-		 limit 1;
+		-- ⚠️ REAL BUG FIXED HERE (client-confirmed, 2026-08-11): this used
+		-- to ignore which contract was actually being calculated —
+		-- `limit 1` with no filter meant whichever contract was assigned
+		-- FIRST to this facility silently set the rate for every contract
+		-- assigned after it, regardless of what rate was actually entered
+		-- for each one. Now correctly matches the specific contract's own
+		-- assignment record, and picks the most recent if more than one
+		-- somehow exists for it.
+		select lending_rate into _lending_rate from lending_information_against_assignment_of_contracts where overdraft_against_assignment_of_contract_id = new.overdraft_against_assignment_of_contract_id and contract_id = new.contract_id order by assignment_date desc , id desc limit 1;
 		 
 	
 		 
 
-		set new.limit =  LEAST(_lending_rate /100 * _contract_amount , _max_lending_limit_per_contract)  ;
+		-- ⚠️ REAL BUG FIXED HERE (client-confirmed, 2026-08-11): same
+		-- missing-cap bug as Commercial Paper — the facility's own overall
+		-- limit (_max_limit) was fetched but never actually applied. Room
+		-- left under it is whatever's unused of the running accumulated
+		-- total so far (_previous_accumulated_limit, which already nets
+		-- finished/reversed contracts), never negative.
+		set new.limit =  LEAST(_lending_rate /100 * _contract_amount , _max_lending_limit_per_contract , GREATEST(_max_limit - _previous_accumulated_limit , 0))  ;
 		
 		if(_contract_status = 'finished'
 			and   _number_of_contracts_existence > 1 
@@ -106,13 +117,24 @@ begin
 
 		select count(*) , max(full_date) into _number_of_contracts_existence , _max_full_date from overdraft_against_assignment_of_contract_limits where contract_id = new.contract_id and is_active = 1  ; 
 	
-		select lending_rate into _lending_rate from lending_information_against_assignment_of_contracts where overdraft_against_assignment_of_contract_id = new.overdraft_against_assignment_of_contract_id 
-		-- and for_assignment_of_contracts_due_within_days >= _days_count order by for_assignment_of_contracts_due_within_days asc
-		
-		 limit 1;
+		-- ⚠️ REAL BUG FIXED HERE (client-confirmed, 2026-08-11): this used
+		-- to ignore which contract was actually being calculated —
+		-- `limit 1` with no filter meant whichever contract was assigned
+		-- FIRST to this facility silently set the rate for every contract
+		-- assigned after it, regardless of what rate was actually entered
+		-- for each one. Now correctly matches the specific contract's own
+		-- assignment record, and picks the most recent if more than one
+		-- somehow exists for it.
+		select lending_rate into _lending_rate from lending_information_against_assignment_of_contracts where overdraft_against_assignment_of_contract_id = new.overdraft_against_assignment_of_contract_id and contract_id = new.contract_id order by assignment_date desc , id desc limit 1;
 		 
 		 
-		set new.limit =  LEAST(_lending_rate /100 * _contract_amount , _max_lending_limit_per_contract)  ;
+		-- ⚠️ REAL BUG FIXED HERE (client-confirmed, 2026-08-11): same
+		-- missing-cap bug as Commercial Paper — the facility's own overall
+		-- limit (_max_limit) was fetched but never actually applied. Room
+		-- left under it is whatever's unused of the running accumulated
+		-- total so far (_previous_accumulated_limit, which already nets
+		-- finished/reversed contracts), never negative.
+		set new.limit =  LEAST(_lending_rate /100 * _contract_amount , _max_lending_limit_per_contract , GREATEST(_max_limit - _previous_accumulated_limit , 0))  ;
 	
 		if(_contract_status = 'finished'
 			and   _number_of_contracts_existence > 1 

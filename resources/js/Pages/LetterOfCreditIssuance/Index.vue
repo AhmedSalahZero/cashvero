@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
@@ -10,6 +10,7 @@ const props = defineProps({
     lcTypes: Object,     // { 'sight-lc': 'Sight LC', ... }
     createUrls: Object,  // { 'lc-facility': url, 'hundred-percentage-cash-cover': url }
     tabs: Object,        // { 'sight-lc': { rows: [...] }, ... } — all loaded eagerly, matches original (no pagination in the original controller)
+    customersWithContracts: Array, // [{id, name, contracts: [{id, name, code, amount}]}]
     navUrls: Object,
 });
 
@@ -33,16 +34,15 @@ function route_view_url() {
 }
 
 /* ── Mark As Paid modal ──────────────────────────────────────────
-   Covers the core payment settlement (date, supplier invoice,
-   financed-by-bank-vs-self, interest). The nested "Allocate Payment
-   To Customer Contract" repeater from the original is deliberately
-   NOT included here — a genuinely separate sub-feature for manually
-   splitting a payment across multiple customer contracts, scoped as
-   its own follow-up. Submitting without it still settles correctly
-   against the chosen supplier invoice (that part is automatic
-   server-side); it only skips the manual-split override, and sends
-   an empty allocations array — the same safe default the backend
-   already falls back to when none is submitted. ───────────────────── */
+   Client-confirmed real gap (2026-08-11, with the original Blade
+   files provided directly): the Cash Cover section, per-line
+   Exchange Rate / Net Balance displays, and the "Allocate Payment To
+   Customer Contract" repeater all existed in the original and were
+   dropped entirely during the earlier Vue migration — even the save
+   action's own backend calls (storeNewSettlementAfterDeleteOldOne /
+   storeNewAllocationAfterDeleteOldOne) were still intact and correct,
+   they just had no UI feeding them real allocation data. Rebuilt here
+   faithfully from the original cancel-issuance-modal.blade.php. ──── */
 const payTarget = ref(null);
 const payForm = ref({
     supplier_invoice_id: '',
@@ -55,22 +55,113 @@ const payForm = ref({
     lc_remaining_amount: 0,
     lc_type: '',
 });
+let nextAllocationRowId = 1;
+function blankAllocationRow() {
+    return { _rowId: nextAllocationRowId++, partner_id: '', contract_id: '', allocation_amount: 0 };
+}
+const allocationRows = ref([blankAllocationRow()]);
+function addAllocationRow() { allocationRows.value.push(blankAllocationRow()); }
+function removeAllocationRow(rowId) {
+    if (allocationRows.value.length <= 1) return;
+    allocationRows.value = allocationRows.value.filter(r => r._rowId !== rowId);
+}
+function contractsForCustomer(partnerId) {
+    return props.customersWithContracts.find(c => c.id === partnerId)?.contracts ?? [];
+}
+function contractDetails(row) {
+    return contractsForCustomer(row.partner_id).find(c => c.id === row.contract_id) ?? null;
+}
+// Selected invoice's own currency/net balance/exchange rate — the
+// original shows these live as soon as an invoice is picked.
+const selectedInvoice = computed(() => {
+    if (!payTarget.value) return null;
+    return payTarget.value.supplier_invoices.find(inv => inv.id === payForm.value.supplier_invoice_id) ?? null;
+});
 function openPay(row) {
     payTarget.value = row;
     payForm.value = {
         supplier_invoice_id: row.supplier_invoice_id ?? '',
         payment_date: row.due_date ?? '',
         payment_currency: row.payment_currency ?? '',
-        payment_account_type_id: row.payment_account_type_id ?? '',
+        payment_account_type_id: row.payment_account_type_id ?? (row.current_account_types[0]?.id ?? ''),
         payment_account_number_id: row.payment_account_number_id ?? '',
         interest_currency: row.interest_currency ?? '',
         interest_amount: row.interest_amount ?? 0,
         lc_remaining_amount: row.lc_amount ?? 0,
         lc_type: row.lc_type,
     };
+    allocationRows.value = [blankAllocationRow()];
+    filteredPaymentAccounts.value = [];
+    /**
+     * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-11): the backend
+     * ALWAYS posts the "LC Payment" statement line using whatever
+     * lc_remaining_amount gets submitted — regardless of whether the
+     * LC is financed by bank or by self. My reactive recalculation
+     * only ever ran inside the "financed by self" section (the only
+     * place with a Payment Currency picker), so a bank-financed LC's
+     * field silently stayed at its raw, unconverted default (the LC
+     * amount in its OWN currency) the entire time. For a bank-financed
+     * LC there's no explicit payment-currency choice to make — the
+     * statement is always posted in the Cash Cover currency — so this
+     * computes it immediately using that, matching exactly how the
+     * Cash Cover section's own conversion already works.
+     */
+    if (!row.is_financed_by_self) {
+        const cashCoverRate = Number(row.cash_cover_rate || 0) / 100;
+        payForm.value.lc_remaining_amount = Math.round(Number(row.lc_amount_in_main_currency) * (1 - cashCoverRate) * 100) / 100;
+    }
 }
+/**
+ * Client-directed (2026-08-11), confirmed against the original's own
+ * behavior: LC Remaining Amount = (LC Amount, converted into whichever
+ * currency is picked as Payment Currency) × (1 − Cash Cover Rate%).
+ * Recalculates live the moment Payment Currency changes; the field
+ * stays editable afterward so the person can still override it.
+ */
+function recalculateLcRemainingAmount() {
+    if (!payTarget.value || !payForm.value.payment_currency) return;
+    const isLcCurrency = payForm.value.payment_currency === payTarget.value.lc_currency;
+    const amountInPaymentCurrency = isLcCurrency
+        ? Number(payTarget.value.lc_amount)
+        : Number(payTarget.value.lc_amount) * Number(payTarget.value.lc_exchange_rate || 1);
+    const cashCoverRate = Number(payTarget.value.cash_cover_rate || 0) / 100;
+    payForm.value.lc_remaining_amount = Math.round(amountInPaymentCurrency * (1 - cashCoverRate) * 100) / 100;
+}
+watch(() => payForm.value.payment_currency, recalculateLcRemainingAmount);
+
+/**
+ * Client-flagged (2026-08-11): Account Number must only show accounts
+ * in the selected Payment Currency, further narrowed by Account Type —
+ * previously showed every account for the bank regardless of currency.
+ * Reuses the same live lookup already used by Money Payment / Money
+ * Received / Cash Expense for this exact purpose.
+ */
+const filteredPaymentAccounts = ref([]);
+async function fetchAccountsForPaymentCurrencyAndType() {
+    if (!payTarget.value || !payForm.value.payment_currency || !payForm.value.payment_account_type_id) {
+        filteredPaymentAccounts.value = [];
+        return;
+    }
+    const url = payTarget.value.account_number_lookup_url
+        .replace('__TYPE__', payForm.value.payment_account_type_id)
+        .replace('__CURRENCY__', payForm.value.payment_currency);
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        filteredPaymentAccounts.value = Object.entries(data?.data ?? {}).map(([id, accountNumber]) => ({ id, account_number: accountNumber }));
+    } catch (e) {
+        filteredPaymentAccounts.value = [];
+    }
+}
+watch(() => [payForm.value.payment_currency, payForm.value.payment_account_type_id], fetchAccountsForPaymentCurrencyAndType);
 function submitPay() {
-    router.post(payTarget.value.mark_as_paid_url, payForm.value, { onFinish: () => { payTarget.value = null; } });
+    const payload = {
+        ...payForm.value,
+        allocations: allocationRows.value
+            .filter(r => r.partner_id && r.contract_id && r.allocation_amount > 0)
+            .map(({ _rowId, ...rest }) => rest),
+    };
+    router.post(payTarget.value.mark_as_paid_url, payload, { onFinish: () => { payTarget.value = null; } });
 }
 
 /* ── Back To Running modal ───────────────────────────────────── */
@@ -211,8 +302,14 @@ const commentTarget = ref(null);
                                     <button @click="openPay(row)" class="cvr-action-btn" title="Apply Payment">💰</button>
                                     <button v-if="row.is_paid" @click="openBackToRunning(row)" class="cvr-action-btn" title="Back To Running">↩️</button>
 
-                                    <Link :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</Link>
-                                    <button @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
+                                    <!-- Client-requested (2026-08-11): once
+                                         an LC is paid, Edit and Delete no
+                                         longer make sense — "Back To
+                                         Running" (above) is the correct way
+                                         to undo a payment before editing or
+                                         removing it. -->
+                                    <Link v-if="!row.is_paid" :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</Link>
+                                    <button v-if="!row.is_paid" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
                                 </div>
                             </td>
                         </tr>
@@ -227,16 +324,55 @@ const commentTarget = ref(null);
 
             <!-- Mark As Paid modal -->
             <div v-if="payTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div class="cvr-modal rounded-lg p-6 w-full max-w-3xl">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-7xl max-h-[90vh] overflow-y-auto">
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">Do you want to pay this LC?</h2>
-                    <div class="cvr-form-grid-3 mb-4">
+                    <div class="cvr-form-grid-6-2-2-2 mb-3">
                         <div>
                             <label class="cvr-form-label">Bank Name</label>
-                            <input disabled :value="payTarget.bank_name" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input disabled :value="payTarget.bank_name" class="cvr-input w-full  py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">LC Amount</label>
-                            <input disabled :value="payTarget.lc_amount_formatted" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input disabled :value="payTarget.lc_amount_formatted" class="cvr-input w-full  py-2 rounded" />
+                        </div>
+                        
+                            <div>
+                                <label class="cvr-form-label">Exchange Rate</label>
+                                <input disabled :value="payTarget.lc_exchange_rate" class="cvr-input w-full  py-2 rounded" />
+                            </div>
+                            <div>
+                                <label class="cvr-form-label">In Payment Currency</label>
+                                <input disabled :value="payTarget.lc_amount_in_main_currency_formatted" class="cvr-input w-full py-2 rounded" />
+                            </div>
+                        
+                    </div>
+
+                    <!-- Cash Cover -->
+                    <div class="cvr-form-grid-6-2-2-2 mb-3">
+                        <div>
+                            <label class="cvr-form-label">Cash Cover</label>
+                            <input disabled value="Cash Cover" class="cvr-input w-full px-3 py-2 rounded" />
+                        </div>
+                        <div>
+                            <label class="cvr-form-label">Amount</label>
+                            <input disabled :value="`${payTarget.cash_cover_amount_formatted} ${payTarget.lc_cash_cover_currency?.toUpperCase()}`" class="cvr-input w-full px-3 py-2 rounded" />
+                        </div>
+                        
+                            <div>
+                                <label class="cvr-form-label">Exchange Rate</label>
+                                <input disabled :value="payTarget.cash_cover_exchange_rate" class="cvr-input w-full px-3 py-2 rounded" />
+                            </div>
+                            <div>
+                                <label class="cvr-form-label">In Payment Currency</label>
+                                <input disabled :value="Math.round(payTarget.cash_cover_amount * payTarget.cash_cover_exchange_rate).toLocaleString()" class="cvr-input w-full px-3 py-2 rounded" />
+                            </div>
+                        
+                    </div>
+
+                    <div class="cvr-form-grid-3-3-2-2-2 mb-3">
+                        <div>
+                            <label class="cvr-form-label">Payment Date *</label>
+                            <input v-model="payForm.payment_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Supplier Invoice</label>
@@ -246,10 +382,22 @@ const commentTarget = ref(null);
                             </select>
                             <p class="text-xs cvr-text-muted mt-1">Only invoices for this beneficiary, in this LC's currency</p>
                         </div>
-                        <div>
-                            <label class="cvr-form-label">Payment Date *</label>
-                            <input v-model="payForm.payment_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
-                        </div>
+                        
+                            <div>
+                                <label class="cvr-form-label">Invoice Net Balance</label>
+                                <input disabled :value="selectedInvoice ? `${Number(selectedInvoice.net_balance).toLocaleString()} ${selectedInvoice.currency}` : 0" class="cvr-input w-full px-3 py-2 rounded" />
+                            </div>
+                            <div>
+                                <label class="cvr-form-label">Exchange Rate</label>
+                                <input disabled :value="selectedInvoice ? selectedInvoice.exchange_rate : 0" class="cvr-input w-full px-3 py-2 rounded" />
+                            </div>
+                            <div>
+                                <label class="cvr-form-label">NB In Main Currency</label>
+                                <input disabled :value="selectedInvoice ? Number(selectedInvoice.net_balance_in_main_currency).toLocaleString() : 0" class="cvr-input w-full px-3 py-2 rounded" />
+                            </div>
+                        
+                       </div>
+                       <div class="cvr-form-grid-4 mb-3">
 
                         <template v-if="payTarget.is_financed_by_self">
                             <div>
@@ -274,8 +422,9 @@ const commentTarget = ref(null);
                                 <label class="cvr-form-label">Account Number</label>
                                 <select v-model="payForm.payment_account_number_id" class="cvr-input w-full px-3 py-2 rounded">
                                     <option value="">Select</option>
-                                    <option v-for="a in payTarget.payment_accounts" :key="a.id" :value="a.id">{{ a.account_number }}</option>
+                                    <option v-for="a in filteredPaymentAccounts" :key="a.id" :value="a.id">{{ a.account_number }}</option>
                                 </select>
+                                <p v-if="payForm.payment_currency && !filteredPaymentAccounts.length" class="text-xs cvr-text-muted mt-1">No accounts in this currency for this bank.</p>
                             </div>
                             <div>
                                 <label class="cvr-form-label">Interest Currency *</label>
@@ -291,9 +440,47 @@ const commentTarget = ref(null);
                             </div>
                         </template>
                     </div>
-                    <p class="text-xs cvr-text-muted mb-4">
-                        Manually splitting this payment across specific customer contracts isn't available here yet — it settles against the invoice above automatically. Flagged as a follow-up.
-                    </p>
+
+                    <!-- Allocate Payment To Customer Contract -->
+                    <h3 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide m-4">Allocate Payment To Customer Contract</h3>
+                    <div class="overflow-x-auto mt-3 mb-2">
+                        <table class="min-w-full text-sm">
+                            <thead class="cvr-table-head">
+                                <tr>
+                                    <th class="px-3 py-2 text-left">Customer</th>
+                                    <th class="px-3 py-2 text-left">Contract Name</th>
+                                    <th class="px-3 py-2 text-left">Contract Code</th>
+                                    <th class="px-3 py-2 text-left">Contract Amount</th>
+                                    <th class="px-3 py-2 text-left">Allocate Amount</th>
+                                    <th class="px-3 py-2 text-left"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="row in allocationRows" :key="row._rowId" class="cvr-table-row">
+                                    <td class="px-3 py-2 min-w-[10rem]">
+                                        <select v-model="row.partner_id" @change="row.contract_id = ''" class="cvr-input px-2 py-1.5 rounded w-full">
+                                            <option value="">Select</option>
+                                            <option v-for="c in customersWithContracts" :key="c.id" :value="c.id">{{ c.name }}</option>
+                                        </select>
+                                    </td>
+                                    <td class="px-3 py-2 min-w-[10rem]">
+                                        <select v-model="row.contract_id" class="cvr-input px-2 py-1.5 rounded w-full">
+                                            <option value="">Select</option>
+                                            <option v-for="ct in contractsForCustomer(row.partner_id)" :key="ct.id" :value="ct.id">{{ ct.name }}</option>
+                                        </select>
+                                    </td>
+                                    <td class="px-3 py-2"><input disabled :value="contractDetails(row)?.code ?? ''" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
+                                    <td class="px-3 py-2"><input disabled :value="(contractDetails(row)?.amount ?? 0).toLocaleString()" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
+                                    <td class="px-3 py-2"><input v-model="row.allocation_amount" type="number" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
+                                    <td class="px-3 py-2">
+                                        <button type="button" @click="removeAllocationRow(row._rowId)" class="cvr-btn-remove-row w-auto">🗑</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <button type="button" @click="addAllocationRow" class="cvr-btn-primary px-2 py-1 rounded text-xs mb-4">+ Add Row</button>
+
                     <div class="flex justify-end gap-2">
                         <button @click="payTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
                         <button @click="submitPay" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>

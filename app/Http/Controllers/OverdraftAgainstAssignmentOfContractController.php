@@ -157,7 +157,7 @@ class OverdraftAgainstAssignmentOfContractController
 			'rows' => $odAgainstAssignmentOfContracts->map(function (OverdraftAgainstAssignmentOfContract $od) use ($company, $financialInstitution, $lockableAccountType) {
 				return [
 					'id' => $od->id,
-					'contract_start_date_formatted' => $od->getContractStartDateFormatted(),
+					'contract_start_date_formatted' => $od->getCurrentChapterStartDateFormatted(),
 					'contract_end_date_formatted' => $od->getContractEndDateFormatted(),
 					'account_number' => $od->getAccountNumber(),
 					'currency' => $od->getCurrencyFormatted(),
@@ -172,6 +172,20 @@ class OverdraftAgainstAssignmentOfContractController
 					'lock_url' => $lockableAccountType ? route('lock.or.unlock.bank.account', ['company' => $company->id, 'accountType' => $lockableAccountType->id, 'accountId' => $od->id]) : null,
 					'apply_rate_url' => route('overdraft-against-assignment-of-contract-apply.rates', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'odAgainstAssignmentOfContract' => $od->id]),
 					'apply_lending_information_url' => route('lending.information.apply.for.against.assignment.of.contract', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'odAgainstAssignmentOfContract' => $od->id]),
+					'renew_url' => route('overdraft-against-assignment-of-contract.renew', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'odAgainstAssignmentOfContract' => $od->id]),
+					'delete_renewal_url' => route('overdraft-against-assignment-of-contract.delete-renewal', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'odAgainstAssignmentOfContract' => $od->id]),
+					'has_renewals' => $od->hasRenewals(),
+					'terms_history' => $od->termsHistories->map(fn ($t) => [
+						'id' => $t->id,
+						'effective_date_formatted' => $t->getEffectiveDateFormatted(),
+						'contract_end_date_formatted' => $t->contract_end_date ? \Carbon\Carbon::make($t->contract_end_date)->format('d-m-Y') : null,
+						'limit_formatted' => $t->getLimitFormatted(),
+						'max_lending_limit_per_contract' => $t->max_lending_limit_per_contract,
+						'highest_debt_balance_rate' => $t->highest_debt_balance_rate,
+						'admin_fees_rate' => $t->admin_fees_rate,
+						'to_be_setteled_max_within_days' => $t->to_be_setteled_max_within_days,
+						'is_original' => (bool) $t->is_original,
+					])->values(),
 					'rates' => $od->rates->map(fn ($rate) => [
 						'id' => $rate->id,
 						'date_formatted' => $rate->getDateFormatted(),
@@ -282,7 +296,16 @@ class OverdraftAgainstAssignmentOfContractController
 		$odAgainstAssignmentOfContract = $financialInstitution->overdraftAgainstAssignmentOfContracts()->create($data);
 		$type = $request->get('type','overdraft-against-assignment-of-contract');
 		$activeTab = $type ; 
+		/**
+		 * Facility Renewal — Phase 4.
+		 */
+		$odAgainstAssignmentOfContract->createOriginalTermsHistory();
 		
+		/**
+		 * Client-requested (2026-08-11): End Of Month Interest, matching
+		 * Clean Overdraft's exact mechanism.
+		 */
+		$odAgainstAssignmentOfContract->handleEndOfMonthInterestForContractStatements($data['contract_start_date'],$data['contract_end_date'],$company->id);
 		$odAgainstAssignmentOfContract->storeOutstandingBreakdown($request,$company);
 	
 		return redirect()->route('view.overdraft.against.assignment.of.contract',['company'=>$company->id,'financialInstitution'=>$financialInstitution->id,'active'=>$activeTab])->with('success',__('Data Store Successfully'));
@@ -296,27 +319,30 @@ class OverdraftAgainstAssignmentOfContractController
 	 * distinguished by the `mode: 'edit'` prop.
 	 */
 	public function edit(Company $company , Request $request , FinancialInstitution $financialInstitution , OverdraftAgainstAssignmentOfContract $odAgainstAssignmentOfContract){
+		$hasRenewals = $odAgainstAssignmentOfContract->hasRenewals();
+		$latestChapter = $odAgainstAssignmentOfContract->getLatestTerms();
         return \Inertia\Inertia::render('OverdraftAgainstAssignmentOfContract/Form', [
 			'mode' => 'edit',
+			'hasRenewals' => $hasRenewals,
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
 			'currencies' => getCurrencies(),
 			'hasOdooIntegration' => $company->hasOdooIntegrationCredentials(),
 			'model' => [
 				'id' => $odAgainstAssignmentOfContract->id,
-				'contract_start_date' => $odAgainstAssignmentOfContract->getContractStartDate(),
+				'contract_start_date' => $hasRenewals ? $latestChapter->effective_date : $odAgainstAssignmentOfContract->getContractStartDate(),
 				'contract_end_date' => $odAgainstAssignmentOfContract->getContractEndDate(),
 				'account_number' => $odAgainstAssignmentOfContract->getAccountNumber(),
 				'odoo_code' => $odAgainstAssignmentOfContract->getOdooCode(),
 				'currency' => $odAgainstAssignmentOfContract->getCurrency(),
 				'limit' => $odAgainstAssignmentOfContract->getLimit(),
-				'outstanding_balance' => $odAgainstAssignmentOfContract->getOutstandingBalance(),
-				'balance_date' => $odAgainstAssignmentOfContract->balance_date,
+				'outstanding_balance' => $hasRenewals ? null : $odAgainstAssignmentOfContract->getOutstandingBalance(),
+				'balance_date' => $hasRenewals ? null : $odAgainstAssignmentOfContract->balance_date,
 				'highest_debt_balance_rate' => $odAgainstAssignmentOfContract->highest_debt_balance_rate,
 				'admin_fees_rate' => $odAgainstAssignmentOfContract->admin_fees_rate,
 				'to_be_setteled_max_within_days' => $odAgainstAssignmentOfContract->getMaxSettlementDays(),
 				'max_lending_limit_per_contract' => $odAgainstAssignmentOfContract->max_lending_limit_per_contract,
-				'outstanding_breakdowns' => $odAgainstAssignmentOfContract->outstandingBreakdowns->map(fn ($b) => [
+				'outstanding_breakdowns' => $hasRenewals ? [] : $odAgainstAssignmentOfContract->outstandingBreakdowns->map(fn ($b) => [
 					'settlement_date' => $b->settlement_date,
 					'amount' => $b->amount,
 				])->values(),
@@ -342,12 +368,17 @@ class OverdraftAgainstAssignmentOfContractController
 	 * change for Inertia compatibility. Odoo Code support added.
 	 */
 	public function update(Company $company , UpdateOverdraftAgainstAssignmentOfContractRequest $request , FinancialInstitution $financialInstitution,OverdraftAgainstAssignmentOfContract $odAgainstAssignmentOfContract){
-		$data = $request->only($this->getCommonDataArr());
+		$hasRenewals = $odAgainstAssignmentOfContract->hasRenewals();
+		$fieldsToUpdate = $hasRenewals
+			? ['contract_end_date','limit','max_lending_limit_per_contract','highest_debt_balance_rate','admin_fees_rate','to_be_setteled_max_within_days']
+			: $this->getCommonDataArr();
+		$data = $request->only($fieldsToUpdate);
 		$data['updated_by'] = auth()->user()->id ;
-		foreach(['contract_start_date','contract_end_date','balance_date'] as $dateField){
+		$dateFields = $hasRenewals ? ['contract_end_date'] : ['contract_start_date','contract_end_date','balance_date'];
+		foreach($dateFields as $dateField){
 			$data[$dateField] = $request->get($dateField) ? Carbon::make($request->get($dateField))->format('Y-m-d'):null;
 		}
-		if($company->hasOdooIntegrationCredentials()){
+		if($company->hasOdooIntegrationCredentials() && ! $hasRenewals){
 			$odooService = new OdooService($company);
 			$odooCode = $request->get('odoo_code');
 			$chartOfAccountId = $odooService->getChartOfAccountIdFromOdooCode($odooCode);
@@ -357,8 +388,22 @@ class OverdraftAgainstAssignmentOfContractController
 		}
 		$odAgainstAssignmentOfContract->update($data);
 		$odAgainstAssignmentOfContract->triggerChangeOnContracts();
-		
-		$odAgainstAssignmentOfContract->storeOutstandingBreakdown($request,$company);
+		$latestChapter = $odAgainstAssignmentOfContract->getLatestTerms();
+		if ($latestChapter) {
+			$latestChapter->update([
+				'effective_date' => $latestChapter->is_original ? $odAgainstAssignmentOfContract->contract_start_date : $latestChapter->effective_date,
+				'limit' => $odAgainstAssignmentOfContract->limit,
+				'max_lending_limit_per_contract' => $odAgainstAssignmentOfContract->max_lending_limit_per_contract,
+				'highest_debt_balance_rate' => $odAgainstAssignmentOfContract->highest_debt_balance_rate,
+				'admin_fees_rate' => $odAgainstAssignmentOfContract->admin_fees_rate,
+				'to_be_setteled_max_within_days' => $odAgainstAssignmentOfContract->to_be_setteled_max_within_days,
+				'contract_end_date' => $odAgainstAssignmentOfContract->contract_end_date,
+			]);
+		}
+		$odAgainstAssignmentOfContract->handleEndOfMonthInterestForContractStatements($odAgainstAssignmentOfContract->contract_start_date,$odAgainstAssignmentOfContract->contract_end_date,$company->id);
+		if (! $hasRenewals) {
+			$odAgainstAssignmentOfContract->storeOutstandingBreakdown($request,$company);
+		}
 
 		$type = $request->get('type','overdraft-against-assignment-of-contract');
 		$activeTab = $type ;
@@ -366,18 +411,63 @@ class OverdraftAgainstAssignmentOfContractController
 	}
 	
 	/**
-	 * Deletes an Overdraft Against Assignment Of Contract and its
-	 * related rates/limits/bank statements/lending-information rows.
-	 * UNCHANGED, deliberately.
+	 * Deletes an Overdraft Against Assignment Of Contract. Client-
+	 * confirmed rule (applied from the start, same as the other three):
+	 * blocked while it still has contracts assigned against it.
 	 */
 	public function destroy(Company $company , FinancialInstitution $financialInstitution , OverdraftAgainstAssignmentOfContract $odAgainstAssignmentOfContract)
 	{
+		if ($odAgainstAssignmentOfContract->hasAnyTransactions()) {
+			return redirect()->back()->withErrors([
+				'delete' => __('This facility cannot be deleted because it still has contracts assigned against it. Please remove those first.'),
+			]);
+		}
 		foreach(['lendingInformation','rates','overdraftAgainstAssignmentOfContractBankLimits','overdraftAgainstAssignmentOfContractBankStatements'] as $hasManyRelationName)
 		$odAgainstAssignmentOfContract->{$hasManyRelationName}->each(function($model){
 			$model->delete();
 		});	
 		$odAgainstAssignmentOfContract->delete();
 		return redirect()->back()->with('success',__('Item Has Been Delete Successfully'));
+	}
+
+	/**
+	 * Facility Renewal — Phase 4.
+	 */
+	public function renew(Company $company, \App\Http\Requests\RenewOverdraftAgainstAssignmentOfContractRequest $request, FinancialInstitution $financialInstitution, OverdraftAgainstAssignmentOfContract $odAgainstAssignmentOfContract)
+	{
+		$effectiveDate = Carbon::make($request->get('effective_date'))->format('Y-m-d');
+		$contractEndDate = $request->get('contract_end_date')
+			? Carbon::make($request->get('contract_end_date'))->format('Y-m-d')
+			: null;
+
+		try {
+			$odAgainstAssignmentOfContract->renew($effectiveDate, [
+				'limit' => $request->get('limit'),
+				'max_lending_limit_per_contract' => $request->get('max_lending_limit_per_contract'),
+				'highest_debt_balance_rate' => $request->get('highest_debt_balance_rate'),
+				'admin_fees_rate' => $request->get('admin_fees_rate'),
+				'to_be_setteled_max_within_days' => $request->get('to_be_setteled_max_within_days'),
+				'contract_end_date' => $contractEndDate,
+				'notes' => $request->get('notes'),
+			], auth()->user()->id);
+		} catch (\InvalidArgumentException $e) {
+			return redirect()->back()->withErrors(['effective_date' => $e->getMessage()]);
+		}
+
+		return redirect()
+			->route('view.overdraft.against.assignment.of.contract', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id])
+			->with('success', __('Facility Renewed Successfully'));
+	}
+
+	public function deleteRenewal(Company $company, FinancialInstitution $financialInstitution, OverdraftAgainstAssignmentOfContract $odAgainstAssignmentOfContract)
+	{
+		try {
+			$odAgainstAssignmentOfContract->deleteLatestRenewal();
+		} catch (\InvalidArgumentException $e) {
+			return redirect()->back()->withErrors(['renewal' => $e->getMessage()]);
+		}
+
+		return redirect()->back()->with('success', __('Renewal Deleted — Facility Reverted To Previous Terms'));
 	}
 	/**
 	 * Links a customer's contract to this facility as collateral —
@@ -391,6 +481,35 @@ class OverdraftAgainstAssignmentOfContractController
 		$contractId = $request->get('contract_id_create') ;
 		$assignmentDate = Carbon::make($request->get('assignment_date_create'))->format('Y-m-d') ;
 		$contract = Contract::find($contractId);
+		/**
+		 * ⚠️ REAL BUG FIXED HERE (client-confirmed, 2026-08-11): there
+		 * was no check at all preventing an already-expired contract
+		 * from being assigned to this facility — a contract whose own
+		 * end date has already passed by the assignment date isn't
+		 * something a bank would actually accept as collateral.
+		 */
+		if ($contract && $contract->contract_end_date && $contract->contract_end_date < $assignmentDate) {
+			return redirect()->back()->withErrors([
+				'contract_id_create' => __('This contract cannot be assigned — its own end date (:end) is before the assignment date (:assign), meaning it is already expired.', [
+					'end' => \Carbon\Carbon::make($contract->contract_end_date)->format('d-m-Y'),
+					'assign' => \Carbon\Carbon::make($assignmentDate)->format('d-m-Y'),
+				]),
+			]);
+		}
+		/**
+		 * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-11): there was
+		 * no check preventing the same contract from being assigned
+		 * more than once — a contract already actively pledged (as
+		 * collateral to this or any other overdraft facility) could be
+		 * assigned again, showing up twice in the Lending Information
+		 * list. It must be unassigned first (via Delete on the existing
+		 * entry) before it can be assigned again.
+		 */
+		if ($contract && $contract->isRunningAndAgainst()) {
+			return redirect()->back()->withErrors([
+				'contract_id_create' => __('This contract is already assigned as collateral to a facility. Remove the existing assignment first before assigning it again.'),
+			]);
+		}
 		$odAgainstAssignmentOfContract->lendingInformation()->create([
 			'company_id'=>$company->id ,
 			'lending_rate'=>$request->get('lending_rate_create'),
@@ -442,6 +561,32 @@ class OverdraftAgainstAssignmentOfContractController
 		$assignmentDate = $request->get('assignment_date_edit') ;
 		$assignmentDate = Carbon::make($assignmentDate)->format('Y-m-d');
 		$contract = Contract::find($contractId);
+		/**
+		 * Same guard as applyLendingInformation() — this action can also
+		 * change which contract is assigned or the assignment date, so
+		 * it needs the identical expiry check.
+		 */
+		if ($contract && $contract->contract_end_date && $contract->contract_end_date < $assignmentDate) {
+			return redirect()->back()->withErrors([
+				'contract_id_edit' => __('This contract cannot be assigned — its own end date (:end) is before the assignment date (:assign), meaning it is already expired.', [
+					'end' => \Carbon\Carbon::make($contract->contract_end_date)->format('d-m-Y'),
+					'assign' => \Carbon\Carbon::make($assignmentDate)->format('d-m-Y'),
+				]),
+			]);
+		}
+		/**
+		 * Same guard as applyLendingInformation() — but only when
+		 * actually switching to a DIFFERENT contract than the one this
+		 * entry already represents (otherwise every edit of an
+		 * unchanged assignment would incorrectly block itself, since
+		 * the contract is naturally "already running_and_against" via
+		 * this very row).
+		 */
+		if ($contract && (int) $contractId !== (int) $lendingInformation->contract_id && $contract->isRunningAndAgainst()) {
+			return redirect()->back()->withErrors([
+				'contract_id_edit' => __('This contract is already assigned as collateral to a facility. Remove the existing assignment first before assigning it again.'),
+			]);
+		}
 		$overdraftAgainstAssignmentOfContract = $lendingInformation->overdraftAgainstAssignmentOfContract;
 		$lendingInformation->update([
 			'lending_rate'=>$request->get('lending_rate_edit'),

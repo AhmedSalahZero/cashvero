@@ -307,9 +307,214 @@ public static function getCashDashboardDataForYear(array &$overdraftAgainstAssig
 			];
 			return $overdraftAgainstAssignmentOfContractCardData;
 }
+	/**
+	 * Client-requested (2026-08-11): End Of Month Interest, wired up to
+	 * match Clean Overdraft's exact mechanism — this model's trigger
+	 * already had the calculation logic for `interest_type =
+	 * 'end_of_month'` rows, nothing ever actually created those rows.
+	 * See FullySecuredOverdraft's copy of this method for the full
+	 * explanation; this is the same verbatim mechanism.
+	 */
+	public function handleEndOfMonthInterestForContractStatements(string $contractStartDate , string $contractEndDate , int $companyId)
+	{
+		$foreignKeyColumnName = self::generateForeignKeyFormModelName();
+		$fullBankStatement = self::getBankStatementTableClassName();
+
+		$contractStartDateAsCarbon = \Carbon\Carbon::make($contractStartDate);
+
+		$isLastDayOfMonth = $contractStartDateAsCarbon->isSameDay($contractStartDateAsCarbon->endOfMonth());
+
+		$contractEndDateAsCarbon= \Carbon\Carbon::make($contractEndDate);
+
+		$dates = generateDatesBetweenTwoDatesWithoutOverflow($contractStartDateAsCarbon,$contractEndDateAsCarbon) ;
+		$countDates = count($dates);
+		$interestText = 'interest';
+		$interestTypeText = 'end_of_month';
+		$fullBankStatement::where('company_id',$companyId)->where('type',$interestText)->where($foreignKeyColumnName,$this->id)->where('interest_type',$interestTypeText)->where('date','>',$contractEndDate)->delete();
+		foreach($dates as $index => $dateAsString){
+			if($index == 0 && $isLastDayOfMonth){
+				continue;
+			}
+			$isLastLoop = $index == $countDates -1;
+			$currentEndOfMonthDate = $isLastLoop ? \Carbon\Carbon::make($contractEndDate)->format('Y-m-d') : \Carbon\Carbon::make($dateAsString)->endOfMonth()->format('Y-m-d');
+			$isExist = $fullBankStatement::where('company_id',$companyId)->where($foreignKeyColumnName,$this->id)->where('type',$interestText)->where('interest_type',$interestTypeText)->where('date',$currentEndOfMonthDate)->first();
+			if(!$isExist){
+				$data = [
+				'company_id'=>$companyId,
+				$foreignKeyColumnName=>$this->id ,
+				'priority'=>1 ,
+				'type'=>$interestText,
+				'date'=>$currentEndOfMonthDate,
+				'limit'=>$this->limit ,
+				'credit'=>0 ,
+				'interest_type'=>'end_of_month',
+				'comment_en'=>__('End Of Month Interest'),
+				'comment_ar'=>__('End Of Month Interest'),
+				] ;
+				 $fullBankStatement::create($data);
+			}
+
+		}
+	}
+
 public function isOverdraft():bool 
 	{
 		return true;
+	}
+
+	/**
+	 * Facility Renewal — Phase 4. Simpler than Commercial Paper's: no
+	 * tier schedule to tag — this facility's lending rate is already
+	 * locked per-contract at assignment time (see the standalone
+	 * rate-lookup fix), so a renewal here only ever changes the
+	 * facility's own overall terms.
+	 */
+	public function termsHistories()
+	{
+		return $this->hasMany(OverdraftAgainstAssignmentOfContractTermsHistory::class,'overdraft_against_assignment_of_contract_id','id')->orderBy('effective_date');
+	}
+
+	public function getTermsAsOfDate(string $date):?OverdraftAgainstAssignmentOfContractTermsHistory
+	{
+		return $this->termsHistories()
+			->where('effective_date','<=',$date)
+			->reorder('effective_date','desc')
+			->orderByDesc('id')
+			->first();
+	}
+
+	public function getLatestTerms():?OverdraftAgainstAssignmentOfContractTermsHistory
+	{
+		return $this->termsHistories()->reorder('effective_date','desc')->orderByDesc('id')->first();
+	}
+
+	public function getCurrentChapterStartDateFormatted():?string
+	{
+		$latest = $this->getLatestTerms();
+		$date = $latest?->effective_date ?: $this->contract_start_date;
+		return $date ? \Carbon\Carbon::make($date)->format('d-m-Y') : null;
+	}
+
+	public function hasRenewals():bool
+	{
+		return $this->termsHistories()->count() > 1;
+	}
+
+	/**
+	 * Same idea as Commercial Paper: a "transaction" here means a
+	 * contract has ever been assigned to this facility (a row exists
+	 * in the limits ledger) — not a debit/credit column check.
+	 */
+	public function hasAnyTransactions():bool
+	{
+		return DB::table('overdraft_against_assignment_of_contract_limits')
+			->where('overdraft_against_assignment_of_contract_id', $this->id)
+			->exists();
+	}
+
+	public function createOriginalTermsHistory():OverdraftAgainstAssignmentOfContractTermsHistory
+	{
+		return $this->termsHistories()->create([
+			'company_id' => $this->company_id,
+			'effective_date' => $this->contract_start_date,
+			'limit' => $this->limit,
+			'max_lending_limit_per_contract' => $this->max_lending_limit_per_contract,
+			'highest_debt_balance_rate' => $this->highest_debt_balance_rate,
+			'admin_fees_rate' => $this->admin_fees_rate,
+			'to_be_setteled_max_within_days' => $this->to_be_setteled_max_within_days,
+			'contract_end_date' => $this->contract_end_date,
+			'is_original' => true,
+			'notes' => 'Original facility terms.',
+		]);
+	}
+
+	public function renew(string $effectiveDate, array $newTerms, int $userId):OverdraftAgainstAssignmentOfContractTermsHistory
+	{
+		if ($this->termsHistories()->count() === 0) {
+			$this->createOriginalTermsHistory();
+		}
+
+		$previous = $this->getLatestTerms();
+
+		if ($previous && $effectiveDate <= $previous->effective_date) {
+			throw new \InvalidArgumentException(
+				__('A renewal date must be after the facility\'s most recent renewal date (:date).', ['date' => $previous->getEffectiveDateFormatted()])
+			);
+		}
+
+		$currentEndDate = $previous?->contract_end_date ?: $this->contract_end_date;
+		if ($currentEndDate && $effectiveDate <= $currentEndDate) {
+			throw new \InvalidArgumentException(
+				__('A renewal date must be after the current contract end date (:date).', ['date' => \Carbon\Carbon::make($currentEndDate)->format('d-m-Y')])
+			);
+		}
+
+		if (empty($newTerms['contract_end_date'])) {
+			throw new \InvalidArgumentException(
+				__('A renewal must include a new contract end date — the previous end date can no longer apply once the renewal starts after it.')
+			);
+		}
+
+		$termsRow = $this->termsHistories()->create([
+			'company_id' => $this->company_id,
+			'effective_date' => $effectiveDate,
+			'limit' => $newTerms['limit'] ?? $previous?->limit ?? $this->limit,
+			'max_lending_limit_per_contract' => $newTerms['max_lending_limit_per_contract'] ?? $previous?->max_lending_limit_per_contract ?? $this->max_lending_limit_per_contract,
+			'highest_debt_balance_rate' => $newTerms['highest_debt_balance_rate'] ?? $previous?->highest_debt_balance_rate ?? $this->highest_debt_balance_rate,
+			'admin_fees_rate' => $newTerms['admin_fees_rate'] ?? $previous?->admin_fees_rate ?? $this->admin_fees_rate,
+			'to_be_setteled_max_within_days' => $newTerms['to_be_setteled_max_within_days'] ?? $previous?->to_be_setteled_max_within_days ?? $this->to_be_setteled_max_within_days,
+			'contract_end_date' => $newTerms['contract_end_date'] ?? $previous?->contract_end_date ?? $this->contract_end_date,
+			'notes' => $newTerms['notes'] ?? null,
+			'is_original' => false,
+			'created_by' => $userId,
+		]);
+
+		$this->update([
+			'limit' => $termsRow->limit,
+			'max_lending_limit_per_contract' => $termsRow->max_lending_limit_per_contract,
+			'highest_debt_balance_rate' => $termsRow->highest_debt_balance_rate,
+			'admin_fees_rate' => $termsRow->admin_fees_rate,
+			'to_be_setteled_max_within_days' => $termsRow->to_be_setteled_max_within_days,
+			'contract_end_date' => $termsRow->contract_end_date,
+		]);
+
+		$this->updateBankStatementsFromDate($effectiveDate);
+
+		return $termsRow;
+	}
+
+	public function deleteLatestRenewal():void
+	{
+		$latest = $this->getLatestTerms();
+
+		if (!$latest || $latest->is_original) {
+			throw new \InvalidArgumentException(__('There is no renewal to delete — this facility is still on its original terms.'));
+		}
+
+		$blockingContracts = DB::table('overdraft_against_assignment_of_contract_limits')
+			->where('overdraft_against_assignment_of_contract_id', $this->id)
+			->where('full_date', '>=', $latest->effective_date)
+			->exists();
+
+		if ($blockingContracts) {
+			throw new \InvalidArgumentException(
+				__('This renewal cannot be deleted because contracts have already been assigned on or after its effective date (:date). Please remove those first.', ['date' => $latest->getEffectiveDateFormatted()])
+			);
+		}
+
+		$latest->delete();
+
+		$newLatest = $this->getLatestTerms();
+		$this->update([
+			'limit' => $newLatest->limit,
+			'max_lending_limit_per_contract' => $newLatest->max_lending_limit_per_contract,
+			'highest_debt_balance_rate' => $newLatest->highest_debt_balance_rate,
+			'admin_fees_rate' => $newLatest->admin_fees_rate,
+			'to_be_setteled_max_within_days' => $newLatest->to_be_setteled_max_within_days,
+			'contract_end_date' => $newLatest->contract_end_date,
+		]);
+
+		$this->updateBankStatementsFromDate($newLatest->effective_date);
 	}
 	
 }

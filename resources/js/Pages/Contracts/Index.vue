@@ -139,15 +139,25 @@ const allocationTarget = ref(null);
 const allocationRows = ref([]);
 const contractsByPartner = ref({}); // partnerId -> [{id, name, code, amount, currency}]
 
-function openAllocationModal(subItem) {
+async function openAllocationModal(subItem) {
     allocationTarget.value = subItem;
     allocationRows.value = subItem.allocations.length
         ? subItem.allocations.map(a => ({ ...a }))
         : [{ partner_id: '', contract_id: '', contract_code: '', contract_amount: null, contract_currency: '', percentage: 0, amount_formatted: '0.00' }];
     // Pre-load contract options for any partner already selected in a
-    // saved allocation row, so the Contract dropdown isn't empty on open.
+    // saved allocation row, so the Contract dropdown isn't empty on open —
+    // then back-fill Code/Amount/Currency for any row that already has a
+    // contract picked. Those fields are normally only derived live by
+    // onContractChange() when the user actively changes the dropdown,
+    // which never fires for rows loaded straight from a saved allocation —
+    // that's why Code/Amount showed blank when reopening an existing one.
+    await Promise.all(
+        allocationRows.value
+            .filter(row => row.partner_id)
+            .map(row => loadContractsForPartner(row.partner_id))
+    );
     allocationRows.value.forEach(row => {
-        if (row.partner_id) loadContractsForPartner(row.partner_id);
+        if (row.contract_id) onContractChange(row);
     });
 }
 function closeAllocationModal() {

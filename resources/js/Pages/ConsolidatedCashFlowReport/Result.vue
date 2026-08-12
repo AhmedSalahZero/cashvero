@@ -11,6 +11,7 @@ const props = defineProps({
     banksSection: Object,             // { label: { total: { weekKey: amount } } }
     contractsSection: Array,          // [{ contract_id, contract_name, contract_code, cash_inflow, cash_outflow, net_cash }]
     companyUnallocatedCashOut: Object,
+    companyUnallocatedCashIn: Object,
     grandTotal: Object,               // { cash_and_banks, cash_inflow, cash_outflow, net_cash, accumulated_net }
     currencyName: String,              // عملة الفلتر — تختار العقود فقط
     displayCurrency: String,           // العملة الوظيفية — كل الأرقام المعروضة بها
@@ -70,7 +71,7 @@ const accumulatedTotal = computed(() => {
                 </div>
             </div>
 
-            <p class="text-sm cvr-text-muted mb-4"><strong class="cvr-text-primary">All amounts are shown in:</strong> {{ displayCurrency }} — <strong class="cvr-text-primary">Contracts filter currency:</strong> {{ currencyName }} — <strong class="cvr-text-primary">Interval:</strong> {{ reportInterval }}</p>
+            <p class="text-sm cvr-text-muted mb-4"><strong class="cvr-text-primary">All amounts are shown in:</strong> {{ displayCurrency }} — <strong class="cvr-text-primary">Contracts filter currencies:</strong> {{ (filters?.currencies?.length ? filters.currencies.join(', ') : 'All') }} — <strong v-if="filters?.min_end_year" class="cvr-text-primary">Contracts ending in/after:</strong> <span v-if="filters?.min_end_year">{{ filters.min_end_year }} — </span><strong class="cvr-text-primary">Interval:</strong> {{ reportInterval }}</p>
 
             <div class="cvr-card-bg cvr-border border rounded-lg overflow-auto">
                 <table class="min-w-full text-sm">
@@ -103,6 +104,11 @@ const accumulatedTotal = computed(() => {
                         </tr>
                         <tr v-if="!Object.keys(banksSection || {}).length">
                             <td :colspan="weekKeys.length + 2" class="px-2 py-4 text-center cvr-text-muted">No bank-level rows returned.</td>
+                        </tr>
+                        <tr class="cvr-table-row">
+                            <td class="px-2 py-2 whitespace-nowrap">Cash Inflow (unallocated)</td>
+                            <td v-for="wk in weekKeys" :key="wk" class="px-2 py-2 text-center cvr-num whitespace-nowrap">{{ fmt(companyUnallocatedCashIn?.[wk]) }}</td>
+                            <td class="px-2 py-2 text-center cvr-num font-semibold whitespace-nowrap">{{ fmt(rowTotal(companyUnallocatedCashIn)) }}</td>
                         </tr>
 
                         <!-- Per-contract blocks -->

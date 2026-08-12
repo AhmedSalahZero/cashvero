@@ -129,7 +129,7 @@ class OverdraftAgainstCommercialPaperController
 			'rows' => $overdraftAgainstCommercialPapers->map(function (OverdraftAgainstCommercialPaper $ocp) use ($company, $financialInstitution, $lockableAccountType) {
 				return [
 					'id' => $ocp->id,
-					'contract_start_date_formatted' => $ocp->getContractStartDateFormatted(),
+					'contract_start_date_formatted' => $ocp->getCurrentChapterStartDateFormatted(),
 					'contract_end_date_formatted' => $ocp->getContractEndDateFormatted(),
 					'account_number' => $ocp->getAccountNumber(),
 					'currency' => $ocp->getCurrencyFormatted(),
@@ -142,6 +142,24 @@ class OverdraftAgainstCommercialPaperController
 					'delete_url' => route('delete.overdraft.against.commercial.paper', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'overdraftAgainstCommercialPaper' => $ocp->id]),
 					'lock_url' => $lockableAccountType ? route('lock.or.unlock.bank.account', ['company' => $company->id, 'accountType' => $lockableAccountType->id, 'accountId' => $ocp->id]) : null,
 					'apply_rate_url' => route('overdraft-against-commercial-paper-apply.rates', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'overdraftAgainstCommercialPaper' => $ocp->id]),
+					'renew_url' => route('overdraft-against-commercial-paper.renew', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'overdraftAgainstCommercialPaper' => $ocp->id]),
+					'delete_renewal_url' => route('overdraft-against-commercial-paper.delete-renewal', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'overdraftAgainstCommercialPaper' => $ocp->id]),
+					'has_renewals' => $ocp->hasRenewals(),
+					'terms_history' => $ocp->termsHistories->map(fn ($t) => [
+						'id' => $t->id,
+						'effective_date_formatted' => $t->getEffectiveDateFormatted(),
+						'contract_end_date_formatted' => $t->contract_end_date ? \Carbon\Carbon::make($t->contract_end_date)->format('d-m-Y') : null,
+						'limit_formatted' => $t->getLimitFormatted(),
+						'max_lending_limit_per_customer' => $t->max_lending_limit_per_customer,
+						'highest_debt_balance_rate' => $t->highest_debt_balance_rate,
+						'admin_fees_rate' => $t->admin_fees_rate,
+						'to_be_setteled_max_within_days' => $t->to_be_setteled_max_within_days,
+						'is_original' => (bool) $t->is_original,
+						'tiers' => $t->lendingInformation->map(fn ($info) => [
+							'for_commercial_papers_due_within_days' => $info->for_commercial_papers_due_within_days,
+							'lending_rate' => $info->lending_rate,
+						])->values(),
+					])->values(),
 					'rates' => $ocp->rates->map(fn ($rate) => [
 						'id' => $rate->id,
 						'date_formatted' => $rate->getDateFormatted(),
@@ -244,9 +262,22 @@ class OverdraftAgainstCommercialPaperController
 		$type = $request->get('type','overdraft-against-commercial-paper');
 		$activeTab = $type ; 
 		
+		/**
+		 * Client-requested (2026-08-11): End Of Month Interest, matching
+		 * Clean Overdraft's exact mechanism.
+		 */
+		$overdraftAgainstCommercialPaper->handleEndOfMonthInterestForContractStatements($data['contract_start_date'],$data['contract_end_date'],$company->id);
 		$overdraftAgainstCommercialPaper->storeOutstandingBreakdown($request,$company);
+		/**
+		 * Facility Renewal — Phase 3: the Original chapter is created
+		 * immediately, and every tier submitted here gets tagged to it
+		 * — this is what lets a later renewal add a brand-new tier set
+		 * without ever touching these.
+		 */
+		$originalChapter = $overdraftAgainstCommercialPaper->createOriginalTermsHistory();
 		foreach($lendingInformation as $lendingInformationArr){
 			$overdraftAgainstCommercialPaper->lendingInformation()->create(array_merge($lendingInformationArr , [
+				'terms_history_id' => $originalChapter->id,
 			]));
 		}
 		return redirect()->route('view.overdraft.against.commercial.paper',['company'=>$company->id,'financialInstitution'=>$financialInstitution->id,'active'=>$activeTab])->with('success',__('Data Store Successfully'));
@@ -261,31 +292,41 @@ class OverdraftAgainstCommercialPaperController
 	 * distinguished by the `mode: 'edit'` prop.
 	 */
 	public function edit(Company $company , Request $request , FinancialInstitution $financialInstitution , OverdraftAgainstCommercialPaper $overdraftAgainstCommercialPaper){
+		$hasRenewals = $overdraftAgainstCommercialPaper->hasRenewals();
+		$latestChapter = $overdraftAgainstCommercialPaper->getLatestTerms();
         return \Inertia\Inertia::render('OverdraftAgainstCommercialPaper/Form', [
 			'mode' => 'edit',
+			'hasRenewals' => $hasRenewals,
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
 			'currencies' => getCurrencies(),
 			'hasOdooIntegration' => $company->hasOdooIntegrationCredentials(),
 			'model' => [
 				'id' => $overdraftAgainstCommercialPaper->id,
-				'contract_start_date' => $overdraftAgainstCommercialPaper->getContractStartDate(),
+				'contract_start_date' => $hasRenewals ? $latestChapter->effective_date : $overdraftAgainstCommercialPaper->getContractStartDate(),
 				'contract_end_date' => $overdraftAgainstCommercialPaper->getContractEndDate(),
 				'account_number' => $overdraftAgainstCommercialPaper->getAccountNumber(),
 				'odoo_code' => $overdraftAgainstCommercialPaper->getOdooCode(),
 				'currency' => $overdraftAgainstCommercialPaper->getCurrency(),
 				'limit' => $overdraftAgainstCommercialPaper->getLimit(),
-				'outstanding_balance' => $overdraftAgainstCommercialPaper->getOutstandingBalance(),
-				'balance_date' => $overdraftAgainstCommercialPaper->balance_date,
+				'outstanding_balance' => $hasRenewals ? null : $overdraftAgainstCommercialPaper->getOutstandingBalance(),
+				'balance_date' => $hasRenewals ? null : $overdraftAgainstCommercialPaper->balance_date,
 				'highest_debt_balance_rate' => $overdraftAgainstCommercialPaper->highest_debt_balance_rate,
 				'admin_fees_rate' => $overdraftAgainstCommercialPaper->admin_fees_rate,
 				'to_be_setteled_max_within_days' => $overdraftAgainstCommercialPaper->getMaxSettlementDays(),
 				'max_lending_limit_per_customer' => $overdraftAgainstCommercialPaper->getMaxLendingLimitPerCustomer(),
-				'lending_information' => $overdraftAgainstCommercialPaper->lendingInformation->map(fn ($info) => [
+				/**
+				 * Facility Renewal — Phase 3: scoped to the CURRENT
+				 * (latest) chapter's own tiers only — never the raw,
+				 * unscoped relation, which would mix every past
+				 * chapter's tiers together. Editing here only ever
+				 * touches the live chapter's tiers (see update() below).
+				 */
+				'lending_information' => ($latestChapter?->lendingInformation ?? $overdraftAgainstCommercialPaper->lendingInformation)->map(fn ($info) => [
 					'for_commercial_papers_due_within_days' => $info->for_commercial_papers_due_within_days,
 					'lending_rate' => $info->lending_rate,
 				])->values(),
-				'outstanding_breakdowns' => $overdraftAgainstCommercialPaper->outstandingBreakdowns->map(fn ($b) => [
+				'outstanding_breakdowns' => $hasRenewals ? [] : $overdraftAgainstCommercialPaper->outstandingBreakdowns->map(fn ($b) => [
 					'settlement_date' => $b->settlement_date,
 					'amount' => $b->amount,
 				])->values(),
@@ -315,14 +356,18 @@ class OverdraftAgainstCommercialPaperController
 	 * Odoo Code support added, matching Fully Secured/Clean Overdraft.
 	 */
 	public function update(Company $company , UpdateOverdraftAgainstCommercialPaperRequest $request , FinancialInstitution $financialInstitution,OverdraftAgainstCommercialPaper $overdraftAgainstCommercialPaper){
-		// $infos =  $request->get('infos',[]) ;
 		$infos =  $request->get('infos',[]) ;
-		$data = $request->only($this->getCommonDataArr());
+		$hasRenewals = $overdraftAgainstCommercialPaper->hasRenewals();
+		$fieldsToUpdate = $hasRenewals
+			? ['contract_end_date','limit','max_lending_limit_per_customer','highest_debt_balance_rate','admin_fees_rate','to_be_setteled_max_within_days']
+			: $this->getCommonDataArr();
+		$data = $request->only($fieldsToUpdate);
 		$data['updated_by'] = auth()->user()->id ;
-		foreach(['contract_start_date','contract_end_date','balance_date'] as $dateField){
+		$dateFields = $hasRenewals ? ['contract_end_date'] : ['contract_start_date','contract_end_date','balance_date'];
+		foreach($dateFields as $dateField){
 			$data[$dateField] = $request->get($dateField) ? Carbon::make($request->get($dateField))->format('Y-m-d'):null;
 		}
-		if($company->hasOdooIntegrationCredentials()){
+		if($company->hasOdooIntegrationCredentials() && ! $hasRenewals){
 			$odooService = new OdooService($company);
 			$odooCode = $request->get('odoo_code');
 			$chartOfAccountId = $odooService->getChartOfAccountIdFromOdooCode($odooCode);
@@ -332,10 +377,45 @@ class OverdraftAgainstCommercialPaperController
 		}
 		
 		$overdraftAgainstCommercialPaper->update($data);
-		$overdraftAgainstCommercialPaper->storeOutstandingBreakdown($request,$company);
-		$overdraftAgainstCommercialPaper->lendingInformation()->delete();
-		foreach($infos as $lendingInformationArr){
-			 $overdraftAgainstCommercialPaper->lendingInformation()->create($lendingInformationArr);
+		$latestChapter = $overdraftAgainstCommercialPaper->getLatestTerms();
+		if ($latestChapter) {
+			$latestChapter->update([
+				'effective_date' => $latestChapter->is_original ? $overdraftAgainstCommercialPaper->contract_start_date : $latestChapter->effective_date,
+				'limit' => $overdraftAgainstCommercialPaper->limit,
+				'max_lending_limit_per_customer' => $overdraftAgainstCommercialPaper->max_lending_limit_per_customer,
+				'highest_debt_balance_rate' => $overdraftAgainstCommercialPaper->highest_debt_balance_rate,
+				'admin_fees_rate' => $overdraftAgainstCommercialPaper->admin_fees_rate,
+				'to_be_setteled_max_within_days' => $overdraftAgainstCommercialPaper->to_be_setteled_max_within_days,
+				'contract_end_date' => $overdraftAgainstCommercialPaper->contract_end_date,
+			]);
+		}
+		$overdraftAgainstCommercialPaper->handleEndOfMonthInterestForContractStatements($overdraftAgainstCommercialPaper->contract_start_date,$overdraftAgainstCommercialPaper->contract_end_date,$company->id);
+		if (! $hasRenewals) {
+			$overdraftAgainstCommercialPaper->storeOutstandingBreakdown($request,$company);
+		}
+		/**
+		 * ⚠️ REAL BUG FIXED HERE (client-directed, 2026-08-11): this
+		 * used to wipe EVERY tier row for the whole facility, across
+		 * every chapter — which would have silently corrupted the very
+		 * history the renewal feature depends on. Now it only ever
+		 * touches the CURRENT (latest) chapter's own tiers, and ONLY
+		 * when NOT locked by a renewal — Form.vue drops 'infos' from
+		 * the payload entirely once locked, so this must never run in
+		 * that state either (an empty $infos here would otherwise wipe
+		 * the current chapter's tiers down to nothing). For a facility
+		 * that's never been renewed, that's still "the only chapter",
+		 * so this is functionally identical to the original behavior
+		 * in that case (per the client's own confirmation to leave the
+		 * never-renewed case as-is).
+		 */
+		if ($latestChapter && ! $hasRenewals) {
+			$latestChapter->lendingInformation()->delete();
+			foreach($infos as $lendingInformationArr){
+				 $latestChapter->lendingInformation()->create(array_merge($lendingInformationArr, [
+					'overdraft_against_commercial_paper_id' => $overdraftAgainstCommercialPaper->id,
+					'company_id' => $company->id,
+				 ]));
+			}
 		}
 		$overdraftAgainstCommercialPaper->updateFirstLimitsTableFromDate();
 		$type = $request->get('type','overdraft-against-commercial-paper');
@@ -346,12 +426,17 @@ class OverdraftAgainstCommercialPaperController
 	}
 	
 	/**
-	 * Deletes an Overdraft Against Commercial Paper and its related
-	 * rates/limits/bank statements/lending-information rows.
-	 * UNCHANGED, deliberately.
+	 * Deletes an Overdraft Against Commercial Paper. Client-confirmed
+	 * rule (applied here from the start, same as the other three):
+	 * blocked while it still has cheques deposited against it.
 	 */
 	public function destroy(Company $company , FinancialInstitution $financialInstitution , OverdraftAgainstCommercialPaper $overdraftAgainstCommercialPaper)
 	{
+		if ($overdraftAgainstCommercialPaper->hasAnyTransactions()) {
+			return redirect()->back()->withErrors([
+				'delete' => __('This facility cannot be deleted because it still has cheques deposited against it. Please remove those first.'),
+			]);
+		}
 		foreach(['lendingInformation','rates','overdraftAgainstCommercialPaperBankLimits','overdraftAgainstCommercialPaperBankStatements'] as $hasManyRelationName){
 			$overdraftAgainstCommercialPaper->{$hasManyRelationName}->each(function($model){
 				$model->delete();
@@ -359,6 +444,49 @@ class OverdraftAgainstCommercialPaperController
 		}
 		$overdraftAgainstCommercialPaper->delete();
 		return redirect()->back()->with('success',__('Item Has Been Delete Successfully'));
+	}
+
+	/**
+	 * Facility Renewal — Phase 3. Unlike the other three facility
+	 * types, this expects a whole new tier schedule ('tiers' — an
+	 * array of {for_commercial_papers_due_within_days, lending_rate}),
+	 * not a single limit — see OverdraftAgainstCommercialPaper::renew().
+	 */
+	public function renew(Company $company, \App\Http\Requests\RenewOverdraftAgainstCommercialPaperRequest $request, FinancialInstitution $financialInstitution, OverdraftAgainstCommercialPaper $overdraftAgainstCommercialPaper)
+	{
+		$effectiveDate = Carbon::make($request->get('effective_date'))->format('Y-m-d');
+		$contractEndDate = $request->get('contract_end_date')
+			? Carbon::make($request->get('contract_end_date'))->format('Y-m-d')
+			: null;
+
+		try {
+			$overdraftAgainstCommercialPaper->renew($effectiveDate, [
+				'limit' => $request->get('limit'),
+				'max_lending_limit_per_customer' => $request->get('max_lending_limit_per_customer'),
+				'highest_debt_balance_rate' => $request->get('highest_debt_balance_rate'),
+				'admin_fees_rate' => $request->get('admin_fees_rate'),
+				'to_be_setteled_max_within_days' => $request->get('to_be_setteled_max_within_days'),
+				'contract_end_date' => $contractEndDate,
+				'notes' => $request->get('notes'),
+			], $request->get('tiers', []), auth()->user()->id);
+		} catch (\InvalidArgumentException $e) {
+			return redirect()->back()->withErrors(['effective_date' => $e->getMessage()]);
+		}
+
+		return redirect()
+			->route('view.overdraft.against.commercial.paper', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id])
+			->with('success', __('Facility Renewed Successfully'));
+	}
+
+	public function deleteRenewal(Company $company, FinancialInstitution $financialInstitution, OverdraftAgainstCommercialPaper $overdraftAgainstCommercialPaper)
+	{
+		try {
+			$overdraftAgainstCommercialPaper->deleteLatestRenewal();
+		} catch (\InvalidArgumentException $e) {
+			return redirect()->back()->withErrors(['renewal' => $e->getMessage()]);
+		}
+
+		return redirect()->back()->with('success', __('Renewal Deleted — Facility Reverted To Previous Terms'));
 	}
 
 	

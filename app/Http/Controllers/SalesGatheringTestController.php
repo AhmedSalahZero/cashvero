@@ -717,7 +717,7 @@ class SalesGatheringTestController extends Controller
 						CustomerInvoice::create($tableDataArr);
 					}
 					if($modelName == 'SupplierInvoice'){
-						$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','contract_id']);
+						$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','contract_id','purchases_order_id']);
 						$purchasesOrderId = $request->get('purchases_order_id') ;
 						$contractId = $request->get('contract_id') ;
 						$tableDataArr['purchases_order_number'] =$purchasesOrderId ? PurchaseOrder::find($purchasesOrderId)->getNumber() : null ; 
@@ -826,7 +826,7 @@ class SalesGatheringTestController extends Controller
 						$model->update($tableDataArr);
 					}
 					if($modelName == 'SupplierInvoice'){
-						$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','contract_id']);
+						$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','contract_id','purchases_order_id']);
 						$purchasesOrderId = $request->get('purchases_order_id') ;
 						$contractId = $request->get('contract_id') ;
 						$tableDataArr['purchases_order_number'] =$purchasesOrderId ? PurchaseOrder::find($purchasesOrderId)->getNumber() : null ; 

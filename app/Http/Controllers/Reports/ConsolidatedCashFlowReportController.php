@@ -47,8 +47,13 @@ class ConsolidatedCashFlowReportController
         $activeContracts = Contract::query()
             ->where('company_id', $company->id)
             ->whereIn('status', [Contract::RUNNING, Contract::RUNNING_AND_AGAINST])
+            // ⚠️ Bug fix: this query had no contract-type filter, so
+            // Supplier contracts leaked into the picker — this report
+            // only ever consolidates Customer contracts (Supplier data
+            // comes in per-contract via po_allocations).
+            ->where('model_type', 'Customer')
             ->orderBy('name')
-            ->get(['id', 'name', 'code', 'currency']);
+            ->get(['id', 'name', 'code', 'currency', 'end_date']);
 
         return Inertia::render('ConsolidatedCashFlowReport/Index', [
             'company' => ['id' => $company->id, 'name' => $company->getName()],
@@ -59,6 +64,7 @@ class ConsolidatedCashFlowReportController
                 'name' => $c->getName(),
                 'code' => $c->getCode(),
                 'currency' => touppercase(trim((string) $c->getCurrency())),
+                'end_date' => $c->end_date ? (string) $c->end_date : null,
             ])->values(),
             'urls' => [
                 'result' => route('reports.consolidated-cash-flow.result', ['company' => $company->id]),
@@ -86,12 +92,19 @@ class ConsolidatedCashFlowReportController
                 'end_date' => $validated['end_date'],
                 'report_interval' => $validated['report_interval'],
                 'contract_ids' => $validated['contract_ids'] ?? [],
-                'currency' => $validated['currency'] ?? null,
+                'currencies' => $validated['currencies'] ?? [],
+                'min_end_year' => $validated['min_end_year'] ?? null,
+                'customer_past_due_percentages' => $validated['customer_past_due_percentages'] ?? [],
+                'customer_past_due_days' => $validated['customer_past_due_days'] ?? [],
+                'supplier_past_due_percentages' => $validated['supplier_past_due_percentages'] ?? [],
+                'supplier_past_due_days' => $validated['supplier_past_due_days'] ?? [],
             ],
             'urls' => [
                 'index' => route('reports.consolidated-cash-flow.index', ['company' => $company->id]),
                 'exportExcel' => route('reports.consolidated-cash-flow.export', array_merge(['company' => $company->id], $request->only([
-                    'start_date', 'end_date', 'report_interval', 'contract_ids', 'currency',
+                    'start_date', 'end_date', 'report_interval', 'contract_ids', 'currencies', 'min_end_year',
+                    'customer_past_due_percentages', 'customer_past_due_days',
+                    'supplier_past_due_percentages', 'supplier_past_due_days',
                 ]))),
             ],
         ]));
@@ -135,6 +148,9 @@ class ConsolidatedCashFlowReportController
             $rows[] = ['label' => $label, 'type' => 'row', 'values' => $values, 'total' => $rowTotal($values)];
         }
 
+        $unallocatedIn = $valuesFor($payload['companyUnallocatedCashIn'] ?? []);
+        $rows[] = ['label' => __('Cash Inflow (unallocated)'), 'type' => 'row', 'values' => $unallocatedIn, 'total' => $rowTotal($unallocatedIn)];
+
         foreach (($payload['contractsSection'] ?? []) as $block) {
             $blockLabel = $block['contract_name'].(! empty($block['contract_code']) ? ' ['.$block['contract_code'].']' : '');
             $rows[] = ['label' => $blockLabel, 'type' => 'section', 'values' => [], 'total' => 0];
@@ -149,9 +165,9 @@ class ConsolidatedCashFlowReportController
             $rows[] = ['label' => __('Net Cash (+/-)'), 'type' => 'net', 'values' => $net, 'total' => $rowTotal($net)];
         }
 
-        $unallocated = $valuesFor($payload['companyUnallocatedCashOut'] ?? []);
+        $unallocatedOut = $valuesFor($payload['companyUnallocatedCashOut'] ?? []);
         $rows[] = ['label' => __('Company cash out (unallocated)'), 'type' => 'section', 'values' => [], 'total' => 0];
-        $rows[] = ['label' => __('Company cash out (unallocated)'), 'type' => 'row', 'values' => $unallocated, 'total' => $rowTotal($unallocated)];
+        $rows[] = ['label' => __('Company cash out (unallocated)'), 'type' => 'row', 'values' => $unallocatedOut, 'total' => $rowTotal($unallocatedOut)];
 
         $rows[] = ['label' => __('Section C — Grand total'), 'type' => 'section', 'values' => [], 'total' => 0];
         $gtBanks = $valuesFor($payload['grandTotal']['cash_and_banks'] ?? []);
@@ -190,7 +206,24 @@ class ConsolidatedCashFlowReportController
             'report_interval' => ['required', 'in:daily,weekly,monthly'],
             'contract_ids' => ['nullable', 'array'],
             'contract_ids.*' => ['integer', Rule::exists('contracts', 'id')->where('company_id', $company->id)],
+            'currencies' => ['nullable', 'array'],
+            'currencies.*' => ['string', 'max:32'],
+            // Kept for any old link/bookmark still sending the pre-multi-select shape.
             'currency' => ['nullable', 'string', 'max:32'],
+            'min_end_year' => ['nullable', 'integer', 'digits:4'],
+            // Fixed 4-tier past-due collection/payment plan — sent as two
+            // flat, parallel arrays (matched by index) rather than one
+            // array of {percentage, days} objects, since the latter
+            // doesn't survive GET query-string serialization reliably
+            // (see ConsolidatedCashFlowService::normalizeTiers()).
+            'customer_past_due_percentages' => ['nullable', 'array', 'max:4'],
+            'customer_past_due_percentages.*' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'customer_past_due_days' => ['nullable', 'array', 'max:4'],
+            'customer_past_due_days.*' => ['nullable', 'integer', 'min:1'],
+            'supplier_past_due_percentages' => ['nullable', 'array', 'max:4'],
+            'supplier_past_due_percentages.*' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'supplier_past_due_days' => ['nullable', 'array', 'max:4'],
+            'supplier_past_due_days.*' => ['nullable', 'integer', 'min:1'],
         ]);
     }
 }

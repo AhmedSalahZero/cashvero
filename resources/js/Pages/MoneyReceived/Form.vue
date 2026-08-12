@@ -586,7 +586,7 @@ function submit() {
                     <div>
                         <label class="cvr-form-label">Receiving Bank *</label>
                         <select v-model="cashInBank.receivingBankId" class="cvr-input w-full px-3 py-2 rounded">
-                            <option v-for="b in financialInstitutionBanks" :key="b.id" :value="b.id">{{ b.name }}</option>
+                            <option v-for="b in [...financialInstitutionBanks].sort((a, b) => a.name.localeCompare(b.name))" :key="b.id" :value="b.id">{{ b.name }}</option>
                         </select>
                     </div>
                     <div>
@@ -674,7 +674,7 @@ function submit() {
                     <div>
                         <label class="cvr-form-label">Receiving Bank *</label>
                         <select v-model="incomingTransfer.receivingBankId" class="cvr-input w-full px-3 py-2 rounded">
-                            <option v-for="b in financialInstitutionBanks" :key="b.id" :value="b.id">{{ b.name }}</option>
+                            <option v-for="b in [...financialInstitutionBanks].sort((a, b) => a.name.localeCompare(b.name))" :key="b.id" :value="b.id">{{ b.name }}</option>
                         </select>
                     </div>
                     <div>

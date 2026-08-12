@@ -243,9 +243,8 @@ class CashFlowReportController
 		if ($preloadedPoAllocations !== null) {
 			$poAllocations = $preloadedPoAllocations;
 		} else {
-			$poAllocations = PoAllocation::where('po_allocations.contract_id',$customerContractId)	
-			->join('purchase_orders','purchase_orders.id','=','po_allocations.purchase_order_id')
-			->join('contracts','contracts.id','=','purchase_orders.contract_id')
+			$poAllocations = PoAllocation::withSupplierPurchaseOrderDetails()
+			->where('po_allocations.contract_id',$customerContractId)
 			->get();
 		}
 
@@ -374,7 +373,7 @@ class CashFlowReportController
 		   * ! start postponed
 		   */
 		  CustomerInvoice::getForecastedProjectCollection($result ,$startDate , $endDate,$currency,$company->id,$datesWithWeekNumber,$contractId,$foreignExchangeRates,$mainFunctionalCurrency) ;
-		   SupplierInvoice::getForecastedProjectCollection($result ,$startDate , $endDate,$currency,$company->id,$datesWithWeekNumber,$contractId,$foreignExchangeRates,$mainFunctionalCurrency) ;
+		   SupplierInvoice::getForecastedProjectCollection($result ,$startDate , $endDate,$currency,$company->id,$datesWithWeekNumber,$contractId,$foreignExchangeRates,$mainFunctionalCurrency,$poAllocations) ;
 		
 		 /**
 		   * ! end postponed
@@ -428,6 +427,7 @@ class CashFlowReportController
 					$periodEnd,
 					$dates,
 					$incomingTransferModelData,
+					$poAllocations,
 				);
 			}
 		} finally {

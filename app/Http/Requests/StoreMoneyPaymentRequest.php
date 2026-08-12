@@ -45,6 +45,37 @@ class StoreMoneyPaymentRequest extends FormRequest
 				'settlements'=>[],
 			];
 		}
+		/**
+		 * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-11): editing an
+		 * existing Outgoing Transfer / Cash Payment failed with "There
+		 * Is No Enough Balance" even when there genuinely was enough —
+		 * because AmountCanNotBeGreaterThanEndBalanceAtPaymentDate's
+		 * balance-compensation logic (which correctly excludes THIS
+		 * transaction's own already-posted amount from the check) only
+		 * runs when the request has 'modelId'/'modelType' — which this
+		 * Store/Update-shared request never actually sent. It's the
+		 * exact same mechanism the on-screen balance preview already
+		 * uses correctly (that's why the displayed balance was right
+		 * but saving still failed) — just never wired into the save
+		 * action itself. Only applies when actually editing (a
+		 * moneyPayment route-bound model exists); a brand-new payment
+		 * has no prior amount to compensate for.
+		 */
+		if ($this->route('moneyPayment')) {
+			$additionalData['modelId'] = $this->route('moneyPayment')->id;
+			$additionalData['modelType'] = 'MoneyPayment';
+			/**
+			 * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-11): same
+			 * class of bug as Money Received's Cheque Number / Receipt
+			 * Number — editing without changing either failed with a
+			 * false "already exists" error, since current_cheque_id
+			 * (Payable Cheque) / cash_id (Cash Payment) were never
+			 * actually submitted. Resolved from this record's own
+			 * related Payable Cheque / Cash Payment row.
+			 */
+			$additionalData['current_cheque_id'] = $this->route('moneyPayment')->payableCheque?->id;
+			$additionalData['cash_id'] = $this->route('moneyPayment')->cashPayment?->id;
+		}
 		$this->merge(array_merge([
 			'paid_amount'=>$paidAmounts,
 			'unapplied_amount'=>number_unformat($this->get('unapplied_amount'))

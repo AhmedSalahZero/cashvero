@@ -11,6 +11,13 @@
 			declare _count_all_rows integer default 0 ; 
 			declare interest_type_text varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci default 'interest';
 			declare highest_debit_balance_text varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci default 'highest_debit_balance';
+			-- Facility Renewal — Phase 1: the limit in force as of THIS row's
+			-- own date, looked up from the dated terms-history table, rather
+			-- than trusting whatever the application happened to pass in
+			-- `new.limit`. This is what makes a backdated transaction (entered
+			-- after a renewal, but dated before it) automatically pick up the
+			-- OLD limit instead of today's, with no special-casing in the app.
+			declare _term_limit decimal(14,2) default null ;
 		
 			-- في حالة الانشاء
 			set new.created_at = CURRENT_TIMESTAMP;
@@ -18,6 +25,9 @@
 			select  count(*) into _count_all_rows from clean_overdraft_bank_statements where  clean_overdraft_id = new.clean_overdraft_id and date <= new.date ;
 
 		set new.beginning_balance = if(_count_all_rows,_last_end_balance,ifnull(new.beginning_balance,0)); 
+
+		select `limit` into _term_limit from clean_overdraft_terms_histories where clean_overdraft_id = new.clean_overdraft_id and effective_date <= new.date order by effective_date desc , id desc limit 1 ;
+		set new.limit = ifnull(_term_limit, ifnull(new.limit,0)) ; -- falls back to whatever was passed in if no terms-history row exists yet
 		
 		set new.end_balance = new.beginning_balance + new.debit - new.credit ; 
 		set new.room = new.limit +  new.end_balance ;
@@ -113,15 +123,21 @@
 				declare interest_type_text varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci default 'interest';
 				declare highest_debit_balance_text varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci default 'highest_debit_balance';
 				declare _total_month_interest_amount decimal(14,2) default 0 ;
+				-- Facility Renewal — Phase 1: settlement days must stay LOCKED to
+				-- whatever was in force on the date this drawing itself happened
+				-- (new.date), never today's terms — this is the 'due date locked
+				-- at origin' rule agreed in the design brief. Same reasoning for
+				-- the limit lookup (_term_limit) further below.
+				declare _term_limit decimal(14,2) default null ;
 				
 			
 				
 		if(new.type = 'payable_cheque') then
-			select to_be_setteled_max_within_days into _clean_overdraft_to_be_settled_after from clean_overdrafts where id = new.clean_overdraft_id ;
+			select to_be_setteled_max_within_days into _clean_overdraft_to_be_settled_after from clean_overdraft_terms_histories where clean_overdraft_id = new.clean_overdraft_id and effective_date <= new.date order by effective_date desc , id desc limit 1 ;
 			update clean_overdraft_withdrawals set due_date =  ADDDATE(new.date,_clean_overdraft_to_be_settled_after) where clean_overdraft_bank_statement_id = new.id ;
 			
 		elseif (new.type = 'outgoing-transfer') then
-		select to_be_setteled_max_within_days into _clean_overdraft_to_be_settled_after from clean_overdrafts where id = new.clean_overdraft_id ;
+		select to_be_setteled_max_within_days into _clean_overdraft_to_be_settled_after from clean_overdraft_terms_histories where clean_overdraft_id = new.clean_overdraft_id and effective_date <= new.date order by effective_date desc , id desc limit 1 ;
 			update clean_overdraft_withdrawals set due_date =  ADDDATE(new.date,_clean_overdraft_to_be_settled_after) where clean_overdraft_bank_statement_id = new.id ;
 			
 		
@@ -143,7 +159,8 @@
 			set _count_all_rows =1 ;
 		set new.beginning_balance = if(_count_all_rows,_last_end_balance,ifnull(new.beginning_balance,0)) ;
 		
-		set new.limit = ifnull(new.limit,0);
+		select `limit` into _term_limit from clean_overdraft_terms_histories where clean_overdraft_id = new.clean_overdraft_id and effective_date <= new.date order by effective_date desc , id desc limit 1 ;
+		set new.limit = ifnull(_term_limit, ifnull(new.limit,0)) ;
 		set new.end_balance = new.beginning_balance + new.debit - new.credit ; 
 		set new.is_debit = if(new.debit > 0 , 1 , 0);
 		set new.is_credit = if(new.debit > 0 , 0 , 1);
@@ -261,7 +278,9 @@
 		declare current_available_debit decimal(14,2) default _debit ;
 		declare _current_settlement_amount decimal(14,2) default 0 ;
 		set current_available_debit = ifnull(current_available_debit , 0);
-		select to_be_setteled_max_within_days into _clean_overdraft_to_be_settled_after from clean_overdrafts where id = _clean_overdraft_id ;
+		-- Facility Renewal — Phase 1: locked to whatever was in force on
+		-- _date_for_settlement (this drawing's own date), not today's terms.
+		select to_be_setteled_max_within_days into _clean_overdraft_to_be_settled_after from clean_overdraft_terms_histories where clean_overdraft_id = _clean_overdraft_id and effective_date <= _date_for_settlement order by effective_date desc , id desc limit 1 ;
 		set _clean_overdraft_to_be_settled_after = ifnull(_clean_overdraft_to_be_settled_after,0);
 		set _due_date = if(_type = 'outstanding_balance' , _date_for_settlement ,ADDDATE(_date_for_settlement,_clean_overdraft_to_be_settled_after));
 		set _clean_overdraft_to_be_settled_after = ifnull(_clean_overdraft_to_be_settled_after , 0) ; 

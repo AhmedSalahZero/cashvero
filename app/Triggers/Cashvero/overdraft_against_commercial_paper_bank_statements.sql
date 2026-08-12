@@ -131,11 +131,11 @@
  
 
 					if(new.type = 'payable_cheque') then
-						select to_be_setteled_max_within_days into _overdraft_against_commercial_paper_to_be_settled_after from overdraft_against_commercial_papers where id = new.overdraft_against_commercial_paper_id ;
+						select to_be_setteled_max_within_days into _overdraft_against_commercial_paper_to_be_settled_after from overdraft_against_commercial_paper_terms_histories where overdraft_against_commercial_paper_id = new.overdraft_against_commercial_paper_id and effective_date <= new.date order by effective_date desc , id desc limit 1 ;
 						update overdraft_against_commercial_paper_withdrawals set due_date =  ADDDATE(new.date,_overdraft_against_commercial_paper_to_be_settled_after) where overdraft_against_commercial_paper_bank_statement_id = new.id ;
 						
 					elseif (new.type = 'outgoing-transfer') then
-					select to_be_setteled_max_within_days into _overdraft_against_commercial_paper_to_be_settled_after from overdraft_against_commercial_papers where id = new.overdraft_against_commercial_paper_id ;
+					select to_be_setteled_max_within_days into _overdraft_against_commercial_paper_to_be_settled_after from overdraft_against_commercial_paper_terms_histories where overdraft_against_commercial_paper_id = new.overdraft_against_commercial_paper_id and effective_date <= new.date order by effective_date desc , id desc limit 1 ;
 						update overdraft_against_commercial_paper_withdrawals set due_date =  ADDDATE(new.date,_overdraft_against_commercial_paper_to_be_settled_after) where overdraft_against_commercial_paper_bank_statement_id = new.id ;
 						
 						
@@ -280,7 +280,7 @@
 					declare current_available_debit decimal(14,2) default _debit ;
 					declare _current_settlement_amount decimal(14,2) default 0 ;
 					set current_available_debit = ifnull(current_available_debit , 0);
-					select to_be_setteled_max_within_days into _overdraft_against_commercial_paper_to_be_settled_after from overdraft_against_commercial_papers where id = _overdraft_against_commercial_paper_id ;
+					select to_be_setteled_max_within_days into _overdraft_against_commercial_paper_to_be_settled_after from overdraft_against_commercial_paper_terms_histories where overdraft_against_commercial_paper_id = _overdraft_against_commercial_paper_id and effective_date <= _date_for_settlement order by effective_date desc , id desc limit 1 ;
 					set _overdraft_against_commercial_paper_to_be_settled_after = ifnull(_overdraft_against_commercial_paper_to_be_settled_after,0);
 					set _due_date = if(_type = 'outstanding_balance' , _date_for_settlement ,ADDDATE(_date_for_settlement,_overdraft_against_commercial_paper_to_be_settled_after));
 					set _overdraft_against_commercial_paper_to_be_settled_after = ifnull(_overdraft_against_commercial_paper_to_be_settled_after , 0) ; 

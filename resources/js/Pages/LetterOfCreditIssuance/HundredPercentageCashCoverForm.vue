@@ -22,6 +22,7 @@ const props = defineProps({
     purchaseOrders: Array,
     model: Object,
     lookupUrl: String,
+    exchangeRateLookupUrl: String,
     balanceLookupUrlTemplate: String, // has __ACCOUNT_TYPE__ / __ACCOUNT_ID__ / __FI_ID__ placeholders
     submitUrl: String,
     backUrl: String,
@@ -119,6 +120,33 @@ watch(() => form.value.lc_currency, () => {
         form.value.lc_cash_cover_currency = props.company.mainFunctionalCurrency;
     }
 }, { immediate: true });
+
+/**
+ * Client-requested (2026-08-11): same auto-fill as LcFacilityForm.vue —
+ * see that file for the full explanation. Manual override still works
+ * since this only sets the field, never disables it.
+ */
+async function fetchExchangeRateForLcCurrency() {
+    if (!form.value.lc_currency || form.value.lc_currency === props.company.mainFunctionalCurrency) {
+        form.value.exchange_rate = 1;
+        return;
+    }
+    const params = new URLSearchParams({
+        fromCurrency: form.value.lc_currency,
+        toCurrency: props.company.mainFunctionalCurrency,
+        date: form.value.issuance_date || todayDate(),
+    });
+    try {
+        const response = await fetch(`${props.exchangeRateLookupUrl}?${params.toString()}`);
+        const data = await response.json();
+        if (data?.exchange_rate) {
+            form.value.exchange_rate = data.exchange_rate;
+        }
+    } catch (e) {
+        // Silent fail — field stays editable regardless.
+    }
+}
+watch(() => [form.value.lc_currency, form.value.issuance_date], fetchExchangeRateForLcCurrency);
 
 /*
  * ⚠️ Previously missing entirely: Balance / Net Balance for the
@@ -289,7 +317,7 @@ function submit() {
                             <label class="cvr-form-label">Bank *</label>
                             <select v-model="form.financial_institution_id" class="cvr-input w-full px-3 py-2 rounded">
                                 <option value="" disabled>Select</option>
-                                <option v-for="b in financialInstitutionBanks" :key="b.id" :value="b.id">{{ b.name }}</option>
+                                <option v-for="b in [...financialInstitutionBanks].sort((a, b) => a.name.localeCompare(b.name))" :key="b.id" :value="b.id">{{ b.name }}</option>
                             </select>
                         </div>
                     </div>

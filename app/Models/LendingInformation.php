@@ -32,6 +32,10 @@ class LendingInformation extends Model
 	{
 		return $this->belongsTo(OverdraftAgainstCommercialPaper::class,'overdraft_against_commercial_paper_id','id');
 	}
+	public function termsHistory()
+	{
+		return $this->belongsTo(OverdraftAgainstCommercialPaperTermsHistory::class,'terms_history_id','id');
+	}
 	public function getId(){
 		return $this->id ; 
 	}

@@ -35,6 +35,7 @@ final class CashFlowContractDetailPeriodBatchLoader
         string $periodEnd,
         array $periodsByWeekKey,
         array &$incomingTransferModelData = [],
+        ?Collection $poAllocations = null,
     ): void {
         self::applySettlementMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractCode, $periodStart, $periodEnd, $periodsByWeekKey, $incomingTransferModelData);
         self::applyDownPaymentMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractId, $periodStart, $periodEnd, $periodsByWeekKey, $incomingTransferModelData);
@@ -43,6 +44,9 @@ final class CashFlowContractDetailPeriodBatchLoader
         self::applyLetterOfGuaranteeMovements($result, $letterOfGuaranteeModelData, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractId, $periodStart, $periodEnd, $periodsByWeekKey);
         self::applyLetterOfCreditMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey);
         self::applyCashExpenseMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractId, $periodStart, $periodEnd, $periodsByWeekKey);
+        if ($poAllocations !== null && $poAllocations->isNotEmpty()) {
+            self::applySupplierPaymentMovementsViaPoAllocations($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $poAllocations, $periodStart, $periodEnd, $periodsByWeekKey);
+        }
     }
 
     private static function applySettlementMovements(
@@ -525,19 +529,267 @@ final class CashFlowContractDetailPeriodBatchLoader
             $supplierName = (string) $row->supplier_name;
             $amount = (float) $row->allocation_amount * $exchangeRate;
 
-            if (! isset($result['suppliers'][$supplierName][$lcKey])) {
-                $result['suppliers'][$supplierName][$lcKey] = ['weeks' => [], 'total' => 0];
+            if (! isset($result['suppliers'][$lcKey][$supplierName])) {
+                $result['suppliers'][$lcKey][$supplierName] = ['weeks' => [], 'total' => 0];
             }
-            if (! isset($result['suppliers'][$supplierName][$lcKey]['weeks'][$weekKey])) {
-                $result['suppliers'][$supplierName][$lcKey]['weeks'][$weekKey] = 0;
+            if (! isset($result['suppliers'][$lcKey][$supplierName]['weeks'][$weekKey])) {
+                $result['suppliers'][$lcKey][$supplierName]['weeks'][$weekKey] = 0;
             }
-            if (! isset($result['suppliers'][$supplierName]['total'][$weekKey])) {
-                $result['suppliers'][$supplierName]['total'][$weekKey] = 0;
+            if (! isset($result['suppliers'][$lcKey]['total'][$weekKey])) {
+                $result['suppliers'][$lcKey]['total'][$weekKey] = 0;
             }
 
-            $result['suppliers'][$supplierName][$lcKey]['weeks'][$weekKey] += $amount;
-            $result['suppliers'][$supplierName][$lcKey]['total'] += $amount;
-            $result['suppliers'][$supplierName]['total'][$weekKey] += $amount;
+            $result['suppliers'][$lcKey][$supplierName]['weeks'][$weekKey] += $amount;
+            $result['suppliers'][$lcKey][$supplierName]['total'] += $amount;
+            $result['suppliers'][$lcKey]['total'][$weekKey] += $amount;
+        }
+    }
+
+    /**
+     * Supplier payments that never get tagged with THIS (Customer)
+     * contract directly — a supplier payment settlement always carries
+     * the SUPPLIER's own contract_id (see settlement_allocations),
+     * never the Customer contract it might be linked to. The only link
+     * is po_allocations: Customer contract -> allocated PO -> that PO's
+     * real Supplier invoice(s) -> whatever payments/LCs settled them.
+     * Each match is weighted by the PO's allocation_percentage for this
+     * contract, so a payment on a PO that's 60% allocated here shows
+     * 60% of its paid amount — same weighting already used for the
+     * "Suppliers Invoices" row (SupplierInvoice::getSupplierInvoicesForPoUnderCollectionAtDates).
+     * Covers every payment type Company Cash Flow shows (Outgoing
+     * Transfers, Cash Payments, Paid/Under-Payment Payable Cheques)
+     * plus Letters of Credit that settled the invoice.
+     */
+    private static function applySupplierPaymentMovementsViaPoAllocations(
+        array &$result,
+        Collection $foreignExchangeRates,
+        string $mainFunctionalCurrency,
+        int $companyId,
+        Collection $poAllocations,
+        string $periodStart,
+        string $periodEnd,
+        array $periodsByWeekKey,
+    ): void {
+        foreach ($poAllocations as $poAllocation) {
+            $allocationPercentage = ((float) ($poAllocation->allocation_percentage ?? 0)) / 100;
+            if ($allocationPercentage <= 0) {
+                continue;
+            }
+
+            $invoiceIds = DB::table('supplier_invoices')
+                ->where('company_id', $companyId)
+                ->where('contract_code', $poAllocation->code)
+                ->where('purchases_order_number', $poAllocation->po_number)
+                ->pluck('id');
+
+            if ($invoiceIds->isEmpty()) {
+                continue;
+            }
+
+            self::applyPoAllocatedMoneyPayments($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $invoiceIds, $allocationPercentage, $periodStart, $periodEnd, $periodsByWeekKey);
+            self::applyPoAllocatedLetterOfCreditSettlements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $invoiceIds, $allocationPercentage, $periodStart, $periodEnd, $periodsByWeekKey);
+        }
+    }
+
+    /**
+     * Outgoing Transfers / Cash Payments / Paid & Under-Payment Payable
+     * Cheques for invoices matched via po_allocations.
+     *
+     * ⚠️ Bug fix: the first version of this method only checked
+     * settlement_allocations (mirroring applyContractMoneyPaymentByType()
+     * below), and a real paid invoice was confirmed missing from this
+     * row as a result. Confirmed with the project owner: which table
+     * actually holds the invoice/payment link depends on which screen
+     * was used to record the settlement — the regular "Invoice
+     * Settlement" flow writes to payment_settlements (invoice_id +
+     * money_payment_id + settlement_amount), while other flows can
+     * still write to settlement_allocations. Both are checked and
+     * summed here so neither is silently missed. payment_settlements'
+     * is_from_down_payment=0 excludes down-payment-sourced settlements
+     * — those aren't a new cash movement (the actual outflow already
+     * happened when the down payment itself was paid), they're just an
+     * accounting reallocation onto this invoice, already reflected in
+     * the Forecasted row via the down payment balance deduction.
+     */
+    private static function applyPoAllocatedMoneyPayments(
+        array &$result,
+        Collection $foreignExchangeRates,
+        string $mainFunctionalCurrency,
+        int $companyId,
+        Collection $invoiceIds,
+        float $allocationPercentage,
+        string $periodStart,
+        string $periodEnd,
+        array $periodsByWeekKey,
+    ): void {
+        $paymentTypes = [
+            [MoneyPayment::OUTGOING_TRANSFER, null],
+            [MoneyPayment::CASH_PAYMENT, null],
+            [MoneyPayment::PAYABLE_CHEQUE, PayableCheque::PAID],
+            [MoneyPayment::PAYABLE_CHEQUE, PayableCheque::PENDING],
+        ];
+
+        foreach ($paymentTypes as [$moneyType, $chequeStatus]) {
+            $typeLabel = match ($moneyType) {
+                MoneyPayment::OUTGOING_TRANSFER => __('Outgoing Transfers'),
+                MoneyPayment::CASH_PAYMENT => __('Cash Payments'),
+                MoneyPayment::PAYABLE_CHEQUE => $chequeStatus === PayableCheque::PAID
+                    ? __('Paid Payable Cheques')
+                    : __('Under Payment Payable Cheques'),
+                default => $moneyType,
+            };
+
+            // settlement_allocations link
+            $settlementAllocationsQuery = DB::table('money_payments')
+                ->join('partners', 'partners.id', '=', 'money_payments.partner_id')
+                ->join('settlement_allocations', 'money_payments.id', '=', 'settlement_allocations.money_payment_id')
+                ->where('money_payments.company_id', $companyId)
+                ->where('money_payments.type', $moneyType)
+                ->whereIn('settlement_allocations.invoice_id', $invoiceIds);
+
+            // payment_settlements link
+            $paymentSettlementsQuery = DB::table('money_payments')
+                ->join('partners', 'partners.id', '=', 'money_payments.partner_id')
+                ->join('payment_settlements', 'money_payments.id', '=', 'payment_settlements.money_payment_id')
+                ->where('money_payments.company_id', $companyId)
+                ->where('money_payments.type', $moneyType)
+                ->where('payment_settlements.is_from_down_payment', 0)
+                ->whereIn('payment_settlements.invoice_id', $invoiceIds);
+
+            if ($chequeStatus !== null) {
+                $settlementAllocationsQuery->join('payable_cheques', 'payable_cheques.money_payment_id', '=', 'money_payments.id')
+                    ->where('payable_cheques.status', $chequeStatus);
+                $paymentSettlementsQuery->join('payable_cheques', 'payable_cheques.money_payment_id', '=', 'money_payments.id')
+                    ->where('payable_cheques.status', $chequeStatus);
+                $dateField = $chequeStatus === PayableCheque::PAID ? 'payable_cheques.actual_payment_date' : 'payable_cheques.due_date';
+            } else {
+                $dateField = 'money_payments.delivery_date';
+            }
+
+            $rows = $settlementAllocationsQuery->whereBetween($dateField, [$periodStart, $periodEnd])
+                ->selectRaw('settlement_allocations.allocation_amount as paid_amount, money_payments.payment_currency, '.$dateField.' as movement_date, partners.name as supplier_name')
+                ->get()
+                ->concat(
+                    $paymentSettlementsQuery->whereBetween($dateField, [$periodStart, $periodEnd])
+                        ->selectRaw('payment_settlements.settlement_amount as paid_amount, money_payments.payment_currency, '.$dateField.' as movement_date, partners.name as supplier_name')
+                        ->get()
+                );
+
+            foreach ($rows as $row) {
+                $weekKey = CashFlowWeekBucketer::resolveWeekKey((string) $row->movement_date, $periodsByWeekKey);
+                if ($weekKey === null) {
+                    continue;
+                }
+
+                $exchangeRate = ForeignExchangeRate::getExchangeRateForCurrencyAndClosestDate(
+                    (string) $row->payment_currency,
+                    $mainFunctionalCurrency,
+                    (string) $row->movement_date,
+                    $companyId,
+                    $foreignExchangeRates,
+                );
+                $amount = (float) $row->paid_amount * $exchangeRate * $allocationPercentage;
+                $supplierName = (string) $row->supplier_name;
+
+                if (! isset($result['suppliers'][$typeLabel][$supplierName])) {
+                    $result['suppliers'][$typeLabel][$supplierName] = ['weeks' => [], 'total' => 0];
+                }
+                if (! isset($result['suppliers'][$typeLabel][$supplierName]['weeks'][$weekKey])) {
+                    $result['suppliers'][$typeLabel][$supplierName]['weeks'][$weekKey] = 0;
+                }
+                if (! isset($result['suppliers'][$typeLabel]['total'][$weekKey])) {
+                    $result['suppliers'][$typeLabel]['total'][$weekKey] = 0;
+                }
+
+                $result['suppliers'][$typeLabel][$supplierName]['weeks'][$weekKey] += $amount;
+                $result['suppliers'][$typeLabel][$supplierName]['total'] += $amount;
+                $result['suppliers'][$typeLabel]['total'][$weekKey] += $amount;
+            }
+        }
+    }
+
+    /**
+     * Letters of Credit that settled an invoice matched via
+     * po_allocations. Same reasoning as applyPoAllocatedMoneyPayments()
+     * above — checks both settlement_allocations and payment_settlements
+     * and sums both, since which one holds the real link depends on
+     * which screen recorded the settlement.
+     */
+    private static function applyPoAllocatedLetterOfCreditSettlements(
+        array &$result,
+        Collection $foreignExchangeRates,
+        string $mainFunctionalCurrency,
+        int $companyId,
+        Collection $invoiceIds,
+        float $allocationPercentage,
+        string $periodStart,
+        string $periodEnd,
+        array $periodsByWeekKey,
+    ): void {
+        $rows = DB::table('settlement_allocations')
+            ->join('letter_of_credit_issuances', 'settlement_allocations.letter_of_credit_issuance_id', '=', 'letter_of_credit_issuances.id')
+            ->join('partners', 'partners.id', '=', 'letter_of_credit_issuances.partner_id')
+            ->whereIn('settlement_allocations.invoice_id', $invoiceIds)
+            ->where('letter_of_credit_issuances.company_id', $companyId)
+            ->whereBetween('letter_of_credit_issuances.due_date', [$periodStart, $periodEnd])
+            ->selectRaw('settlement_allocations.allocation_amount as allocation_amount, settlement_allocations.invoice_id, letter_of_credit_issuances.payment_currency, letter_of_credit_issuances.payment_date, letter_of_credit_issuances.due_date, partners.name as supplier_name')
+            ->get()
+            ->concat(
+                DB::table('payment_settlements')
+                    ->join('letter_of_credit_issuances', 'payment_settlements.letter_of_credit_issuance_id', '=', 'letter_of_credit_issuances.id')
+                    ->join('partners', 'partners.id', '=', 'letter_of_credit_issuances.partner_id')
+                    ->whereIn('payment_settlements.invoice_id', $invoiceIds)
+                    ->where('letter_of_credit_issuances.company_id', $companyId)
+                    ->whereBetween('letter_of_credit_issuances.due_date', [$periodStart, $periodEnd])
+                    ->selectRaw('payment_settlements.settlement_amount as allocation_amount, payment_settlements.invoice_id, letter_of_credit_issuances.payment_currency, letter_of_credit_issuances.payment_date, letter_of_credit_issuances.due_date, partners.name as supplier_name')
+                    ->get()
+            );
+
+        if ($rows->isEmpty()) {
+            return;
+        }
+
+        $invoiceIdsForNumbers = $rows->pluck('invoice_id')->filter()->unique()->values();
+        $invoicesById = $invoiceIdsForNumbers->isNotEmpty()
+            ? SupplierInvoice::whereIn('id', $invoiceIdsForNumbers->all())->get()->keyBy('id')
+            : collect();
+
+        foreach ($rows as $row) {
+            $weekKey = CashFlowWeekBucketer::resolveWeekKey((string) $row->due_date, $periodsByWeekKey);
+            if ($weekKey === null) {
+                continue;
+            }
+
+            $exchangeRate = ForeignExchangeRate::getExchangeRateAt(
+                (string) $row->payment_currency,
+                $mainFunctionalCurrency,
+                (string) $row->payment_date,
+                $companyId,
+                $foreignExchangeRates,
+            );
+
+            $invoiceNumber = '';
+            if ($row->invoice_id && $invoicesById->has($row->invoice_id)) {
+                $invoiceNumber = $invoicesById->get($row->invoice_id)->getInvoiceNumber();
+            }
+
+            $lcKey = __('Letter Of Credit').' - '.__('Invoice No').' '.$invoiceNumber;
+            $supplierName = (string) $row->supplier_name;
+            $amount = (float) $row->allocation_amount * $exchangeRate * $allocationPercentage;
+
+            if (! isset($result['suppliers'][$lcKey][$supplierName])) {
+                $result['suppliers'][$lcKey][$supplierName] = ['weeks' => [], 'total' => 0];
+            }
+            if (! isset($result['suppliers'][$lcKey][$supplierName]['weeks'][$weekKey])) {
+                $result['suppliers'][$lcKey][$supplierName]['weeks'][$weekKey] = 0;
+            }
+            if (! isset($result['suppliers'][$lcKey]['total'][$weekKey])) {
+                $result['suppliers'][$lcKey]['total'][$weekKey] = 0;
+            }
+
+            $result['suppliers'][$lcKey][$supplierName]['weeks'][$weekKey] += $amount;
+            $result['suppliers'][$lcKey][$supplierName]['total'] += $amount;
+            $result['suppliers'][$lcKey]['total'][$weekKey] += $amount;
         }
     }
 

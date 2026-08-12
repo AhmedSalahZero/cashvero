@@ -615,7 +615,7 @@ function submitApplyCollection() {
 
             <!-- Send To Under Collection (single / batch) -->
             <div v-if="collectionTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div class="cvr-modal rounded-lg p-6 w-full max-w-2xl">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-6xl">
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">
                         Send {{ collectionTarget.ids.length > 1 ? 'these cheques' : 'this cheque' }} to under collection?
                     </h2>
@@ -630,7 +630,7 @@ function submitApplyCollection() {
                             <label class="cvr-form-label">Drawal Bank *</label>
                             <select v-model="collectionForm.drawl_bank_id" @change="onCollectionAccountTypeChange" class="cvr-input w-full px-3 py-2 rounded">
                                 <option value="">Select</option>
-                                <option v-for="bank in financialInstitutionBanks" :key="bank.id" :value="bank.id">{{ bank.name }}</option>
+                                <option v-for="bank in [...financialInstitutionBanks].sort((a, b) => a.name.localeCompare(b.name))" :key="bank.id" :value="bank.id">{{ bank.name }}</option>
                             </select>
                         </div>
                         <div>
