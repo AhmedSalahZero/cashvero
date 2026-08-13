@@ -97,10 +97,12 @@ class SyncOdooPaymentMethodIdsJob implements ShouldQueue
             $branchesOdooCodes = $this->rowsNeedingSync('branch', $company->id)->pluck('odoo_code');
 
             if ($accounts->isEmpty() && $branchesOdooCodes->isEmpty()) {
+				logger('exit1');
                 return ;
-            }
-
-            if (! $this->canRunNowFor($company)) {
+				}
+				
+				if (! $this->canRunNowFor($company)) {
+				logger('exit2');
                 return ;
             }
 
