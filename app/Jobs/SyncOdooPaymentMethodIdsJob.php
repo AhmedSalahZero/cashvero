@@ -88,7 +88,7 @@ class SyncOdooPaymentMethodIdsJob implements ShouldQueue
     private function syncCompany(Company $company, User $user): void
     {
         try {
-			logger('starting feetubg');
+				logger('starting feetubg');
             if (! $company->hasOdooIntegrationCredentials($user)) {
                 return ;
             }
@@ -114,6 +114,8 @@ class SyncOdooPaymentMethodIdsJob implements ShouldQueue
             }
 
             foreach ($branchesOdooCodes as $odooCode) {
+								logger('sync branches '.$odooCode);
+
                 $this->syncBranch($odooService, $company, (string) $odooCode);
             }
         } catch (\Throwable $exception) {
