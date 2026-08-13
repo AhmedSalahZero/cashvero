@@ -110,6 +110,8 @@ class SyncOdooPaymentMethodIdsJob implements ShouldQueue
             $odooService = app(OdooService::class, ['company' => $company, 'user' => $user]);
 
             foreach ($accounts as $account) {
+												logger('sync accounts '.$account->id);
+
                 $this->syncAccount($odooService, $company, (int) $account->id);
             }
 
