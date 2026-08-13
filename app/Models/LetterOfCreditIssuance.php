@@ -642,9 +642,23 @@ class LetterOfCreditIssuance extends Model
 		return $this->cd_or_td_id;
 	}
 	
-	public function deleteAllRelations():self
+	/**
+	 * * $includeExpenses = false بيتبعت من الـ update بس ، لأن التعديل بيمسح
+	 * * الاعتماد ويعمله من الأول والمصاريف بترجع تتربط بالسجل الجديد.
+	 * * في الحذف العادي لازم تتمسح معاه وإلا بتفضل يتيمة (مفيش FK على
+	 * * lc_issuance_expenses يمسحها)
+	 */
+	public function deleteAllRelations(bool $includeExpenses = true):self
 	{
-		
+		if($includeExpenses){
+			/**
+			 * * الـ deleting hook على LcIssuanceExpense بيمسح حركات الحساب
+			 * * الجاري بتاعتها ، فلازم نمسحهم واحد واحد مش بـ query delete
+			 */
+			$this->expenses->each(function($expense){
+				$expense->delete();
+			});
+		}
 		PaymentSettlement::deleteButTriggerChangeOnLastElement($this->settlements);
 		CurrentAccountBankStatement::deleteButTriggerChangeOnLastElement($this->currentAccountDebitBankStatements);
 		CurrentAccountBankStatement::deleteButTriggerChangeOnLastElement($this->currentAccountCreditBankStatements);

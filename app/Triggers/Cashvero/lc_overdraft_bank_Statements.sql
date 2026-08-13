@@ -31,7 +31,10 @@
 					set _current_interest_rate = _current_interest_rate / 100 ;
 
 					
-					set @dailyInterestRate = _current_interest_rate/365 ;
+					-- * -1 عشان الفايدة تطلع موجبة: الرصيد سالب (مديونية) وضربه في
+					-- سعر موجب بيدي رقم سالب ، والـ credit السالب كان بيقلل المديونية
+					-- بدل ما يزودها. نفس الاتجاه اللي في update trigger بتاع clean overdraft
+					set @dailyInterestRate = _current_interest_rate/365*-1 ;
 					if _previous_date then 
 					set @dayCounts = DATEDIFF(new.date,_previous_date) ;
 					set @interestAmount = if(_last_end_balance < 0 , _last_end_balance * @dailyInterestRate * @dayCounts , 0)  ;
@@ -69,9 +72,12 @@
 					update lc_overdraft_withdrawals set net_balance = net_balance + settlement_amount , settlement_amount = 0 where due_date > _start_update_from_date  and lc_overdraft_withdrawals.lc_facility_id = _lc_facility_id ;
 				end //
 				
-				delimiter ; 
+				delimiter //
 				
 
+				-- * الـ delimiter فوق لازم يفضل // : جسم التريجر جواه ; كتير ،
+				-- * ولو رجع ; الـ mysql client بيقطع الجملة عند اول ; فيمسح
+				-- * التريجر (الـ drop فوق) وبعدين يفشل في انشاءه من تاني
 				create trigger refresh_calculation_before_update_lc_overdraft before update on `lc_overdraft_bank_statements` for each row 
 				begin 
 
@@ -127,7 +133,10 @@
 					set _current_interest_rate = _current_interest_rate / 100 ;
 
 					
-					set @dailyInterestRate = _current_interest_rate/365 ;
+					-- * -1 عشان الفايدة تطلع موجبة: الرصيد سالب (مديونية) وضربه في
+					-- سعر موجب بيدي رقم سالب ، والـ credit السالب كان بيقلل المديونية
+					-- بدل ما يزودها. نفس الاتجاه اللي في update trigger بتاع clean overdraft
+					set @dailyInterestRate = _current_interest_rate/365*-1 ;
 					if _previous_date then 
 					set @dayCounts = DATEDIFF(new.date,_previous_date) ;
 					set @interestAmount = if(_last_end_balance < 0 , _last_end_balance * @dailyInterestRate * @dayCounts , 0)  ;
@@ -178,15 +187,24 @@
 					-- اعادة حساب فايدة نهاية كل شهر (في حالة التعديل مش الانشاء)
 
 					if new.id and (new.type = interest_type_text or new.type = highest_debit_balance_text ) then 
-								select  sum(interest_amount) , max(end_balance) into _current_interest_amount,_largest_end_balance from  lc_overdraft_bank_statements where `type` != interest_type_text and `type` != highest_debit_balance_text and lc_overdraft_bank_statements.lc_facility_id = new.lc_facility_id and source = new.source and EXTRACT(MONTH from date) = EXTRACT(MONTH from new.date ) and  EXTRACT(YEAR from date) = EXTRACT(YEAR from new.date) ;
+								-- min مش max: ارصدة الاوفردرافت سالبة ، فاعلى مديونية في الشهر هي اصغر end_balance
+								select  sum(interest_amount) , min(end_balance) into _current_interest_amount,_largest_end_balance from  lc_overdraft_bank_statements where `type` != interest_type_text and `type` != highest_debit_balance_text and lc_overdraft_bank_statements.lc_facility_id = new.lc_facility_id and source = new.source and EXTRACT(MONTH from date) = EXTRACT(MONTH from new.date ) and  EXTRACT(YEAR from date) = EXTRACT(YEAR from new.date) ;
 								set _current_interest_amount = ifnull(_current_interest_amount,0);
+								-- لو الشهر مفيهوش اي حركات عادية بترجع max بـ NULL ، وساعتها
+								-- credit بيبقى NULL و end_balance بيقع بـ "cannot be null" اول لمسة تانية
+								set _largest_end_balance = ifnull(_largest_end_balance,0);
 								select highest_debt_balance_rate into _highest_debt_balance_rate from letter_of_credit_facilities where id = new.lc_facility_id  ;
-								if new.type = interest_type_text then 
+								if new.type = interest_type_text then
 								-- للفايدة الخاصة باخر الشهر
-									set new.credit = _current_interest_amount ;
+								-- + new.interest_amount مهمة: الـ select فوق بيستبعد صفوف
+								-- الفوايد نفسها ، فلو الشهر مفيهوش أي حركة عادية (مديونية
+								-- ثابتة) الفايدة المستحقة بتكون محمولة على صف الفايدة ده
+								-- لوحده ، وكانت بتضيع وتطلع صفر
+									set new.credit = _current_interest_amount + new.interest_amount ;
 								elseif new.type = highest_debit_balance_text then 
 								-- حساب ال highest debit balance
-								set _current_interest_amount = _highest_debt_balance_rate / 100 * _largest_end_balance ; 
+								-- * -1 عشان العمولة تطلع موجبة وتتخصم صح (credit سالب كان بيزود الرصيد بدل ما يخصم)
+								set _current_interest_amount = _highest_debt_balance_rate / 100 * _largest_end_balance * -1 ; 
 									set new.credit = _current_interest_amount ;
 								end if;
 								
@@ -275,7 +293,6 @@
 
 				delimiter ;
 				drop procedure if exists recalculate_end_of_month_lc_overdraft_interests ;
-				delimiter // 
 				-- create procedure recalculate_end_of_month_lc_overdraft_interests()
 				-- begin 
 				-- 	declare current_id integer default 0 ;
@@ -308,7 +325,6 @@
 				-- 	end if ;
 					
 				-- end //
-				delimiter ; 
 				DROP EVENT IF EXISTS `recalculate_end_of_month_lc_overdraft_interests_event`;
 				-- DELIMITER $$
 				-- CREATE EVENT `recalculate_end_of_month_lc_overdraft_interests_event`
@@ -320,7 +336,6 @@
 				-- -- call recalculate_end_of_month_lc_overdraft_interests();
 				-- END$$
 				
- delimiter ; 
 drop trigger if exists refresh_calculation_before_delete_lc_over_statements ;
   delimiter //  
   

@@ -124,6 +124,13 @@ class LetterOfCreditIssuanceController
     use GeneralFunctions;
 
     /**
+     * * التعديل معمول كـ حذف ثم إنشاء ، فالـ update محتاج يوصل للسجل الجديد
+     * * اللي storeWithinTransaction() عملته عشان يرجّع عليه المصاريف
+     * * الإضافية بتاعت السجل القديم
+     */
+    protected ?LetterOfCreditIssuance $lastStoredIssuance = null;
+
+    /**
      * No longer called from index() (see that method's docblock —
      * replaced with a real DB query since this operated on an
      * already-fully-loaded Collection). Left in place, unused, rather
@@ -734,6 +741,14 @@ class LetterOfCreditIssuanceController
                 ]);
                 $purchaseOrderId = $po->id;
             }
+            /**
+             * * لو امر الشراء موجود اصلا (حالة التعديل) لازم نمسك الـ id بتاعه
+             * * من غير كده كان بيفضل ماخود من الريكوست ، والحقل ده مخفي في وضع
+             * * "PO جديد" فكان بيرجع فاضي والاعتماد يتحفظ من غير امر شراء
+             */
+            elseif ($existingPo) {
+                $purchaseOrderId = $existingPo->id;
+            }
         } elseif ($contractId == -2) {
             $contractType = 'existing-po';
             $contractId = null;
@@ -778,6 +793,8 @@ class LetterOfCreditIssuanceController
         $lcCommissionAmount = $request->get('lc_commission_amount', 0);
         $minLcCommissionAmount = $request->get('min_lc_commission_fees', 0);
         $model->storeBasicForm($request, ['_token', 'save', '_method', 'contract_id', 'contract_type']);
+        // * السجل الجديد عشان update() يقدر يرجّع عليه مصاريف السجل القديم
+        $this->lastStoredIssuance = $model;
         $transactionName = $request->get('transaction_name');
         $lcType = $request->get('lc_type');
         $issuanceDate = $request->get('issuance_date');
@@ -795,7 +812,13 @@ class LetterOfCreditIssuanceController
             $cdOrTdAccount = TimeOfDeposit::find($cdOrTdId);
             $cdOrTdId = $cdOrTdAccount->id;
         }
-        $lcCashCoverOrCdOrTdCurrency = $model->getLcCashCoverCurrency() ?: $cdOrTdAccount->getCurrency();
+        /**
+         * * في lc-facility و hundred-percentage-cash-cover مفيش شهادة/وديعة ،
+         * * فـ $cdOrTdAccount بيفضل null. من غير الفحص ده كان بيضرب
+         * * "getCurrency() on null" لو عملة التغطية اتسابت فاضية
+         */
+        $lcCashCoverOrCdOrTdCurrency = $model->getLcCashCoverCurrency()
+            ?: ($cdOrTdAccount ? $cdOrTdAccount->getCurrency() : $request->get('lc_currency', ''));
         $isOpeningBalance = $request->get('category_name') == LetterOfCreditIssuance::OPENING_BALANCE;
         $cashCoverAmount = $request->get('cash_cover_amount', 0);
         $issuanceFees = $request->get('issuance_fees', 0);
@@ -806,12 +829,28 @@ class LetterOfCreditIssuanceController
         $financialInstitutionAccountForFeesAndCommission = FinancialInstitutionAccount::find($lcFeesAndCommissionAccountId);
         $financialInstitutionAccountForCashCover = FinancialInstitutionAccount::find($request->get('cash_cover_deducted_from_account_id', $lcFeesAndCommissionAccountId));
 
+        if (is_null($financialInstitutionAccountForFeesAndCommission)) {
+            return redirect()->back()->withInput()->with('fail', __('Please Select A Valid Fees And Commission Account'));
+        }
+
         $financialInstitutionAccountIdForFeesAndCommission = $financialInstitutionAccountForFeesAndCommission->id;
         $openingBalanceDateOfCurrentAccount = $financialInstitutionAccountForFeesAndCommission->getOpeningBalanceDate();
 
         $financialInstitutionAccountIdForCashCover = $financialInstitutionAccountForCashCover->id ?? 0;
 
-        $isCdOrTdCashCoverAccount = in_array($request->get('cash_cover_deducted_from_account_id', []), [28, 29]);
+        /**
+         * * الفحص ده معناه: التغطية جاية من شهادة استثمار أو وديعة ، يبقى
+         * * ما ينفعش نخصمها كمان من الحساب الجاري.
+         * *
+         * * قبل كده كان بيقارن cash_cover_deducted_from_account_id (وده id
+         * * لحساب في financial_institution_accounts) بالرقمين 28 و 29 وهما
+         * * ids لأنواع الحسابات في account_types — نوعين مختلفين تماما ،
+         * * فالشرط كان دايما false والتغطية كانت بتتخصم مرتين في
+         * * against-cd و against-td
+         */
+        $cashCoverAccountType = AccountType::find($request->get('cash_cover_deducted_from_account_type'));
+        $isCdOrTdCashCoverAccount = $cashCoverAccountType
+            && ($cashCoverAccountType->isCertificateOfDeposit() || $cashCoverAccountType->isTimeOfDeposit());
         $customerName = $model->getBeneficiaryName();
         if (!$isOpeningBalance && !$isCdOrTdCashCoverAccount) {
             $model->storeCurrentAccountCreditBankStatement($issuanceDate, $cashCoverAmount, $financialInstitutionAccountIdForCashCover, 0, 1, __('Cash Cover [ :customerName ] [ :lgType ] Transaction Name [ :transactionName ]', ['lgType' => __($lcType, [], 'en'), 'customerName' => $customerName, 'transactionName' => $transactionName], 'en'), __('Cash Cover [ :customerName ] [ :lgType ] Transaction Name [ :transactionName ]', ['lgType' => __($lcType, [], 'ar'), 'customerName' => $customerName, 'transactionName' => $transactionName], 'ar'));
@@ -827,9 +866,17 @@ class LetterOfCreditIssuanceController
         $model->handleLetterOfCreditStatement($financialInstitutionId, $source, $letterOfCreditFacilityId, $lcType, $company->id, $issuanceDate, 0, $cashCoverAmount, 0, $lcCashCoverOrCdOrTdCurrency, 0, $cdOrTdId, 'credit-lc-amount', $commentEn, $commentAr);
         $model->handleLetterOfCreditCashCoverStatement($financialInstitutionId, $source, $letterOfCreditFacilityId, $lcType, $company->id, $issuanceDate, 0, $cashCoverAmount, 0, $lcCashCoverCurrency, 0, 'credit-lc-amount');
 
-        $numberOfIterationsForQuarter = 1;
-        $lcCommissionInterval = 'monthly';
-        $model->storeCommissionAmountCreditBankStatement($lcCommissionInterval, $numberOfIterationsForQuarter, $issuanceDate, $openingBalanceDateOfCurrentAccount, $maxLcCommissionAmount, $financialInstitutionAccountIdForFeesAndCommission, $transactionName, $lcType, $isOpeningBalance);
+        /**
+         * * قرار العميل (12-08-2026): عمولة الاعتماد بتتاخد **مرة واحدة** يوم
+         * * الإصدار ، مش دورية زي خطاب الضمان.
+         * *
+         * * عشان كده بنبعت عدد مرات = 1 و interval غير 'quarterly' ، فالدالة
+         * * المشتركة بتنزل صف عمولة واحد بس. حقل LC Duration بيأثر على
+         * * تاريخ الاستحقاق بس ومالوش أي علاقة بالعمولة
+         */
+        $numberOfCommissionRows = 1;
+        $lcCommissionInterval = 'once';
+        $model->storeCommissionAmountCreditBankStatement($lcCommissionInterval, $numberOfCommissionRows, $issuanceDate, $openingBalanceDateOfCurrentAccount, $maxLcCommissionAmount, $financialInstitutionAccountIdForFeesAndCommission, $transactionName, $lcType, $isOpeningBalance);
 
         return redirect()->route('view.letter.of.credit.issuance', ['company' => $company->id, 'active' => $request->get('lc_type')])->with('success', __('Data Store Successfully'));
     }
@@ -873,10 +920,17 @@ class LetterOfCreditIssuanceController
      */
     public function update(Company $company, UpdateLetterOfCreditIssuanceRequest $request, LetterOfCreditIssuance $letterOfCreditIssuance, string $source)
     {
-        if ($letterOfCreditIssuance->getContractType() == 'no-po' && $request->get('contract-id') != -1) {
+        /**
+         * * الحقل في الفورم اسمه contract_id بـ underscore. الكود كان بيقرا
+         * * 'contract-id' بشرطة فالقيمة كانت دايما null ، يعني الشرط الأول
+         * * صح دايما (امر الشراء بيتمسح في كل تعديل) والتاني غلط دايما
+         * * (رقم الـ PO عمره ما بيتحدث)
+         */
+        $requestContractId = $request->get('contract_id');
+        if ($letterOfCreditIssuance->getContractType() == 'no-po' && $requestContractId != -1) {
             $letterOfCreditIssuance->purchaseOrder ? $letterOfCreditIssuance->purchaseOrder->delete() : null;
         }
-        if ($letterOfCreditIssuance->getContractType() == 'no-po' && $request->get('contract-id') == -1) {
+        if ($letterOfCreditIssuance->getContractType() == 'no-po' && $requestContractId == -1) {
             if ($letterOfCreditIssuance->purchaseOrder) {
                 $letterOfCreditIssuance->purchaseOrder->update([
                     'po_number' => $request->get('new_purchase_order_number')
@@ -890,10 +944,23 @@ class LetterOfCreditIssuanceController
          * * قبل كده لو أي حاجة ضربت في النص كان الاعتماد القديم بيروح والجديد بيتعمل ناقص
          */
         OdooSync::transaction(function () use ($company, $request, $letterOfCreditIssuance, $source) {
-            $letterOfCreditIssuance->deleteAllRelations();
+            /**
+             * * المصاريف الإضافية مش بتتعاد مع الاعتماد الجديد ، فبنمسك الـ ids
+             * * بتاعتها ونرجّعها على السجل الجديد بعد ما يتعمل. من غير كده كانت
+             * * بتفضل مربوطة بـ id اتمسح (مصاريف يتيمة ما بتظهرش في أي شاشة)
+             */
+            $expenseIds = $letterOfCreditIssuance->expenses()->pluck('id')->toArray();
+
+            $letterOfCreditIssuance->deleteAllRelations(false);
             $letterOfCreditIssuance->delete();
 
             $this->storeWithinTransaction($company, $request, $source);
+
+            if (count($expenseIds) && $this->lastStoredIssuance) {
+                LcIssuanceExpense::whereIn('id', $expenseIds)->update([
+                    'lc_issuance_id' => $this->lastStoredIssuance->id
+                ]);
+            }
         });
         return redirect()->route('view.letter.of.credit.issuance', ['company' => $company->id, 'active' => $request->get('lc_type')])->with('success', __('Data Store Successfully'));
     }
@@ -921,15 +988,33 @@ class LetterOfCreditIssuanceController
             'payment_currency' => null,
             'payment_account_type_id' => null,
             'payment_account_number_id' => null,
+            /**
+             * * الفوايد بتتسجل في خطوة الدفع ، فلازم تترجع صفر مع التراجع.
+             * * من غير كده صف الفايدة في الحساب الجاري بيتمسح بس القيمة
+             * * بتفضل على الاعتماد وبتترجع في المودال ، فلو اتدفع تاني
+             * * بتتحسب من جديد
+             */
+            'interest_amount' => 0,
+            'interest_currency' => null,
         ]);
 
         PaymentSettlement::deleteButTriggerChangeOnLastElement($letterOfCreditIssuance->settlements);
         CurrentAccountBankStatement::deleteButTriggerChangeOnLastElement($letterOfCreditIssuance->currentAccountPaymentCreditBankStatements);
         CurrentAccountBankStatement::deleteButTriggerChangeOnLastElement($letterOfCreditIssuance->currentAccountLcInterestCreditBankStatements);
         LetterOfCreditStatement::deleteButTriggerChangeOnLastElement($letterOfCreditIssuance->letterOfCreditStatements->where('type', LetterOfCreditIssuance::FOR_PAID));
+        /**
+         * * صفوف الـ for-paid بس هي اللي بتتشال ، لأنها هي اللي خطوة الدفع
+         * * عملتها. صف الـ credit-lc-amount اتعمل وقت **الإصدار** ومفيش
+         * * علاقة ليه بالدفع — وشيله كان بيخلي الاعتماد يرجع running
+         * * من غير تغطيته النقدية أصلا (كشف التغطيات بيفضل فاضي)
+         */
         LetterOfCreditCashCoverStatement::deleteButTriggerChangeOnLastElement($letterOfCreditIssuance->letterOfCreditCashCoverStatements->where('type', LetterOfCreditIssuance::FOR_PAID));
-        LetterOfCreditCashCoverStatement::deleteButTriggerChangeOnLastElement($letterOfCreditIssuance->letterOfCreditCashCoverStatements->where('type', 'credit-lc-amount'));
-        LcOverdraftBankStatement::deleteButTriggerChangeOnLastElement($letterOfCreditIssuance->lcOverdraftBankStatements->where('source', $source));
+        /**
+         * * نفس الفلتر اللي في markAsPaid بالظبط (is_credit = 1) ، عشان
+         * * التراجع يكون معكوس تماما للدفع. من غير الفلتر كان بيمسح أي صف
+         * * مدين على نفس الاعتماد وده مش من صنع خطوة الدفع
+         */
+        LcOverdraftBankStatement::deleteButTriggerChangeOnLastElement($letterOfCreditIssuance->lcOverdraftBankStatements->where('source', $source)->where('is_credit', 1));
 
         return redirect()->route('view.letter.of.credit.issuance', ['company' => $company->id, 'active' => $request->get('lc_type')])->with('success', __('Data Store Successfully'));
     }
@@ -1042,8 +1127,17 @@ class LetterOfCreditIssuanceController
         $commentEn = __('LC Cash Cover Payment [:lcType] [:transactionName]', ['lcType' => $lcType, 'transactionName' => $transactionName], 'en');
         $commentAr = __('LC Cash Cover Payment [:lcType] [:transactionName]', ['lcType' => $lcType, 'transactionName' => $transactionName], 'ar');
         $letterOfCreditIssuance->handleLetterOfCreditCashCoverStatement($financialInstitutionId, $source, $letterOfCreditFacilityId, $lcType, $company->id, $paymentDate, 0, 0, $cashCoverAmount, $letterOfCreditIssuance->getLcCashCoverCurrency(), 0, LetterOfCreditIssuance::FOR_PAID);
-        if ($interestAmount > 0) {
-            $letterOfCreditIssuance->storeCurrentAccountLcInterestPaymentCreditBankStatement($paymentDate, $interestAmount, $paymentAccountNumberId, 0, 1, __('LC Interest Payment [ :supplierName ] [ :lcType ] Transaction Name [ :transactionName ]', ['lcType' => __($lcType, [], 'en'), 'supplierName' => $supplierName, 'transactionName' => $transactionName], 'en'), __('LC Payment [ :supplierName ] [ :lcType ] Transaction Name [ :transactionName ]', ['lcType' => __($lcType, [], 'ar'), 'supplierName' => $supplierName, 'transactionName' => $transactionName], 'ar'));
+        /**
+         * * الفوايد مصروف بنكي زي العمولة ومصاريف الإصدار ، فبتتخصم من نفس
+         * * حساب المصاريف والعمولات بتاع الاعتماد.
+         * *
+         * * ودي الحالة الوحيدة اللي فيها حساب أصلا: لما التمويل من البنك
+         * * الـ merge اللي فوق بيصفّر payment_account_number_id ، والدالة
+         * * بتاخد int مش nullable فكان بيحصل TypeError (صفحة 500)
+         */
+        $interestAccountId = $letterOfCreditIssuance->getFeesAndCommissionAccountId() ?: $paymentAccountNumberId;
+        if ($interestAmount > 0 && $interestAccountId) {
+            $letterOfCreditIssuance->storeCurrentAccountLcInterestPaymentCreditBankStatement($paymentDate, $interestAmount, $interestAccountId, 0, 1, __('LC Interest Payment [ :supplierName ] [ :lcType ] Transaction Name [ :transactionName ]', ['lcType' => __($lcType, [], 'en'), 'supplierName' => $supplierName, 'transactionName' => $transactionName], 'en'), __('LC Payment [ :supplierName ] [ :lcType ] Transaction Name [ :transactionName ]', ['lcType' => __($lcType, [], 'ar'), 'supplierName' => $supplierName, 'transactionName' => $transactionName], 'ar'));
         }
         if ($source != LetterOfCreditIssuance::HUNDRED_PERCENTAGE_CASH_COVER) {
             $commentEn = __('Post Finance [ :noDays ] Days [ :supplierName ] [ :lcType ] Transaction Name [ :transactionName ]', ['noDays' => $financialDuration, 'supplierName' => $supplierName, 'lcType' => $lcType, 'transactionName' => $transactionName], 'en');

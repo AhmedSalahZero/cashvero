@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests;
 
+use App\Models\LetterOfCreditIssuance;
+use App\Rules\UniqueToCompanyAndAdditionalColumnsRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreLetterOfCreditIssuanceRequest extends FormRequest
@@ -16,11 +18,54 @@ class StoreLetterOfCreditIssuanceRequest extends FormRequest
         return true;
     }
 
-
+    /**
+     * * ملحوظة على النطاق: الحقول اللي هنا موجودة في الفورمات الحية
+     * * (lc-facility / hundred-percentage-cash-cover).
+     * * مثلا cash_cover_rate **مش** موجود في فورمات الـ cd و الـ td ،
+     * * فمينفعش يبقى required هنا
+     */
     public function rules()
     {
         return [
 			'lc_amount'=>['required','gt:0'],
+            'lc_currency' => ['required', 'string'],
+            /**
+             * * exchange_rate بيتضرب في lc_amount عشان يطلع المبلغ بالعملة
+             * * الأساسية. لو صفر كل الحركات بتنزل بصفر
+             */
+            'exchange_rate' => ['required', 'gt:0'],
+            'issuance_date' => ['required', 'date'],
+            'lc_type' => ['required', 'string'],
+            /**
+             * * الاتنين دول بيتعمل عليهم find() في الكنترولر وبيتقرا منهم ->id
+             * * على طول ، فلو مش موجودين كانت الصفحة بترمي 500
+             */
+            'financial_institution_id' => ['required', 'exists:financial_institutions,id'],
+            'lc_fees_and_commission_account_id' => ['required', 'exists:financial_institution_accounts,id'],
+            /**
+             * * رقم الاعتماد من البنك — مينفعش يتكرر مع نفس البنك في نفس الشركة
+             */
+            'lc_code' => [
+                'required',
+                new UniqueToCompanyAndAdditionalColumnsRule(
+                    'LetterOfCreditIssuance',
+                    'lc_code',
+                    $this->currentIssuanceId(),
+                    [['financial_institution_id', '=', $this->get('financial_institution_id')]],
+                    __('This LC Code Already Exist For This Bank')
+                ),
+            ],
         ];
+    }
+
+    /**
+     * * في الإنشاء بيرجع 0 (يعني ما تستثنيش أي سجل) ، وفي التعديل بيرجع
+     * * id السجل الحالي عشان ما يعتبرش نفسه تكرار
+     */
+    protected function currentIssuanceId(): int
+    {
+        $letterOfCreditIssuance = $this->route('letterOfCreditIssuance');
+
+        return $letterOfCreditIssuance instanceof LetterOfCreditIssuance ? $letterOfCreditIssuance->id : 0;
     }
 }

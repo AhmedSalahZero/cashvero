@@ -204,5 +204,104 @@ class LetterOfCreditFacility extends Model
 	{
 		return $this->hasMany(LcOverdraftBankStatement::class,'lc_facility_id','id')->orderBy('full_date','desc');
 	}
-	
+
+	/**
+	 * * بتولد صف فايدة آخر كل شهر في كشف الـ LC Overdraft
+	 * * (type = interest , interest_type = end_of_month) لكل شهر ما بين
+	 * * بداية ونهاية التعاقد. الصف بينزل بـ credit = 0 والـ trigger هو اللي
+	 * * بيملّي القيمة من مجموع interest_amount بتاع الشهر.
+	 * *
+	 * * نفس المنطق بالظبط بتاع الأنواع التانية في IsOverdraft ، والفرق إن
+	 * * كشف الـ LC محتاج source و lc_issuance_id كمان. بنستخدم 0 للـ issuance
+	 * * لأن الفايدة على مديونية التسهيل كلها مش على اعتماد بعينه
+	 * *
+	 * * ملحوظة: بنولّد للـ source بتاع lc-facility بس ، لأن الاعتمادات
+	 * * المضمونة بشهادة/وديعة بتتسجّل بـ lc_facility_id = 0 ومالهاش تسهيل
+	 * * ليه سعر فايدة
+	 */
+	public function handleEndOfMonthInterestForOverdraft(?string $contractStartDate , ?string $contractEndDate , int $companyId):void
+	{
+		if(!$contractStartDate || !$contractEndDate){
+			return ;
+		}
+
+		$source = LetterOfCreditIssuance::LC_FACILITY ;
+		$interestText = 'interest';
+		$interestTypeText = 'end_of_month';
+
+		$contractStartDateAsCarbon = Carbon::make($contractStartDate);
+		$contractEndDateAsCarbon = Carbon::make($contractEndDate);
+
+		/**
+		 * * copy() مهمة: endOfMonth() بتعدّل الكائن نفسه
+		 */
+		$isLastDayOfMonth = $contractStartDateAsCarbon->copy()->endOfMonth()->isSameDay($contractStartDateAsCarbon);
+
+		$dates = generateDatesBetweenTwoDatesWithoutOverflow($contractStartDateAsCarbon->copy(),$contractEndDateAsCarbon);
+		$countDates = count($dates);
+
+		$baseQuery = fn() => LcOverdraftBankStatement::where('company_id',$companyId)
+			->where('lc_facility_id',$this->id)
+			->where('source',$source)
+			->where('type',$interestText)
+			->where('interest_type',$interestTypeText);
+
+		/**
+		 * * لو التعاقد اتقصّر ، الصفوف اللي بقت بره المدة تتشال
+		 */
+		$baseQuery()->where('date','>',$contractEndDateAsCarbon->format('Y-m-d'))->delete();
+
+		foreach($dates as $index => $dateAsString){
+			if($index == 0 && $isLastDayOfMonth){
+				continue;
+			}
+			$isLastLoop = $index == $countDates - 1 ;
+			$currentEndOfMonthDate = $isLastLoop
+				? $contractEndDateAsCarbon->format('Y-m-d')
+				: Carbon::make($dateAsString)->endOfMonth()->format('Y-m-d');
+
+			if($baseQuery()->where('date',$currentEndOfMonthDate)->exists()){
+				continue;
+			}
+
+			LcOverdraftBankStatement::create([
+				'company_id'=>$companyId,
+				'lc_facility_id'=>$this->id,
+				'lc_issuance_id'=>0,
+				'source'=>$source,
+				'priority'=>1,
+				'type'=>$interestText,
+				'date'=>$currentEndOfMonthDate,
+				'limit'=>$this->getLimit(),
+				'debit'=>0,
+				'credit'=>0,
+				'interest_type'=>$interestTypeText,
+				'comment_en'=>__('End Of Month Interest'),
+				'comment_ar'=>__('End Of Month Interest'),
+			]);
+		}
+
+		$this->settleOverdraftInterestRows($companyId,$source);
+	}
+
+	/**
+	 * * الصفوف بتتعمل بـ credit = 0 ، واللي بيملّي القيمة هو الـ before update
+	 * * trigger (البلوك بتاع interest_type = end_of_month) مش الـ insert.
+	 * * فبنلمس الصفوف بالترتيب عشان التريجر يحسب:
+	 * *   المرة الأولى → بيملّي الـ credit
+	 * *   المرة التانية → بيعيد حساب الأرصدة بالـ credit الجديد
+	 * * (نفس سلوك الـ statement cascade في باقي الكشوف)
+	 */
+	protected function settleOverdraftInterestRows(int $companyId , string $source):void
+	{
+		$baseQuery = fn() => \Illuminate\Support\Facades\DB::table('lc_overdraft_bank_statements')
+			->where('company_id',$companyId)
+			->where('lc_facility_id',$this->id)
+			->where('source',$source);
+
+		foreach([1,2] as $pass){
+			\App\Support\StatementCascade::touchRows($baseQuery(),'date asc , priority asc , id asc');
+		}
+	}
+
 }
