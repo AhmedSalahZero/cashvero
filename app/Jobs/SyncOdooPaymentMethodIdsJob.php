@@ -90,6 +90,7 @@ class SyncOdooPaymentMethodIdsJob implements ShouldQueue
         try {
 				logger('starting feetubg');
             if (! $company->hasOdooIntegrationCredentials($user)) {
+				logger('no cred..');
                 return ;
             }
 
