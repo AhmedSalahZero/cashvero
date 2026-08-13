@@ -88,6 +88,7 @@ class SyncOdooPaymentMethodIdsJob implements ShouldQueue
     private function syncCompany(Company $company, User $user): void
     {
         try {
+			logger('starting feetubg');
             if (! $company->hasOdooIntegrationCredentials($user)) {
                 return ;
             }
