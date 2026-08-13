@@ -101,7 +101,43 @@ class DownPaymentContractsController extends Controller
 		// currently filter results. Preserved exactly as-is (not a
 		// bug we introduced, and not ours to silently "fix" without
 		// a decision from the project owner).
-		$rows = $moneyModels->map(function ($moneyModel) use ($company, $modelType) {
+		$isMoneyReceived = $modelType == 'CustomerInvoice';
+		$invoiceModelName = $isMoneyReceived ? CustomerInvoice::class : SupplierInvoice::class;
+		$rows = $moneyModels->map(function ($moneyModel) use ($company, $modelType, $invoiceModelName) {
+			/**
+			 * FIX (per request, 2026-08-13): the down payment's own
+			 * 👍/🐞 only ever reflected whether the ADVANCE ITSELF
+			 * synced with Odoo when it was first received/paid. It
+			 * said nothing about what happens later when that advance
+			 * gets matched against specific invoices (a separate Odoo
+			 * journal entry per settlement, via
+			 * OdooPayment::settleAdvanceWithInvoices()). Both icons now
+			 * reflect BOTH: the down payment's own sync AND every
+			 * settlement made against it — a row can show both icons
+			 * at once if some settlements succeeded and others didn't.
+			 */
+			$settlements = $moneyModel->settlements;
+
+			$settlementReferences = $settlements
+				->filter(fn ($s) => $s->odoo_reference)
+				->map(fn ($s) => $s->odoo_reference.' — Transfer Customer Advance to Receivable')
+				->values()
+				->all();
+
+			$failedSettlements = $settlements
+				->filter(fn ($s) => $s->hasOdooError())
+				->map(function ($s) use ($invoiceModelName) {
+					$invoice = $invoiceModelName::find($s->invoice_id);
+					$invoiceLabel = $invoice ? $invoice->getInvoiceNumber() : ('#'.$s->invoice_id);
+					return 'Invoice '.$invoiceLabel.': '.$s->getOdooError();
+				})
+				->values()
+				->all();
+
+			$odooReferenceNames = array_merge($moneyModel->getOdooReferenceNames(), $settlementReferences);
+			$hasOdooError = $moneyModel->hasOdooError() || count($failedSettlements) > 0;
+			$isFullyIntegrated = ($company->hasOdooIntegrationCredentials() && $moneyModel->fullyIntegratedWithOdoo()) || count($settlementReferences) > 0;
+
 			return [
 				'id' => $moneyModel->id,
 				'date_formatted' => $moneyModel->getReceivingOrPaymentMoneyDateFormatted(),
@@ -111,6 +147,20 @@ class DownPaymentContractsController extends Controller
 				'currency' => $moneyModel->currency,
 				'contract_name' => $moneyModel->getContractName(),
 				'contract_amount_formatted' => $moneyModel->getContractAmountFormatted(),
+				/**
+				 * FIX (per request, 2026-08-13): this page had neither
+				 * the success (👍) nor failure (🐞) Odoo status icon at
+				 * all, unlike every other list of Odoo-touching records
+				 * in the app. $moneyModel is always a MoneyPayment or
+				 * MoneyReceived here, which already has all three
+				 * methods via the IsMoney trait — nothing new needed on
+				 * the model side, just exposing it here.
+				 */
+				'is_fully_integrated_with_odoo' => $isFullyIntegrated,
+				'odoo_reference_names' => $odooReferenceNames,
+				'has_odoo_error' => (bool) $hasOdooError,
+				'odoo_error' => $moneyModel->getOdooError(),
+				'failed_settlement_errors' => $failedSettlements,
 				// Still Blade — see class docblock. Left as a plain
 				// link out, same as Adjust Due Date / Money Received
 				// were before their own pages got migrated.

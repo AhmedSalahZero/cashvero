@@ -56,7 +56,13 @@ function build() {
 
     chart = am4core.create(el.value, am4charts.PieChart);
     chart.logo.disabled = true;
-    chart.data = rows;
+    /**
+     * FIX (per request, 2026-08-13): same reasoning as MultiLineChart
+     * and Aging/Result.vue — round the value field at the source
+     * rather than trust amCharts' own "#,###" tooltip formatting alone
+     * to hide floating-point decimal tails.
+     */
+    chart.data = rows.map(r => ({ ...r, [props.valueField]: Math.round(Number(r[props.valueField])) }));
     chart.innerRadius = am4core.percent(52);
     chart.numberFormatter.numberFormat = '#,###';
     const textColor = cvrColor('--cvr-text-secondary');

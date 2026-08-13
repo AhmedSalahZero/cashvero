@@ -64,6 +64,41 @@ const TYPES = {
     OUTGOING_TRANSFER: 'outgoing-transfer',
 };
 
+/**
+ * Exchange Rate should only ever matter when the expense currency
+ * differs from the company's main functional currency — same reasoning
+ * as Money Payment / Money Received's Form.vue. Shared across all three
+ * types since Currency is the same field regardless of which type tab
+ * is active.
+ */
+const isForeignCurrency = computed(() => form.value.currency && form.value.currency !== props.company.mainFunctionalCurrency);
+
+/**
+ * Exchange Rate now accepts either a plain number ("50") or a division
+ * expression ("1/50" or "=1/50", spreadsheet-style) — mirrors Money
+ * Payment / Money Received's Form.vue exactly. One input + parsed value
+ * per type (cash payment / outgoing transfer / payable cheque), since
+ * each type keeps its own exchange rate field already.
+ */
+function parseExchangeRateExpression(raw) {
+    const s = String(raw ?? '').trim().replace(/^=/, '');
+    if (!s) return 0;
+    if (/^-?\d+(\.\d+)?$/.test(s)) {
+        const n = Number(s);
+        return Number.isFinite(n) ? n : 0;
+    }
+    if (/^[\d+\-*/().\s]+$/.test(s)) {
+        try {
+            // eslint-disable-next-line no-new-func
+            const result = Function(`"use strict"; return (${s});`)();
+            return Number.isFinite(result) ? result : 0;
+        } catch (e) {
+            return 0;
+        }
+    }
+    return 0;
+}
+
 const form = ref({
     type: props.model?.type ?? TYPES.CASH_PAYMENT,
     payment_date: props.model?.payment_date ?? todayDate(),
@@ -75,14 +110,14 @@ const form = ref({
     delivery_branch_id: props.model?.delivery_branch_id ?? '',
     paid_amount_cash_payment: props.model?.type === TYPES.CASH_PAYMENT ? props.model?.paid_amount : 0,
     receipt_number: props.model?.receipt_number ?? '',
-    exchange_rate_cash_payment: props.model?.type === TYPES.CASH_PAYMENT ? (props.model?.exchange_rate ?? 1) : 1,
+    exchange_rate_input_cash_payment: String(props.model?.type === TYPES.CASH_PAYMENT ? (props.model?.exchange_rate ?? 1) : 1),
     // Outgoing Transfer
     outgoing_transfer_delivery_bank_id: props.model?.outgoing_transfer_delivery_bank_id ?? '',
     outgoing_transfer_account_type: props.model?.outgoing_transfer_account_type ?? '',
     outgoing_transfer_account_number: props.model?.outgoing_transfer_account_number ?? '',
     paid_amount_outgoing_transfer: props.model?.type === TYPES.OUTGOING_TRANSFER ? props.model?.paid_amount : 0,
     is_bank_charges: props.model?.is_bank_charges ?? false,
-    exchange_rate_outgoing_transfer: props.model?.type === TYPES.OUTGOING_TRANSFER ? (props.model?.exchange_rate ?? 1) : 1,
+    exchange_rate_input_outgoing_transfer: String(props.model?.type === TYPES.OUTGOING_TRANSFER ? (props.model?.exchange_rate ?? 1) : 1),
     // Payable Cheque
     payable_cheque_delivery_bank_id: props.model?.payable_cheque_delivery_bank_id ?? '',
     payable_cheque_account_type: props.model?.payable_cheque_account_type ?? '',
@@ -90,8 +125,43 @@ const form = ref({
     paid_amount_payable_cheque: props.model?.type === TYPES.PAYABLE_CHEQUE ? props.model?.paid_amount : 0,
     due_date: props.model?.due_date ?? '',
     cheque_number: props.model?.cheque_number ?? '',
-    exchange_rate_payable_cheque: props.model?.type === TYPES.PAYABLE_CHEQUE ? (props.model?.exchange_rate ?? 1) : 1,
+    exchange_rate_input_payable_cheque: String(props.model?.type === TYPES.PAYABLE_CHEQUE ? (props.model?.exchange_rate ?? 1) : 1),
 });
+
+/* Parsed numeric value behind each exchange-rate input — only
+   recalculated when the person leaves the field (@blur), same UX as
+   Money Payment / Money Received. */
+const exchangeRateCashPayment = ref(parseExchangeRateExpression(form.value.exchange_rate_input_cash_payment));
+const exchangeRateOutgoingTransfer = ref(parseExchangeRateExpression(form.value.exchange_rate_input_outgoing_transfer));
+const exchangeRatePayableCheque = ref(parseExchangeRateExpression(form.value.exchange_rate_input_payable_cheque));
+
+function onExchangeRateBlur(type) {
+    if (type === TYPES.CASH_PAYMENT) {
+        const parsed = parseExchangeRateExpression(form.value.exchange_rate_input_cash_payment);
+        form.value.exchange_rate_input_cash_payment = String(Math.round(parsed * 1e6) / 1e6);
+        exchangeRateCashPayment.value = parsed;
+    } else if (type === TYPES.OUTGOING_TRANSFER) {
+        const parsed = parseExchangeRateExpression(form.value.exchange_rate_input_outgoing_transfer);
+        form.value.exchange_rate_input_outgoing_transfer = String(Math.round(parsed * 1e6) / 1e6);
+        exchangeRateOutgoingTransfer.value = parsed;
+    } else {
+        const parsed = parseExchangeRateExpression(form.value.exchange_rate_input_payable_cheque);
+        form.value.exchange_rate_input_payable_cheque = String(Math.round(parsed * 1e6) / 1e6);
+        exchangeRatePayableCheque.value = parsed;
+    }
+}
+
+/**
+ * Amount in the company's main currency — shown read-only right after
+ * Exchange Rate, same "Amount in [currency]" pattern as Money Payment /
+ * Money Received's Form.vue, but labeled with the real main-currency
+ * code (e.g. "OMR") instead of a generic label. Matches the same
+ * amount * exchangeRate convention CashExpense's own Odoo sync code
+ * uses server-side (see HasNonCustomerOrSupplier::createNonCustomerOrSupplierOdooExpense).
+ */
+const amountInMainCurrencyCashPayment = computed(() => Math.round((Number(form.value.paid_amount_cash_payment) || 0) * exchangeRateCashPayment.value * 100) / 100);
+const amountInMainCurrencyOutgoingTransfer = computed(() => Math.round((Number(form.value.paid_amount_outgoing_transfer) || 0) * exchangeRateOutgoingTransfer.value * 100) / 100);
+const amountInMainCurrencyPayableCheque = computed(() => Math.round((Number(form.value.paid_amount_payable_cheque) || 0) * exchangeRatePayableCheque.value * 100) / 100);
 
 /* ── Category → Expense Name cascade ─────────────────────────────
    All category names arrive up front (with their parent category id)
@@ -252,9 +322,9 @@ function submit() {
         form.value.type === TYPES.OUTGOING_TRANSFER ? form.value.paid_amount_outgoing_transfer :
         form.value.paid_amount_payable_cheque;
     exchangeRate[form.value.type] =
-        form.value.type === TYPES.CASH_PAYMENT ? form.value.exchange_rate_cash_payment :
-        form.value.type === TYPES.OUTGOING_TRANSFER ? form.value.exchange_rate_outgoing_transfer :
-        form.value.exchange_rate_payable_cheque;
+        form.value.type === TYPES.CASH_PAYMENT ? exchangeRateCashPayment.value :
+        form.value.type === TYPES.OUTGOING_TRANSFER ? exchangeRateOutgoingTransfer.value :
+        exchangeRatePayableCheque.value;
     if (form.value.type === TYPES.OUTGOING_TRANSFER) {
         deliveryBankId[TYPES.OUTGOING_TRANSFER] = form.value.outgoing_transfer_delivery_bank_id;
         accountType[TYPES.OUTGOING_TRANSFER] = form.value.outgoing_transfer_account_type;
@@ -281,6 +351,16 @@ function submit() {
         is_bank_charges: form.value.type === TYPES.OUTGOING_TRANSFER ? form.value.is_bank_charges : false,
         due_date: form.value.type === TYPES.PAYABLE_CHEQUE ? form.value.due_date : null,
         cheque_number: form.value.type === TYPES.PAYABLE_CHEQUE ? form.value.cheque_number : null,
+        /**
+         * FIX (per bug report, 2026-08-13): these tell the server which
+         * record to EXCLUDE from the Cheque Number / Receipt Number
+         * uniqueness check — without them, editing a cheque or receipt
+         * falsely reports "already exists" against itself. Only
+         * meaningful (and only sent as non-null) in edit mode; on
+         * create there's nothing yet to exclude.
+         */
+        current_cheque_id: isEdit ? (props.model?.payable_cheque_id ?? null) : null,
+        cash_id: isEdit ? (props.model?.cash_payment_id ?? null) : null,
         contracts: allocationRows.value
             .filter(r => r.contract_id && Number(r.amount) > 0)
             .map(r => ({ contract_id: r.contract_id, amount: r.amount })),
@@ -391,9 +471,13 @@ function submit() {
                             <input v-model="form.receipt_number" type="text" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('receipt_number')" class="text-xs mt-1 cvr-num-red">{{ errorFor('receipt_number') }}</p>
                         </div>
-                        <div>
+                        <div v-if="isForeignCurrency">
                             <label class="cvr-form-label">Exchange Rate</label>
-                            <input v-model="form.exchange_rate_cash_payment" type="number" step="0.0001" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="form.exchange_rate_input_cash_payment" @blur="onExchangeRateBlur(TYPES.CASH_PAYMENT)" type="text" inputmode="decimal" placeholder="e.g. 50 or 1/50" class="cvr-input w-full px-3 py-2 rounded" />
+                        </div>
+                        <div v-if="isForeignCurrency">
+                            <label class="cvr-form-label">Amount In {{ company.mainFunctionalCurrency }}</label>
+                            <input :value="amountInMainCurrencyCashPayment" readonly class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
 
@@ -411,9 +495,13 @@ function submit() {
                                 <label class="cvr-form-label">Paid Amount *</label>
                                 <input v-model="form.paid_amount_outgoing_transfer" type="number" step="0.01" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
-                            <div>
+                            <div v-if="isForeignCurrency">
                                 <label class="cvr-form-label">Exchange Rate</label>
-                                <input v-model="form.exchange_rate_outgoing_transfer" type="number" step="0.0001" class="cvr-input w-full px-3 py-2 rounded" />
+                                <input v-model="form.exchange_rate_input_outgoing_transfer" @blur="onExchangeRateBlur(TYPES.OUTGOING_TRANSFER)" type="text" inputmode="decimal" placeholder="e.g. 50 or 1/50" class="cvr-input w-full px-3 py-2 rounded" />
+                            </div>
+                            <div v-if="isForeignCurrency">
+                                <label class="cvr-form-label">Amount In {{ company.mainFunctionalCurrency }}</label>
+                                <input :value="amountInMainCurrencyOutgoingTransfer" readonly class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                         </div>
                         <!-- Bank-name field — 6:3:3, bank names run long -->
@@ -497,10 +585,14 @@ function submit() {
                                 <p v-if="errorFor('account_number')" class="text-xs mt-1 cvr-num-red">{{ errorFor('account_number') }}</p>
                             </div>
                         </div>
-                        <div class="cvr-form-grid-3">
+                        <div v-if="isForeignCurrency" class="cvr-form-grid-3">
                             <div>
                                 <label class="cvr-form-label">Exchange Rate</label>
-                                <input v-model="form.exchange_rate_payable_cheque" type="number" step="0.0001" class="cvr-input w-full px-3 py-2 rounded" />
+                                <input v-model="form.exchange_rate_input_payable_cheque" @blur="onExchangeRateBlur(TYPES.PAYABLE_CHEQUE)" type="text" inputmode="decimal" placeholder="e.g. 50 or 1/50" class="cvr-input w-full px-3 py-2 rounded" />
+                            </div>
+                            <div>
+                                <label class="cvr-form-label">Amount In {{ company.mainFunctionalCurrency }}</label>
+                                <input :value="amountInMainCurrencyPayableCheque" readonly class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                         </div>
                     </template>

@@ -107,57 +107,6 @@ class BuyOrSellCurrenciesController
             ];
         }
 
-        $bankToBankStartDate = $filterDates[BuyOrSellCurrency::BANK_TO_BANK]['startDate'] ?? null;
-        $bankToBankEndDate = $filterDates[BuyOrSellCurrency::BANK_TO_BANK]['endDate'] ?? null;
-        $bankToBankBuyOrSellCurrencies = $company->bankToBankBuyOrSellCurrencies()
-        ->filterByTransactionDate($bankToBankStartDate, $bankToBankEndDate);
-        $bankToBankBuyOrSellCurrencies = $this->applyTypeFilters($bankToBankBuyOrSellCurrencies, $request, BuyOrSellCurrency::BANK_TO_BANK, $currentType, ['from_account_number', 'to_account_number']);
-        $bankToBankBuyOrSellCurrencies = $bankToBankBuyOrSellCurrencies
-        ->with(['fromBank.bank', 'fromAccountType', 'toBank.bank', 'toAccountType', 'fromBranch', 'toBranch'])
-        ->orderByDesc('transaction_date')
-        ->paginate($paginationPerPage, ['*'], 'bankToBankBuyOrSellCurrenciesPage')
-        ->withQueryString();
-
-        $safeToBankStartDate = $filterDates[BuyOrSellCurrency::SAFE_TO_BANK]['startDate'] ?? null;
-        $safeToBankEndDate = $filterDates[BuyOrSellCurrency::SAFE_TO_BANK]['endDate'] ?? null;
-        $safeToBankBuyOrSellCurrencies = $company->safeToBankBuyOrSellCurrencies()
-        ->filterByTransactionDate($safeToBankStartDate, $safeToBankEndDate);
-        $safeToBankBuyOrSellCurrencies = $this->applyTypeFilters($safeToBankBuyOrSellCurrencies, $request, BuyOrSellCurrency::SAFE_TO_BANK, $currentType, ['to_account_number']);
-        $safeToBankBuyOrSellCurrencies = $safeToBankBuyOrSellCurrencies
-        ->with(['fromBank.bank', 'fromAccountType', 'toBank.bank', 'toAccountType', 'fromBranch', 'toBranch'])
-        ->orderByDesc('transaction_date')
-        ->paginate($paginationPerPage, ['*'], 'safeToBankBuyOrSellCurrenciesPage')
-        ->withQueryString();
-
-        $bankToSafeStartDate = $filterDates[BuyOrSellCurrency::BANK_TO_SAFE]['startDate'] ?? null;
-        $bankToSafeEndDate = $filterDates[BuyOrSellCurrency::BANK_TO_SAFE]['endDate'] ?? null;
-        $bankToSafeBuyOrSellCurrencies = $company->bankToSafeBuyOrSellCurrencies()
-        ->filterByTransactionDate($bankToSafeStartDate, $bankToSafeEndDate);
-        $bankToSafeBuyOrSellCurrencies = $this->applyTypeFilters($bankToSafeBuyOrSellCurrencies, $request, BuyOrSellCurrency::BANK_TO_SAFE, $currentType, ['from_account_number']);
-        $bankToSafeBuyOrSellCurrencies = $bankToSafeBuyOrSellCurrencies
-        ->with(['fromBank.bank', 'fromAccountType', 'toBank.bank', 'toAccountType', 'fromBranch', 'toBranch'])
-        ->orderByDesc('transaction_date')
-        ->paginate($paginationPerPage, ['*'], 'bankToSafeBuyOrSellCurrenciesPage')
-        ->withQueryString();
-
-        $safeToSafeStartDate = $filterDates[BuyOrSellCurrency::SAFE_TO_SAFE]['startDate'] ?? null;
-        $safeToSafeEndDate = $filterDates[BuyOrSellCurrency::SAFE_TO_SAFE]['endDate'] ?? null;
-        $safeToSafeBuyOrSellCurrencies = $company->safeToSafeBuyOrSellCurrencies()
-        ->filterByTransactionDate($safeToSafeStartDate, $safeToSafeEndDate);
-        $safeToSafeBuyOrSellCurrencies = $this->applyTypeFilters($safeToSafeBuyOrSellCurrencies, $request, BuyOrSellCurrency::SAFE_TO_SAFE, $currentType, []);
-        $safeToSafeBuyOrSellCurrencies = $safeToSafeBuyOrSellCurrencies
-        ->with(['fromBank.bank', 'fromAccountType', 'toBank.bank', 'toAccountType', 'fromBranch', 'toBranch'])
-        ->orderByDesc('transaction_date')
-        ->paginate($paginationPerPage, ['*'], 'safeToSafeBuyOrSellCurrenciesPage')
-        ->withQueryString();
-
-        $models = [
-            BuyOrSellCurrency::BANK_TO_BANK => $bankToBankBuyOrSellCurrencies,
-            BuyOrSellCurrency::SAFE_TO_BANK => $safeToBankBuyOrSellCurrencies,
-            BuyOrSellCurrency::BANK_TO_SAFE => $bankToSafeBuyOrSellCurrencies,
-            BuyOrSellCurrency::SAFE_TO_SAFE => $safeToSafeBuyOrSellCurrencies,
-        ];
-
         /**
          * Column sets differ per type (see class docblock): a "bank"
          * leg shows Bank/Account Type/Account Number, a "safe" leg
@@ -196,27 +145,77 @@ class BuyOrSellCurrenciesController
                 'to_branch_name' => $model->getToBranchName(),
                 'user_comment' => $model->hasComment() ? $model->getUserComment() : null,
                 'is_fully_integrated_with_odoo' => $company->hasOdooIntegrationCredentials() && $model->fullyIntegratedWithOdoo(),
+                'has_odoo_error' => (bool) $model->hasOdooError(),
+                'odoo_error' => $model->getOdooError(),
                 'odoo_reference_names' => $model->getOdooReferenceNames(),
                 'edit_url' => route('buy-or-sell-currencies.edit', ['company' => $company->id, 'buy_or_sell_currency' => $model->id]),
                 'delete_url' => route('buy-or-sell-currencies.destroy', ['company' => $company->id, 'buy_or_sell_currency' => $model->id]),
             ];
         };
 
-        $tabs = [];
-        foreach ($models as $type => $paginator) {
-            $tabs[$type] = [
+        /**
+         * FIX (per audit, 2026-08-13): same reasoning as Cash Expense
+         * and Internal Money Transfer — all four tabs used to be fully
+         * queried, eager-loaded, and row-mapped on EVERY request,
+         * including a plain "next page" click that only concerns ONE
+         * tab. Each tab's work now lives in its own closure, only
+         * actually run when Inertia needs that specific prop. This
+         * page's eager loading was already correct, so this is purely
+         * the redundant-work fix — nothing else changes.
+         */
+        $configByType = [
+            BuyOrSellCurrency::BANK_TO_BANK => [
+                'relation' => 'bankToBankBuyOrSellCurrencies',
+                'page' => 'bankToBankBuyOrSellCurrenciesPage',
+                'searchable' => ['from_account_number', 'to_account_number'],
+            ],
+            BuyOrSellCurrency::SAFE_TO_BANK => [
+                'relation' => 'safeToBankBuyOrSellCurrencies',
+                'page' => 'safeToBankBuyOrSellCurrenciesPage',
+                'searchable' => ['to_account_number'],
+            ],
+            BuyOrSellCurrency::BANK_TO_SAFE => [
+                'relation' => 'bankToSafeBuyOrSellCurrencies',
+                'page' => 'bankToSafeBuyOrSellCurrenciesPage',
+                'searchable' => ['from_account_number'],
+            ],
+            BuyOrSellCurrency::SAFE_TO_SAFE => [
+                'relation' => 'safeToSafeBuyOrSellCurrencies',
+                'page' => 'safeToSafeBuyOrSellCurrenciesPage',
+                'searchable' => [],
+            ],
+        ];
+
+        $buildTab = function (string $type) use ($company, $request, $currentType, $filterDates, $paginationPerPage, $mapRow, $configByType) {
+            $config = $configByType[$type];
+            $startDate = $filterDates[$type]['startDate'] ?? null;
+            $endDate = $filterDates[$type]['endDate'] ?? null;
+
+            $query = $company->{$config['relation']}()
+                ->filterByTransactionDate($startDate, $endDate);
+            $query = $this->applyTypeFilters($query, $request, $type, $currentType, $config['searchable']);
+            $paginator = $query
+                ->with(['fromBank.bank', 'fromAccountType', 'toBank.bank', 'toAccountType', 'fromBranch', 'toBranch'])
+                ->orderByDesc('transaction_date')
+                ->paginate($paginationPerPage, ['*'], $config['page'])
+                ->withQueryString();
+
+            return [
                 'label' => BuyOrSellCurrency::getAllTypes()[$type],
                 'rows' => $paginator->through($mapRow),
-                'startDate' => $filterDates[$type]['startDate'],
-                'endDate' => $filterDates[$type]['endDate'],
+                'startDate' => $startDate,
+                'endDate' => $endDate,
             ];
-        }
+        };
 
         return \Inertia\Inertia::render('BuyOrSellCurrencies/Index', [
             'company' => ['id' => $company->id],
             'activeTab' => $currentType,
             'allTypes' => BuyOrSellCurrency::getAllTypes(),
-            'tabs' => $tabs,
+            'bankToBankTab' => fn () => $buildTab(BuyOrSellCurrency::BANK_TO_BANK),
+            'safeToBankTab' => fn () => $buildTab(BuyOrSellCurrency::SAFE_TO_BANK),
+            'bankToSafeTab' => fn () => $buildTab(BuyOrSellCurrency::BANK_TO_SAFE),
+            'safeToSafeTab' => fn () => $buildTab(BuyOrSellCurrency::SAFE_TO_SAFE),
             'searchValue' => $request->get('value'),
             'canCreate' => hasAuthFor('create buy or sell currency'),
             'canUpdate' => hasAuthFor('update buy or sell currency'),

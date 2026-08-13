@@ -711,6 +711,20 @@ body {
     grid-template-columns: 2fr 2fr 1fr 4fr 1fr 2fr;
     gap: 1rem;
 }
+/* Unequal ratio — 2:2:5:1:3 out of 13, for the Money Received / Money
+   Payment header row when Partner Type is NOT Customer/Supplier (so
+   Invoice/Receive Currency is not rendered at all — v-if, not v-show
+   — and must not reserve a grid track): Date, Partner Type, Name,
+   Pay/Receive Currency, Money Type. Name gets much more room (partner
+   names for Employee/Shareholder/etc. run long and this is now the
+   only wide field on the row); Pay/Receive Currency shrinks (currency
+   codes are 3 letters); Money Type grows (labels like "Outgoing
+   Transfer" need room). Client-confirmed 2026-08-13. */
+.cvr-form-grid-2-2-5-1-3 {
+    display: grid;
+    grid-template-columns: 2fr 2fr 5fr 1fr 3fr;
+    gap: 1rem;
+}
 /* Unequal ratio — 3:3:2:2:2 out of 12, for the Money Received /
    Money Payment Settlement Information invoice row: Project Name,
    Invoice Number, Invoice Date, Due Date, Invoice Amount. */
@@ -787,6 +801,7 @@ body {
     .cvr-form-grid-7-3-2,
     .cvr-form-grid-6-3-3,
     .cvr-form-grid-2-2-1-4-1-2,
+    .cvr-form-grid-2-2-5-1-3,
     .cvr-form-grid-3-3-2-2-2,
     .cvr-form-grid-2-2-2-4-2,
     .cvr-form-grid-2-2-6-2,

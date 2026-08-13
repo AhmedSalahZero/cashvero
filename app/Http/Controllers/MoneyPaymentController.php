@@ -27,6 +27,7 @@ use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 /**
@@ -507,6 +508,7 @@ class MoneyPaymentController
             'getContractsForCustomer' => route('get.contracts.for.customer', ['company' => $company->id]),
             'getPurchaseOrdersForContract' => $this->companyScopedUrl($company, 'down-payments/get-purchases-orders-for-contract'),
             'getSuppliersBasedOnCurrency' => $this->companyScopedUrl($company, 'get-suppliers-based-on-currency'),
+            'getPartnersBasedOnCurrency' => $this->companyScopedUrl($company, 'get-partners-based-on-type'),
             'getBranchBasedOnCurrency' => route('get.branch.based.on.currency', ['company' => $company->id]),
             'getCashInSafeEndBalance' => route('get.current.end.balance.of.cash.in.safe.statement', ['company' => $company->id]),
         ];
@@ -1037,22 +1039,47 @@ class MoneyPaymentController
             if ($balance < $currentPaidAmount) {
                 return redirect()->back()->with('fail', $errMessage);
             }
-            // $chequeDueDate = $moneyPayment->payableCheque->due_date;
-            $moneyPayment->payableCheque->update($data);
-            $currentStatement = $moneyPayment->getCurrentStatement();
-        
-        
-            if ($hasOdooIntegration && $company->withinIntegrationDate($actualPaymentDate)) {
-				
-				if($moneyPayment->isOpenBalance()){
-					$moneyPayment->markOpeningPayableChequeAsPaidInOdoo(false);
-				}else{
-					$moneyPayment->markPayableChequeAsPaidInOdoo();
-				}
-            }
-        
-            if ($currentStatement) {
-                $currentStatement->handleFullDateAfterDateEdit(Carbon::make($data['actual_payment_date'])->format('Y-m-d'), $currentStatement->debit, $currentStatement->credit);
+            /**
+             * FIX (per bug report, 2026-08-13): same fix as
+             * CashExpenseController::markChequesAsPaid() — for a
+             * company WITH Odoo integration credentials configured, if
+             * the Odoo sync below fails, the local "mark as paid"
+             * change (and the statement date fix) must not stick
+             * either, or CashVero and Odoo silently drift apart with
+             * no way to tell from the UI. Wrapping the local update +
+             * Odoo sync + statement fix in one DB transaction means an
+             * Odoo failure rolls back the local change too, leaving
+             * the cheque exactly as it was — safe to just retry.
+             * Companies without Odoo credentials are unaffected: the
+             * Odoo block below is skipped entirely for them, same as
+             * before this fix, so the transaction just commits the
+             * local change as it always did. The balance check above
+             * stays outside the transaction since it doesn't write
+             * anything — it's a validation the transaction should never
+             * need to undo.
+             */
+            try {
+                DB::transaction(function () use ($moneyPayment, $data, $hasOdooIntegration, $company, $actualPaymentDate) {
+                    $moneyPayment->payableCheque->update($data);
+                    $currentStatement = $moneyPayment->getCurrentStatement();
+
+                    if ($hasOdooIntegration && $company->withinIntegrationDate($actualPaymentDate)) {
+
+                        if ($moneyPayment->isOpenBalance()) {
+                            $moneyPayment->markOpeningPayableChequeAsPaidInOdoo(false);
+                        } else {
+                            $moneyPayment->markPayableChequeAsPaidInOdoo();
+                        }
+                    }
+
+                    if ($currentStatement) {
+                        $currentStatement->handleFullDateAfterDateEdit(Carbon::make($data['actual_payment_date'])->format('Y-m-d'), $currentStatement->debit, $currentStatement->credit);
+                    }
+                });
+            } catch (\Throwable $e) {
+                $message = __('Error While Connecting With Odoo').' : '.$e->getMessage();
+                return redirect()->route('view.money.payment', ['company'=>$company->id,'active'=>MoneyPayment::PAYABLE_CHEQUE])
+                    ->with('fail', $message);
             }
 
         }
@@ -1075,6 +1102,28 @@ class MoneyPaymentController
     {
         return response()->json([
             'supplierInvoices'=>SupplierInvoice::orderBy('supplier_name')->where('currency', $currencyName)->where('company_id', $company->id)->pluck('supplier_id', 'supplier_name')
+        ]);
+    }
+
+    /**
+     * Name-list endpoint for every non-supplier Partner Type on the
+     * Money Payment form (Employee, Shareholder, Subsidiary Company,
+     * Other Partner, Tax) — mirrors
+     * MoneyReceivedController::getPartnersBasedOnCurrency() exactly.
+     * Not currency-scoped for these types (matches the original:
+     * only invoice-backed partner types like suppliers/customers are
+     * filtered by currency); $currencyName is accepted for a
+     * consistent URL shape with the Money Received equivalent but
+     * unused here.
+     */
+    public function getPartnersBasedOnCurrency(Request $request, Company $company, string $currencyName)
+    {
+        $partnerColumnName = $request->get('partnerColumnName');
+
+        $partners = Partner::orderBy('name')->where('company_id', $company->id)->where($partnerColumnName, 1)->pluck('id', 'name');
+
+        return response()->json([
+            'partners' => $partners,
         ]);
     }
     public function getSuppliersWithOpeningBalance(Request $request, Company $company)

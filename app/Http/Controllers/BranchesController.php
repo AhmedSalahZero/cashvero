@@ -87,16 +87,14 @@ class BranchesController
      */
     public function index(Company $company, Request $request)
     {
-        $numberOfMonthsBetweenEndDateAndStartDate = 18;
-        $startDate = $request->has('startDate')
-            ? $request->input('startDate.'.CashVeroBranch::BRANCHES)
-            : now()->subMonths($numberOfMonthsBetweenEndDateAndStartDate)->format('Y-m-d');
-        $endDate = $request->has('endDate')
-            ? $request->input('endDate.'.CashVeroBranch::BRANCHES)
-            : now()->format('Y-m-d');
-
+        // NOTE: Safe Accounts are master data, not date-scoped
+        // transactions, and this page has no date-range control in
+        // the UI (SafeAccounts/Index.vue). A previous default
+        // created_at filter (last 18 months) was silently hiding
+        // older safes from the list — removed. If a genuine need for
+        // date filtering surfaces later, it should come with a
+        // visible filter control on the page, not a silent default.
         $branches = $company->branches;
-        $branches = $branches->filterByCreatedAt($startDate, $endDate);
         $branches = $this->applyFilter($request, $branches);
 
         return \Inertia\Inertia::render('SafeAccounts/Index', [

@@ -31,7 +31,9 @@ const props = defineProps({
     canCreate: Boolean,
     canUpdate: Boolean,
     canDelete: Boolean,
-    tabs: Object, // {type: {label, rows: paginator, startDate, endDate, hasBatchCollection}}
+    outgoingTransferTab: Object, // {label, rows: paginator, startDate, endDate, hasBatchCollection}
+    cashPaymentTab: Object,
+    payableChequeTab: Object,
     indexUrl: String,
     createUrl: String,
     markChequesAsPaidUrl: String,
@@ -42,6 +44,24 @@ const TYPES = {
     OUTGOING_TRANSFER: 'outgoing-transfer',
     CASH_PAYMENT: 'cash_payment',
     PAYABLE_CHEQUE: 'payable_cheque',
+};
+
+/**
+ * Each tab is now its own separate Inertia prop server-side (see
+ * CashExpenseController@index for why — only the active tab's data
+ * should be recomputed on a pagination/filter request, not all three).
+ * This just puts them back into the { [type]: {...} } shape the rest
+ * of this file already expects, so nothing else below needs to change.
+ */
+const tabs = computed(() => ({
+    [TYPES.OUTGOING_TRANSFER]: props.outgoingTransferTab,
+    [TYPES.CASH_PAYMENT]: props.cashPaymentTab,
+    [TYPES.PAYABLE_CHEQUE]: props.payableChequeTab,
+}));
+const TAB_PROP_NAMES = {
+    [TYPES.OUTGOING_TRANSFER]: 'outgoingTransferTab',
+    [TYPES.CASH_PAYMENT]: 'cashPaymentTab',
+    [TYPES.PAYABLE_CHEQUE]: 'payableChequeTab',
 };
 
 const activeTab = ref(props.activeTab);
@@ -71,9 +91,9 @@ const columnLabels = {
 const bankNameColumns = ['bank_name'];
 /* ── Per-tab search + date range ─────────────────────────────────── */
 const filters = ref(
-    Object.fromEntries(Object.keys(props.tabs).map(type => [type, {
-        startDate: props.tabs[type].startDate,
-        endDate: props.tabs[type].endDate,
+    Object.fromEntries(Object.keys(tabs.value).map(type => [type, {
+        startDate: tabs.value[type].startDate,
+        endDate: tabs.value[type].endDate,
     }]))
 );
 const searchField = ref('partner_name');
@@ -97,12 +117,12 @@ function applyFilters(type) {
         endDate,
         field: searchField.value,
         value: searchValue.value,
-    }, { preserveState: true, preserveScroll: true });
+    }, { preserveState: true, preserveScroll: true, only: [TAB_PROP_NAMES[type]] });
 }
 
 function goToPage(url) {
     if (!url) return;
-    router.get(url, {}, { preserveState: true, preserveScroll: true });
+    router.get(url, {}, { preserveState: true, preserveScroll: true, only: [TAB_PROP_NAMES[activeTab.value]] });
 }
 
 /* ── Batch Mark As Paid (Outgoing Transfer, Payable Cheques) ──────── */
@@ -150,6 +170,7 @@ function destroyRow() {
 /* ── User comment / Odoo references modals ───────────────────────── */
 const commentTarget = ref(null);
 const odooRefTarget = ref(null);
+const odooErrorTarget = ref(null);
 </script>
 
 <template>
@@ -254,6 +275,7 @@ const odooRefTarget = ref(null);
                                     <td v-if="canUpdate || canDelete" class="px-3 py-3">
                                         <div class="flex items-center gap-2">
                                             <button v-if="row.user_comment" @click="commentTarget = row" class="cvr-action-btn" title="User Comment">💬</button>
+                                            <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Odoo Error">🐞</button>
                                             <button v-if="row.is_fully_integrated_with_odoo" @click="odooRefTarget = row" class="cvr-action-btn" title="Fully Integrated">👍</button>
                                             <Link v-if="canUpdate && row.edit_url" :href="row.edit_url" class="cvr-action-btn" title="Edit">✏️</Link>
                                             <button
@@ -328,6 +350,17 @@ const odooRefTarget = ref(null);
                     <p class="cvr-text-secondary whitespace-pre-wrap">{{ commentTarget.user_comment }}</p>
                     <div class="flex justify-end mt-4">
                         <button @click="commentTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Odoo error modal -->
+            <div v-if="odooErrorTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-md">
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Odoo Error</h2>
+                    <p class="cvr-text-secondary mb-4">{{ odooErrorTarget.odoo_error }}</p>
+                    <div class="flex justify-end mt-4">
+                        <button @click="odooErrorTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
                     </div>
                 </div>
             </div>

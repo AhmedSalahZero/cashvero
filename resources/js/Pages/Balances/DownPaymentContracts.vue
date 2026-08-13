@@ -20,14 +20,18 @@
  * silently "fixed" here without a decision from the project owner.
  */
 import { Link } from '@inertiajs/vue3';
+import { ref } from 'vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
 defineProps({
     title: String,
     currency: String,
     backUrl: String,
-    rows: Array, // [{ id, date_formatted, down_payment_amount_formatted, settlement_amount_formatted, net_amount_formatted, currency, contract_name, contract_amount_formatted, settlement_url }]
+    rows: Array, // [{ id, date_formatted, down_payment_amount_formatted, settlement_amount_formatted, net_amount_formatted, currency, contract_name, contract_amount_formatted, settlement_url, is_fully_integrated_with_odoo, odoo_reference_names, has_odoo_error, odoo_error, failed_settlement_errors }]
 });
+
+const odooRefTarget = ref(null);
+const odooErrorTarget = ref(null);
 </script>
 
 <template>
@@ -68,9 +72,13 @@ defineProps({
                             <td class="px-4 py-3 text-left cvr-text-primary">{{ row.contract_name || '-' }}</td>
                             <td class="px-4 py-3 text-right cvr-num">{{ row.contract_amount_formatted }}</td>
                             <td class="px-4 py-3 text-center">
-                                <Link :href="row.settlement_url" class="cvr-btn-copper px-3 py-1 rounded text-xs whitespace-nowrap" title="Start Settlement">
-                                    Start Settlement
-                                </Link>
+                                <div class="flex items-center justify-center gap-2">
+                                    <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Odoo Error">🐞</button>
+                                    <button v-if="row.is_fully_integrated_with_odoo" @click="odooRefTarget = row" class="cvr-action-btn" title="Fully Integrated">👍</button>
+                                    <Link :href="row.settlement_url" class="cvr-btn-copper px-3 py-1 rounded text-xs whitespace-nowrap" title="Start Settlement">
+                                        Start Settlement
+                                    </Link>
+                                </div>
                             </td>
                         </tr>
                         <tr v-if="rows.length === 0">
@@ -78,6 +86,36 @@ defineProps({
                         </tr>
                     </tbody>
                 </table>
+            </div>
+
+            <!-- Odoo error modal -->
+            <div v-if="odooErrorTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-md">
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Odoo Error</h2>
+                    <p v-if="odooErrorTarget.odoo_error" class="cvr-text-secondary mb-4">{{ odooErrorTarget.odoo_error }}</p>
+                    <template v-if="odooErrorTarget.failed_settlement_errors && odooErrorTarget.failed_settlement_errors.length">
+                        <p class="text-sm font-medium cvr-text-primary mb-2">Failed invoice settlements:</p>
+                        <ul class="list-disc pl-5 cvr-text-secondary mb-4">
+                            <li v-for="(err, i) in odooErrorTarget.failed_settlement_errors" :key="i">{{ err }}</li>
+                        </ul>
+                    </template>
+                    <div class="flex justify-end mt-4">
+                        <button @click="odooErrorTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Odoo references modal -->
+            <div v-if="odooRefTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-md">
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Odoo References</h2>
+                    <ul class="list-disc pl-5 cvr-text-secondary">
+                        <li v-for="(ref, i) in odooRefTarget.odoo_reference_names" :key="i">{{ ref }}</li>
+                    </ul>
+                    <div class="flex justify-end mt-4">
+                        <button @click="odooRefTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                    </div>
+                </div>
             </div>
         </div>
     </AppLayout>

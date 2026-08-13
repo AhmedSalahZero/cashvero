@@ -66,12 +66,49 @@ const activeCurrency = ref(props.selectedCurrencies[0] || props.currencyName || 
 const reportIntervalModel = ref(props.selectedReportInterval || 'weekly');
 const startDateModel = ref(props.cashFlowStartDate);
 const endDateModel = ref(props.cashFlowEndDate);
+/**
+ * CORRECTION (per follow-up, 2026-08-13): the previous version of this
+ * fix auto-recalculated End Date to Start Date + 3 months every time
+ * Start Date changed — per clarification, that's not wanted. The
+ * +3-months default should only apply once, on first entering the
+ * page with no dates chosen yet (that part is handled entirely on the
+ * backend, see viewForecastDashboard()) — once a Start Date is
+ * already set, End Date is the person's own to edit independently and
+ * should never be silently overwritten.
+ */
 
 function applyFilter() {
     router.get(props.filterUrl, {
         report_interval: reportIntervalModel.value,
         start_date: startDateModel.value,
         end_date: endDateModel.value,
+    }, { preserveScroll: true, preserveState: true });
+}
+
+/**
+ * FIX (per audit, 2026-08-13): the backend now only computes data for
+ * the active currency by default (previously it eagerly computed EVERY
+ * company currency's full Cash Flow report and Aging summary on every
+ * visit — the actual cause of this page's load delay). That means a
+ * currency pill you haven't clicked yet may genuinely have no data
+ * loaded — switching to it locally would just show empty charts. This
+ * checks for that and, only when needed, does a real page visit asking
+ * the server to compute that one currency — same one extra request a
+ * person would expect from clicking something new, instead of a
+ * silently blank chart. Already-loaded currencies (including the
+ * initial one) still switch instantly, no request at all.
+ */
+function switchCurrency(currency) {
+    const alreadyLoaded = props.cashFlowReport?.[currency] || props.dashboardResult?.invoices_aging?.CustomerInvoice?.[currency];
+    if (alreadyLoaded) {
+        activeCurrency.value = currency;
+        return;
+    }
+    router.get(props.filterUrl, {
+        report_interval: reportIntervalModel.value,
+        start_date: startDateModel.value,
+        end_date: endDateModel.value,
+        currencies: [currency],
     }, { preserveScroll: true, preserveState: true });
 }
 
@@ -178,7 +215,7 @@ function chequeChartData(modelType) {
                     :key="currency"
                     class="cvr-filter-pill"
                     :class="{ 'cvr-filter-pill-active': activeCurrency === currency }"
-                    @click="activeCurrency = currency"
+                    @click="switchCurrency(currency)"
                 >
                     {{ currency }}
                 </button>
@@ -203,13 +240,13 @@ function chequeChartData(modelType) {
                 <div v-for="modelType in invoiceTypesModels" :key="'inv-'+modelType" class="cvr-chart-card" style="border-top-color: var(--cvr-num-amber)">
                     <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ invoiceTypeLabels[modelType] || modelType }} Aging</h4>
                     <p class="text-xs cvr-text-muted mb-1">Past Due (left) · Current &amp; Coming Due (right)</p>
-                    <AgingDivergingBarChart :data="agingBarData(modelType)" :height="280" />
+                    <AgingDivergingBarChart :data="agingBarData(modelType)" :height="300" />
                 </div>
             </div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
                 <div v-for="modelType in invoiceTypesModels" :key="'chq-'+modelType" class="cvr-chart-card" style="border-top-color: var(--cvr-copper-bright)">
                     <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ invoiceTypeLabels[modelType] || modelType }} — Cheques Coming Due</h4>
-                    <DonutChart3D :data="chequeChartData(modelType)" :show-total="true" :height="260" />
+                    <DonutChart3D :data="chequeChartData(modelType)" :show-total="true" :height="300" />
                 </div>
             </div>
 

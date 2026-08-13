@@ -559,6 +559,18 @@ class InternalMoneyTransfer extends Model
 	{
 		return !$this->synced_with_odoo && $this->odoo_error_message ;
 	}
+	/**
+	 * Missing getter — hasOdooError() existed but nothing ever exposed
+	 * the actual message. Added per audit, 2026-08-13, alongside the
+	 * matching Vue error icon.
+	 */
+	public function getOdooError()
+	{
+		if ($this->hasOdooError()) {
+			return $this->odoo_error_message;
+		}
+		return '';
+	}
 	public function fullyIntegratedWithOdoo():bool
 	{
 		return !$this->hasOdooError() && count($this->getOdooReferenceNames()) ;

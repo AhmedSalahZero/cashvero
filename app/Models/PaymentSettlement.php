@@ -99,4 +99,22 @@ class PaymentSettlement extends Model
 		$id = $this->money_payment_id;
 			return MoneyPayment::find($id);
 	}
+	/**
+	 * Same pattern used everywhere else in the app (IsMoney,
+	 * InternalMoneyTransfer, BuyOrSellCurrency, Settlement, ...). Added
+	 * per request, 2026-08-13, alongside settleAdvanceWithInvoices()
+	 * now persisting failures onto individual settlement rows instead
+	 * of only flashing a one-time error message.
+	 */
+	public function hasOdooError():bool
+	{
+		return !$this->synced_with_odoo && $this->odoo_error_message;
+	}
+	public function getOdooError()
+	{
+		if ($this->hasOdooError()) {
+			return $this->odoo_error_message;
+		}
+		return '';
+	}
 }

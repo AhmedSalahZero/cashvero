@@ -50,7 +50,13 @@ function build() {
 
     chart = am4core.create(el.value, am4charts.XYChart);
     chart.logo.disabled = true;
-    chart.data = rows;
+    /**
+     * FIX (per request, 2026-08-13): round at the source rather than
+     * rely solely on amCharts' own "#,###" tooltip formatting — same
+     * reasoning as MultiLineChart.vue and DonutChart3D.vue. Math.round
+     * handles the negative (Past Due) values here correctly too.
+     */
+    chart.data = rows.map(r => ({ ...r, value: Math.round(Number(r.value)) }));
     chart.numberFormatter.numberFormat = '#,###';
     chart.paddingLeft = 0;
 

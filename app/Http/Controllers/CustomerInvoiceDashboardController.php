@@ -284,13 +284,32 @@ class CustomerInvoiceDashboardController extends Controller
 	}
     public function viewForecastDashboard(Company $company, Request $request)
     {
-		// Mirrors CashFlowReportController::result()'s own default range
-		// (today → today+1 month) exactly, purely so the Vue page can
-		// show the date range actually in effect — CashFlowReportController
-		// itself is left untouched, since it's shared, heavier report
-		// logic (Roadmap §3.4).
+		/**
+		 * FIX (per report, 2026-08-13): the dashboard's own Start/End
+		 * Date form fields already defaulted to today → +3 months
+		 * (previously +1 month, per the client's initial ask) — but
+		 * CashFlowReportController::result() below has its own,
+		 * completely separate default date range (buildSharedTimelineContext(),
+		 * still today → +1 month), and nothing here ever told it about
+		 * the 3-month range computed just below. On a fresh visit
+		 * (no start_date/end_date in the URL yet), that meant the form
+		 * fields showed 3 months while the actual chart was still
+		 * silently computed over only 1 — two different date ranges
+		 * disagreeing on the same page. Merging the computed dates into
+		 * the request here (only when not already present) makes both
+		 * sides agree, without touching CashFlowReportController's own
+		 * default logic at all — it still applies normally for any
+		 * other caller, this just makes sure THIS page's request always
+		 * carries an explicit date range before reaching it.
+		 */
 		$cashFlowStartDate = $request->get('start_date', now()->format('Y-m-d'));
-		$cashFlowEndDate = $request->get('end_date', Carbon::make($cashFlowStartDate)->addMonth()->format('Y-m-d'));
+		$cashFlowEndDate = $request->get('end_date', Carbon::make($cashFlowStartDate)->addMonths(3)->format('Y-m-d'));
+		if (! $request->has('start_date')) {
+			$request->merge(['start_date' => $cashFlowStartDate]);
+		}
+		if (! $request->has('end_date')) {
+			$request->merge(['end_date' => $cashFlowEndDate]);
+		}
 
 		$clientsWithContracts = Partner::onlyCompany($company->id)	->onlyCustomers()->onlyThatHaveCustomerContracts()->get();
 		$allCurrencies = getCurrenciesForSuppliersAndCustomers($company->id) ;
@@ -342,7 +361,25 @@ class CustomerInvoiceDashboardController extends Controller
 			 * * currency tab, so they must be computed separately per currency (the
 			 * * company-wide report above only covers $reportCurrentName).
 			 */
-			$selectedCurrenciesForCashFlowChart = $request->get('currencies', $allCurrencies);
+			/**
+			 * FIX (per audit, 2026-08-13): this used to default to
+			 * $allCurrencies — EVERY currency the company has ever
+			 * configured a safe/bank account in, not just the ones
+			 * actually relevant right now — meaning the full,
+			 * genuinely heavy CashFlowReportController::result() ran
+			 * once per currency, every single time this page loaded,
+			 * even for currencies nobody was looking at. Defaulting to
+			 * just the active report currency cuts that from N heavy
+			 * report runs to 1 on a normal visit; explicitly requesting
+			 * more via ?currencies[]=... (e.g. clicking a not-yet-loaded
+			 * currency pill — see Forecast.vue) still computes exactly
+			 * what's asked for, same as before. $selectedCurrencies
+			 * (the full list used for the currency PILL buttons
+			 * themselves, further down) is intentionally untouched —
+			 * people still see every currency as an option, this only
+			 * changes which ones get computed up front.
+			 */
+			$selectedCurrenciesForCashFlowChart = $request->filled('currencies') ? (array) $request->get('currencies') : [];
 			foreach ($selectedCurrenciesForCashFlowChart as $currencyNameForChart) {
 				if ($currencyNameForChart === $reportCurrentName || isset($cashFlowReport[$currencyNameForChart])) {
 					continue;
@@ -377,9 +414,24 @@ class CustomerInvoiceDashboardController extends Controller
 		
 		$agingDate = $request->get('aging_date',now()->format('Y-m-d'))  ;
         $selectedCurrencies = $request->get('currencies', $allCurrencies) ;
+		/**
+		 * FIX (per audit, 2026-08-13): same reasoning as the cash-flow
+		 * chart loop above — $selectedCurrencies itself is left
+		 * completely unchanged (it's also what the currency PILL
+		 * buttons render from, further down, so narrowing it would
+		 * have hidden currencies as options entirely, not just skipped
+		 * computing them). This new, separate, narrower list is what
+		 * actually drives the two heavy loops below instead — the
+		 * financial institutions lookup and, more importantly, the
+		 * Invoice/Cheque Aging summary (2 services × 2 invoice types ×
+		 * however many currencies — previously run for every company
+		 * currency on every visit, regardless of which one anyone was
+		 * actually looking at).
+		 */
+		$currenciesToCompute = $request->filled('currencies') ? (array) $request->get('currencies') : array_values(array_filter([$reportCurrentName]));
 
 		$financialInstitutionsByCurrency = [];
-		foreach ($selectedCurrencies as $currencyName) {
+		foreach ($currenciesToCompute as $currencyName) {
 			$financialInstitutionsByCurrency[$currencyName] = FinancialInstitution::onlyCompany($company->id)
 				->onlyHasMediumTermLoans($currencyName)
 				->get();
@@ -387,7 +439,7 @@ class CustomerInvoiceDashboardController extends Controller
 
 		
 		$allFinancialInstitutionIds = $company->financialInstitutions->pluck('id')->toArray(); 
-		foreach($selectedCurrencies as $currencyName)
+		foreach($currenciesToCompute as $currencyName)
 		{
 			foreach ($invoiceTypesModels as $modelType) {
 				/**
@@ -691,6 +743,17 @@ class CustomerInvoiceDashboardController extends Controller
 				'lc'=>$lcTypes
 			];
 		$financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->get();
+		/**
+		 * FIX (per audit, 2026-08-13): the per-bank loop below used to
+		 * call FinancialInstitution::find($id) fresh on every single
+		 * iteration — a classic N+1: one extra query per bank, every
+		 * currency, every LG/LC pass. $financialInstitutionBanks just
+		 * above already loads every bank for this company in one
+		 * query; keying it by id here means the loop can just look the
+		 * bank up in memory instead of asking the database again for
+		 * data it already has.
+		 */
+		$financialInstitutionsById = $financialInstitutionBanks->keyBy('id');
 		
 	
 		$currentDate = now()->format('Y-m-d') ;
@@ -705,6 +768,30 @@ class CustomerInvoiceDashboardController extends Controller
 		$selectedFinancialInstitutionBankIds = [];
 		
         $selectedCurrencies = $request->get('currencies', $allCurrencies) ;
+		/**
+		 * FIX (per audit, 2026-08-13): same reasoning as the Cash
+		 * Forecast dashboard fix — this used to default to EVERY
+		 * currency the company has ever configured, meaning the whole
+		 * nested LG/LC × bank × facility computation below (already a
+		 * lot of individual queries for just ONE currency — see the
+		 * FinancialInstitution::find() fix a few lines down) ran once
+		 * per currency, every visit, regardless of which one anyone
+		 * was actually looking at. $selectedCurrencies itself is left
+		 * completely unchanged — it's also what the currency PILL
+		 * buttons render from, further down, so narrowing it directly
+		 * would have hidden currencies as options entirely. This new,
+		 * separate, narrower list is what actually drives the
+		 * computation loop instead, defaulting to just the company's
+		 * main currency (mirroring the exact same default
+		 * LGLCStatus.vue's own activeCurrency already falls back to,
+		 * so the one currency computed by default is always the one
+		 * shown by default) — clicking a not-yet-loaded currency pill
+		 * (see LGLCStatus.vue's switchCurrency()) requests exactly
+		 * that one currency instead.
+		 */
+		$currenciesToCompute = $request->filled('currencies')
+			? (array) $request->get('currencies')
+			: array_values(array_filter([in_array($company->getMainFunctionalCurrency(), $allCurrencies, true) ? $company->getMainFunctionalCurrency() : ($allCurrencies[0] ?? null)]));
 		$source = $request->get('lgSource');
         $reports = [];
 		$canShowDashboardPerCurrency = [];
@@ -728,7 +815,7 @@ class CustomerInvoiceDashboardController extends Controller
 			$currentStatementTableName = $lgOrLcOptionsArr['statement_table_name'];
 
 			$lgOrLcTypes = $typesForLgAndLc[$currentLgOrLcType];
-			foreach ($selectedCurrencies as $currencyName) {
+			foreach ($currenciesToCompute as $currencyName) {
 				
 				
 				$financialInstitutionBankIds = [
@@ -762,7 +849,7 @@ class CustomerInvoiceDashboardController extends Controller
 				
 				foreach ($selectedFinancialInstitutionBankIds as $financialInstitutionBankId) {
 					
-					$currentFinancialInstitution = FinancialInstitution::find($financialInstitutionBankId);
+					$currentFinancialInstitution = $financialInstitutionsById->get($financialInstitutionBankId);
 					$statementTableFullClassName::getDashboardOutstandingPerFinancialInstitutionFormattedData($charts,$company,$currencyName , $date ,$financialInstitutionBankId,$currentFinancialInstitution->getName(),$source,$lgOrLcTypes);
 						
 					$lastLetterOfGuaranteeOrCreditFacilities = DB::table($letterOfFacilityTableName)

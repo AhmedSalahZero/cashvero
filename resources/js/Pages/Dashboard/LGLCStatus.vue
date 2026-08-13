@@ -55,6 +55,27 @@ function applyFilter() {
     router.get(props.filterUrl, { date: filterDate.value }, { preserveScroll: true, preserveState: true });
 }
 
+/**
+ * FIX (per audit, 2026-08-13): the backend now only computes the LG/LC
+ * dashboard's figures for the active currency by default (previously
+ * it eagerly computed EVERY company currency's full nested LG/LC × bank
+ * × facility breakdown on every visit — the actual cause of this
+ * page's load delay). A currency pill you haven't clicked yet may
+ * genuinely have no data loaded, so switching to it locally would just
+ * show empty cards. This checks reports (present for a currency the
+ * moment it's been computed, for either LG or LC) and, only when
+ * needed, does a real page visit asking the server to compute that one
+ * currency. Already-loaded currencies still switch instantly.
+ */
+function switchCurrency(currency) {
+    const alreadyLoaded = props.reports?.lg?.[currency] || props.reports?.lc?.[currency];
+    if (alreadyLoaded) {
+        activeCurrency.value = currency;
+        return;
+    }
+    router.get(props.filterUrl, { date: filterDate.value, currencies: [currency] }, { preserveScroll: true, preserveState: true });
+}
+
 function fmt(value) {
     const n = Number(value || 0);
     return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
@@ -138,7 +159,7 @@ function tableRows(section) {
                     :key="currency"
                     class="cvr-filter-pill"
                     :class="{ 'cvr-filter-pill-active': activeCurrency === currency }"
-                    @click="activeCurrency = currency"
+                    @click="switchCurrency(currency)"
                 >
                     {{ currency }}
                 </button>

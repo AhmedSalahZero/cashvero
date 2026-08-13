@@ -108,53 +108,6 @@ class InternalMoneyTransferController
             ];
         }
 
-        $bankToBankStartDate = $filterDates[InternalMoneyTransfer::BANK_TO_BANK]['startDate'];
-        $bankToBankEndDate = $filterDates[InternalMoneyTransfer::BANK_TO_BANK]['endDate'];
-        $bankToBankInternalMoneyTransfers = $company->bankToBankInternalMoneyTransfers()
-            ->whereBetween('transfer_date', [$bankToBankStartDate, $bankToBankEndDate]);
-        $bankToBankInternalMoneyTransfers = $this->applyTypeFilters($bankToBankInternalMoneyTransfers, $request, InternalMoneyTransfer::BANK_TO_BANK, $currentType, ['from_account_number', 'to_account_number']);
-        $bankToBankInternalMoneyTransfers = $bankToBankInternalMoneyTransfers
-            ->orderByDesc('transfer_date')
-            ->paginate($paginationPerPage, ['*'], 'bankToBankInternalMoneyTransfersPage')
-            ->withQueryString();
-
-        $safeToBankStartDate = $filterDates[InternalMoneyTransfer::SAFE_TO_BANK]['startDate'];
-        $safeToBankEndDate = $filterDates[InternalMoneyTransfer::SAFE_TO_BANK]['endDate'];
-        $safeToBankInternalMoneyTransfers = $company->safeToBankInternalMoneyTransfers()
-            ->whereBetween('transfer_date', [$safeToBankStartDate, $safeToBankEndDate]);
-        $safeToBankInternalMoneyTransfers = $this->applyTypeFilters($safeToBankInternalMoneyTransfers, $request, InternalMoneyTransfer::SAFE_TO_BANK, $currentType, ['to_account_number']);
-        $safeToBankInternalMoneyTransfers = $safeToBankInternalMoneyTransfers
-            ->orderByDesc('transfer_date')
-            ->paginate($paginationPerPage, ['*'], 'safeToBankInternalMoneyTransfersPage')
-            ->withQueryString();
-
-        $bankToSafeStartDate = $filterDates[InternalMoneyTransfer::BANK_TO_SAFE]['startDate'];
-        $bankToSafeEndDate = $filterDates[InternalMoneyTransfer::BANK_TO_SAFE]['endDate'];
-        $bankToSafeInternalMoneyTransfers = $company->bankToSafeInternalMoneyTransfers()
-            ->whereBetween('transfer_date', [$bankToSafeStartDate, $bankToSafeEndDate]);
-        $bankToSafeInternalMoneyTransfers = $this->applyTypeFilters($bankToSafeInternalMoneyTransfers, $request, InternalMoneyTransfer::BANK_TO_SAFE, $currentType, ['from_account_number']);
-        $bankToSafeInternalMoneyTransfers = $bankToSafeInternalMoneyTransfers
-            ->orderByDesc('transfer_date')
-            ->paginate($paginationPerPage, ['*'], 'bankToSafeInternalMoneyTransfersPage')
-            ->withQueryString();
-
-        $safeToSafeStartDate = $filterDates[InternalMoneyTransfer::SAFE_TO_SAFE]['startDate'];
-        $safeToSafeEndDate = $filterDates[InternalMoneyTransfer::SAFE_TO_SAFE]['endDate'];
-        $safeToSafeInternalMoneyTransfers = $company->safeToSafeInternalMoneyTransfers()
-            ->whereBetween('transfer_date', [$safeToSafeStartDate, $safeToSafeEndDate]);
-        $safeToSafeInternalMoneyTransfers = $this->applyTypeFilters($safeToSafeInternalMoneyTransfers, $request, InternalMoneyTransfer::SAFE_TO_SAFE, $currentType, []);
-        $safeToSafeInternalMoneyTransfers = $safeToSafeInternalMoneyTransfers
-            ->orderByDesc('transfer_date')
-            ->paginate($paginationPerPage, ['*'], 'safeToSafeInternalMoneyTransfersPage')
-            ->withQueryString();
-
-        $models = [
-            InternalMoneyTransfer::BANK_TO_BANK => $bankToBankInternalMoneyTransfers,
-            InternalMoneyTransfer::SAFE_TO_BANK => $safeToBankInternalMoneyTransfers,
-            InternalMoneyTransfer::BANK_TO_SAFE => $bankToSafeInternalMoneyTransfers,
-            InternalMoneyTransfer::SAFE_TO_SAFE => $safeToSafeInternalMoneyTransfers,
-        ];
-
         $mapRow = function (InternalMoneyTransfer $model) use ($company) {
             return [
                 'id' => $model->id,
@@ -175,27 +128,87 @@ class InternalMoneyTransferController
                 'to_branch_name' => $model->getToBranchName(),
                 'user_comment' => $model->hasComment() ? $model->getUserComment() : null,
                 'is_fully_integrated_with_odoo' => $company->hasOdooIntegrationCredentials() && $model->fullyIntegratedWithOdoo(),
+                'has_odoo_error' => (bool) $model->hasOdooError(),
+                'odoo_error' => $model->getOdooError(),
                 'odoo_reference_names' => $model->getOdooReferenceNames(),
                 'edit_url' => route('internal-money-transfers.edit', ['company' => $company->id, 'type' => $model->getType(), 'internal_money_transfer' => $model->id]),
                 'delete_url' => route('internal-money-transfers.destroy', ['company' => $company->id, 'type' => $model->getType(), 'internal_money_transfer' => $model->id]),
             ];
         };
 
-        $tabs = [];
-        foreach ($models as $type => $paginator) {
-            $tabs[$type] = [
+        /**
+         * FIX (per audit, 2026-08-13): two separate real issues fixed
+         * together here, same as Cash Expense (see that controller's
+         * docblock for the general reasoning):
+         *
+         *   1. All four tabs used to be fully queried and row-mapped on
+         *      EVERY request — including a plain "next page" click that
+         *      only concerns ONE tab. Each tab's work now lives in its
+         *      own closure, only actually run when Inertia needs that
+         *      specific prop (always on a full page load, so tab
+         *      switching stays instant/client-side exactly as before —
+         *      only pagination/filter requests now skip the other
+         *      three, via `only` in Index.vue's goToPage()/applyFilters()).
+         *
+         *   2. This controller never eager-loaded fromBank/toBank at
+         *      all (unlike its close sibling BuyOrSellCurrenciesController,
+         *      which already did) — every row's bank name was a
+         *      separate, individually-lazy-loaded query. Added the same
+         *      ->with([...]) that controller already uses.
+         */
+        $configByType = [
+            InternalMoneyTransfer::BANK_TO_BANK => [
+                'relation' => 'bankToBankInternalMoneyTransfers',
+                'page' => 'bankToBankInternalMoneyTransfersPage',
+                'searchable' => ['from_account_number', 'to_account_number'],
+            ],
+            InternalMoneyTransfer::SAFE_TO_BANK => [
+                'relation' => 'safeToBankInternalMoneyTransfers',
+                'page' => 'safeToBankInternalMoneyTransfersPage',
+                'searchable' => ['to_account_number'],
+            ],
+            InternalMoneyTransfer::BANK_TO_SAFE => [
+                'relation' => 'bankToSafeInternalMoneyTransfers',
+                'page' => 'bankToSafeInternalMoneyTransfersPage',
+                'searchable' => ['from_account_number'],
+            ],
+            InternalMoneyTransfer::SAFE_TO_SAFE => [
+                'relation' => 'safeToSafeInternalMoneyTransfers',
+                'page' => 'safeToSafeInternalMoneyTransfersPage',
+                'searchable' => [],
+            ],
+        ];
+
+        $buildTab = function (string $type) use ($company, $request, $currentType, $filterDates, $paginationPerPage, $mapRow, $configByType) {
+            $config = $configByType[$type];
+            $startDate = $filterDates[$type]['startDate'];
+            $endDate = $filterDates[$type]['endDate'];
+
+            $query = $company->{$config['relation']}()
+                ->whereBetween('transfer_date', [$startDate, $endDate]);
+            $query = $this->applyTypeFilters($query, $request, $type, $currentType, $config['searchable']);
+            $paginator = $query
+                ->with(['fromBank.bank', 'fromAccountType', 'toBank.bank', 'toAccountType', 'fromBranch', 'toBranch'])
+                ->orderByDesc('transfer_date')
+                ->paginate($paginationPerPage, ['*'], $config['page'])
+                ->withQueryString();
+
+            return [
                 'label' => $this->allTypes()[$type],
                 'rows' => $paginator->through($mapRow),
-                'startDate' => $filterDates[$type]['startDate'],
-                'endDate' => $filterDates[$type]['endDate'],
+                'startDate' => $startDate,
+                'endDate' => $endDate,
             ];
-        }
+        };
 
         return \Inertia\Inertia::render('InternalMoneyTransfer/Index', [
             'company' => ['id' => $company->id],
             'activeTab' => $currentType,
             'allTypes' => $this->allTypes(),
-            'tabs' => $tabs,
+            'bankToBankTab' => fn () => $buildTab(InternalMoneyTransfer::BANK_TO_BANK),
+            'safeToBankTab' => fn () => $buildTab(InternalMoneyTransfer::SAFE_TO_BANK),
+            'bankToSafeTab' => fn () => $buildTab(InternalMoneyTransfer::BANK_TO_SAFE),
+            'safeToSafeTab' => fn () => $buildTab(InternalMoneyTransfer::SAFE_TO_SAFE),
             'searchValue' => $request->get('value'),
             'canCreate' => hasAuthFor('create internal money transfer'),
             'canUpdate' => hasAuthFor('update internal money transfer'),

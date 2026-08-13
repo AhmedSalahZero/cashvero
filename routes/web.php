@@ -714,6 +714,7 @@ Route::middleware([])->group(function () {
                     Route::post('mark-outgoing-transfer-as-paid', 'MoneyPaymentController@markOutgoingTransfersAsPaid')->name('outgoing.transfer.mark.as.paid');
                     Route::get('get-supplier-invoices', 'SupplierInvoicesController@getSupplierInvoicesForSupplier')->name('get.supplier.invoices');
                     Route::get('get-suppliers-based-on-currency/{currencyName}', 'MoneyPaymentController@getSuppliersBasedOnCurrency');
+                    Route::get('get-partners-based-on-type/{currencyName}', 'MoneyPaymentController@getPartnersBasedOnCurrency');
                     Route::get('get-current-end-balance-of-current-account', 'MoneyPaymentController@getCashInSafeStatementEndBalance')->name('get.current.end.balance.of.cash.in.safe.statement');
                     // cash expense
                     Route::get('get-exchange-rate-for-date-and-currencies', 'ForeignExchangeRateController@getExchangeRate')->name('get.exchange.rate.for.date.and.currencies');

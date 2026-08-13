@@ -51,7 +51,27 @@ function build() {
 
     chart = am4core.create(el.value, am4charts.XYChart);
     chart.logo.disabled = true;
-    chart.data = props.data;
+    /**
+     * FIX (per request, 2026-08-13): relying on amCharts' own
+     * "#,###" number format to hide decimals turned out not to be
+     * reliable on its own (confirmed on the Aging report — see
+     * Aging/Result.vue) — long floating-point tails from upstream
+     * arithmetic could still leak through in places like the cursor's
+     * value-axis tooltip. Rounding every numeric field here, once, at
+     * the source, guarantees clean whole numbers everywhere this
+     * chart displays a value, regardless of how amCharts formats
+     * things — applied generally since this component is shared
+     * across the whole Dashboard, not just one page.
+     */
+    chart.data = (props.data || []).map(row => {
+        const rounded = { ...row };
+        Object.keys(rounded).forEach(key => {
+            if (key !== 'date' && typeof rounded[key] === 'number') {
+                rounded[key] = Math.round(rounded[key]);
+            }
+        });
+        return rounded;
+    });
     chart.dateFormatter.inputDateFormat = props.dateFormat;
     // Whole numbers everywhere the chart prints one — axis labels, axis
     // tooltips, legend values. Without this amCharts falls back to raw

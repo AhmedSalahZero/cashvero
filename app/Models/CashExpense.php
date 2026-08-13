@@ -229,6 +229,19 @@ class CashExpense extends Model  implements IHaveCreditOverdraftStatement
 	{
 		return $this->getPaidAmount();
 	}
+	/**
+	 * Same pattern as MoneyPayment::getAmountInReceivingCurrency() — for
+	 * a straightforward payment (not a multi-currency invoice
+	 * settlement), the paid amount already IS in the receiving/payment
+	 * currency, so this is just an alias of getAmount(). Needed because
+	 * IsMoneyOut::markPayableChequeAsPaidInOdoo() calls this on every
+	 * "money model" in $items, and for CashExpense that's always $this
+	 * itself (no settlements relation).
+	 */
+	public function getAmountInReceivingCurrency()
+	{
+		return $this->getAmount();
+	}
 	
 	public function getPayableChequeDueDate(){
 		return $this->payableCheque ? $this->payableCheque->getDueDate(): null;
@@ -764,9 +777,26 @@ class CashExpense extends Model  implements IHaveCreditOverdraftStatement
 		}
 		return $references ;
 	}
+	/**
+	 * Same pattern as IsMoney / InternalMoneyTransfer / BuyOrSellCurrency
+	 * — CashExpense had neither of these at all, so "fully integrated"
+	 * could never actually reflect a failed sync. Added per audit,
+	 * 2026-08-13, alongside the matching Vue error icon.
+	 */
+	public function hasOdooError():bool
+	{
+		return !$this->synced_with_odoo && $this->odoo_error_message;
+	}
+	public function getOdooError()
+	{
+		if ($this->hasOdooError()) {
+			return $this->odoo_error_message;
+		}
+		return '';
+	}
 	public function fullyIntegratedWithOdoo()
 	{
-		return count($this->getOdooReferenceNames());
+		return !$this->hasOdooError() && count($this->getOdooReferenceNames());
 	}
 	public function isChequeAndNotCustomerOrSupplier()
 	{
@@ -792,7 +822,75 @@ class CashExpense extends Model  implements IHaveCreditOverdraftStatement
 	public function getDeliveryDate()
 	{
 		return $this->getDate();
-	}public function isInvoiceSettlementWithDownPayment()
+	}
+	/**
+	 * Same shape as IsMoney's getReceivingOrPaymentMoneyDate() /
+	 * getReceivingOrPaymentMoneyDateFormatted() (used by MoneyPayment
+	 * and MoneyReceived), so the Odoo sync code (OdooPayment) can call
+	 * either method on any "money model" it's handed without caring
+	 * which one it actually got. CashExpense only uses the IsMoneyOut
+	 * trait, not IsMoney, so it never had these — added directly here
+	 * instead of to IsMoneyOut, since MoneyPayment uses both IsMoney
+	 * and IsMoneyOut together and duplicating the method name there
+	 * would collide with the one it already gets from IsMoney.
+	 * CashExpense is always "money out", so no MoneyReceived branch is
+	 * needed here — it always resolves to its own delivery/payment date.
+	 */
+	public function getReceivingOrPaymentMoneyDate(): string
+	{
+		return $this->getDeliveryDate();
+	}
+	public function getReceivingOrPaymentMoneyDateFormatted(): string
+	{
+		return $this->getPaymentDateFormatted();
+	}
+	/**
+	 * Same reasoning as getReceivingOrPaymentMoneyDate() above — this is
+	 * the CashExpense equivalent of IsMoney's getInboundOrOutbound().
+	 * CashExpense is always money leaving the company, so this never
+	 * needs the MoneyReceived branch IsMoney has.
+	 */
+	public function getInboundOrOutbound(): string
+	{
+		return 'outbound';
+	}
+	/**
+	 * CashExpense equivalent of IsMoney's getPaymentMethodLineId().
+	 * Reuses CashExpense's own getFinancialInstitution() / getAccountTypeId()
+	 * / getAccountNumber(), which already resolve correctly for both
+	 * Outgoing Transfer and Payable Cheque (see those methods above) —
+	 * so this doesn't need to branch on payableCheque vs outgoingTransfer
+	 * separately the way IsMoney's version does for MoneyPayment.
+	 */
+	public function getPaymentMethodLineId()
+	{
+		if ($this->isCashPayment()) {
+			$branch = $this->cashPaymentDeliveryBranch();
+			return $branch ? (int) $branch->getOdooOutboundTransferPaymentMethodId() : null;
+		}
+		if ($this->isOutgoingTransfer() || $this->isPayableCheque()) {
+			$financialInstitution = $this->getFinancialInstitution();
+			if (! $financialInstitution) {
+				return null;
+			}
+			$key = $this->isPayableCheque() ? 'odoo_outbound_cheque_payment_method_id' : 'odoo_outbound_transfer_payment_method_id';
+			return (int) $financialInstitution->getOdooPaymentIds($this->getAccountTypeId(), $this->getAccountNumber())[$key];
+		}
+		return null;
+	}
+	/**
+	 * CashExpense equivalent of IsMoney's generateDownPaymentMessage().
+	 * CashExpense has no partner_type / down-payment concept of its own
+	 * (isInvoiceSettlementWithDownPayment() above always returns false),
+	 * so this is the simple "Paid To <category>" case only — the
+	 * down-payment-specific branches in IsMoney's version can never
+	 * apply here.
+	 */
+	public function generateDownPaymentMessage(): string
+	{
+		return __('Paid') . ' ' . $this->getExpenseCategoryName();
+	}
+	public function isInvoiceSettlementWithDownPayment()
 	{
 		return false;
 	}

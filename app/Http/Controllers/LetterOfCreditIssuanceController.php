@@ -123,6 +123,13 @@ class LetterOfCreditIssuanceController
 {
     use GeneralFunctions;
 
+    /**
+     * No longer called from index() (see that method's docblock —
+     * replaced with a real DB query since this operated on an
+     * already-fully-loaded Collection). Left in place, unused, rather
+     * than deleted, since nothing else in this class references it and
+     * removing it isn't necessary for this fix.
+     */
     protected function applyFilter(Request $request, Collection $collection, ?string $filterStartDate = null, ?string $filterEndDate = null): Collection
     {
         if (!count($collection)) {
@@ -277,35 +284,88 @@ class LetterOfCreditIssuanceController
     }
 
     /**
-     * The main "LC Issuance" list — 3 tabs by LC type. Unlike LG
-     * Issuance, the ORIGINAL has no pagination at all here — every
-     * row for every LC type is already queried on every request, only
-     * filtering the active tab server-side. Matched exactly.
+     * The main "LC Issuance" list — 3 tabs by LC type.
+     *
+     * FIX (per audit, 2026-08-13): the ORIGINAL genuinely had no
+     * pagination at all here — confirmed deliberate (see the removed
+     * comment this docblock used to have), not a migration mistake —
+     * but it means every LC record the company has ever issued, for
+     * ALL 3 types, was loaded into memory and fully built into a row
+     * (including a couple of real per-row queries inside buildRow(),
+     * still true after this fix — see that method) on every single
+     * visit to this page, and that only gets worse as LC history
+     * grows. Same underlying problem as Cash Expense / Internal Money
+     * Transfer / Buy-Sell Currencies (already fixed), just more severe
+     * here since there was no pagination boundary of any kind.
+     *
+     * Now uses real database pagination, one tab per Inertia prop
+     * (only the active tab's page of rows is ever built), same
+     * pattern as those other three pages. Switching tabs client-side
+     * still works instantly on the first page load, since all three
+     * tabs' first page still arrive together — only page-turning
+     * within a tab now scopes down to just that tab (see
+     * goToPage()/applyFilters() in Index.vue).
+     *
+     * NOT changed in this pass: buildRow() itself still runs a couple
+     * of real per-row queries (a SupplierInvoice lookup and a
+     * FinancialInstitutionAccount lookup, both needed for that row's
+     * "Mark As Paid" modal). Real pagination bounds this to ~15-20
+     * rows per request instead of a company's entire LC history, which
+     * is the large majority of the win — but those two queries per
+     * visible row are a smaller, separate opportunity left for a
+     * follow-up if it's still worth chasing after this.
      *
      * ✅ MIGRATED to Vue + Inertia. Renders
      * resources/js/Pages/LetterOfCreditIssuance/Index.vue.
      */
     public function index(Company $company, Request $request)
     {
-        $company->load('letterOfCreditIssuances.financialInstitutionBank', 'letterOfCreditIssuances.beneficiary');
-
+        $paginationPerPage = GeneralFunctions::getPaginationLimit();
         $numberOfMonthsBetweenEndDateAndStartDate = 18;
         $activeLcType = $request->get('active', LcTypes::SIGHT_LC);
         $filterDates = [];
-        $tabs = [];
         foreach (getLcTypes() as $type => $typeNameFormatted) {
             $startDate = $request->has('startDate') ? $request->input('startDate.'.$type) : now()->subMonths($numberOfMonthsBetweenEndDateAndStartDate)->format('Y-m-d');
             $endDate = $request->has('endDate') ? $request->input('endDate.'.$type) : now()->format('Y-m-d');
             $filterDates[$type] = ['startDate' => $startDate, 'endDate' => $endDate];
-
-            $models = $company->letterOfCreditIssuances->where('lc_type', $type);
-            if ($type == $activeLcType) {
-                $models = $this->applyFilter($request, $models, $startDate, $endDate);
-            }
-            $tabs[$type] = [
-                'rows' => $models->map(fn (LetterOfCreditIssuance $lc) => $this->buildRow($lc, $company))->values(),
-            ];
         }
+
+        $pageParamByType = [
+            LcTypes::SIGHT_LC => 'sightLcPage',
+            LcTypes::DEFERRED => 'deferredPage',
+            LcTypes::CASH_AGAINST_DOCUMENT => 'cashAgainstDocumentPage',
+        ];
+
+        $buildTab = function (string $type) use ($company, $request, $activeLcType, $filterDates, $paginationPerPage, $pageParamByType) {
+            $startDate = $filterDates[$type]['startDate'];
+            $endDate = $filterDates[$type]['endDate'];
+
+            $query = $company->letterOfCreditIssuances()
+                ->with(['financialInstitutionBank', 'beneficiary', 'expenses'])
+                ->where('lc_type', $type)
+                ->whereDate('issuance_date', '>=', $startDate)
+                ->whereDate('issuance_date', '<=', $endDate);
+
+            // Search only ever applies to whichever tab is actually
+            // active — matches the original's own guard exactly
+            // (searchField is one of only 2 real columns offered by
+            // Index.vue's dropdown: transaction_name, lc_code).
+            if ($type === $activeLcType) {
+                $searchFieldName = $request->get('field');
+                $value = $request->get('value');
+                if ($request->has('value') && $searchFieldName) {
+                    $query->where($searchFieldName, 'like', '%'.$value.'%');
+                }
+            }
+
+            $paginator = $query->orderByDesc('id')
+                ->paginate($paginationPerPage, ['*'], $pageParamByType[$type])
+                ->withQueryString();
+
+            return [
+                'rows' => $paginator->through(fn (LetterOfCreditIssuance $lc) => $this->buildRow($lc, $company)),
+            ];
+        };
 
         return \Inertia\Inertia::render('LetterOfCreditIssuance/Index', [
             'company' => ['id' => $company->id],
@@ -316,7 +376,9 @@ class LetterOfCreditIssuanceController
                 LetterOfCreditIssuance::LC_FACILITY => route('create.letter.of.credit.issuance', ['company' => $company->id, 'source' => LetterOfCreditIssuance::LC_FACILITY]),
                 LetterOfCreditIssuance::HUNDRED_PERCENTAGE_CASH_COVER => route('create.letter.of.credit.issuance', ['company' => $company->id, 'source' => LetterOfCreditIssuance::HUNDRED_PERCENTAGE_CASH_COVER]),
             ],
-            'tabs' => $tabs,
+            'sightLcTab' => fn () => $buildTab(LcTypes::SIGHT_LC),
+            'deferredTab' => fn () => $buildTab(LcTypes::DEFERRED),
+            'cashAgainstDocumentTab' => fn () => $buildTab(LcTypes::CASH_AGAINST_DOCUMENT),
             /**
              * Facility Renewal work uncovered this: the "Allocate
              * Payment To Customer Contract" table (client-flagged,

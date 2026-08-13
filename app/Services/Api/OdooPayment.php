@@ -831,6 +831,18 @@ class OdooPayment
                     );
                     // Handle success
                 } catch (Exception $e) {
+                    /**
+                     * FIX (per audit, 2026-08-13): chequeCollection()'s
+                     * identical reconciliation step (a few hundred lines
+                     * up) flashes this failure to the user as well as
+                     * logging it — this copy in chequePayment() was only
+                     * logging it, so a reconciliation failure here was
+                     * invisible on screen even though the exact same
+                     * failure is visible when it happens on the
+                     * collection side. Brought in line with that.
+                     */
+                    session()->flash('fail', $e->getMessage());
+
                     // Log or handle error
                     Log::error('Odoo reconciliation failed: ' . $e->getMessage());
                 }
@@ -1554,10 +1566,22 @@ public function transferAdvanceToReceivableOrPayable(int $odooCurrencyId , float
             [[$newMoveId]]
         );
 
+        /**
+         * The readable reference (e.g. "TA/2026/08/0002") is only
+         * finalized by Odoo once the move is posted — draft moves
+         * commonly show "/" as their name. Read it back after posting
+         * so callers (settleAdvanceWithInvoices) can show the person
+         * something meaningful instead of just the raw internal id.
+         * Added per request, 2026-08-13.
+         */
+        $postedMove = $this->execute('account.move', 'read', [[$newMoveId], ['name']]);
+        $moveReference = $postedMove[0]['name'] ?? null;
+
         return [
             'success' => true,
             'message' => 'Journal entry created successfully',
             'move_id' => $newMoveId,
+            'reference' => $moveReference,
             'transfer_amount' => $amountInCurrency,
             'is_customer' => $isCustomer
         ];
@@ -1989,6 +2013,20 @@ public function settleAdvanceWithInvoices(int $odooCurrencyId, float $exchangeRa
             );
             
             if (!$transferResult['success']) {
+                /**
+                 * FIX (per request, 2026-08-13): this failure used to
+                 * only ever exist as a one-time flash message and this
+                 * in-memory $results array — nothing was saved on the
+                 * settlement row itself, so there was no way to see
+                 * later which invoice failed or why. $settlement is the
+                 * actual local row (already saved before any Odoo call
+                 * runs — see storeDownPaymentSettlement()), so this is
+                 * safe to update here.
+                 */
+                $settlement->update([
+                    'synced_with_odoo' => false,
+                    'odoo_error_message' => $transferResult['message'],
+                ]);
                 $results[] = [
                     'invoice_id' => $invoiceId,
                     'amount' => $amountInCurrency,
@@ -2000,6 +2038,7 @@ public function settleAdvanceWithInvoices(int $odooCurrencyId, float $exchangeRa
             }
 
             $transferMoveId = $transferResult['move_id'];
+            $transferReference = $transferResult['reference'] ?? null;
             $transferMoveIds[] = $transferMoveId;
 
             // Step 2: Reconcile transfer with invoice
@@ -2010,16 +2049,35 @@ public function settleAdvanceWithInvoices(int $odooCurrencyId, float $exchangeRa
             );
             
             if ($invoiceReconcileResult['success']) {
-				$settlement->update(['odoo_move_id'=>$transferMoveId]);
+				$settlement->update([
+					'odoo_move_id'=>$transferMoveId,
+					'odoo_reference'=>$transferReference,
+					'synced_with_odoo'=>true,
+					'odoo_error_message'=>null,
+				]);
 				
                 $totalSettled += $amountInCurrency;
                 $results[] = [
                     'invoice_id' => $invoiceId,
                     'amount' => $amountInCurrency,
                     'status' => 'success',
-                    'transfer_move_id' => $transferMoveId
+                    'transfer_move_id' => $transferMoveId,
+                    'transfer_reference' => $transferReference,
                 ];
             } else {
+                /**
+                 * The transfer journal entry itself was created fine
+                 * (so its reference is real and worth keeping), but the
+                 * reconciliation against this specific invoice failed —
+                 * still a failure overall, so synced_with_odoo stays
+                 * false with the real reason recorded.
+                 */
+                $settlement->update([
+                    'odoo_move_id'=>$transferMoveId,
+                    'odoo_reference'=>$transferReference,
+                    'synced_with_odoo' => false,
+                    'odoo_error_message' => $invoiceReconcileResult['message'],
+                ]);
                 $results[] = [
                     'invoice_id' => $invoiceId,
                     'amount' => $amountInCurrency,
@@ -2039,10 +2097,41 @@ public function settleAdvanceWithInvoices(int $odooCurrencyId, float $exchangeRa
                 $isCustomer
             );
         }
-		
+
+        /**
+         * FIX (per audit, 2026-08-13): this used to always return
+         * 'success' => true here regardless of what actually happened
+         * in $results above — so if every single invoice match failed
+         * against Odoo, the caller (DownPaymentContractsController)
+         * only checks this top-level flag, saw success === true, and
+         * told the user "Data Store Successfully" even though nothing
+         * was actually settled in Odoo. Now this correctly reflects
+         * whether any invoice in the batch failed, with a message that
+         * says so — the per-invoice detail in $results (already
+         * correct) is unchanged.
+         */
+        $failedCount = count(array_filter($results, fn ($r) => $r['status'] === 'failed'));
+        $allSucceeded = $failedCount === 0;
+
+        if (! $allSucceeded) {
+            $message = $failedCount === count($results)
+                ? 'Advance settlement failed for all matched invoices'
+                : sprintf('Advance settlement partially failed (%d of %d invoice(s) failed)', $failedCount, count($results));
+
+            Log::error('Odoo advance settlement had failures', [
+                'advance_move_id' => $advanceMoveId,
+                'is_customer' => $isCustomer,
+                'failed_count' => $failedCount,
+                'total_count' => count($results),
+                'settlements' => $results,
+            ]);
+        } else {
+            $message = 'Advance settlement completed';
+        }
+
 		return [
-            'success' => true,
-            'message' => 'Advance settlement completed',
+            'success' => $allSucceeded,
+            'message' => $message,
             'total_settled' => $totalSettled,
             'settlements' => $results,
      //       'unreconcile_result' => $unreconcileResult,

@@ -9,28 +9,46 @@ const props = defineProps({
     filterDates: Object,
     lcTypes: Object,     // { 'sight-lc': 'Sight LC', ... }
     createUrls: Object,  // { 'lc-facility': url, 'hundred-percentage-cash-cover': url }
-    tabs: Object,        // { 'sight-lc': { rows: [...] }, ... } — all loaded eagerly, matches original (no pagination in the original controller)
+    sightLcTab: Object,        // { rows: paginator }
+    deferredTab: Object,
+    cashAgainstDocumentTab: Object,
     customersWithContracts: Array, // [{id, name, contracts: [{id, name, code, amount}]}]
     navUrls: Object,
 });
 
-/*
- * Unlike LG Issuance, the original LC Issuance index() has no
- * pagination at all — it queries and returns every row for all 3 LC
- * types on every request, filtering only the active tab server-side.
- * Matched here exactly: no on-demand tab fetching needed, since
- * everything is already loaded up front.
+/**
+ * Each tab is now its own separate Inertia prop server-side, and rows
+ * are now a real paginator instead of a plain array (see
+ * LetterOfCreditIssuanceController@index for why — this page used to
+ * have no pagination at all, loading a company's entire LC history on
+ * every visit). This puts the three props back into the
+ * { [type]: {...} } shape the rest of this file already expects.
  */
+const tabs = computed(() => ({
+    'sight-lc': props.sightLcTab,
+    'deferred': props.deferredTab,
+    'cash-against-document': props.cashAgainstDocumentTab,
+}));
+const TAB_PROP_NAMES = {
+    'sight-lc': 'sightLcTab',
+    'deferred': 'deferredTab',
+    'cash-against-document': 'cashAgainstDocumentTab',
+};
+
 const activeTab = ref(props.activeLcType);
-const currentTab = computed(() => props.tabs[activeTab.value] || { rows: [] });
+const currentTab = computed(() => tabs.value[activeTab.value] || { rows: { data: [], links: [], last_page: 1 } });
 
 const searchField = ref('transaction_name');
 const searchValue = ref('');
 function applySearch() {
-    router.get(route_view_url(), { active: activeTab.value, field: searchField.value, value: searchValue.value }, { preserveState: true });
+    router.get(route_view_url(), { active: activeTab.value, field: searchField.value, value: searchValue.value }, { preserveState: true, only: [TAB_PROP_NAMES[activeTab.value]] });
 }
 function route_view_url() {
     return window.location.pathname;
+}
+function goToPage(url) {
+    if (!url) return;
+    router.get(url, {}, { preserveState: true, preserveScroll: true, only: [TAB_PROP_NAMES[activeTab.value]] });
 }
 
 /* ── Mark As Paid modal ──────────────────────────────────────────
@@ -282,7 +300,7 @@ const commentTarget = ref(null);
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="(row, index) in currentTab.rows" :key="row.id" class="cvr-table-row">
+                        <tr v-for="(row, index) in currentTab.rows.data" :key="row.id" class="cvr-table-row">
                             <td class="px-3 py-3 cvr-text-secondary">{{ index + 1 }}</td>
                             <td class="px-3 py-3 cvr-text-primary max-w-[12rem] break-words">{{ row.transaction_name }}</td>
                             <td class="px-3 py-3 cvr-text-secondary max-w-[12rem] break-words">{{ row.beneficiary_name }}</td>
@@ -313,13 +331,31 @@ const commentTarget = ref(null);
                                 </div>
                             </td>
                         </tr>
-                        <tr v-if="currentTab.rows.length === 0">
+                        <tr v-if="currentTab.rows.data.length === 0">
                             <td colspan="11" class="px-4 py-8 text-center cvr-text-muted">
                                 No LC Issuance records found.
                             </td>
                         </tr>
                     </tbody>
                 </table>
+
+                <!-- Pagination -->
+                <div v-if="currentTab.rows.last_page > 1" class="flex items-center justify-between mt-4 flex-wrap gap-3">
+                    <p class="text-xs cvr-text-muted">
+                        Showing {{ currentTab.rows.from }}–{{ currentTab.rows.to }} of {{ currentTab.rows.total }}
+                    </p>
+                    <div class="flex items-center gap-1 flex-wrap">
+                        <button
+                            v-for="(link, i) in currentTab.rows.links"
+                            :key="i"
+                            @click="goToPage(link.url)"
+                            :disabled="!link.url"
+                            class="cvr-filter-pill"
+                            :class="{ 'cvr-filter-pill-active': link.active, 'opacity-40 cursor-not-allowed': !link.url }"
+                            v-html="link.label"
+                        ></button>
+                    </div>
+                </div>
             </div>
 
             <!-- Mark As Paid modal -->

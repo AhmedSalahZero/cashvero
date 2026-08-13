@@ -22,6 +22,7 @@ use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * CashExpenseController
@@ -74,18 +75,6 @@ class CashExpenseController
 				'endDate'=>$endDate
 			];
 		}
-		$cashPaymentsStartDate = $filterDates[CashExpense::CASH_PAYMENT]['startDate'] ?? null ;
-		$cashPaymentsEndDate = $filterDates[CashExpense::CASH_PAYMENT]['endDate'] ?? null ;
-
-		$outgoingTransferStartDate = $filterDates[CashExpense::OUTGOING_TRANSFER]['startDate'] ?? null ;
-		$outgoingTransferEndDate = $filterDates[CashExpense::OUTGOING_TRANSFER]['endDate'] ?? null ;
-
-		$payableChequesStartDate = $filterDates[CashExpense::PAYABLE_CHEQUE]['startDate'] ?? null ;
-		$payableChequesEndDate = $filterDates[CashExpense::PAYABLE_CHEQUE]['endDate'] ?? null ;
-
-		$cashPayments = $company->getCashExpenseCashPayments($cashPaymentsStartDate ,$cashPaymentsEndDate ,$activeTab)->paginate($paginationPerPage,['*'],'cashPaymentsPage')->withQueryString() ;
-		$outgoingTransfer = $company->getCashExpenseOutgoingTransfer($outgoingTransferStartDate,$outgoingTransferEndDate,$activeTab)->paginate($paginationPerPage,['*'],'outgoingTransferPage')->withQueryString() ;
-		$payableCheques = $company->getCashExpensePayableCheques($payableChequesStartDate,$payableChequesEndDate,$activeTab)->paginate($paginationPerPage,['*'],'payableChequesPage')->withQueryString() ;
 
 		$financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->get();
 		$accountTypes = AccountType::onlyCashAccounts()->get();
@@ -108,48 +97,104 @@ class CashExpenseController
 				'is_open_balance' => $model->isOpenBalance(),
 				'user_comment' => $model->hasComment() ? $model->getUserComment() : null,
 				'is_fully_integrated_with_odoo' => $company->hasOdooIntegrationCredentials() && $model->fullyIntegratedWithOdoo(),
+				'has_odoo_error' => (bool) $model->hasOdooError(),
+				'odoo_error' => $model->getOdooError(),
 				'odoo_reference_names' => $model->getOdooReferenceNames(),
 				'edit_url' => $model->isOpenBalance() ? null : route('edit.cash.expense', ['company' => $company->id, 'cashExpense' => $model->id]),
 				'delete_url' => $model->isOpenBalance() ? null : route('delete.cash.expense', ['company' => $company->id, 'cashExpense' => $model->id]),
 			];
 		};
 
-		$cashPaymentsMapped = $cashPayments->through(function (CashExpense $model) use ($mapCommon) {
-			return array_merge($mapCommon($model), [
-				'branch_name' => $model->getCashPaymentBranchName(),
-				'receipt_number' => $model->getCashPaymentReceiptNumber(),
-			]);
-		});
-		$outgoingTransferMapped = $outgoingTransfer->through(function (CashExpense $model) use ($mapCommon) {
-			return array_merge($mapCommon($model), [
-				// getOutgoingTransferDeliveryBankName() returns the Bank's
-				// combined view_name (English + Arabic in one string) —
-				// the actual cause of the "too long" column. Pulling
-				// name_en/name_ar straight off the related Bank lets the
-				// page show them as two shorter stacked lines instead.
-				'bank_name_en' => optional(optional(optional($model->outgoingTransfer)->deliveryBank)->bank)->name_en,
-				'bank_name_ar' => optional(optional(optional($model->outgoingTransfer)->deliveryBank)->bank)->name_ar,
-				'bank_name' => $model->getOutgoingTransferDeliveryBankName(),
-				'account_type_name' => $model->getOutgoingTransferAccountTypeName(),
-				'account_number' => $model->getOutgoingTransferAccountNumber(),
-			]);
-		});
-		$payableChequesMapped = $payableCheques->through(function (CashExpense $model) use ($mapCommon) {
-			$dueStatus = $model->payableCheque ? $model->payableCheque->getDueStatusFormatted() : null;
-			return array_merge($mapCommon($model), [
-				'status' => $model->payableCheque?->getStatusFormatted(),
-				'is_paid' => $model->payableCheque?->getStatus() === 'paid',
-				'cheque_number' => $model->payableCheque?->getChequeNumber(),
-				'bank_name_en' => optional(optional(optional($model->payableCheque)->deliveryBank)->bank)->name_en,
-				'bank_name_ar' => optional(optional(optional($model->payableCheque)->deliveryBank)->bank)->name_ar,
-				'bank_name' => $model->payableCheque?->getPaymentBankName(),
-				'account_type_name' => $model->payableCheque?->getAccountTypeName(),
-				'account_number' => $model->payableCheque?->getAccountNumber(),
-				'due_date_formatted' => $model->payableCheque?->getDueDateFormatted(),
-				'due_status' => $dueStatus,
-				'can_mark_paid' => !$model->isOpenBalance() && $model->payableCheque?->getStatus() !== 'paid',
-			]);
-		});
+		/**
+		 * FIX (per audit, 2026-08-13): the query + eager-load + paginate
+		 * + row-mapping for all THREE tabs used to run unconditionally
+		 * on every single request to this page — including a plain
+		 * "next page" pagination click on just ONE of them. Nothing on
+		 * screen ever shows more than the active tab's data (confirmed:
+		 * no tab-count badges reference the other tabs), so the other
+		 * two tabs' work was pure waste on every such request, and it
+		 * compounds badly once the table has real production-sized data.
+		 *
+		 * Each tab's actual work now lives in this closure, so it's
+		 * only executed when Inertia actually needs that specific prop
+		 * — every prop still resolves normally on a full page load
+		 * (e.g. first opening the page, or switching tabs, which stays
+		 * instant/client-side exactly as before, since all three are
+		 * still present on that initial load). The saving specifically
+		 * kicks in on partial reloads — see goToPage()/applyFilters()
+		 * in Index.vue, which now pass `only` naming just the active
+		 * tab's prop, so a "next page" click genuinely only recomputes
+		 * that one tab instead of all three.
+		 */
+		$buildTab = function (string $type, string $label, bool $hasBatchCollection) use (
+			$company, $activeTab, $filterDates, $paginationPerPage, $mapCommon
+		) {
+			$startDate = $filterDates[$type]['startDate'] ?? null;
+			$endDate = $filterDates[$type]['endDate'] ?? null;
+
+			$pageParamByType = [
+				CashExpense::OUTGOING_TRANSFER => 'outgoingTransferPage',
+				CashExpense::CASH_PAYMENT => 'cashPaymentsPage',
+				CashExpense::PAYABLE_CHEQUE => 'payableChequesPage',
+			];
+			$queryMethodByType = [
+				CashExpense::OUTGOING_TRANSFER => 'getCashExpenseOutgoingTransfer',
+				CashExpense::CASH_PAYMENT => 'getCashExpenseCashPayments',
+				CashExpense::PAYABLE_CHEQUE => 'getCashExpensePayableCheques',
+			];
+
+			$queryMethod = $queryMethodByType[$type];
+			$paginator = $company->{$queryMethod}($startDate, $endDate, $activeTab)
+				->paginate($paginationPerPage, ['*'], $pageParamByType[$type])
+				->withQueryString();
+
+			$mapped = $paginator->through(function (CashExpense $model) use ($mapCommon, $type) {
+				$common = $mapCommon($model);
+				if ($type === CashExpense::OUTGOING_TRANSFER) {
+					return array_merge($common, [
+						// getOutgoingTransferDeliveryBankName() returns the Bank's
+						// combined view_name (English + Arabic in one string) —
+						// the actual cause of the "too long" column. Pulling
+						// name_en/name_ar straight off the related Bank lets the
+						// page show them as two shorter stacked lines instead.
+						'bank_name_en' => optional(optional(optional($model->outgoingTransfer)->deliveryBank)->bank)->name_en,
+						'bank_name_ar' => optional(optional(optional($model->outgoingTransfer)->deliveryBank)->bank)->name_ar,
+						'bank_name' => $model->getOutgoingTransferDeliveryBankName(),
+						'account_type_name' => $model->getOutgoingTransferAccountTypeName(),
+						'account_number' => $model->getOutgoingTransferAccountNumber(),
+					]);
+				}
+				if ($type === CashExpense::CASH_PAYMENT) {
+					return array_merge($common, [
+						'branch_name' => $model->getCashPaymentBranchName(),
+						'receipt_number' => $model->getCashPaymentReceiptNumber(),
+					]);
+				}
+				// PAYABLE_CHEQUE
+				$dueStatus = $model->payableCheque ? $model->payableCheque->getDueStatusFormatted() : null;
+				return array_merge($common, [
+					'status' => $model->payableCheque?->getStatusFormatted(),
+					'is_paid' => $model->payableCheque?->getStatus() === 'paid',
+					'cheque_number' => $model->payableCheque?->getChequeNumber(),
+					'bank_name_en' => optional(optional(optional($model->payableCheque)->deliveryBank)->bank)->name_en,
+					'bank_name_ar' => optional(optional(optional($model->payableCheque)->deliveryBank)->bank)->name_ar,
+					'bank_name' => $model->payableCheque?->getPaymentBankName(),
+					'account_type_name' => $model->payableCheque?->getAccountTypeName(),
+					'account_number' => $model->payableCheque?->getAccountNumber(),
+					'due_date_formatted' => $model->payableCheque?->getDueDateFormatted(),
+					'due_status' => $dueStatus,
+					'can_mark_paid' => !$model->isOpenBalance() && $model->payableCheque?->getStatus() !== 'paid',
+				]);
+			});
+
+			return [
+				'label' => $label,
+				'rows' => $mapped,
+				'startDate' => $startDate,
+				'endDate' => $endDate,
+				'hasBatchCollection' => $hasBatchCollection,
+			];
+		};
 
 		return \Inertia\Inertia::render('CashExpense/Index', [
 			'company' => ['id' => $company->id],
@@ -157,29 +202,9 @@ class CashExpenseController
 			'canCreate' => hasAuthFor('create cash expenses'),
 			'canUpdate' => hasAuthFor('update cash expenses'),
 			'canDelete' => hasAuthFor('delete cash expenses'),
-			'tabs' => [
-				CashExpense::OUTGOING_TRANSFER => [
-					'label' => __('Outgoing Transfer'),
-					'rows' => $outgoingTransferMapped,
-					'startDate' => $outgoingTransferStartDate,
-					'endDate' => $outgoingTransferEndDate,
-					'hasBatchCollection' => true,
-				],
-				CashExpense::CASH_PAYMENT => [
-					'label' => __('Cash Payment'),
-					'rows' => $cashPaymentsMapped,
-					'startDate' => $cashPaymentsStartDate,
-					'endDate' => $cashPaymentsEndDate,
-					'hasBatchCollection' => false,
-				],
-				CashExpense::PAYABLE_CHEQUE => [
-					'label' => __('Payable Cheques'),
-					'rows' => $payableChequesMapped,
-					'startDate' => $payableChequesStartDate,
-					'endDate' => $payableChequesEndDate,
-					'hasBatchCollection' => true,
-				],
-			],
+			'outgoingTransferTab' => fn () => $buildTab(CashExpense::OUTGOING_TRANSFER, __('Outgoing Transfer'), true),
+			'cashPaymentTab' => fn () => $buildTab(CashExpense::CASH_PAYMENT, __('Cash Payment'), false),
+			'payableChequeTab' => fn () => $buildTab(CashExpense::PAYABLE_CHEQUE, __('Payable Cheques'), true),
 			'indexUrl' => route('view.cash.expense', ['company' => $company->id]),
 			'createUrl' => route('create.cash.expense', ['company' => $company->id]),
 			'markChequesAsPaidUrl' => route('cash.expense.payable.cheque.mark.as.paid', ['company' => $company->id]),
@@ -233,7 +258,7 @@ class CashExpenseController
 		$cashExpenseCategoryNames = CashExpenseCategoryName::whereIn('cash_expense_category_id', $cashExpenseCategories->pluck('id'))->get();
 
 		return [
-			'company' => ['id' => $company->id],
+			'company' => ['id' => $company->id, 'mainFunctionalCurrency' => $company->getMainFunctionalCurrency()],
 			'mode' => $model ? 'edit' : 'create',
 			'locale' => app()->getLocale(),
 			'types' => [
@@ -280,6 +305,22 @@ class CashExpenseController
 				'payable_cheque_account_number' => $model->getPayableChequeAccountNumber(),
 				'due_date' => $model->payableCheque?->getDueDate(),
 				'cheque_number' => $model->payableCheque?->getChequeNumber(),
+				/**
+				 * FIX (per bug report, 2026-08-13): the uniqueness checks
+				 * for Cheque Number / Receipt Number need the sub-record's
+				 * own id (payable_cheques.id / cash_payments.id — NOT
+				 * cash_expenses.id) to exclude the record being edited
+				 * from the duplicate check. This was never sent from the
+				 * new Vue form at all, so in edit mode the exclude value
+				 * was always null — and Laravel's query builder treats
+				 * where('id', '!=', null) as whereNotNull('id'), which
+				 * matches virtually every row including the one being
+				 * edited. That's why editing a cheque/receipt falsely
+				 * reported "already exists" even with its own unchanged
+				 * number.
+				 */
+				'payable_cheque_id' => $model->payableCheque?->id,
+				'cash_payment_id' => $model->cashPayment?->id,
 			] : null,
 			'submitUrl' => $model
 				? route('update.cash.expense', ['company' => $company->id, 'cashExpense' => $model->id])
@@ -504,25 +545,43 @@ class CashExpenseController
 			/**
 			 * @var CashExpense $cashExpense
 			 */
-			// $chequeDueDate = $cashExpense->payableCheque->due_date;
-			$cashExpense->payableCheque->update($data);
-			
-			// FIX (per bug report): markPayableChequeAsPaidInOdoo() used to
-			// run unconditionally and throw RuntimeException("Missing
-			// company Odoo DB URL/Name.") for any company without Odoo
-			// credentials configured — even though the update() above had
-			// already committed successfully, so the cheque silently ended
-			// up correctly marked as paid despite the request erroring out.
-			// Guarded the same way every other Odoo-touching call in this
-			// codebase already is.
-			if ($company->hasOdooIntegrationCredentials()) {
-				$cashExpense->markPayableChequeAsPaidInOdoo();
-			}
-			
-			
-			if($currentStatement = $cashExpense->getCurrentStatement()){
-				$currentStatement->handleFullDateAfterDateEdit($data['actual_payment_date'],$currentStatement->debit,$currentStatement->credit);
+			/**
+			 * FIX (per bug report, 2026-08-13): for a company WITH Odoo
+			 * integration credentials configured, if the Odoo sync step
+			 * below fails, the local "mark as paid" change must not
+			 * stick either — otherwise CashVero shows the cheque as
+			 * paid while Odoo never actually recorded it, and there's
+			 * no way to tell from the UI that they've drifted apart.
+			 * Wrapping the local update + Odoo sync + statement date
+			 * fix in one DB transaction means an Odoo failure rolls
+			 * back the local change too, so the cheque stays exactly
+			 * as it was before the attempt — safe to just retry.
+			 * Companies WITHOUT Odoo credentials are unaffected: the
+			 * transaction still commits normally since
+			 * markPayableChequeAsPaidInOdoo() is never even called for
+			 * them, same as before this fix.
+			 */
+			try {
+				DB::transaction(function () use ($cashExpense, $data, $company) {
+					$cashExpense->payableCheque->update($data);
 
+					if ($company->hasOdooIntegrationCredentials()) {
+						$cashExpense->markPayableChequeAsPaidInOdoo();
+					}
+
+					if ($currentStatement = $cashExpense->getCurrentStatement()) {
+						$currentStatement->handleFullDateAfterDateEdit($data['actual_payment_date'],$currentStatement->debit,$currentStatement->credit);
+					}
+				});
+			} catch (\Throwable $e) {
+				$message = __('Error While Connecting With Odoo').' : '.$e->getMessage();
+				if($request->ajax() && ! $request->header('X-Inertia')){
+					return response()->json([
+						'status'=>false ,
+						'msg'=>$message,
+					]);
+				}
+				return redirect()->route('view.cash.expense',['company'=>$company->id,'active'=>CashExpense::PAYABLE_CHEQUE])->with('fail', $message);
 			}
 
 		}

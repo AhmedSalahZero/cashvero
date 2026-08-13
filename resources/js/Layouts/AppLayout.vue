@@ -70,7 +70,32 @@ onMounted(() => {
 function isActiveLink(link) {
     if (!link || link === '#') return false;
     try {
-        return page.url.startsWith(new URL(link).pathname);
+        const linkUrl = new URL(link);
+        const currentUrl = new URL(page.url, window.location.origin);
+        if (!currentUrl.pathname.startsWith(linkUrl.pathname)) return false;
+        /**
+         * FIX (per report, 2026-08-13): "Partners" and "Subsidiary
+         * Companies" — and any other sidebar item built the same way —
+         * point at the exact same route/pathname and differ only by a
+         * query param (e.g. ?type=subsidiary-companies). The pathname
+         * check above used to be the whole story, so both items lit up
+         * together any time either page's pathname matched, regardless
+         * of which specific type was actually being viewed. Now: every
+         * query param the link itself specifies must match the current
+         * page's value too...
+         */
+        for (const [key, value] of linkUrl.searchParams) {
+            if (currentUrl.searchParams.get(key) !== value) return false;
+        }
+        // ...and the reverse also has to hold: a link with NO query
+        // params (plain "Partners") must not stay active once the
+        // current page has picked up a `type` the link never asked
+        // for — otherwise "Partners" alone would still match every
+        // sibling tab sharing its pathname (e.g. Subsidiary Companies).
+        if (linkUrl.searchParams.toString() === '' && currentUrl.searchParams.has('type')) {
+            return false;
+        }
+        return true;
     } catch {
         return false;
     }

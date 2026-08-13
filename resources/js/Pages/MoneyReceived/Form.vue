@@ -492,7 +492,7 @@ function submit() {
             <!-- Header -->
             <div class="cvr-card-bg cvr-border border rounded-lg p-5 mb-5">
                 <h2 class="text-base font-medium cvr-text-primary mb-4">Money Received</h2>
-                <div class="cvr-form-grid-2-2-1-4-1-2">
+                <div :class="partnerType === 'is_customer' ? 'cvr-form-grid-2-2-1-4-1-2' : 'cvr-form-grid-2-2-5-1-3'">
                     <div>
                         <label class="cvr-form-label">Receiving Date *</label>
                         <input v-model="receivingDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
@@ -504,7 +504,7 @@ function submit() {
                             <option v-for="t in partnerTypes" :key="t.value" :value="t.value">{{ t.label }}</option>
                         </select>
                     </div>
-                    <div v-show="partnerType === 'is_customer'">
+                    <div v-if="partnerType === 'is_customer'">
                         <label class="cvr-form-label">Invoice Currency*</label>
                         <select v-model="invoiceCurrency" class="cvr-input w-full px-3 py-2 rounded">
                             <option v-for="c in currencies" :key="c.code" :value="c.code">{{ c.label }}</option>
@@ -533,8 +533,8 @@ function submit() {
                         <p v-if="errors.type" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.type }}</p>
                     </div>
                 </div>
-                <div v-if="partnerType !== 'is_customer'" class="cvr-form-grid-4 mt-4">
-                    <div>
+                <div v-if="partnerType !== 'is_customer'" class="mt-4">
+                    <div class="cvr-field-narrow">
                         <label class="cvr-form-label">Transaction *</label>
                         <select v-model="transactionType" class="cvr-input w-full px-3 py-2 rounded">
                             <option value="">Select</option>
