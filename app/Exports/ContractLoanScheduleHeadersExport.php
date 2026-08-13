@@ -15,6 +15,32 @@ class ContractLoanScheduleHeadersExport extends HeadersExport implements WithEve
 
     private const DATA_ROWS = 5000;
 
+    /**
+     * @var int[]|null Bank (FinancialInstitution) IDs the user picked on
+     * the "Export Fields" screen before downloading. Null/empty falls
+     * back to every bank the company has on file (previous behavior).
+     */
+    protected ?array $bankIds = null;
+
+    /**
+     * ⚠️ Confirmed second bug, fixed here: HeadersExport::__construct()
+     * deliberately does NOT store $company_id on $this (see its own
+     * docblock — "intentionally unused"). This subclass's afterSheet()
+     * reads $this->company_id to build the drawee-bank dropdown, so
+     * without storing it explicitly here that value was always null —
+     * the dropdown silently never populated, independent of the
+     * ExportTable::validation() bug that was blocking the download
+     * entirely. Storing it locally fixes both together.
+     */
+    protected $company_id;
+
+    public function __construct($company_id, $columnsWithViewingNames, ?array $bankIds = null)
+    {
+        parent::__construct($company_id, $columnsWithViewingNames);
+        $this->company_id = $company_id;
+        $this->bankIds = $bankIds;
+    }
+
     public function afterSheet(AfterSheet $event): void
     {
         $sheet = $event->sheet->getDelegate();
@@ -24,7 +50,7 @@ class ContractLoanScheduleHeadersExport extends HeadersExport implements WithEve
             return;
         }
 
-        $bankNames = getCompanyDraweeBankNames($this->company_id);
+        $bankNames = getCompanyDraweeBankNames($this->company_id, $this->bankIds);
 
         if ($bankNames === []) {
             return;

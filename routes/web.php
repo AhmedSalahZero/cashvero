@@ -108,6 +108,7 @@ Route::middleware([])->group(function () {
                     Route::get('leasing-companies/{leasingCompany}/contracts/{leasingContract}/edit', 'LeasingContractController@edit')->name('leasing.contracts.edit');
                     Route::put('leasing-companies/{leasingCompany}/contracts/{leasingContract}/update', 'LeasingContractController@update')->name('leasing.contracts.update');
                     Route::delete('leasing-companies/{leasingCompany}/contracts/{leasingContract}/delete', 'LeasingContractController@destroy')->name('leasing.contracts.destroy');
+                    Route::delete('leasing-companies/{leasingCompany}/contracts/{leasingContract}/schedule', 'LeasingContractController@destroySchedule')->name('leasing.contracts.schedule.destroy');
 
                     Route::post('factoring-companies/create', 'FactoringCompanyController@store')->name('factoring.companies.store');
                     Route::put('factoring-companies/update/{factoringCompany}', 'FactoringCompanyController@update')->name('factoring.companies.update');
@@ -345,6 +346,7 @@ Route::middleware([])->group(function () {
                     Route::get('financial-institutions/{financialInstitution}/medium-term-loan/{mediumTermLoan}/edit', 'MediumTermLoanController@edit')->name('loans.edit');
                     Route::put('financial-institutions/{financialInstitution}/medium-term-loan/{mediumTermLoan}/update', 'MediumTermLoanController@update')->name('loans.update');
                     Route::delete('financial-institutions/{financialInstitution}/medium-term-loan/{mediumTermLoan}/delete', 'MediumTermLoanController@destroy')->name('loans.destroy');
+                    Route::delete('financial-institutions/{financialInstitution}/medium-term-loan/{mediumTermLoan}/schedule', 'MediumTermLoanController@destroySchedule')->name('loans.schedule.destroy');
                  
                  
                 

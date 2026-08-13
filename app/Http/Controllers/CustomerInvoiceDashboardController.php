@@ -164,6 +164,29 @@ class CustomerInvoiceDashboardController extends Controller
      * different "owning institution" method name, hence the
      * $isLeasing switch. Purely presentational; none of the
      * underlying getters are touched.
+     *
+     * Outstanding/Paid are computed LIVE here, principal-only —
+     * matching what a bank statement actually shows, not what was
+     * previously used (SUM(remaining), which double-counted future
+     * un-accrued interest and read too high).
+     *
+     * Per row: outstanding principal = min(principle_amount, remaining).
+     * This applies the standard banking convention — a payment settles
+     * interest first, then principal — using only data already stored
+     * per row, no schema change or re-amortization engine needed:
+     *   - remaining = schedule_payment − actual amount settled (already
+     *     correctly, automatically maintained per row, including
+     *     partial payments, by LoanScheduleSettlement's /
+     *     ContractLoanScheduleSettlement's booted() hooks)
+     *   - if remaining >= principle_amount: even interest isn't fully
+     *     covered yet, so the full principal is still outstanding →
+     *     min() caps at principle_amount
+     *   - if remaining < principle_amount: interest is fully covered,
+     *     and (principle_amount − remaining) of principal has actually
+     *     been retired → min() correctly returns what's left
+     * This also automatically nets in whatever was already paid before
+     * the company joined CashVero, as long as the uploaded schedule's
+     * first row correctly started from the true remaining principal.
      */
     private function flattenLoanOrLeasingArr($arrByCurrency, string $date, bool $isLeasing): array
     {
@@ -171,12 +194,16 @@ class CustomerInvoiceDashboardController extends Controller
         foreach ($arrByCurrency as $currencyName => $collection) {
             $out[$currencyName] = collect($collection)->map(function ($item) use ($date, $isLeasing) {
                 $next = $item->getNextInstallmentDateAndAmount($date);
+                $schedules = $isLeasing ? $item->contractLoanSchedules : $item->loanSchedules;
+                $outstanding = $schedules->sum(fn ($schedule) => min($schedule->getPrincipleAmount(), $schedule->getRemaining()));
+                $paid = $item->getLimit() - $outstanding;
                 return [
                     'id' => $item->id,
                     'institution_name' => $isLeasing ? $item->getLeasingCompanyName() : $item->getFinancialInstitutionName(),
                     'name' => $item->getName(),
                     'limit_formatted' => $item->getLimitFormatted(),
-                    'outstanding_formatted' => $item->getLoanOutstandingFormatted(),
+                    'paid_formatted' => number_format($paid),
+                    'outstanding_formatted' => number_format($outstanding),
                     'next_installment_date' => $next['date_formatted'] ?? null,
                     'next_installment_amount' => $next['amount_formatted'] ?? null,
                     'total_past_due_remaining_formatted' => $item->getTotalPastDueRemainingFormatted(),

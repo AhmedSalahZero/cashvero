@@ -169,6 +169,7 @@ class MediumTermLoanController
             'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
             'currencies' => getCurrencies(),
             'installmentIntervals' => \App\Helpers\HVero::getDurationIntervalTypesForSelect(),
+            'isLocked' => false,
             'model' => null,
             'submitUrl' => route('loans.store', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
             'backUrl' => route('loans.index', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
@@ -204,12 +205,23 @@ class MediumTermLoanController
      */
     public function edit(Company $company, FinancialInstitution $financialInstitution, MediumTermLoan $mediumTermLoan)
     {
+        // ⚠️ Confirmed, deliberate lock: update() (below) works by
+        // deleting the loan and its schedule relations, then recreating
+        // from scratch. If a schedule has real settlements against it
+        // already, that would silently destroy settlement/bank-statement
+        // history. Per the project owner's decision, once a schedule
+        // exists the facility is locked — the user must explicitly
+        // delete the schedule (destroySchedule(), a new, separate
+        // action) before editing is allowed again.
+        $isLocked = $mediumTermLoan->loanSchedules()->exists();
+
         return \Inertia\Inertia::render('MediumTermLoan/Form', [
             'mode' => 'edit',
             'company' => ['id' => $company->id],
             'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
             'currencies' => getCurrencies(),
             'installmentIntervals' => \App\Helpers\HVero::getDurationIntervalTypesForSelect(),
+            'isLocked' => $isLocked,
             'model' => [
                 'id' => $mediumTermLoan->id,
                 'name' => $mediumTermLoan->getName(),
@@ -222,8 +234,12 @@ class MediumTermLoanController
                 'margin_rate' => $mediumTermLoan->getMarginRate(),
                 'duration' => $mediumTermLoan->getDuration(),
                 'installment_payment_interval' => $mediumTermLoan->getPaymentInstallmentInterval(),
+                'already_paid_amount' => (float) $mediumTermLoan->already_paid_amount,
+                'first_installment_date' => $mediumTermLoan->first_installment_date,
+                'remaining_installment_count' => $mediumTermLoan->remaining_installment_count,
             ],
             'submitUrl' => route('loans.update', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'mediumTermLoan' => $mediumTermLoan->id]),
+            'deleteScheduleUrl' => route('loans.schedule.destroy', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'mediumTermLoan' => $mediumTermLoan->id]),
             'backUrl' => route('loans.index', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
             'navUrls' => [
                 'home' => route('home', ['company' => $company->id]),
@@ -236,17 +252,52 @@ class MediumTermLoanController
     }
 
     /**
-     * Deletes the loan and calls store() fresh, in-place. Confirmed
-     * deliberate original behavior, not a bug. UNCHANGED.
+     * Deletes the loan and calls store() fresh, in-place — same
+     * delete-then-recreate pattern as before. UPDATED: now blocked
+     * once a schedule exists (see destroySchedule() below for why).
      */
     public function update(Company $company, Request $request, FinancialInstitution $financialInstitution, MediumTermLoan $mediumTermLoan)
     {
+        // Server-side enforcement of the same lock shown in edit() — a
+        // disabled form in the UI isn't a guarantee, this is.
+        if ($mediumTermLoan->loanSchedules()->exists()) {
+            return redirect()
+                ->back()
+                ->with('fail', __('This loan has an uploaded schedule and can\'t be edited. Delete the schedule first if you need to make changes.'));
+        }
+
         $mediumTermLoan->deleteRelations();
         $mediumTermLoan->delete();
         $type = MediumTermLoan::RUNNING;
         $this->store($company, $request, $financialInstitution);
         $activeTab = $type;
         return redirect()->route('loans.index', ['company' => $company->id, 'active' => $activeTab, 'financialInstitution' => $financialInstitution->id])->with('success', __('Item Has Been Updated Successfully'));
+    }
+
+    /**
+     * Deletes every installment on this loan's schedule, and for each
+     * one, every payment settlement recorded against it — reversing
+     * each settlement's effect on the bank statement / loan statement
+     * exactly as a normal single-settlement delete already does
+     * (reuses the existing, already-proven LoanScheduleSettlement::
+     * deleteAllRelations() + delete(), just applied to every row).
+     * Unlocks the facility for editing again once complete.
+     */
+    public function destroySchedule(Company $company, FinancialInstitution $financialInstitution, MediumTermLoan $mediumTermLoan)
+    {
+        DB::transaction(function () use ($mediumTermLoan) {
+            foreach ($mediumTermLoan->loanSchedules as $schedule) {
+                foreach ($schedule->settlements as $settlement) {
+                    $settlement->deleteAllRelations();
+                    $settlement->delete();
+                }
+                $schedule->delete();
+            }
+        });
+
+        return redirect()
+            ->back()
+            ->with('success', __('Schedule deleted. You can now edit this loan or upload a corrected schedule.'));
     }
 
     /**
@@ -416,7 +467,15 @@ class MediumTermLoanController
         $commentAr = __('Settlement For Loan '.$loanSchedule->getMediumTermLoanName().' Installment No. '.$loanSchedule->getInstallmentNumber(), [], 'ar');
         $loanScheduleSettlement->handleCreditStatement($company->id, $financialInstitutionId, $accountType, $currentAccountNumber, null, $date, $amount, null, null, $commentEn, $commentAr);
         $loanScheduleSettlement->handleLoanStatement($company->id, $financialInstitutionId, $currentAccountNumber, $date, $amount, $commentEn, $commentAr);
-        return back();
+        // ⚠️ Same confirmed fix as ContractLoanScheduleController's
+        // equivalent method: this was back(), leaving the user on the
+        // same settlement page after paying instead of the schedule
+        // table.
+        return redirect()->route('view.uploading', getUploadingRouteParams(
+            $company->id,
+            'LoanSchedule',
+            (string) $loanSchedule->getMediumTermLoanId()
+        ));
     }
 
     /**

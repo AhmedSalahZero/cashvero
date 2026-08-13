@@ -157,6 +157,12 @@ class ExportTable extends Controller
 			'view' => $view,
 			'isLoanScheduleModel' => $isLoanScheduleModel,
 			'fields' => $fields,
+			// Only relevant for ContractLoanSchedule — lets the user pick
+			// which bank(s) the company issues cheques against, so only
+			// those exact names (matching the Central Bank of Egypt
+			// naming already stored per bank) go into the Drawee Bank
+			// dropdown on the downloaded template.
+			'banks' => $model === 'ContractLoanSchedule' ? getCompanyBanksForDraweeBankPicker($company->id) : [],
 			'submitUrl' => route('table.fields.selection.save', ['company' => $company->id, 'model' => $model, 'modelName' => $modelName]),
 			'redirectUrl' => route('salesGatheringImport', ['company' => $company->id, 'model' => $modelName]),
 			'navUrls' => [
@@ -179,6 +185,16 @@ class ExportTable extends Controller
 		$this->validation($request);
 
 		$request['company_id'] = $company->id;
+		// ⚠️ bank_ids[] (the new Drawee Bank picker, ContractLoanSchedule
+		// only) must NOT ride along into $request->all() below —
+		// CustomizedFieldsExportation::create()/update() mass-assigns
+		// every key in the request (guarded = []), and that table has
+		// no bank_ids column. It's only needed further down, for the
+		// actual export call, so pull it out before the save and put
+		// it back afterward.
+		$bankIds = array_map('intval', (array) $request->get('bank_ids', []));
+		$request->request->remove('bank_ids');
+
 		$fields = [];
 		$fields = $request->get('model_name') == 'LoanSchedule'
 			? array_keys(LoanSchedule::getExportableFields())
@@ -230,7 +246,7 @@ class ExportTable extends Controller
 		if($request->get('model_name') == 'ContractLoanSchedule'){
 			$columnsWithViewingNames = ContractLoanSchedule::getExportableFields();
 
-			return (new ContractLoanScheduleHeadersExport($company->id, $columnsWithViewingNames))
+			return (new ContractLoanScheduleHeadersExport($company->id, $columnsWithViewingNames, $bankIds))
 				->download($model . 'Fields.xlsx');
 		}
 		return (new HeadersExport($company->id, $columnsWithViewingNames))->download($model . 'Fields.xlsx');
@@ -280,7 +296,15 @@ class ExportTable extends Controller
 	 */
 	public function validation($request)
 	{
-		if($request->get('model_name') == 'LoanSchedule'){
+		// ContractLoanSchedule's fields are forced to the full fixed set
+		// regardless of what's submitted (see customizedTableFieldSave()
+		// below) — exactly like LoanSchedule. Its checkboxes on the
+		// TemplateFieldSelection screen are also all rendered `disabled`
+		// (isLoanScheduleModel-locked), so a native form submit never
+		// includes `fields[]` for it. Without this, "you must choose
+		// fields" always failed validation and the download never
+		// happened — confirmed bug, this is the fix.
+		if(in_array($request->get('model_name'), ['LoanSchedule', 'ContractLoanSchedule'], true)){
 			return ;
 		}
 		$validation = [];

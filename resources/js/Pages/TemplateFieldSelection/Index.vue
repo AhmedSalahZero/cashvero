@@ -10,6 +10,7 @@ const props = defineProps({
     view: String,
     isLoanScheduleModel: Boolean,
     fields: Array, // [{field_name, label, checked, locked}]
+    banks: { type: Array, default: () => [] }, // [{id, name}] — ContractLoanSchedule only
     submitUrl: String,
     redirectUrl: String,
     navUrls: Object,
@@ -18,6 +19,14 @@ const props = defineProps({
 const formRef = ref(null);
 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 const checkedState = ref(Object.fromEntries(props.fields.map(f => [f.field_name, f.checked])));
+
+// Drawee Bank picker — only shown for ContractLoanSchedule. Nothing
+// checked here means "include every company bank" (previous behavior),
+// so leaving this untouched is a safe default, not a way to end up with
+// an accidentally-empty dropdown.
+const showBankPicker = computed(() => props.model === 'ContractLoanSchedule' && props.banks.length > 0);
+const bankChecked = ref(Object.fromEntries(props.banks.map(b => [b.id, false])));
+const selectedBankIds = computed(() => props.banks.filter(b => bankChecked.value[b.id]).map(b => b.id));
 
 const discountFields = ['quantity_discount', 'cash_discount', 'special_discount', 'other_discounts'];
 const hasSalesValueField = computed(() => props.fields.some(f => f.field_name === 'sales_value'));
@@ -108,6 +117,24 @@ function submit() {
                             </span>
                         </label>
                     </div>
+                </div>
+
+                <div v-if="showBankPicker" class="cvr-card mb-6">
+                    <p class="font-semibold cvr-text-primary mb-1">Drawee Banks</p>
+                    <p class="text-xs cvr-text-muted mb-4">
+                        Pick the bank(s) the company issues cheques against, in favor of the leasing
+                        company. Only these will appear in the Drawee Bank dropdown in the downloaded
+                        template — matching the exact name as stored in CashVero, so there's no risk of
+                        a mismatched English/Arabic spelling. Leave all unchecked to include every bank
+                        the company has on file.
+                    </p>
+                    <div class="grid grid-cols-2 gap-x-6 gap-y-2">
+                        <label v-for="b in banks" :key="b.id" class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" v-model="bankChecked[b.id]" />
+                            <span class="cvr-text-secondary text-sm">{{ b.name }}</span>
+                        </label>
+                    </div>
+                    <input v-for="id in selectedBankIds" :key="id" type="hidden" name="bank_ids[]" :value="id" />
                 </div>
 
                 <button type="submit" class="cvr-btn-primary px-4 py-2 rounded">Download</button>

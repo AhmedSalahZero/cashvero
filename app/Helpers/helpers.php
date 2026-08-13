@@ -1349,17 +1349,42 @@ function isDraweeBankImportHeading(string $heading): bool
     return false;
 }
 
-function getCompanyDraweeBankNames(int $companyId): array
+function getCompanyDraweeBankNames(int $companyId, ?array $bankIds = null): array
 {
     return FinancialInstitution::query()
         ->where('company_id', $companyId)
         ->where('type', FinancialInstitution::BANK)
+        ->when($bankIds !== null && $bankIds !== [], function ($query) use ($bankIds) {
+            $query->whereIn('id', $bankIds);
+        })
         ->with('bank:id,view_name')
         ->get()
         ->map(fn (FinancialInstitution $financialInstitution) => (string) ($financialInstitution->bank?->view_name ?? ''))
         ->filter(fn (string $bankName) => $bankName !== '')
         ->unique()
         ->sort(SORT_NATURAL | SORT_FLAG_CASE)
+        ->values()
+        ->all();
+}
+
+/**
+ * Company's banks, for the "which bank(s) does the company issue cheques
+ * against?" picker shown on the Contract Loan Schedule "Export Fields"
+ * screen before download (see ExportTable::customizedTableField()).
+ */
+function getCompanyBanksForDraweeBankPicker(int $companyId): array
+{
+    return FinancialInstitution::query()
+        ->where('company_id', $companyId)
+        ->where('type', FinancialInstitution::BANK)
+        ->with('bank:id,view_name')
+        ->get()
+        ->map(fn (FinancialInstitution $financialInstitution) => [
+            'id' => $financialInstitution->id,
+            'name' => (string) ($financialInstitution->bank?->view_name ?? $financialInstitution->getName()),
+        ])
+        ->filter(fn (array $bank) => $bank['name'] !== '')
+        ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
         ->values()
         ->all();
 }

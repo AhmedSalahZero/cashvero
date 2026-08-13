@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Exports\ExportData;
+use App\Models\ActiveJob;
 use App\Models\Company;
 use App\Models\CustomerInvoice;
 use App\Models\Deduction;
@@ -132,6 +133,19 @@ class SalesGatheringController extends Controller
 			$columns[] = ['label' => $label, 'field' => $db_names[$i]];
 		}
 		$isScheduleModel = in_array($modelName, ['LoanSchedule', 'ContractLoanSchedule'], true);
+		// ⚠️ UX fix: insertToMainTable() dispatches the actual DB-insert
+		// job (SalesGatheringTestJob, chained) and redirects immediately
+		// — it doesn't wait for the job to finish. If a queue worker
+		// hasn't caught up yet by the time this page renders, the
+		// schedule looks empty right after "Save," even though nothing
+		// failed (reloading a few seconds later shows the real rows).
+		// ActiveJob's 'save_to_table' row is the same signal
+		// insertToMainTable()/NotifyUserOfCompletedImport already use
+		// to track this — reused here rather than inventing a new one.
+		$isProcessing = $isScheduleModel && ActiveJob::where('company_id', $company->id)
+			->where('model', $modelName)
+			->where('status', 'save_to_table')
+			->exists();
 		$rows = collect($salesGatherings->items())->map(function ($item) use ($columns, $dateFields, $amountFields, $company, $modelName, $isScheduleModel) {
 			$cells = [];
 			foreach ($columns as $col) {
@@ -165,6 +179,7 @@ class SalesGatheringController extends Controller
 			'modelName' => $modelName,
 			'modelDisplayName' => $uploadingArr['typePrefixName'],
 			'isScheduleModel' => $isScheduleModel,
+			'isProcessing' => $isProcessing,
 			'columns' => $columns,
 			'rows' => $rows,
 			'pagination' => [

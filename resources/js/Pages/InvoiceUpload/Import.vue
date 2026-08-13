@@ -93,16 +93,44 @@ function submitUpload() {
    This keeps polling (via real Inertia reloads, so all props stay
    in sync) until we reach a genuinely stable state. ───────────────── */
 const waitingForParse = ref(props.isParsing);
+const parseGaveUp = ref(false);
 let parseTimer = null;
+let parseAttempts = 0;
+const MAX_PARSE_ATTEMPTS = 30; // ~60s at 2s intervals
 
 watch(waitingForParse, (val) => {
     if (val && !parseTimer) {
-        parseTimer = setInterval(() => router.reload(), 2000);
+        parseAttempts = 0;
+        parseGaveUp.value = false;
+        // ⚠️ Confirmed bug fix: this had no attempt cap. If a queue
+        // worker isn't running (or the parse job stalls/fails before
+        // either completion marker is set), isParsing/canReview never
+        // change and this polled forever — every 2s, indefinitely,
+        // for as long as the tab stayed open. Piling-up requests like
+        // that can exhaust PHP-FPM's worker pool server-side, making
+        // the whole app unresponsive for everyone, not just this tab.
+        // Same class of bug as InvoiceUpload/Index.vue's polling, now
+        // fixed the same way: hard cap, manual fallback after that.
+        parseTimer = setInterval(() => {
+            parseAttempts++;
+            if (parseAttempts > MAX_PARSE_ATTEMPTS) {
+                clearInterval(parseTimer);
+                parseTimer = null;
+                parseGaveUp.value = true;
+                return;
+            }
+            router.reload();
+        }, 2000);
     } else if (!val && parseTimer) {
         clearInterval(parseTimer);
         parseTimer = null;
     }
 }, { immediate: true });
+
+function checkParseAgain() {
+    parseGaveUp.value = false;
+    router.reload();
+}
 
 watch(
     () => [props.isParsing, props.canReview, props.totalCachedRows],
@@ -126,11 +154,26 @@ watch(
    Triggered via a watcher (not onMounted) for the same reason as
    parsing above — this component may not remount between visits. ── */
 const savingPercent = ref(0);
+const saveGaveUp = ref(false);
 let saveTimer = null;
+let saveAttempts = 0;
+const MAX_SAVE_ATTEMPTS = 60; // ~5min at 5s intervals — saving can legitimately take longer than parsing for large files
 
 function pollSaving() {
     if (saveTimer) return;
+    saveAttempts = 0;
+    saveGaveUp.value = false;
+    // ⚠️ Same confirmed bug fix as the parsing poller above — this had
+    // no attempt cap either, and would poll every 5s forever if the
+    // save job stalled.
     saveTimer = setInterval(async () => {
+        saveAttempts++;
+        if (saveAttempts > MAX_SAVE_ATTEMPTS) {
+            clearInterval(saveTimer);
+            saveTimer = null;
+            saveGaveUp.value = true;
+            return;
+        }
         const { data } = await window.axios.post(props.percentagePollUrl);
         savingPercent.value = data.totalPercentage;
         if (data.totalPercentage >= 100 || data.reloadPage) {
@@ -139,6 +182,10 @@ function pollSaving() {
             router.visit(props.redirectUrlAfterSave);
         }
     }, 5000);
+}
+
+function checkSaveAgain() {
+    pollSaving();
 }
 
 watch(() => props.isSaving, (val) => { if (val) pollSaving(); }, { immediate: true });
@@ -165,19 +212,27 @@ onBeforeUnmount(() => {
             <Link v-if="lastUploadFailedUrl" :href="lastUploadFailedUrl" class="inline-block text-sm cvr-num-red hover:underline mb-4">View last upload's failed rows →</Link>
 
             <!-- State: parsing -->
-            <div v-if="isParsing" class="cvr-card-bg cvr-border border rounded-lg p-6 mb-6">
+            <div v-if="isParsing && !parseGaveUp" class="cvr-card-bg cvr-border border rounded-lg p-6 mb-6">
                 <p class="cvr-num-green font-medium mb-3">Uploading and parsing your file…</p>
                 <div class="h-2 rounded-full bg-white/5 overflow-hidden">
                     <div class="h-full rounded-full animate-pulse" style="width: 100%; background-color: var(--cvr-green-bright)"></div>
                 </div>
             </div>
+            <div v-else-if="isParsing && parseGaveUp" class="cvr-card-bg cvr-border border rounded-lg p-6 mb-6 flex items-center justify-between gap-3 flex-wrap">
+                <p class="text-sm">This is taking longer than expected. Your file may still be processing in the background.</p>
+                <button type="button" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap" @click="checkParseAgain">Check Again</button>
+            </div>
 
             <!-- State: saving -->
-            <div v-else-if="isSaving" class="cvr-card-bg cvr-border border rounded-lg p-6 mb-6">
+            <div v-else-if="isSaving && !saveGaveUp" class="cvr-card-bg cvr-border border rounded-lg p-6 mb-6">
                 <p class="cvr-num-green font-medium mb-3">Saving to the database… {{ savingPercent.toFixed(0) }}%</p>
                 <div class="h-2 rounded-full bg-white/5 overflow-hidden">
                     <div class="h-full rounded-full transition-all" :style="{ width: savingPercent + '%', backgroundColor: 'var(--cvr-green-bright)' }"></div>
                 </div>
+            </div>
+            <div v-else-if="isSaving && saveGaveUp" class="cvr-card-bg cvr-border border rounded-lg p-6 mb-6 flex items-center justify-between gap-3 flex-wrap">
+                <p class="text-sm">This is taking longer than expected ({{ savingPercent.toFixed(0) }}% when we stopped checking). Your data may still be saving in the background.</p>
+                <button type="button" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap" @click="checkSaveAgain">Check Again</button>
             </div>
 
             <!-- State: review (preview + duplicates + Save Data) -->

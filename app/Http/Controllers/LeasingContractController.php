@@ -8,6 +8,7 @@ use App\Models\LeasingContract;
 use App\Traits\GeneralFunctions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * LeasingContractController
@@ -145,6 +146,7 @@ class LeasingContractController
             'leasingCompany' => ['id' => $leasingCompany->id, 'name' => $leasingCompany->getName()],
             'currencies' => getCurrencies(),
             'installmentIntervals' => \App\Helpers\HVero::getDurationIntervalTypesForSelect(),
+            'isLocked' => false,
             'model' => null,
             'submitUrl' => route('leasing.contracts.store', ['company' => $company->id, 'leasingCompany' => $leasingCompany->id]),
             'backUrl' => route('leasing.contracts.index', ['company' => $company->id, 'leasingCompany' => $leasingCompany->id]),
@@ -185,12 +187,17 @@ class LeasingContractController
      */
     public function edit(Company $company, LeasingCompany $leasingCompany, LeasingContract $leasingContract)
     {
+        // Same lock, same reason, as MediumTermLoanController::edit() —
+        // see that method's comment for the full rationale.
+        $isLocked = $leasingContract->contractLoanSchedules()->exists();
+
         return \Inertia\Inertia::render('LeasingContract/Form', [
             'mode' => 'edit',
             'company' => ['id' => $company->id],
             'leasingCompany' => ['id' => $leasingCompany->id, 'name' => $leasingCompany->getName()],
             'currencies' => getCurrencies(),
             'installmentIntervals' => \App\Helpers\HVero::getDurationIntervalTypesForSelect(),
+            'isLocked' => $isLocked,
             'model' => [
                 'id' => $leasingContract->id,
                 'name' => $leasingContract->getName(),
@@ -202,8 +209,12 @@ class LeasingContractController
                 'margin_rate' => $leasingContract->getMarginRate(),
                 'duration' => $leasingContract->getDuration(),
                 'installment_payment_interval' => $leasingContract->getPaymentInstallmentInterval(),
+                'already_paid_amount' => (float) $leasingContract->already_paid_amount,
+                'first_installment_date' => $leasingContract->first_installment_date,
+                'remaining_installment_count' => $leasingContract->remaining_installment_count,
             ],
             'submitUrl' => route('leasing.contracts.update', ['company' => $company->id, 'leasingCompany' => $leasingCompany->id, 'leasingContract' => $leasingContract->id]),
+            'deleteScheduleUrl' => route('leasing.contracts.schedule.destroy', ['company' => $company->id, 'leasingCompany' => $leasingCompany->id, 'leasingContract' => $leasingContract->id]),
             'backUrl' => route('leasing.contracts.index', ['company' => $company->id, 'leasingCompany' => $leasingCompany->id]),
             'navUrls' => [
                 'home' => route('home', ['company' => $company->id]),
@@ -216,12 +227,18 @@ class LeasingContractController
     }
 
     /**
-     * Deletes then calls store() fresh, in-place. Confirmed deliberate
-     * original behavior (same pattern as Medium Term Loan), not a
-     * bug. UNCHANGED.
+     * Deletes then calls store() fresh, in-place — same delete-then-
+     * recreate pattern as before. UPDATED: now blocked once a schedule
+     * exists (see destroySchedule() below for why).
      */
     public function update(Company $company, Request $request, LeasingCompany $leasingCompany, LeasingContract $leasingContract)
     {
+        if ($leasingContract->contractLoanSchedules()->exists()) {
+            return redirect()
+                ->back()
+                ->with('fail', __('This leasing contract has an uploaded schedule and can\'t be edited. Delete the schedule first if you need to make changes.'));
+        }
+
         $leasingContract->deleteRelations();
         $leasingContract->delete();
         $this->store($company, $request, $leasingCompany);
@@ -244,5 +261,31 @@ class LeasingContractController
         $leasingContract->delete();
 
         return redirect()->back()->with('success', __('Item Has Been Delete Successfully'));
+    }
+
+    /**
+     * Deletes every installment on this contract's schedule, and for
+     * each one, every payment settlement recorded against it —
+     * reversing each settlement's effect on the bank statement / loan
+     * statement exactly as a normal single-settlement delete already
+     * does (reuses ContractLoanScheduleSettlement::deleteAllRelations()
+     * + delete(), applied to every row). Unlocks the contract for
+     * editing again once complete.
+     */
+    public function destroySchedule(Company $company, LeasingCompany $leasingCompany, LeasingContract $leasingContract)
+    {
+        DB::transaction(function () use ($leasingContract) {
+            foreach ($leasingContract->contractLoanSchedules as $schedule) {
+                foreach ($schedule->settlements as $settlement) {
+                    $settlement->deleteAllRelations();
+                    $settlement->delete();
+                }
+                $schedule->delete();
+            }
+        });
+
+        return redirect()
+            ->back()
+            ->with('success', __('Schedule deleted. You can now edit this contract or upload a corrected schedule.'));
     }
 }

@@ -38,7 +38,7 @@
  * original's own backend method is empty — a dead feature, not
  * replicated as if it worked).
  */
-import { ref } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
@@ -46,6 +46,7 @@ const props = defineProps({
     modelName: String,
     modelDisplayName: String,
     isScheduleModel: Boolean,
+    isProcessing: Boolean,
     columns: Array, // [{ label, field }]
     rows: Array, // [{ id, cells: [...], status, remaining, settlementUrl, editUrl, deleteUrl }]
     pagination: Object, // { current_page, last_page, total, per_page }
@@ -99,6 +100,63 @@ function goToPage(page) {
     }, { preserveState: true, preserveScroll: true });
 }
 
+/* ── "Still processing" banner + auto-poll ──────────────────────────
+   insertToMainTable() dispatches the actual DB-insert job and
+   redirects immediately, without waiting for it to finish — so this
+   page can render before a queue worker has caught up, looking
+   "empty" right after Save even though nothing failed. isProcessing
+   (backed by the same ActiveJob row the backend already tracks this
+   with) tells us that's what's happening.
+
+   ⚠️ Hard-capped, deliberately: if a queue worker isn't running, or a
+   job silently fails and never clears its ActiveJob row, isProcessing
+   would never turn false — an uncapped setInterval would then poll
+   forever, and if reloads pile up faster than they resolve, the tab's
+   memory/CPU climbs unbounded until the browser becomes unresponsive.
+   Stops after 10 tries (~30s) and falls back to a manual "Check Again"
+   button instead. Also guards against a second interval ever starting
+   if this somehow runs twice. */
+const pollAttempts = ref(0);
+const pollGaveUp = ref(false);
+const MAX_POLL_ATTEMPTS = 10;
+let pollTimer = null;
+
+function stopPolling() {
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+}
+
+function pollUntilProcessed() {
+    if (!props.isProcessing || pollTimer) return;
+    pollTimer = setInterval(() => {
+        pollAttempts.value++;
+        if (pollAttempts.value > MAX_POLL_ATTEMPTS) {
+            stopPolling();
+            pollGaveUp.value = true;
+            return;
+        }
+        router.reload({
+            only: ['rows', 'pagination', 'isProcessing'],
+            onSuccess: () => {
+                if (!props.isProcessing) {
+                    stopPolling();
+                }
+            },
+        });
+    }, 3000);
+}
+
+function checkAgain() {
+    pollAttempts.value = 0;
+    pollGaveUp.value = false;
+    router.reload({ only: ['rows', 'pagination', 'isProcessing'] });
+}
+
+onMounted(pollUntilProcessed);
+onBeforeUnmount(stopPolling);
+
 /* ── Single-row delete — real Inertia action, controller already
    returns a plain redirect. ─────────────────────────────────────── */
 const deleteTarget = ref(null);
@@ -123,6 +181,15 @@ function destroyRow() {
                 </div>
             </div>
             <p class="text-sm cvr-text-muted mb-6">{{ pagination.total }} record(s)</p>
+
+            <div v-if="isProcessing && !pollGaveUp" class="mb-4 px-4 py-3 rounded cvr-card-bg cvr-border border text-sm flex items-center gap-2">
+                <span class="animate-spin inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full"></span>
+                <span>Your upload is still being saved — this page will update automatically in a few seconds.</span>
+            </div>
+            <div v-else-if="isProcessing && pollGaveUp" class="mb-4 px-4 py-3 rounded cvr-badge-overdue text-sm flex items-center justify-between gap-3 flex-wrap">
+                <span>This is taking longer than expected. Your upload may still be processing in the background.</span>
+                <button type="button" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap" @click="checkAgain">Check Again</button>
+            </div>
 
             <!-- Filters -->
             <div class="cvr-card-bg cvr-border border rounded-lg p-4 mb-6">

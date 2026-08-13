@@ -479,6 +479,7 @@ const expandedLoanId = ref(null);
                                     <th class="px-4 py-2 text-left">Bank</th>
                                     <th class="px-4 py-2 text-left">Loan</th>
                                     <th class="px-4 py-2 text-right">Limit</th>
+                                    <th class="px-4 py-2 text-right">Paid</th>
                                     <th class="px-4 py-2 text-right">Outstanding</th>
                                     <th class="px-4 py-2 text-left">Next Installment</th>
                                     <th class="px-4 py-2 text-right">Past Due</th>
@@ -490,12 +491,13 @@ const expandedLoanId = ref(null);
                                         <td class="px-4 py-2">{{ loan.institution_name }}</td>
                                         <td class="px-4 py-2">{{ loan.name }}</td>
                                         <td class="px-4 py-2 text-right cvr-num-blue">{{ loan.limit_formatted }}</td>
+                                        <td class="px-4 py-2 text-right cvr-num-green">{{ loan.paid_formatted }}</td>
                                         <td class="px-4 py-2 text-right cvr-num-amber">{{ loan.outstanding_formatted }}</td>
                                         <td class="px-4 py-2">{{ loan.next_installment_date || '—' }} <span v-if="loan.next_installment_amount" class="cvr-num">({{ loan.next_installment_amount }})</span></td>
                                         <td class="px-4 py-2 text-right cvr-num-red">{{ loan.total_past_due_remaining_formatted }}</td>
                                     </tr>
                                     <tr v-if="expandedLoanId === 'ml-'+loan.id" class="cvr-sub-row">
-                                        <td colspan="6" class="px-4 py-2">
+                                        <td colspan="7" class="px-4 py-2">
                                             <div v-if="(loan.past_dues || []).length" class="text-xs">
                                                 <span v-for="(pd, i) in loan.past_dues" :key="i" class="inline-block me-4 mb-1">
                                                     {{ pd.date }}: <span class="cvr-num-red">{{ fmt(pd.remaining) }}</span>
@@ -520,6 +522,7 @@ const expandedLoanId = ref(null);
                                     <th class="px-4 py-2 text-left">Leasing Company</th>
                                     <th class="px-4 py-2 text-left">Contract</th>
                                     <th class="px-4 py-2 text-right">Limit</th>
+                                    <th class="px-4 py-2 text-right">Paid</th>
                                     <th class="px-4 py-2 text-right">Outstanding</th>
                                     <th class="px-4 py-2 text-left">Next Installment</th>
                                     <th class="px-4 py-2 text-right">Past Due</th>
@@ -531,12 +534,13 @@ const expandedLoanId = ref(null);
                                         <td class="px-4 py-2">{{ lease.institution_name }}</td>
                                         <td class="px-4 py-2">{{ lease.name }}</td>
                                         <td class="px-4 py-2 text-right cvr-num-blue">{{ lease.limit_formatted }}</td>
+                                        <td class="px-4 py-2 text-right cvr-num-green">{{ lease.paid_formatted }}</td>
                                         <td class="px-4 py-2 text-right cvr-num-amber">{{ lease.outstanding_formatted }}</td>
                                         <td class="px-4 py-2">{{ lease.next_installment_date || '—' }} <span v-if="lease.next_installment_amount" class="cvr-num">({{ lease.next_installment_amount }})</span></td>
                                         <td class="px-4 py-2 text-right cvr-num-red">{{ lease.total_past_due_remaining_formatted }}</td>
                                     </tr>
                                     <tr v-if="expandedLoanId === 'lc-'+lease.id" class="cvr-sub-row">
-                                        <td colspan="6" class="px-4 py-2">
+                                        <td colspan="7" class="px-4 py-2">
                                             <div v-if="(lease.past_dues || []).length" class="text-xs">
                                                 <span v-for="(pd, i) in lease.past_dues" :key="i" class="inline-block me-4 mb-1">
                                                     {{ pd.date }}: <span class="cvr-num-red">{{ fmt(pd.remaining) }}</span>

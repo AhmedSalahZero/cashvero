@@ -19,12 +19,15 @@ use App\Models\Company;
 use App\Models\Contract;
 use App\Models\CustomerInvoice;
 use App\Models\LastUploadFileName;
+use App\Models\LeasingContract;
+use App\Models\MediumTermLoan;
 use App\Models\Partner;
 use App\Models\PurchaseOrder;
 use App\Models\SalesOrder;
 use App\Models\SupplierInvoice;
 use App\Models\User;
 use Auth;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
@@ -161,7 +164,16 @@ class SalesGatheringTestController extends Controller
 				}
 			}
 
-			$previewRows = collect($salesGatherings)->take(20)->map(function ($row) use ($db_names, $company, $modelName) {
+			// Preview cap: 20 for most upload types (deliberately —
+			// some of these can be up to 50,000 rows, so previewing
+			// everything would be slow and unwieldy). LoanSchedule /
+			// ContractLoanSchedule are naturally small (installment
+			// counts, realistically dozens not thousands), so show the
+			// whole thing — no reason to make the user wonder what's
+			// in the other 10 rows on something this size.
+			$isScheduleModel = in_array($modelName, ['LoanSchedule', 'ContractLoanSchedule'], true);
+			$previewLimit = $isScheduleModel ? PHP_INT_MAX : 20;
+			$previewRows = collect($salesGatherings)->take($previewLimit)->map(function ($row) use ($db_names, $company, $modelName) {
 				$key = ($row['invoice_number'] ?? '') . '|' . strtoupper($row['currency'] ?? '');
 				return [
 					'id' => $row['id'] ?? null,
@@ -185,9 +197,15 @@ class SalesGatheringTestController extends Controller
 				$currentFileNameLabel = 'Last Successfully Uploaded File Name: ' . $company->getSuccessLastFileNameForModel($modelName);
 			}
 
+			// ⚠️ Same confirmed bug as insertToMainTable()'s final
+			// redirect: this omitted loanId, so on a non-sync queue
+			// driver (where this URL is actually used, once the save
+			// job's percentage hits 100%), the user would land on the
+			// UNFILTERED schedule table — every leasing contract's
+			// rows mixed together — instead of just this one.
 			$redirectUrlAfterSave = in_array($modelName, ['CustomerInvoice', 'SupplierInvoice'], true)
 				? route('view.balances', ['company' => $company->id, 'modelType' => $modelName])
-				: route('view.uploading', ['company' => $company->id, 'model' => $modelName]);
+				: route('view.uploading', getUploadingRouteParams($company->id, $modelName, $loanId));
 
 			return Inertia::render('InvoiceUpload/Import', [
 				'modelName' => $modelName,
@@ -275,21 +293,92 @@ class SalesGatheringTestController extends Controller
 			return redirect()->route('salesGatheringImport', $redirectParams);
 		}
 	}
+	/**
+	 * Guards the "already-running facility onboarding" contract: if the
+	 * MTL / Leasing record has first_installment_date and/or
+	 * remaining_installment_count set, the just-uploaded (still cached,
+	 * not yet committed) schedule must match both exactly — same row
+	 * count, first row's date equal to the configured date. Hard
+	 * reject (returns an error message, nothing gets committed) rather
+	 * than a soft warning: a wrong row count or start date would break
+	 * the guarantee that everything from here on is payable through
+	 * CashVero. Returns null when everything checks out (or when the
+	 * facility has none of these fields set, e.g. a brand-new facility
+	 * with no pre-CashVero history).
+	 */
+	protected function validateScheduleUploadShape(Company $company, string $modelName, $loanId): ?string
+	{
+		$facility = $modelName === 'ContractLoanSchedule'
+			? LeasingContract::find($loanId)
+			: MediumTermLoan::find($loanId);
+
+		if (! $facility || (! $facility->first_installment_date && ! $facility->remaining_installment_count)) {
+			return null;
+		}
+
+		$rows = collect();
+		foreach (CachingCompany::where('company_id', $company->id)->where('model', $modelName)->get() as $cache) {
+			$cacheGroup = Cache::get($cache->key_name) ?: [];
+			$rows = $rows->merge(collect($cacheGroup)->filter(fn ($row) => ! isMappedImportRowEmpty($row)));
+		}
+
+		if ($rows->isEmpty()) {
+			return null;
+		}
+
+		if ($facility->remaining_installment_count && $rows->count() != $facility->remaining_installment_count) {
+			return __('This schedule has :uploaded row(s), but :expected remaining installment(s) were expected for this facility.', [
+				'uploaded' => $rows->count(),
+				'expected' => $facility->remaining_installment_count,
+			]);
+		}
+
+		if ($facility->first_installment_date) {
+			$firstRow = $rows->sortBy('date')->first();
+			$firstRowDate = isset($firstRow['date']) ? Carbon::make($firstRow['date'])?->format('Y-m-d') : null;
+			$expectedDate = Carbon::make($facility->first_installment_date)->format('Y-m-d');
+
+			if ($firstRowDate !== $expectedDate) {
+				return __('The first installment date in this schedule (:uploaded) does not match the First Installment Date configured for this facility (:expected).', [
+					'uploaded' => $firstRowDate ?? __('N/A'),
+					'expected' => $expectedDate,
+				]);
+			}
+		}
+
+		return null;
+	}
+
 	public function insertToMainTable(Company $company , string $modelName)
 	{
 		$loanId = request('medium_term_loan_id') ?? request('loanId') ?? session('loan_schedule_import_loan_id_' . $company->id);
 		if ($modelName == 'LoanSchedule' && !$loanId) {
-			toastr()->error(__('Loan is required to save loan schedule data.'));
-			return redirect()->back();
+			// ⚠️ Pre-existing bug, unrelated to this session's changes,
+			// fixed here because it's the exact same failure mode as
+			// above: toastr() isn't wired into this app's Inertia flash
+			// system, so this error was always silent too.
+			return redirect()->back()->with('fail', __('Loan is required to save loan schedule data.'));
 		}
 		$contractId = request('leasing_contract_id') ?? request('loanId') ?? session('contract_loan_schedule_import_contract_id_' . $company->id);
 		if ($modelName == 'ContractLoanSchedule' && !$contractId) {
-			toastr()->error(__('Contract is required to save contract loan schedule data.'));
-			return redirect()->back();
+			return redirect()->back()->with('fail', __('Contract is required to save contract loan schedule data.'));
 		}
 		if ($modelName == 'ContractLoanSchedule') {
 			$loanId = $contractId;
 		}
+
+		if (in_array($modelName, ['LoanSchedule', 'ContractLoanSchedule'], true)) {
+			$shapeError = $this->validateScheduleUploadShape($company, $modelName, $loanId);
+			if ($shapeError) {
+				// ⚠️ toastr() is NOT wired into this app's Inertia flash
+				// system (see HandleInertiaRequests::share() — it only
+				// bridges session('success')/session('fail') into
+				// page.props.flash, which AppLayout.vue watches).
+				// with('fail', ...) is the correct channel here.
+				return redirect()->back()->with('fail', $shapeError);
+			}
+		}
+
 		$active_job = ActiveJob::where('company_id',  $company->id)->where('model',$modelName)->where('status', 'save_to_table')->where('model_name', 'SalesGatheringTest')->first();
 		if ($active_job === null) {
 			$active_job = ActiveJob::create([
@@ -311,8 +400,14 @@ class SalesGatheringTestController extends Controller
 				new RemoveCachingCompaniesData($company->id,$modelName),
 			])->dispatch($company->id,$modelName,$loanId);
 	
-
-		return redirect()->back();
+		// ⚠️ Confirmed bug fix: this was redirect()->back(), which sends
+		// the user back to the Import page itself (the "choose a file"
+		// screen) instead of forward to the actual schedule table where
+		// their just-saved rows live — forcing an extra manual click on
+		// "Back to Contract Loan Schedule Table" every time. Same
+		// destination-building helper already used by storeModel() /
+		// updateModel() below for the equivalent single-row save flow.
+		return redirect()->route('view.uploading', getUploadingRouteParams($company->id, $modelName, $loanId));
 	}
 
 	/**

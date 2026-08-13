@@ -88,9 +88,7 @@ class SyncOdooPaymentMethodIdsJob implements ShouldQueue
     private function syncCompany(Company $company, User $user): void
     {
         try {
-				logger('starting feetubg');
             if (! $company->hasOdooIntegrationCredentials($user)) {
-				logger('no cred..');
                 return ;
             }
 
@@ -98,12 +96,10 @@ class SyncOdooPaymentMethodIdsJob implements ShouldQueue
             $branchesOdooCodes = $this->rowsNeedingSync('branch', $company->id)->pluck('odoo_code');
 
             if ($accounts->isEmpty() && $branchesOdooCodes->isEmpty()) {
-				logger('exit1');
                 return ;
-				}
-				
-				if (! $this->canRunNowFor($company)) {
-				logger('exit2');
+            }
+
+            if (! $this->canRunNowFor($company)) {
                 return ;
             }
 
@@ -113,14 +109,10 @@ class SyncOdooPaymentMethodIdsJob implements ShouldQueue
             $odooService = app(OdooService::class, ['company' => $company, 'user' => $user]);
 
             foreach ($accounts as $account) {
-												logger('sync accounts '.$account->id);
-
                 $this->syncAccount($odooService, $company, (int) $account->id);
             }
 
             foreach ($branchesOdooCodes as $odooCode) {
-								logger('sync branches '.$odooCode);
-
                 $this->syncBranch($odooService, $company, (string) $odooCode);
             }
         } catch (\Throwable $exception) {

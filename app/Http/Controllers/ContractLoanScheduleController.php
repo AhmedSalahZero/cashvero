@@ -211,7 +211,16 @@ class ContractLoanScheduleController extends Controller
         $settlement->handleCreditStatement($company->id, $financialInstitutionId, $accountType, $currentAccountNumber, null, $date, $amount, null, null, $commentEn, $commentAr);
         $settlement->handleLoanStatement($company->id, $financialInstitutionId, $currentAccountNumber, $date, $amount, $commentEn, $commentAr);
 
-        return back();
+        // ⚠️ Confirmed fix: this was back(), which leaves the user on
+        // the same settlement page after paying — the natural next
+        // step is seeing the updated schedule table, not re-settling
+        // the same installment. Same destination helper already used
+        // for the upload flow.
+        return redirect()->route('view.uploading', getUploadingRouteParams(
+            $company->id,
+            'ContractLoanSchedule',
+            (string) $contractLoanSchedule->getLeasingContractId()
+        ));
     }
 
     /**
