@@ -120,6 +120,8 @@ Route::middleware([])->group(function () {
                     Route::get('factoring-companies/{factoringCompany}/contracts/{factoringContract}/edit', 'FactoringContractController@edit')->name('factoring.contracts.edit');
                     Route::put('factoring-companies/{factoringCompany}/contracts/{factoringContract}/update', 'FactoringContractController@update')->name('factoring.contracts.update');
                     Route::delete('factoring-companies/{factoringCompany}/contracts/{factoringContract}/delete', 'FactoringContractController@destroy')->name('factoring.contracts.destroy');
+                    Route::post('factoring-companies/{factoringCompany}/contracts/{factoringContract}/renew', 'FactoringContractController@renew')->name('factoring.contracts.renew');
+                    Route::delete('factoring-companies/{factoringCompany}/contracts/{factoringContract}/renew', 'FactoringContractController@deleteRenewal')->name('factoring.contracts.delete-renewal');
 
                     Route::get('financial-institutions/{financialInstitution}/add-account', 'FinancialInstitutionController@addAccount')->name('financial.institution.add.account');
                     Route::post('financial-institutions/{financialInstitution}/add-account', 'FinancialInstitutionController@storeAccount')->name('financial.institution.store.account');
@@ -533,6 +535,8 @@ Route::middleware([])->group(function () {
                     Route::get('financial-institutions/{financialInstitution}/letter-of-credit-facility/edit/{letterOfCreditFacility}', 'LetterOfCreditFacilityController@edit')->name('edit.letter.of.credit.facility');
                     Route::put('financial-institutions/{financialInstitution}/letter-of-credit-facility/update/{letterOfCreditFacility}', 'LetterOfCreditFacilityController@update')->name('update.letter.of.credit.facility');
                     Route::delete('financial-institutions/{financialInstitution}/letter-of-credit-facility/delete/{letterOfCreditFacility}', 'LetterOfCreditFacilityController@destroy')->name('delete.letter.of.credit.facility');
+                    Route::post('financial-institutions/{financialInstitution}/letter-of-credit-facility/renew/{letterOfCreditFacility}', 'LetterOfCreditFacilityController@renew')->name('letter-of-credit-facility.renew');
+                    Route::delete('financial-institutions/{financialInstitution}/letter-of-credit-facility/renew/{letterOfCreditFacility}', 'LetterOfCreditFacilityController@deleteRenewal')->name('letter-of-credit-facility.delete-renewal');
 
                     
                     
@@ -566,6 +570,15 @@ Route::middleware([])->group(function () {
                     Route::get('partners-statement/partners-by-type', 'PartnersStatementController@getPartnersByType')->name('partners.statement.partners.by.type');
                     Route::get('partners-statement/result', 'PartnersStatementController@result')->name('result.partners.statement');
                     Route::get('partners-statement/export', 'PartnersStatementController@exportExcel')->name('export.partners.statement');
+
+                    /**
+                     * Feature (client requested, 2026-08-15): Taxes & Insurance
+                     * moved out of Partner Statement's Type dropdown into its
+                     * own dedicated report — see TaxesInsuranceStatementController
+                     * for why.
+                     */
+                    Route::get('taxes-insurance-statement', 'TaxesInsuranceStatementController@index')->name('view.taxes.insurance.statement');
+                    Route::get('taxes-insurance-statement/result', 'TaxesInsuranceStatementController@result')->name('result.taxes.insurance.statement');
                     
                     
                     Route::get('show-bank-statement', 'BankStatementController@index')->name('view.bank.statement');

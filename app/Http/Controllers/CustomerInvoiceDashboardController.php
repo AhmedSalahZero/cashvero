@@ -195,8 +195,33 @@ class CustomerInvoiceDashboardController extends Controller
             $out[$currencyName] = collect($collection)->map(function ($item) use ($date, $isLeasing) {
                 $next = $item->getNextInstallmentDateAndAmount($date);
                 $schedules = $isLeasing ? $item->contractLoanSchedules : $item->loanSchedules;
+
+                /**
+                 * REVERTED 2026-08-15: the previous edit here summed each
+                 * installment's full remaining (principal + interest) and
+                 * treated Limit as if it were the total of every future
+                 * payment. That's wrong — Limit is the loan/lease's
+                 * PRINCIPAL amount, and the sum of principal+interest
+                 * across a whole amortization schedule is always bigger
+                 * than the principal alone. That edit made Outstanding
+                 * balloon past Limit and Paid go negative even on an
+                 * untouched loan — confirmed wrong by the client
+                 * (screenshot: Limit 6,000,000, Outstanding 10,304,294,
+                 * Paid -4,304,294, nothing actually paid). Back to
+                 * outstanding PRINCIPAL only, which is the standard
+                 * meaning of "Outstanding" for a loan balance and is what
+                 * correctly nets to ~Limit when nothing has been paid.
+                 *
+                 * The original small-gap symptom (Limit 6,000,000, nothing
+                 * paid, "Paid" showing 3,333) still needs a real
+                 * diagnosis — see the follow-up investigation, since it's
+                 * most likely a rounding artifact in the schedule's own
+                 * principal amounts (their sum landing a few thousand off
+                 * Limit), not this formula.
+                 */
                 $outstanding = $schedules->sum(fn ($schedule) => min($schedule->getPrincipleAmount(), $schedule->getRemaining()));
                 $paid = $item->getLimit() - $outstanding;
+
                 return [
                     'id' => $item->id,
                     'institution_name' => $isLeasing ? $item->getLeasingCompanyName() : $item->getFinancialInstitutionName(),

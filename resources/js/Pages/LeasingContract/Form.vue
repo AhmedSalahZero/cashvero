@@ -85,7 +85,7 @@ function deleteSchedule() {
 
 <template>
     <AppLayout :nav-urls="navUrls">
-        <div class="p-6 max-w-5xl">
+        <div class="p-6">
             <div class="flex items-center gap-3 mb-1">
                 <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
                     ← Back to Leasing Contracts
@@ -162,7 +162,7 @@ function deleteSchedule() {
                     </div>
                 </div>
 
-                <div class="cvr-card">
+                <div class="cvr-card mt-4">
                     <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-1">Already Running Facility?</h2>
                     <p class="text-xs cvr-text-muted mb-4">
                         Fill this in only if the company already had this contract before joining CashVero.

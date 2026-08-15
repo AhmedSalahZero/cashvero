@@ -170,9 +170,27 @@ trait HasPartnerStatement
 			$this->otherPartnerStatement()->create($statementData);
 		}
 		elseif($partnerType == 'is_tax'){
-			$this->taxStatement()->create($statementData);
+			/**
+			 * Bug fix (client-flagged, confirmed 2026-08-15): every other
+			 * partner type here models "we paid them" as a debit — correct
+			 * for Employee/Shareholder/Subsidiary/Other Partner, where a
+			 * payment out is money the PARTNER now owes back to the
+			 * company (a receivable, which grows on debit per this
+			 * ledger's end_balance = beginning + debit - credit formula).
+			 * Taxes & Insurance is the opposite kind of relationship: the
+			 * COMPANY owes THEM (a payable), so paying a VAT/insurance
+			 * bill should shrink that balance, not grow it — which this
+			 * formula does on credit, not debit. Using $statementData
+			 * as-is (debit=amount) had every VAT/insurance payment
+			 * appearing as a debit and inflating the balance in the wrong
+			 * direction. Swapped for this branch only.
+			 */
+			$this->taxStatement()->create([
+				...$statementData,
+				'debit' => 0,
+				'credit' => $amount,
+			]);
 		}
-		 
 	}
 	public function generatePartnerCreditComment(string $bankNameOrBranchName , ?string $accountTypeName , ?string $accountNumber  )
 	{

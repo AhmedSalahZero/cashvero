@@ -7,6 +7,7 @@ use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
+use PhpOffice\PhpSpreadsheet\NamedRange;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class ContractLoanScheduleHeadersExport extends HeadersExport implements WithEvents
@@ -75,6 +76,85 @@ class ContractLoanScheduleHeadersExport extends HeadersExport implements WithEve
         $sheet->setDataValidation($draweeBankColumn.'2', $validation);
 
         $sheet->getColumnDimension($draweeBankColumn)->setWidth(55);
+
+        $this->addAccountNumberValidation($sheet, $workbook, $draweeBankColumn);
+    }
+
+    /**
+     * Bug fix (client-flagged, confirmed 2026-08-15): the template already
+     * forced Drawee Bank to be picked from a real list, but Account Number
+     * was still free text — nothing stopped a typo, and nothing tied the
+     * imported row to one specific account (see
+     * ContractLoanSchedule::getAccountNumberAttribute() and the
+     * 2026-08-15 migrations for the storage side of this fix).
+     *
+     * This adds the matching dropdown, scoped to whichever bank the user
+     * picks on that row: a hidden "BankAccounts" sheet holds one column of
+     * account numbers per bank plus a bank-name -> column-code lookup
+     * table, and the Account Number cell's validation list is
+     * INDIRECT(VLOOKUP(<this row's bank cell>, map, 2, 0)) — so picking a
+     * different bank changes which accounts are offered, same row.
+     */
+    protected function addAccountNumberValidation($sheet, $workbook, string $draweeBankColumn): void
+    {
+        $accountNumberColumn = $this->getAccountNumberColumnLetter();
+        if (! $accountNumberColumn) {
+            return;
+        }
+
+        $accountsByBank = getCompanyDraweeBankAccountNumbersGrouped($this->company_id, $this->bankIds);
+        if ($accountsByBank === []) {
+            return;
+        }
+
+        $mapSheet = new Worksheet($workbook, 'BankAccounts');
+        $workbook->addSheet($mapSheet);
+        $mapSheet->setSheetState(Worksheet::SHEETSTATE_VERYHIDDEN);
+
+        $bankIndex = 0;
+        foreach ($accountsByBank as $bankName => $accountNumbers) {
+            $bankIndex++;
+            $code = 'BankAcc'.$bankIndex;
+
+            // bank name -> code, for the VLOOKUP map (columns A/B)
+            $mapSheet->setCellValue('A'.$bankIndex, $bankName);
+            $mapSheet->setCellValue('B'.$bankIndex, $code);
+
+            // that bank's account numbers, in their own column starting at C
+            $accountColumn = Coordinate::stringFromColumnIndex(3 + $bankIndex - 1);
+            foreach ($accountNumbers as $rowOffset => $accountNumber) {
+                $mapSheet->setCellValue($accountColumn.($rowOffset + 1), $accountNumber);
+            }
+
+            $workbook->addNamedRange(new NamedRange(
+                $code,
+                $mapSheet,
+                sprintf('$%1$s$1:$%1$s$%2$d', $accountColumn, count($accountNumbers))
+            ));
+        }
+
+        $workbook->addNamedRange(new NamedRange(
+            'BankAccountCodeMap',
+            $mapSheet,
+            sprintf('$A$1:$B$%d', $bankIndex)
+        ));
+
+        $validation = new DataValidation();
+        $validation->setType(DataValidation::TYPE_LIST);
+        $validation->setErrorStyle(DataValidation::STYLE_STOP);
+        $validation->setAllowBlank(true);
+        $validation->setShowInputMessage(true);
+        $validation->setShowErrorMessage(true);
+        $validation->setShowDropDown(true);
+        $validation->setErrorTitle(__('Invalid Account Number'));
+        $validation->setError(__('Please pick the Drawee Bank first, then select one of its account numbers from the list'));
+        $validation->setPromptTitle(__('Account Number'));
+        $validation->setPrompt(__('Select an account number for the bank chosen in this row'));
+        $validation->setFormula1(sprintf('INDIRECT(VLOOKUP(%s2,BankAccountCodeMap,2,0))', $draweeBankColumn));
+        $validation->setSqref(sprintf('%s2:%s%d', $accountNumberColumn, $accountNumberColumn, self::DATA_ROWS));
+
+        $sheet->setDataValidation($accountNumberColumn.'2', $validation);
+        $sheet->getColumnDimension($accountNumberColumn)->setWidth(30);
     }
 
     protected function createDraweeBankValidation(string $listRange): DataValidation
@@ -101,6 +181,21 @@ class ContractLoanScheduleHeadersExport extends HeadersExport implements WithEve
 
         foreach ($this->headings() as $heading) {
             if (isDraweeBankImportHeading((string) $heading)) {
+                return Coordinate::stringFromColumnIndex($columnIndex);
+            }
+
+            $columnIndex++;
+        }
+
+        return null;
+    }
+
+    protected function getAccountNumberColumnLetter(): ?string
+    {
+        $columnIndex = 1;
+
+        foreach ($this->headings() as $heading) {
+            if (isAccountNumberImportHeading((string) $heading)) {
                 return Coordinate::stringFromColumnIndex($columnIndex);
             }
 

@@ -318,7 +318,7 @@ function submit() {
 
                 <div class="cvr-card-bg cvr-border border rounded-lg p-5">
                     <h2 class="text-base font-medium cvr-text-primary mb-4">Bank Details</h2>
-                    <div class="cvr-form-grid-3">
+                    <div class="cvr-form-grid-6-3-3">
                         <div>
                             <label class="cvr-form-label">Bank *</label>
                             <select v-model="financialInstitutionId" class="cvr-input w-full px-3 py-2 rounded">

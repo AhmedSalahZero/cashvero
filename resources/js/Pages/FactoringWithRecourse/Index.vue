@@ -65,6 +65,42 @@ const canAct = computed(() => props.canCreate || props.canUpdate);
 const collectTarget = ref(null);
 const collectForm = reactive({ collection_date: '', financial_institution_id: '', account_type_id: '', account_number: '' });
 const collectAccountNumbers = ref([]);
+/**
+ * ⚠️ REAL BUG FIXED HERE (client-flagged): "Account Number sometimes
+ * works, sometimes doesn't." Two compounding bugs in the old
+ * watch-only approach:
+ *   1. The fetch URL uses collectTarget.value.invoice_currency, but
+ *      the watch() below only listened for account_type_id and
+ *      financial_institution_id changing — currency was never a
+ *      watched dependency. So opening a row that shares the same
+ *      account type + bank as whatever was previously loaded (very
+ *      common — most transactions go through the same account type/
+ *      bank) but has a DIFFERENT currency never re-fired the watcher,
+ *      silently leaving the account list for the wrong currency (or
+ *      empty, if the modal had just been closed).
+ *   2. openCollect() only set the form fields from the row's own
+ *      values and relied entirely on the watcher noticing a change —
+ *      it never forced a fresh fetch itself.
+ * Fixed by always calling loadCollectAccountNumbers() directly when
+ * the modal opens (so a fetch always happens, regardless of whether
+ * the watched values changed), keeping the watch() for when the user
+ * manually changes Bank/Account Type afterwards, and adding a
+ * request-sequence guard so a slow, stale response can never
+ * overwrite a newer one (a real race condition if a user reopens the
+ * modal or switches dropdowns quickly).
+ */
+let collectAccountNumbersRequestId = 0;
+async function loadCollectAccountNumbers() {
+    const requestId = ++collectAccountNumbersRequestId;
+    if (!collectTarget.value || !collectForm.account_type_id || !collectForm.financial_institution_id) {
+        collectAccountNumbers.value = [];
+        return;
+    }
+    const url = `${props.urls.getAccountNumbersForType}/${collectForm.account_type_id}/${collectTarget.value.invoice_currency}/${collectForm.financial_institution_id}`;
+    const result = await fetchJson(url);
+    if (requestId !== collectAccountNumbersRequestId) return; // a newer request has since started — discard this stale result
+    collectAccountNumbers.value = Object.values(result.data?.data || {});
+}
 function openCollect(row) {
     collectTarget.value = row;
     collectForm.collection_date = new Date().toISOString().slice(0, 10);
@@ -72,13 +108,10 @@ function openCollect(row) {
     collectForm.account_type_id = row.account_type_id || '';
     collectForm.account_number = row.account_number || '';
     collectAccountNumbers.value = row.account_number ? [row.account_number] : [];
+    loadCollectAccountNumbers();
 }
-watch([() => collectForm.account_type_id, () => collectForm.financial_institution_id], async () => {
-    collectAccountNumbers.value = [];
-    if (!collectTarget.value || !collectForm.account_type_id || !collectForm.financial_institution_id) return;
-    const url = `${props.urls.getAccountNumbersForType}/${collectForm.account_type_id}/${collectTarget.value.invoice_currency}/${collectForm.financial_institution_id}`;
-    const result = await fetchJson(url);
-    collectAccountNumbers.value = Object.values(result.data?.data || {});
+watch([() => collectForm.account_type_id, () => collectForm.financial_institution_id], () => {
+    loadCollectAccountNumbers();
 });
 function submitCollect() {
     router.post(collectTarget.value.mark_collected_url, { ...collectForm }, { onSuccess: () => { collectTarget.value = null; } });
@@ -88,6 +121,19 @@ function submitCollect() {
 const rejectTarget = ref(null);
 const rejectForm = reactive({ rejection_date: '', uncollected_invoice_charges: 0, financial_institution_id: '', account_type_id: '', account_number: '' });
 const rejectAccountNumbers = ref([]);
+// Same fix as loadCollectAccountNumbers() above — see the comment there.
+let rejectAccountNumbersRequestId = 0;
+async function loadRejectAccountNumbers() {
+    const requestId = ++rejectAccountNumbersRequestId;
+    if (!rejectTarget.value || !rejectForm.account_type_id || !rejectForm.financial_institution_id) {
+        rejectAccountNumbers.value = [];
+        return;
+    }
+    const url = `${props.urls.getAccountNumbersForType}/${rejectForm.account_type_id}/${rejectTarget.value.invoice_currency}/${rejectForm.financial_institution_id}`;
+    const result = await fetchJson(url);
+    if (requestId !== rejectAccountNumbersRequestId) return;
+    rejectAccountNumbers.value = Object.values(result.data?.data || {});
+}
 function openReject(row) {
     rejectTarget.value = row;
     rejectForm.rejection_date = new Date().toISOString().slice(0, 10);
@@ -96,13 +142,10 @@ function openReject(row) {
     rejectForm.account_type_id = row.account_type_id || '';
     rejectForm.account_number = row.account_number || '';
     rejectAccountNumbers.value = row.account_number ? [row.account_number] : [];
+    loadRejectAccountNumbers();
 }
-watch([() => rejectForm.account_type_id, () => rejectForm.financial_institution_id], async () => {
-    rejectAccountNumbers.value = [];
-    if (!rejectTarget.value || !rejectForm.account_type_id || !rejectForm.financial_institution_id) return;
-    const url = `${props.urls.getAccountNumbersForType}/${rejectForm.account_type_id}/${rejectTarget.value.invoice_currency}/${rejectForm.financial_institution_id}`;
-    const result = await fetchJson(url);
-    rejectAccountNumbers.value = Object.values(result.data?.data || {});
+watch([() => rejectForm.account_type_id, () => rejectForm.financial_institution_id], () => {
+    loadRejectAccountNumbers();
 });
 function submitReject() {
     router.post(rejectTarget.value.mark_rejected_url, { ...rejectForm }, { onSuccess: () => { rejectTarget.value = null; } });

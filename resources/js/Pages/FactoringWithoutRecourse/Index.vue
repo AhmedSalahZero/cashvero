@@ -82,6 +82,23 @@ function submitRevertSettle() {
 const differenceTarget = ref(null);
 const differenceForm = reactive({ difference_received_date: '', financial_institution_id: '', account_type_id: '', account_number: '' });
 const differenceAccountNumbers = ref([]);
+// Same fix as FactoringWithRecourse/Index.vue's loadCollectAccountNumbers():
+// invoice_currency wasn't a watched dependency, and opening the modal
+// never forced a fresh fetch, so a row sharing account_type_id +
+// financial_institution_id with whatever was previously loaded (but a
+// different currency) silently kept the stale/wrong account list.
+let differenceAccountNumbersRequestId = 0;
+async function loadDifferenceAccountNumbers() {
+    const requestId = ++differenceAccountNumbersRequestId;
+    if (!differenceTarget.value || !differenceForm.account_type_id || !differenceForm.financial_institution_id) {
+        differenceAccountNumbers.value = [];
+        return;
+    }
+    const url = `${props.urls.getAccountNumbersForType}/${differenceForm.account_type_id}/${differenceTarget.value.invoice_currency}/${differenceForm.financial_institution_id}`;
+    const result = await fetchJson(url);
+    if (requestId !== differenceAccountNumbersRequestId) return;
+    differenceAccountNumbers.value = Object.values(result.data?.data || {});
+}
 function openDifference(row) {
     differenceTarget.value = row;
     differenceForm.difference_received_date = new Date().toISOString().slice(0, 10);
@@ -89,13 +106,10 @@ function openDifference(row) {
     differenceForm.account_type_id = row.account_type_id || '';
     differenceForm.account_number = row.account_number || '';
     differenceAccountNumbers.value = row.account_number ? [row.account_number] : [];
+    loadDifferenceAccountNumbers();
 }
-watch([() => differenceForm.account_type_id, () => differenceForm.financial_institution_id], async () => {
-    differenceAccountNumbers.value = [];
-    if (!differenceTarget.value || !differenceForm.account_type_id || !differenceForm.financial_institution_id) return;
-    const url = `${props.urls.getAccountNumbersForType}/${differenceForm.account_type_id}/${differenceTarget.value.invoice_currency}/${differenceForm.financial_institution_id}`;
-    const result = await fetchJson(url);
-    differenceAccountNumbers.value = Object.values(result.data?.data || {});
+watch([() => differenceForm.account_type_id, () => differenceForm.financial_institution_id], () => {
+    loadDifferenceAccountNumbers();
 });
 function submitDifference() {
     router.post(differenceTarget.value.mark_difference_received_url, { ...differenceForm }, { onSuccess: () => { differenceTarget.value = null; } });

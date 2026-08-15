@@ -39,15 +39,28 @@ const accountNumberOptions = ref([]);
 const initialAccountNumber = props.fields.find(f => f.field === 'account_number')?.value || '';
 let firstLoad = true;
 
+// Same fix as InvoiceUpload/ScheduleForm.vue — seed with the row's own
+// saved account number immediately so it's displayable before the
+// async lookup resolves (see that file for the full explanation).
+if (initialAccountNumber) {
+    accountNumberOptions.value = [initialAccountNumber];
+}
+
 async function loadAccountNumbers() {
     if (!props.accountNumbersUrl) return;
     const draweeBank = form.drawee_bank || '';
     if (!draweeBank) {
-        accountNumberOptions.value = [];
+        // Same fix as ScheduleForm.vue — a blank Drawee Bank should
+        // never erase an already-known, independently-saved Account
+        // Number from the dropdown.
+        accountNumberOptions.value = initialAccountNumber ? [initialAccountNumber] : [];
         return;
     }
     const { data } = await window.axios.get(props.accountNumbersUrl, { params: { drawee_bank: draweeBank } });
-    accountNumberOptions.value = data.data || [];
+    const fetched = data.data || [];
+    accountNumberOptions.value = (firstLoad && initialAccountNumber && !fetched.includes(initialAccountNumber))
+        ? [initialAccountNumber, ...fetched]
+        : fetched;
     // Preserve the row's existing account number on first load only —
     // a later bank change should force a fresh, explicit choice
     // (matches the original: changing bank clears the old account

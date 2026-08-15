@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\DB;
  * Renders the "Partner Statement" report (Statements sidebar section)
  * — a running-balance ledger, like Bank/Safe Statement, but for one or
  * MORE non-bank partners at once (Subsidiary Company, Shareholder,
- * Employee, Other Partner, or Taxes & Insurance), each read from its
+ * Employee, or Other Partner), each read from its
  * own dedicated statement table. Grouped by partner, not a single flat
  * ledger — genuinely different shape from Bank/Safe Statement.
  *
@@ -83,7 +83,6 @@ class PartnersStatementController
         'is_shareholder' => 'Shareholder',
         'is_employee' => 'Employee',
         'is_other_partner' => 'Other Partner',
-        'is_tax' => 'Taxes & Insurance',
     ];
 
     private const STATEMENT_TABLE_BY_TYPE = [
@@ -91,7 +90,6 @@ class PartnersStatementController
         'is_shareholder' => 'shareholder_statements',
         'is_employee' => 'employee_statements',
         'is_other_partner' => 'other_partner_statements',
-        'is_tax' => 'tax_statements',
     ];
 
     /**

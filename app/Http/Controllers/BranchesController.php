@@ -158,11 +158,7 @@ class BranchesController
      */
     public function store(Company $company, StoreBranchRequest $request, SafeRepository $safeRepository)
     {
-        $hasOdoo = $company->hasOdooIntegrationCredentials();
-        $odooService = null;
-        if ($hasOdoo) {
-            $odooService = new OdooService($company);
-        }
+        $odooSyncFailureMessages = [];
 
         foreach ($request->get('safe', []) as $currentSafeArr) {
             $currentSafeArr = array_merge($currentSafeArr, [
@@ -170,14 +166,20 @@ class BranchesController
                 'created_by' => auth()->user()->id,
             ]);
             $model = $safeRepository->store($currentSafeArr);
-            if ($hasOdoo) {
-                $odooService->syncBranchSafe($model->odoo_code, $company->id);
+            $failureMessage = $this->syncSafeWithOdoo($company, $model->odoo_code);
+            if ($failureMessage) {
+                $odooSyncFailureMessages[] = $failureMessage;
             }
         }
 
-        return redirect()
-            ->route('branches.index', ['company' => $company->id, 'active' => CashVeroBranch::BRANCHES])
-            ->with('success', __('Data Store Successfully'));
+        $redirect = redirect()
+            ->route('branches.index', ['company' => $company->id, 'active' => CashVeroBranch::BRANCHES]);
+
+        if ($odooSyncFailureMessages) {
+            return $redirect->with('fail', implode(' | ', array_unique($odooSyncFailureMessages)));
+        }
+
+        return $redirect->with('success', __('Data Store Successfully'));
     }
 
     /**
@@ -219,22 +221,62 @@ class BranchesController
      */
     public function update(Company $company, StoreBranchRequest $request, CashVeroBranch $branch)
     {
-        $hasOdoo = $company->hasOdooIntegrationCredentials();
-        $odooService = null;
-        if ($hasOdoo) {
-            $odooService = new OdooService($company);
-        }
+        $odooSyncFailureMessages = [];
 
         foreach ($request->get('safe', []) as $safeArr) {
             $branch->update($safeArr);
-            if ($hasOdoo) {
-                $odooService->syncBranchSafe($branch->odoo_code, $company->id);
+            $failureMessage = $this->syncSafeWithOdoo($company, $branch->odoo_code);
+            if ($failureMessage) {
+                $odooSyncFailureMessages[] = $failureMessage;
             }
         }
 
-        return redirect()
-            ->route('branches.index', ['company' => $company->id, 'active' => CashVeroBranch::BRANCHES])
-            ->with('success', __('Item Has Been Updated Successfully'));
+        $redirect = redirect()
+            ->route('branches.index', ['company' => $company->id, 'active' => CashVeroBranch::BRANCHES]);
+
+        if ($odooSyncFailureMessages) {
+            return $redirect->with('fail', implode(' | ', array_unique($odooSyncFailureMessages)));
+        }
+
+        return $redirect->with('success', __('Item Has Been Updated Successfully'));
+    }
+
+    /**
+     * * بترجع رسالة الخطا لو المزامنة مع اودو ما نجحتش و null لو كل حاجة تمام
+     * * الحفظ نفسه بيكون خلص قبل كدا , فا احنا بس بنعرف المستخدم ان الربط مع اودو
+     * * هو اللي ما اتحدثش , لان من غير الرسالة دي الربط القديم بيفضل موجود
+     * * من غير ما حد ياخد باله والشيكات اللي في الخزنة بتقع في اودو بعد كدا
+     */
+    private function syncSafeWithOdoo(Company $company, ?string $odooCode): ?string
+    {
+        /**
+         * * الشركة اصلا مش مربوطة باودو , فمفيش مزامنة اساسا و مفيش حاجة نقولها
+         */
+        if (! $company->hasOdooCredentials()) {
+            return null;
+        }
+        /**
+         * * الشركة مربوطة باودو بس اليوزر اللي عامل لوجن مالوش يوزر/باسورد في اودو
+         * * ده كان بيعدي في صمت : الخزنة بتتحفظ , المزامنة ما بتشتغلش , وماحدش ياخد باله
+         */
+        if (! $company->hasOdooIntegrationCredentials()) {
+            return __('The Safe Has Been Saved But It Was Not Synced With Odoo Because The Current User Has No Odoo Username Or Password');
+        }
+        if (! $odooCode) {
+            return null;
+        }
+        try {
+            $isSynced = (new OdooService($company))->syncBranchSafe($odooCode, $company->id);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return __('The Safe Has Been Saved But Syncing With Odoo Failed').' : '.$exception->getMessage();
+        }
+        if (! $isSynced) {
+            return __('The Safe Has Been Saved But The Odoo Code Was Not Found In Odoo Chart Of Accounts').' : '.$odooCode;
+        }
+
+        return null;
     }
 
     /**

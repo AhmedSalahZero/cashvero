@@ -280,7 +280,7 @@ function chequeChartData(modelType) {
                     </table>
                 </div>
                 <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
-                    <div class="px-4 py-2 cvr-table-head text-xs">Past Due Loan Installments</div>
+                    <div class="px-4 py-2 cvr-table-head text-xs">Past Due Loans & Leasing Installments</div>
                     <table class="min-w-full text-xs">
                         <tbody>
                             <tr v-for="(row, i) in (pastDueInstallments || [])" :key="i" class="cvr-table-row">

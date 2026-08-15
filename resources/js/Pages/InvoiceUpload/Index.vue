@@ -242,8 +242,29 @@ function destroyRow() {
                             <td class="px-4 py-2 text-center">
                                 <div class="flex items-center justify-center gap-2">
                                     <a v-if="row.settlementUrl" :href="row.settlementUrl" class="cvr-action-btn" title="Settlement">💲</a>
-                                    <Link v-if="canUpload" :href="row.editUrl" class="cvr-action-btn" title="Edit">✎</Link>
-                                    <button v-if="canDelete && !companyHasOdoo" @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" title="Delete">🗑</button>
+                                    <!--
+                                        Bug fix (client-flagged, confirmed 2026-08-15): an installment
+                                        that's paid or partially paid shouldn't be edited or deleted
+                                        from here anymore — doing so would now disagree with real
+                                        settlement/ledger rows that already exist for it. Delete used
+                                        to only hide once fully paid (remaining_raw === 0); Edit was
+                                        never hidden. Both now hide as soon as isPaidOrPartiallyPaid is
+                                        true, computed server-side (SalesGatheringController@index)
+                                        from the installment's real cheque amount vs. remaining, not
+                                        from whatever columns happen to be visible in this table.
+                                    -->
+                                    <Link
+                                        v-if="canUpload && !row.isPaidOrPartiallyPaid"
+                                        :href="row.editUrl"
+                                        class="cvr-action-btn"
+                                        title="Edit"
+                                    >✎</Link>
+                                    <button
+                                        v-if="canDelete && !companyHasOdoo && !row.isPaidOrPartiallyPaid"
+                                        @click="confirmDelete(row)"
+                                        class="cvr-action-btn cvr-action-btn-danger"
+                                        title="Delete"
+                                    >🗑</button>
                                 </div>
                             </td>
                         </tr>

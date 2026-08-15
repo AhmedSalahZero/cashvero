@@ -124,6 +124,19 @@ class FactoringWithRecourseController
             'urls' => [
                 'create' => route('factoring.with-recourse.create', ['company' => $company->id]),
                 'index' => route('factoring.with-recourse.index', ['company' => $company->id]),
+                /**
+                 * ⚠️ REAL BUG FIXED HERE (client-flagged): this key was
+                 * missing entirely from index()'s urls array (it only
+                 * existed in formViewData(), used by the separate
+                 * Create/Edit form page) — so on this list page,
+                 * props.urls.getAccountNumbersForType was undefined,
+                 * and the Collect/Reject popups' Account Number fetch
+                 * silently hit a broken "undefined/…" URL, always
+                 * getting nothing back. That's why the row's own saved
+                 * account number would flash briefly (the immediate
+                 * fallback) before being wiped by the failed lookup.
+                 */
+                'getAccountNumbersForType' => $this->companyScopedUrl($company, 'money-received/get-account-numbers-based-on-account-type'),
             ],
         ]);
     }
@@ -230,8 +243,8 @@ class FactoringWithRecourseController
                 'created_by' => auth()->id(),
             ]);
 
-            $commentEn = __('Factoring Amount From Account Number #:accountNumber', ['accountNumber' => $transaction->account_number]);
-            $commentAr = __('Factoring Amount From Account Number #:accountNumber', ['accountNumber' => $transaction->account_number], 'ar');
+            $commentEn = __('Factoring With Recourse Amount For Invoice #:invoiceNumber', ['invoiceNumber' => $invoice->getInvoiceNumber()]);
+            $commentAr = __('Factoring With Recourse Amount For Invoice #:invoiceNumber', ['invoiceNumber' => $invoice->getInvoiceNumber()], 'ar');
 
             $transaction->storeBankDebitStatement(
                 $company->id,
@@ -299,8 +312,8 @@ class FactoringWithRecourseController
                 'updated_by' => auth()->id(),
             ]);
 
-            $commentEn = __('Factoring Amount From Account Number #:accountNumber', ['accountNumber' => $factoringTransaction->account_number]);
-            $commentAr = __('Factoring Amount From Account Number #:accountNumber', ['accountNumber' => $factoringTransaction->account_number], 'ar');
+            $commentEn = __('Factoring With Recourse Amount For Invoice #:invoiceNumber', ['invoiceNumber' => $invoice->getInvoiceNumber()]);
+            $commentAr = __('Factoring With Recourse Amount For Invoice #:invoiceNumber', ['invoiceNumber' => $invoice->getInvoiceNumber()], 'ar');
 
             $factoringTransaction->storeBankDebitStatement(
                 $company->id,

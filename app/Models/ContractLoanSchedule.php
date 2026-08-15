@@ -50,6 +50,30 @@ class ContractLoanSchedule extends Model
         return $this->belongsTo(FinancialInstitution::class, 'drawee_bank_id');
     }
 
+    public function financialInstitutionAccount(): BelongsTo
+    {
+        return $this->belongsTo(FinancialInstitutionAccount::class);
+    }
+
+    /**
+     * Bug fix (client-flagged, confirmed 2026-08-15): account_number used
+     * to be a plain text copy taken at import time, so it went stale the
+     * moment someone edited the real account's number afterwards. Now
+     * that a schedule row can be linked to its actual account record
+     * (financial_institution_account_id — see the 2026-08-15 migrations),
+     * this accessor prefers that live value. $value is the raw stored
+     * column, kept as a fallback for older rows that couldn't be
+     * confidently matched to one account during the backfill.
+     *
+     * This is an accessor (not a separate getter method) so every
+     * existing read of $schedule->account_number — the settlement screen,
+     * the schedule table export, everywhere — gets the fix automatically.
+     */
+    public function getAccountNumberAttribute($value)
+    {
+        return $this->financialInstitutionAccount?->account_number ?: ($value ?? '');
+    }
+
     public function settlements(): HasMany
     {
         return $this->hasMany(ContractLoanScheduleSettlement::class, 'contract_loan_schedule_id');

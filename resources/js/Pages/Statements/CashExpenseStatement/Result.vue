@@ -7,9 +7,16 @@
  * currency, and categories.
  *
  * Same "heavy report" treatment as Bank/Safe Statement: rows are
- * paginated SERVER-SIDE (50/page). KPI totals (Paid Amount, Withhold
- * Amount) are computed backend-side from the FULL filtered result set
- * before pagination.
+ * paginated SERVER-SIDE (50/page). KPI total (Paid Amount) is computed
+ * backend-side from the FULL filtered result set before pagination.
+ *
+ * Feature (client requested, 2026-08-15): dropped Supplier Name,
+ * Withhold Amount, Amount In Paying Currency, and Reviewed columns.
+ * Added Currency (always shown). Exchange Rate and Equivalent In Main
+ * Currency only show when the filtered currency isn't the company's
+ * main functional currency — for a main-currency report exchange_rate
+ * is always 1 and the amount already IS the main-currency amount, so
+ * both columns would just be noise.
  */
 import { computed } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
@@ -18,7 +25,8 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 const props = defineProps({
     company: Object,
     currency: String,
-    kpis: Object, // { totalPaidAmount, totalWithholdAmount, transactionCount }
+    isMainCurrency: Boolean,
+    kpis: Object, // { totalPaidAmount, transactionCount }
     paginator: Object, // { data, links, current_page, last_page, total }
     urls: Object, // { backUrl, exportUrl }
 });
@@ -27,12 +35,6 @@ const rows = computed(() => props.paginator?.data || []);
 
 function formatAmount(value) {
     return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function reviewedBadgeClass(text) {
-    if (text === 'Yes') return 'cvr-badge cvr-badge-active';
-    if (text === 'No') return 'cvr-badge cvr-badge-pending';
-    return null;
 }
 
 function goToPage(url) {
@@ -69,13 +71,6 @@ function goToPage(url) {
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
-                    <div class="cvr-kpi-icon cvr-kpi-icon-blue">🧾</div>
-                    <div>
-                        <p class="cvr-kpi-label">Total Withhold Amount</p>
-                        <p class="cvr-kpi-value cvr-num-blue">{{ formatAmount(kpis.totalWithholdAmount) }}</p>
-                    </div>
-                </div>
-                <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-green">📋</div>
                     <div>
                         <p class="cvr-kpi-label">Transactions</p>
@@ -94,12 +89,12 @@ function goToPage(url) {
                                 <th class="px-3 py-3 text-center">Date</th>
                                 <th class="px-3 py-3 text-left">Main Category</th>
                                 <th class="px-3 py-3 text-left">Sub Category</th>
-                                <th class="px-3 py-3 text-left">Supplier Name</th>
+                                <th class="px-3 py-3 text-left">Currency</th>
                                 <th class="px-3 py-3 text-right">Paid Amount</th>
-                                <th class="px-3 py-3 text-right">Withhold Amount</th>
-                                <th class="px-3 py-3 text-right">Amount In Paying Currency</th>
-                                <th class="px-3 py-3 text-right">Exchange Rate</th>
-                                <th class="px-3 py-3 text-center">Reviewed</th>
+                                <template v-if="!isMainCurrency">
+                                    <th class="px-3 py-3 text-right">Exchange Rate</th>
+                                    <th class="px-3 py-3 text-right">Equivalent In Main Currency</th>
+                                </template>
                                 <th class="px-3 py-3 text-left min-w-[240px]">Comment</th>
                             </tr>
                         </thead>
@@ -111,22 +106,19 @@ function goToPage(url) {
                                 <td class="px-3 py-2.5 text-center cvr-text-secondary">{{ row.date }}</td>
                                 <td class="px-3 py-2.5 text-left cvr-text-primary">{{ row.mainCategoryName }}</td>
                                 <td class="px-3 py-2.5 text-left cvr-text-secondary">{{ row.subCategoryName }}</td>
-                                <td class="px-3 py-2.5 text-left cvr-text-secondary">{{ row.supplierName }}</td>
+                                <td class="px-3 py-2.5 text-left cvr-text-secondary">{{ row.currency }}</td>
                                 <td class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(row.paidAmount) }}</td>
-                                <td class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(row.withholdAmount) }}</td>
-                                <td class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(row.amountInPayingCurrency) }}</td>
-                                <td class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(row.exchangeRate) }}</td>
-                                <td class="px-3 py-2.5 text-center">
-                                    <span v-if="reviewedBadgeClass(row.reviewedText)" :class="reviewedBadgeClass(row.reviewedText)">{{ row.reviewedText }}</span>
-                                    <span v-else class="cvr-text-muted">{{ row.reviewedText }}</span>
-                                </td>
+                                <template v-if="!isMainCurrency">
+                                    <td class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(row.exchangeRate) }}</td>
+                                    <td class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(row.equivalentInMainCurrency) }}</td>
+                                </template>
                                 <td class="px-3 py-2.5 text-left cvr-text-secondary">
                                     <span class="block max-w-[320px] whitespace-normal">{{ row.comment }}</span>
                                     <span v-if="row.userComment" class="block max-w-[320px] whitespace-normal cvr-text-muted text-xs mt-0.5">{{ row.userComment }}</span>
                                 </td>
                             </tr>
                             <tr v-if="rows.length === 0">
-                                <td colspan="11" class="px-4 py-8 text-center cvr-text-muted">No expenses found for this date range.</td>
+                                <td :colspan="isMainCurrency ? 7 : 9" class="px-4 py-8 text-center cvr-text-muted">No expenses found for this date range.</td>
                             </tr>
                         </tbody>
                     </table>

@@ -1028,17 +1028,36 @@ function camelizeWithSpace($input, $separator = '-')
 {
     return HStr::camelizeWithSpace($input, $separator);
 }
+/**
+ * Bug fix (client-flagged, confirmed 2026-08-15 — CRITICAL DATA CORRUPTION):
+ * the previous implementation tried to guess whether a "." or "," was a
+ * decimal point or a thousands separator by checking whether it was
+ * followed by 3-or-more digits through the end of the string. That
+ * heuristic silently breaks for any amount with 3+ decimal digits — e.g.
+ * "302612.2944" (a normal amount, likely produced by an exchange-rate
+ * calculation) gets its decimal point treated as a thousands separator
+ * and DELETED, turning it into the integer 3026122944 — over 3 billion
+ * from a value of about 300 thousand. Confirmed against a real case: a
+ * settlement of 302,612.2944 EGP was saved and displayed as
+ * 3,026,122,944 EGP, which then corrupted the invoice's collected
+ * amount and, from there, the customer's whole account balance.
+ *
+ * Fixed by removing the guessing entirely: comma is always treated as a
+ * thousands separator (stripped) and "." is always the decimal point —
+ * the same convention already used everywhere amounts are *displayed*
+ * in this app (number_format()'s default), and already what
+ * number_unformat() above assumes by default. No heuristic, no
+ * ambiguity, no dependence on how many decimal digits happen to be
+ * present.
+ */
 function unformat_number($money)
 {
-    $cleanString = preg_replace('/([^0-9\.,])/i', '', $money);
-    $onlyNumbersString = preg_replace('/([^0-9])/i', '', $money);
+    $money = (string) $money;
+    $isNegative = str_starts_with(trim($money), '-');
+    $digitsAndDot = preg_replace('/[^0-9.]/', '', str_replace(',', '', $money));
+    $value = $digitsAndDot === '' || $digitsAndDot === '.' ? 0.0 : (float) $digitsAndDot;
 
-    $separatorsCountToBeErased = strlen($cleanString) - strlen($onlyNumbersString) - 1;
-
-    $stringWithCommaOrDot = preg_replace('/([,\.])/', '', $cleanString, $separatorsCountToBeErased);
-    $removedThousandSeparator = preg_replace('/(\.|,)(?=[0-9]{3,}$)/', '', $stringWithCommaOrDot);
-
-    return (float) str_replace(',', '.', $removedThousandSeparator);
+    return $isNegative ? -$value : $value;
 }
 
 
@@ -1359,11 +1378,78 @@ function getCompanyDraweeBankNames(int $companyId, ?array $bankIds = null): arra
         })
         ->with('bank:id,view_name')
         ->get()
-        ->map(fn (FinancialInstitution $financialInstitution) => (string) ($financialInstitution->bank?->view_name ?? ''))
+        /**
+         * ⚠️ REAL BUG FIXED HERE (client-flagged, confirmed via DB):
+         * this used to resolve a bank's display name ONLY through
+         * financial_institutions.bank_id → banks.view_name (the
+         * standardized bank catalog). A financial institution that
+         * was added directly by name, without being linked to that
+         * catalog (bank_id null, or pointing to a Bank row missing
+         * view_name), silently produced an empty string here and got
+         * filtered out below — even though it's a perfectly real,
+         * saved bank. Falls back to the financial institution's own
+         * `name` column in that case.
+         */
+        ->map(fn (FinancialInstitution $financialInstitution) => (string) ($financialInstitution->bank?->view_name ?: $financialInstitution->name ?? ''))
         ->filter(fn (string $bankName) => $bankName !== '')
         ->unique()
         ->sort(SORT_NATURAL | SORT_FLAG_CASE)
         ->values()
+        ->all();
+}
+
+function isAccountNumberImportHeading(string $heading): bool
+{
+    $normalizedHeading = mb_strtolower(trim($heading));
+
+    $candidates = [
+        'account_number',
+        'Account Number',
+        __('Account Number'),
+        'رقم الحساب',
+    ];
+
+    foreach ($candidates as $candidate) {
+        if ($normalizedHeading === mb_strtolower(trim((string) $candidate))) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Account numbers for the Contract Loan Schedule Excel template's Account
+ * Number dropdown, grouped by the same bank display name used in the
+ * Drawee Bank dropdown (getCompanyDraweeBankNames()) so the two columns
+ * can be cross-referenced in the workbook. Only real, non-blank account
+ * numbers are included; a bank with none is simply omitted.
+ *
+ * @return array<string, list<string>> bank name => account numbers
+ */
+function getCompanyDraweeBankAccountNumbersGrouped(int $companyId, ?array $bankIds = null): array
+{
+    return FinancialInstitution::query()
+        ->where('company_id', $companyId)
+        ->where('type', FinancialInstitution::BANK)
+        ->when($bankIds !== null && $bankIds !== [], function ($query) use ($bankIds) {
+            $query->whereIn('id', $bankIds);
+        })
+        ->with(['bank:id,view_name', 'accounts:id,financial_institution_id,account_number'])
+        ->get()
+        ->mapWithKeys(function (FinancialInstitution $financialInstitution) {
+            $bankName = (string) ($financialInstitution->bank?->view_name ?: $financialInstitution->name ?? '');
+            $accountNumbers = $financialInstitution->accounts
+                ->map(fn ($account) => trim((string) $account->account_number))
+                ->filter(fn (string $accountNumber) => $accountNumber !== '')
+                ->unique()
+                ->sort(SORT_NATURAL | SORT_FLAG_CASE)
+                ->values()
+                ->all();
+
+            return [$bankName => $accountNumbers];
+        })
+        ->filter(fn (array $accountNumbers, string $bankName) => $bankName !== '' && $accountNumbers !== [])
         ->all();
 }
 
@@ -1381,7 +1467,7 @@ function getCompanyBanksForDraweeBankPicker(int $companyId): array
         ->get()
         ->map(fn (FinancialInstitution $financialInstitution) => [
             'id' => $financialInstitution->id,
-            'name' => (string) ($financialInstitution->bank?->view_name ?? $financialInstitution->getName()),
+            'name' => (string) ($financialInstitution->bank?->view_name ?: $financialInstitution->name ?? ''),
         ])
         ->filter(fn (array $bank) => $bank['name'] !== '')
         ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
@@ -1421,15 +1507,38 @@ function resolveDraweeBankFinancialInstitutionId(int $companyId, string $draweeB
             ?->id;
     }
 
-    if (! $bankId) {
-        return null;
+    if ($bankId) {
+        $draweeBankId = FinancialInstitution::query()
+            ->where('company_id', $companyId)
+            ->where('type', FinancialInstitution::BANK)
+            ->where('bank_id', $bankId)
+            ->value('id');
+
+        if ($draweeBankId) {
+            return (int) $draweeBankId;
+        }
     }
 
+    /**
+     * ⚠️ REAL BUG FIXED HERE (client-flagged, confirmed via DB): every
+     * path above only ever matches against the standardized Bank
+     * catalog (banks.view_name) — either directly, or via a financial
+     * institution's bank_id link to it. A financial institution added
+     * directly by name, without ever being linked to that catalog,
+     * could NEVER be resolved here, no matter how correctly its name
+     * was typed or selected — this function would always return null
+     * for it. Falls back to matching the financial institution's own
+     * `name` column directly.
+     */
+    $normalizedInput = mb_strtolower($draweeBankName);
     $draweeBankId = FinancialInstitution::query()
         ->where('company_id', $companyId)
         ->where('type', FinancialInstitution::BANK)
-        ->where('bank_id', $bankId)
-        ->value('id');
+        ->get(['id', 'name'])
+        ->first(function (FinancialInstitution $financialInstitution) use ($normalizedInput) {
+            return mb_strtolower(normalizeDraweeBankImportName((string) $financialInstitution->name)) === $normalizedInput;
+        })
+        ?->id;
 
     return $draweeBankId ? (int) $draweeBankId : null;
 }

@@ -149,7 +149,7 @@ const visibleSettlements = computed(() =>
                         </div>
                         <div>
                             <label class="cvr-form-label">Settlement Amount</label>
-                            <input v-model="form.amount" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="form.amount" type="number" step="0.01" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Current Account *</label>

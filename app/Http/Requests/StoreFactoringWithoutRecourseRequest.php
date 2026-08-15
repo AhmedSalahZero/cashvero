@@ -103,8 +103,8 @@ class StoreFactoringWithoutRecourseRequest extends FormRequest
 
             $factoringDate = Carbon::make(parseDatePickerValue($this->input('factoring_date')) ?? $this->input('factoring_date'))->startOfDay();
             $dueDate = Carbon::make($invoice->getInvoiceDueDate())->startOfDay();
-            if ($factoringDate->lt($dueDate)) {
-                $validator->errors()->add('factoring_date', __('Factoring date must be greater than or equal to invoice due date.'));
+            if ($factoringDate->gte($dueDate)) {
+                $validator->errors()->add('factoring_date', __('Factoring date must be less than invoice due date.'));
             }
 
             $contract = FactoringContract::find($this->input('factoring_contract_id'));

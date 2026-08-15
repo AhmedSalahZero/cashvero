@@ -174,9 +174,22 @@ class FactoringTransaction extends Model
         return (bool) $this->is_difference_received;
     }
 
+    /**
+     * ⚠️ REAL BUG FIXED HERE (client-flagged): once an invoice is
+     * collected, the factoring company owes back the UN-FACTORED
+     * portion of the invoice — invoice_amount minus factoring_amount
+     * (e.g. if only 90% was factored, the remaining 10% retained by
+     * the factoring company as security). This used to compute
+     * factoring_amount - received_amount, which actually equals
+     * factoring_interest_amount + other_charges (since received_amount
+     * = factoring_amount - factoring_interest_amount - other_charges)
+     * — the wrong number entirely, not just a rounding difference.
+     * Both With Recourse's "Collection Difference" and Without
+     * Recourse's "Difference Received" share this same method.
+     */
     public function getDifferenceAmount(): float
     {
-        return round((float) $this->factoring_amount - (float) $this->received_amount, 2);
+        return round((float) $this->invoice_amount - (float) $this->factoring_amount, 2);
     }
 
     public function getCollectionDifferenceAmount(): float

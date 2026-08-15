@@ -24,7 +24,7 @@ const tabs = [
     { key: 'bank', label: 'Banks Table' },
     { key: 'leasing_companies', label: 'Leasing Companies' },
     { key: 'factoring_companies', label: 'Factoring Companies' },
-    { key: 'mortgage_companies', label: 'Mortgage Companies' },
+    // { key: 'mortgage_companies', label: 'Mortgage Companies' }, / The Application still does not have Mortgage Companies /
 ];
 
 function goToTab(tabKey) {

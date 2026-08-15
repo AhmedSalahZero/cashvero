@@ -140,27 +140,29 @@ class CashExpenseStatementController
     /**
      * Shapes one raw cash_expenses row into the plain array both the
      * on-screen table (via result()) and the Excel export (via
-     * exportExcel()) read from. Reviewed/Comment come straight off the
-     * row's own is_reviewed/reviewed_by/comment_en/comment_ar/user_comment
-     * columns — no join-based lookup helper needed here (unlike Bank/Safe
-     * Statement, whose statement tables only carry a foreign key to
-     * whichever record actually holds those fields).
+     * exportExcel()) read from.
+     *
+     * Feature (client requested, 2026-08-15): dropped Supplier Name,
+     * Withhold Amount, Amount In Paying Currency, and Reviewed — the
+     * client no longer wants these on this report. Added Currency, and
+     * (conditionally, only when the filtered currency isn't the
+     * company's main functional currency) Equivalent In Main Currency,
+     * computed as paidAmount * exchangeRate — cash_expenses has no
+     * dedicated "amount in main currency" column, so this mirrors the
+     * same multiplication the DB triggers use elsewhere in the app for
+     * the equivalent conversion.
      */
     private function mapStatementRow($row, string $lang): array
     {
-        $reviewedArr = ['is_reviewed' => $row->is_reviewed ?? null];
-
         return [
             'id' => $row->id,
             'date' => Carbon::make($row->payment_date)->format('d-m-Y'),
             'mainCategoryName' => $row->main_category_name,
             'subCategoryName' => $row->sub_category_name,
-            'supplierName' => $row->supplier_name,
+            'currency' => $row->currency,
             'paidAmount' => (float) ($row->paid_amount ?? 0),
-            'withholdAmount' => (float) ($row->total_withhold_amount ?? 0),
-            'amountInPayingCurrency' => (float) ($row->amount_in_paying_currency ?? 0),
             'exchangeRate' => (float) ($row->exchange_rate ?? 1),
-            'reviewedText' => getReviewedText($reviewedArr),
+            'equivalentInMainCurrency' => (float) ($row->paid_amount ?? 0) * (float) ($row->exchange_rate ?? 1),
             'comment' => $row->{'comment_'.$lang} ?? null,
             'userComment' => $row->user_comment ?? null,
         ];
@@ -181,21 +183,28 @@ class CashExpenseStatementController
         $paginator = $this->paginateStatement($data['query'], self::ROWS_PER_PAGE);
         $sums = $this->statementSums($data['query'], [
             'total_paid' => self::STATEMENT_TABLE.'.paid_amount',
-            'total_withhold' => self::STATEMENT_TABLE.'.total_withhold_amount',
         ]);
 
         $kpis = [
             'totalPaidAmount' => $sums['total_paid'],
-            'totalWithholdAmount' => $sums['total_withhold'],
             'transactionCount' => $paginator->total(),
         ];
 
         $lang = app()->getLocale();
         $paginator->getCollection()->transform(fn ($row) => $this->mapStatementRow($row, $lang));
 
+        // Feature (client requested, 2026-08-15): the filtered currency is
+        // fixed for the whole report (one currency per view, same as
+        // before), so whether to show Exchange Rate / Equivalent In Main
+        // Currency at all is decided once here rather than per row —
+        // main-currency amounts always have exchange_rate = 1, so those
+        // columns would show nothing useful.
+        $isMainCurrency = strtoupper((string) $data['currency']) === strtoupper($company->getMainFunctionalCurrency());
+
         return \Inertia\Inertia::render('Statements/CashExpenseStatement/Result', [
             'company' => ['id' => $company->id],
             'currency' => $data['currency'],
+            'isMainCurrency' => $isMainCurrency,
             'kpis' => $kpis,
             'paginator' => $paginator->toArray(),
             'urls' => [
@@ -220,27 +229,35 @@ class CashExpenseStatementController
             return redirect()->back()->with('fail', __('No Data Found'));
         }
         $lang = app()->getLocale();
+        $isMainCurrency = strtoupper((string) $data['currency']) === strtoupper($company->getMainFunctionalCurrency());
 
-        $headings = ['#', 'Date', 'Main Category', 'Sub Category', 'Supplier Name', 'Paid Amount', 'Withhold Amount', 'Amount In Paying Currency', 'Exchange Rate', 'Reviewed', 'Comment'];
+        $headings = ['#', 'Date', 'Main Category', 'Sub Category', 'Currency', 'Paid Amount'];
+        if (! $isMainCurrency) {
+            $headings[] = 'Exchange Rate';
+            $headings[] = 'Equivalent In Main Currency';
+        }
+        $headings[] = 'Comment';
 
         // The workbook is the whole range, not the page on screen, so the
         // export runs the same query unpaginated.
-        $rows = $data['query']()->get()->values()->map(function ($row, $index) use ($lang) {
+        $rows = $data['query']()->get()->values()->map(function ($row, $index) use ($lang, $isMainCurrency) {
             $mapped = $this->mapStatementRow($row, $lang);
 
-            return [
+            $out = [
                 '#' => $index + 1,
                 'Date' => $mapped['date'],
                 'Main Category' => $mapped['mainCategoryName'],
                 'Sub Category' => $mapped['subCategoryName'],
-                'Supplier Name' => $mapped['supplierName'],
+                'Currency' => $mapped['currency'],
                 'Paid Amount' => $mapped['paidAmount'],
-                'Withhold Amount' => $mapped['withholdAmount'],
-                'Amount In Paying Currency' => $mapped['amountInPayingCurrency'],
-                'Exchange Rate' => $mapped['exchangeRate'],
-                'Reviewed' => $mapped['reviewedText'],
-                'Comment' => trim(($mapped['comment'] ?? '').' '.($mapped['userComment'] ?? '')),
             ];
+            if (! $isMainCurrency) {
+                $out['Exchange Rate'] = $mapped['exchangeRate'];
+                $out['Equivalent In Main Currency'] = $mapped['equivalentInMainCurrency'];
+            }
+            $out['Comment'] = trim(($mapped['comment'] ?? '').' '.($mapped['userComment'] ?? ''));
+
+            return $out;
         });
 
         $fileNameParts = ['Cash-Expense-Statement', strtoupper((string) $data['currency'])];

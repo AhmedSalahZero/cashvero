@@ -163,6 +163,33 @@ class SalesGatheringTestJob implements ShouldQueue
 						]);
 						$currentIds[$columnName] = $currentRowInserted ;
 					}
+					/**
+					 * * Feature (client requested, 2026-08-15): a Sales Person
+					 * * name filled in on the Customer Invoice Excel upload
+					 * * should also exist as a real Employee — Employees in
+					 * * this app are just Partner rows with is_employee=1
+					 * * (same pattern already used a few lines above for
+					 * * auto-creating the Customer partner from
+					 * * $customerName). Only creates one if a Partner with
+					 * * this exact name isn't already an employee for this
+					 * * company, so re-uploading the same sheet doesn't
+					 * * create duplicates every time.
+					 */
+					if($columnName === 'sales_person' && trim((string) $currentColValue) !== ''){
+						$salesPersonName = trim((string) $currentColValue);
+						$isAlreadyEmployee = DB::table('partners')
+							->where('company_id', $this->company_id)
+							->where('is_employee', 1)
+							->where('name', $salesPersonName)
+							->exists();
+						if(!$isAlreadyEmployee){
+							Partner::create([
+								'name' => $salesPersonName,
+								'company_id' => $this->company_id,
+								'is_employee' => 1,
+							]);
+						}
+					}
 					}
 					
 				
@@ -250,6 +277,22 @@ class SalesGatheringTestJob implements ShouldQueue
 					$value['date'] ?? null
 				);
 
+				// Bug fix (client-flagged, confirmed 2026-08-15): drawee bank was
+				// already resolved to an id above, but account_number was passed
+				// through as raw text with nothing linking it to the actual
+				// account row — so it went stale the moment that account's
+				// number was later edited. Resolve it to the real account here,
+				// the same way it's already looked up elsewhere
+				// (FinancialInstitutionAccount::findByAccountNumber, used by
+				// ContractLoanScheduleSettlement::handleLoanStatement). The raw
+				// text is still kept in the row as a fallback for the rare case
+				// where no matching account is found (e.g. typo not caught by
+				// the template's dropdown, or the account was deleted).
+				$accountNumberText = trim((string) ($value['account_number'] ?? ''));
+				$financialInstitutionAccountId = ($draweeBankId && $accountNumberText !== '')
+					? \App\Models\FinancialInstitutionAccount::findByAccountNumber($accountNumberText, $this->company_id, $draweeBankId)?->id
+					: null;
+
 				$row = is_array($newItems[$key]) ? $newItems[$key] : $value;
 				unset($row['drawee_bank'], $row['schedule_payment']);
 				if (isset($row['id']) && !is_numeric($row['id'])) {
@@ -260,6 +303,7 @@ class SalesGatheringTestJob implements ShouldQueue
 					'leasing_contract_id' => $loanId,
 					'remaining' => $remaining,
 					'drawee_bank_id' => $draweeBankId,
+					'financial_institution_account_id' => $financialInstitutionAccountId,
 					'company_id' => $this->company_id,
 					'status' => $status,
 				]);

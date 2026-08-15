@@ -231,8 +231,19 @@ class FinancialInstitutionAccountController
 	 */
 	private function syncAccountWithOdoo(Company $company , FinancialInstitutionAccount $financialInstitutionAccount):?string
 	{
-		if(!$company->hasOdooIntegrationCredentials()){
+		/**
+		 * * الشركة اصلا مش مربوطة باودو , فمفيش مزامنة اساسا و مفيش حاجة نقولها
+		 */
+		if(!$company->hasOdooCredentials()){
 			return null ;
+		}
+		/**
+		 * * الشركة مربوطة باودو بس اليوزر اللي عامل لوجن مالوش يوزر/باسورد في اودو
+		 * * ده كان بيعدي في صمت : الحساب بيتحفظ , المزامنة ما بتشتغلش , وماحدش ياخد باله
+		 * * فيفضل الربط القديم متخزن وكانه اتحدث
+		 */
+		if(!$company->hasOdooIntegrationCredentials()){
+			return __('The Account Has Been Saved But It Was Not Synced With Odoo Because The Current User Has No Odoo Username Or Password');
 		}
 		$odooCode = $financialInstitutionAccount->getOdooCode();
 		if(!$odooCode){

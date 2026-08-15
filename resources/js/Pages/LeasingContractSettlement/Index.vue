@@ -93,13 +93,13 @@ const visibleSettlements = computed(() =>
 
 <template>
     <AppLayout :nav-urls="navUrls">
-        <div class="p-6 max-w-6xl">
+        <div class="p-6">
             <div class="flex items-center gap-3 mb-1">
                 <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
                     ← Back To Contract Schedule
                 </Link>
             </div>
-            <h1 class="text-xl font-semibold cvr-text-primary mb-6">Contract Schedule Payment</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mt-3 mb-6">Leasing Contract Schedule Payment</h1>
 
             <form @submit.prevent="submit" class="space-y-6">
                 <!-- Read-only installment info -->
@@ -154,7 +154,7 @@ const visibleSettlements = computed(() =>
                         </div>
                         <div>
                             <label class="cvr-form-label">Settlement Amount</label>
-                            <input v-model="form.amount" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="form.amount" type="number" step="0.01" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Current Account *</label>

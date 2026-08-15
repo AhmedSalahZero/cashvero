@@ -845,6 +845,33 @@ class OdooService
 
 	}
 	/**
+	 * * اودو بيرجع null لما ما يلاقيش سطر طريقة دفع مطابق (مثلا اليومية لسه
+	 * * ما اتظبطش عليها سطر شيكات) . لو كتبنا الـ null ده فوق رقم صحيح كان
+	 * * متخزن من مزامنة قبل كدا بنكون مسحنا ربط شغال بايدينا , والحركة اللي
+	 * * بعده بتقع في اودو بـ "Please define a payment method line on your payment"
+	 *
+	 * * فا بنكتب العمود بس في حالتين :
+	 * *   1. اودو رجعلنا رقم فعلا
+	 * *   2. القيمة القديمة اصلا مش رقم صالح (null او '[]' اللي كانت بتتخزن
+	 * *      كنص من نتيجة بحث فاضية قديمة) فمفيش حاجة نحافظ عليها
+	 */
+	private function keepOldValueIfNewIsEmpty(array $newValues , array $currentValues): array
+	{
+		$valuesToUpdate = [];
+		foreach($newValues as $column => $newValue){
+			if(!is_null($newValue)){
+				$valuesToUpdate[$column] = $newValue ;
+				continue ;
+			}
+			$currentValue = $currentValues[$column] ?? null ;
+			$currentValueIsUsable = is_numeric($currentValue) && (int) $currentValue > 0 ;
+			if(!$currentValueIsUsable){
+				$valuesToUpdate[$column] = null ;
+			}
+		}
+		return $valuesToUpdate ;
+	}
+	/**
 	 * * بترجع true لو الحساب اترط فعلا بحساب في شجرة حسابات اودو
 	 * * و false لو الكود مش موجود في اودو (ساعتها الربط القديم بيفضل زي ما هو)
 	 * * علشان اللي بينده يقدر يعرف المستخدم بدل ما الموضوع يعدي في صمت
@@ -877,14 +904,17 @@ class OdooService
 						}
 						
 						
-						$financialInstitutionAccount->update([
-							'odoo_id'=>$chartOfAccountId,
+						$valuesThatMustNotBeWipedOut = $this->keepOldValueIfNewIsEmpty([
 							'journal_id'=>$journalId ,
 							'odoo_inbound_transfer_payment_method_id'=>$odooInboundTransferPaymentMethodId??null ,
 							'odoo_outbound_transfer_payment_method_id'=>$odooOutboundTransferPaymentMethodId??null,
 							'odoo_inbound_cheque_payment_method_id'=>$odooInboundChequePaymentMethodId??null ,
 							'odoo_outbound_cheque_payment_method_id'=>$odooOutboundChequePaymentMethodId??null,
-						]);
+						],$financialInstitutionAccount->getAttributes());
+
+						$financialInstitutionAccount->update(array_merge([
+							'odoo_id'=>$chartOfAccountId,
+						],$valuesThatMustNotBeWipedOut));
 
 						return true ;
 					}
@@ -896,7 +926,12 @@ class OdooService
 		return false ;
 
 	}
-	public function syncBranchSafe(?string $odooCode,int $companyId)
+	/**
+	 * * بترجع true لو الخزنة اترطبت فعلا بحساب في شجرة حسابات اودو
+	 * * و false لو الكود مش موجود في اودو (ساعتها الربط القديم بيفضل زي ما هو)
+	 * * علشان اللي بينده يقدر يعرف المستخدم بدل ما الموضوع يعدي في صمت
+	 */
+	public function syncBranchSafe(?string $odooCode,int $companyId): bool
 	{
 			$fields = [
 				'id',
@@ -932,18 +967,26 @@ class OdooService
 						
 					
 		}
-		if($chartOfAccountId){
-			DB::table('branch')->where('company_id',$companyId)->where('odoo_code',$odooCode)->update([
-							'odoo_id'=>$chartOfAccountId,
-							'journal_id'=>$journalId,
-							'odoo_inbound_transfer_payment_method_id'=>$odooInboundTransferPaymentMethodId??null ,
-							'odoo_outbound_transfer_payment_method_id'=>$odooOutboundTransferPaymentMethodId??null,
-							'odoo_inbound_cheque_payment_method_id'=>$odooInboundChequePaymentMethodId??null ,
-							'odoo_outbound_cheque_payment_method_id'=>$odooOutboundChequePaymentMethodId??null,
-						]);
+		if(!$chartOfAccountId){
+			return false ;
 		}
-					
-		
+
+		$branches = DB::table('branch')->where('company_id',$companyId)->where('odoo_code',$odooCode);
+		$currentBranch = (clone $branches)->first();
+
+		$valuesThatMustNotBeWipedOut = $this->keepOldValueIfNewIsEmpty([
+			'journal_id'=>$journalId,
+			'odoo_inbound_transfer_payment_method_id'=>$odooInboundTransferPaymentMethodId??null ,
+			'odoo_outbound_transfer_payment_method_id'=>$odooOutboundTransferPaymentMethodId??null,
+			'odoo_inbound_cheque_payment_method_id'=>$odooInboundChequePaymentMethodId??null ,
+			'odoo_outbound_cheque_payment_method_id'=>$odooOutboundChequePaymentMethodId??null,
+		],$currentBranch ? (array) $currentBranch : []);
+
+		$branches->update(array_merge([
+			'odoo_id'=>$chartOfAccountId,
+		],$valuesThatMustNotBeWipedOut));
+
+		return true ;
 	}
 	// public function syncBanks()
 	// {

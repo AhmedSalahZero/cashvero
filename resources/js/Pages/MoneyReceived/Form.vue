@@ -7,6 +7,23 @@ import { todayDate } from '@/composables/today';
    الحماية الحقيقية على السيرفر في الـ Form Request. */
 const maxDate = todayDate();
 
+/**
+ * Bug fix (client-flagged, confirmed 2026-08-15): Invoice Amount,
+ * Collected Amount, and Net Balance in the settlement panel below were
+ * bound straight from the backend with no formatting at all — so any
+ * floating-point noise already present in the underlying figures (e.g.
+ * 876260.0652000001, or a net balance of 0.000000023283064365386963 on
+ * an invoice that's actually fully settled) was shown to the user
+ * exactly as-is. Money should never display with more than 2 decimal
+ * places. This does not change any stored value or any calculation —
+ * purely how these three read-only fields are displayed.
+ */
+function fmtAmount(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return value;
+    return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 const props = defineProps({
     company: Object,
     model: Object,          // null on create
@@ -747,17 +764,17 @@ function submit() {
                         </div>
                         <div>
                             <label class="cvr-form-label">Invoice Amount [{{ inv.currency }}]</label>
-                            <input :value="inv.net_invoice_amount" disabled class="cvr-input w-full px-3 py-2 rounded" />
+                            <input :value="fmtAmount(inv.net_invoice_amount)" disabled class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
                     <div class="cvr-form-grid-4">
                         <div>
                             <label class="cvr-form-label">Collected Amount</label>
-                            <input :value="inv.collected_amount" disabled class="cvr-input w-full px-3 py-2 rounded" />
+                            <input :value="fmtAmount(inv.collected_amount)" disabled class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Net Balance</label>
-                            <input :value="inv.net_balance" readonly class="cvr-input w-full px-3 py-2 rounded" />
+                            <input :value="fmtAmount(inv.net_balance)" readonly class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Settlement Amount *</label>

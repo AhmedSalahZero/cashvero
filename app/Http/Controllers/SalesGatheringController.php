@@ -127,7 +127,16 @@ class SalesGatheringController extends Controller
 		// pairs), each row as a plain array of formatted cell values
 		// in the same order, plus pre-resolved per-row URLs.
 		$dateFields = ['date', 'invoice_due_date', 'invoice_date'];
-		$amountFields = ['invoice_amount', 'vat_amount', 'withhold_amount', 'collected_amount', 'paid_amount', 'net_balance', 'net_invoice_amount'];
+		$amountFields = [
+			'invoice_amount', 'vat_amount', 'withhold_amount', 'collected_amount', 'paid_amount', 'net_balance', 'net_invoice_amount',
+			// Schedule Table columns (Leasing/ContractLoanSchedule uses
+			// cheque_amount, MTL/LoanSchedule uses schedule_payment —
+			// both share beginning_balance/interest_amount/
+			// principle_amount/end_balance). These used to fall through
+			// to the unformatted else-branch below, showing raw numbers
+			// with no thousands separator or fixed decimals.
+			'beginning_balance', 'cheque_amount', 'schedule_payment', 'interest_amount', 'principle_amount', 'end_balance',
+		];
 		$columns = [];
 		foreach ($viewing_names as $i => $label) {
 			$columns[] = ['label' => $label, 'field' => $db_names[$i]];
@@ -164,11 +173,36 @@ class SalesGatheringController extends Controller
 			} elseif ($modelName === 'ContractLoanSchedule' && $item->canSettle()) {
 				$settlementUrl = route('view.contract.loan.schedule.settlements', ['company' => $company->id, 'contractLoanSchedule' => $item->id]);
 			}
+			// Bug fix (client-flagged, confirmed 2026-08-15, extended
+			// 2026-08-15 to also cover Medium Term Loan installments): an
+			// installment with ANY payment recorded against it — fully
+			// paid or only partially paid — shouldn't be editable or
+			// deletable from this table anymore, since either action would
+			// now disagree with real settlement/ledger rows that already
+			// exist for it. Delete was already hidden for
+			// ContractLoanSchedule, but only once fully paid
+			// (remaining_raw === 0); Edit was never hidden at all, and
+			// LoanSchedule (Medium Term Loan) had neither check. Computed
+			// here (not on the frontend) because the frontend only has
+			// remaining_raw, not the installment's original payment amount
+			// to compare it against — and that comparison shouldn't depend
+			// on whether "Cheque Amount" / "Schedule Payment" happens to
+			// be one of the columns the user chose to display.
+			$isPaidOrPartiallyPaid = match ($modelName) {
+				'ContractLoanSchedule' => (float) $item->getRemaining() < (float) $item->getChequeAmount(),
+				'LoanSchedule' => (float) $item->getRemaining() < (float) $item->getSchedulePayment(),
+				default => null,
+			};
 			return [
 				'id' => $item->id,
 				'cells' => $cells,
 				'status' => $isScheduleModel ? $item->getStatusFormatted() : null,
 				'remaining' => $isScheduleModel ? $item->getRemainingFormatted() : null,
+				// Raw numeric value (not the formatted display string)
+				// so the frontend can reliably check "is this fully
+				// collected/settled" without parsing "0.00" vs "1,234.00".
+				'remaining_raw' => $isScheduleModel ? (float) $item->getRemaining() : null,
+				'isPaidOrPartiallyPaid' => $isPaidOrPartiallyPaid,
 				'settlementUrl' => $settlementUrl,
 				'editUrl' => route('edit.sales.form', ['company' => $company->id, 'model' => $modelName, 'modelId' => $item->id]),
 				'deleteUrl' => route('salesGathering.destroy', ['company' => $company->id, 'salesGathering' => $item->id, 'modelType' => $modelName]),
@@ -244,6 +278,29 @@ class SalesGatheringController extends Controller
 		$modelType  = $request->get('modelType');
 		$fullModelName = 'App\Models\\'.$modelType ;
 		$model = $fullModelName::find($modelId);
+
+		if (! $model) {
+			return redirect()->back();
+		}
+
+		/**
+		 * Bug fix (client-flagged, confirmed 2026-08-15, extended
+		 * 2026-08-15 to Medium Term Loan installments): hiding the Delete
+		 * button in the UI for a paid/partially-paid installment (see
+		 * InvoiceUpload/Index.vue) only stops it from that screen — this
+		 * route itself had no matching check, so the same delete could
+		 * still be triggered directly. Guarded here too, same condition
+		 * as the UI: any recorded payment blocks it.
+		 */
+		if ($modelType === 'ContractLoanSchedule' && (float) $model->getRemaining() < (float) $model->getChequeAmount()) {
+			toastr()->error(__('This installment has a payment recorded against it and can no longer be deleted.'));
+			return redirect()->back();
+		}
+		if ($modelType === 'LoanSchedule' && (float) $model->getRemaining() < (float) $model->getSchedulePayment()) {
+			toastr()->error(__('This installment has a payment recorded against it and can no longer be deleted.'));
+			return redirect()->back();
+		}
+
 		toastr()->error('Deleted Successfully');
         $model->delete();
         return redirect()->back();

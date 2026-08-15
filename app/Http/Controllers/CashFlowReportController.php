@@ -818,16 +818,47 @@ class CashFlowReportController
 	public function getPastDueLoanSchedules(string $currency , int $companyId , ?string $mainFunctionalCurrency = null , ?Collection $foreignExchangeRates = null ){
 		$showAllCurrenciesConverted = $mainFunctionalCurrency !== null && $currency === $mainFunctionalCurrency;
 
-		$items  = LoanSchedule::where('loan_schedules.company_id',$companyId)
+		/**
+		 * Bug fix (client-flagged, confirmed 2026-08-15): this only ever
+		 * queried loan_schedules (Medium/Long Term Loans) — Leasing
+		 * Contract installments (contract_loan_schedules) were never
+		 * included, so a past-due leasing cheque never showed up in the
+		 * "Past Due Loan Installments" card on the Cash Forecast
+		 * dashboard at all, no matter how overdue it was.
+		 *
+		 * Also fixed while in here: the status filter used
+		 * 'partially_collected_and_past_due', which is the invoice-status
+		 * constant (CustomerInvoice::PARTIALLY_COLLECTED_OR_PAID_AND_PAST_DUE)
+		 * — copy-pasted from the past-due-invoices query right above this
+		 * one. Loan/lease schedules use a different status string,
+		 * 'partially_paid_and_past_due' (see resolveLoanScheduleStatus()
+		 * in helpers.php, and LeasingContract::getLoanPastDuesDetailsArray()
+		 * / MediumTermLoan's own equivalent, which already filtered
+		 * correctly). With the wrong string, a partially-paid-and-overdue
+		 * MTL installment silently never appeared here either — only
+		 * installments with literally zero paid did.
+		 */
+		$mtlItems  = LoanSchedule::where('loan_schedules.company_id',$companyId)
 		->where('remaining','>',0)
 		->join('medium_term_loans','medium_term_loans.id','=','loan_schedules.medium_term_loan_id')
 		->when(! $showAllCurrenciesConverted, function($query) use ($currency) {
 			$query->where('medium_term_loans.currency',$currency);
 		})
-		->whereIn('loan_schedules.status',['past_due','partially_collected_and_past_due'])
+		->whereIn('loan_schedules.status',['past_due','partially_paid_and_past_due'])
 		->where('date','<',now()->format('Y-m-d'))
-		->orderBy('date')
-		->selectRaw('loan_schedules.*,medium_term_loans.currency,medium_term_loans.name as loan_name')->get();
+		->selectRaw('loan_schedules.*,medium_term_loans.currency,medium_term_loans.name as loan_name, \'MTL\' as loan_type')->get();
+
+		$leasingItems = ContractLoanSchedule::where('contract_loan_schedules.company_id',$companyId)
+		->where('remaining','>',0)
+		->join('leasing_contracts','leasing_contracts.id','=','contract_loan_schedules.leasing_contract_id')
+		->when(! $showAllCurrenciesConverted, function($query) use ($currency) {
+			$query->where('leasing_contracts.currency',$currency);
+		})
+		->whereIn('contract_loan_schedules.status',['past_due','partially_paid_and_past_due'])
+		->where('date','<',now()->format('Y-m-d'))
+		->selectRaw('contract_loan_schedules.*,leasing_contracts.currency,leasing_contracts.name as loan_name, \'Leasing\' as loan_type')->get();
+
+		$items = $mtlItems->concat($leasingItems)->sortBy('date')->values();
 
 		if ($showAllCurrenciesConverted) {
 			$items = $items->map(function($item) use ($mainFunctionalCurrency, $companyId, $foreignExchangeRates) {

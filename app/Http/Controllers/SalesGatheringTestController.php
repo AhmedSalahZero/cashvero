@@ -440,8 +440,15 @@ class SalesGatheringTestController extends Controller
 		$fields = collect($exportableFields)->map(function ($label, $fieldName) use ($row, $dateFields, $amountFields, $isContractLoanSchedule, $company) {
 			$value = $row[$fieldName] ?? '';
 			$type = 'text';
+			$options = null;
 			if ($isContractLoanSchedule && $fieldName === 'drawee_bank') {
 				$type = 'bank_select';
+				// Same fix as renderScheduleForm() — guarantee the row's
+				// own current value is always a selectable option.
+				$options = getCompanyDraweeBankNames($company->id);
+				if ($value && ! in_array($value, $options, true)) {
+					array_unshift($options, $value);
+				}
 			} elseif ($isContractLoanSchedule && $fieldName === 'account_number') {
 				$type = 'account_number_select';
 			} elseif (in_array($fieldName, $dateFields, true)) {
@@ -457,7 +464,7 @@ class SalesGatheringTestController extends Controller
 				'label' => $label,
 				'type' => $type,
 				'value' => $value,
-				'options' => $type === 'bank_select' ? getCompanyDraweeBankNames($company->id) : null,
+				'options' => $options,
 			];
 		})->values();
 
@@ -741,11 +748,44 @@ class SalesGatheringTestController extends Controller
 		$fields = collect($exportables)->map(function ($label, $fieldName) use ($model, $dateFields, $amountFields, $isContractLoanSchedule, $company) {
 			$value = $model ? ($model->{$fieldName} ?? null) : null;
 			if ($isContractLoanSchedule && $fieldName === 'drawee_bank' && $model) {
-				$value = $model->draweeBank?->bank?->view_name ?? null;
+				/**
+				 * ⚠️ REAL BUG FIXED HERE: ContractLoanSchedule has both
+				 * a draweeBank() relation AND a getDraweeBankAttribute()
+				 * accessor (for the raw 'drawee_bank' pseudo-column).
+				 * Str::studly('draweeBank') and Str::studly('drawee_bank')
+				 * both resolve to 'DraweeBank', so Eloquent's magic
+				 * property access ($model->draweeBank) gets intercepted
+				 * by the ACCESSOR and returns a plain string — never the
+				 * relation object — causing "Attempt to read property
+				 * bank on string" the moment ->bank is chained onto it.
+				 * getRelationValue() calls the relation method directly,
+				 * bypassing the accessor collision entirely — same
+				 * pattern the model's own hasDraweeBank()/
+				 * getDraweeBankName() already use for this exact reason.
+				 */
+				$draweeBankFinancialInstitution = $model->getRelationValue('draweeBank');
+				$value = $draweeBankFinancialInstitution?->bank?->view_name ?: $draweeBankFinancialInstitution?->name ?? null;
 			}
 			$type = 'text';
+			$options = null;
 			if ($isContractLoanSchedule && $fieldName === 'drawee_bank') {
 				$type = 'bank_select';
+				/**
+				 * ⚠️ REAL BUG FIXED HERE (client-flagged): getCompanyDraweeBankNames()
+				 * only returns banks matching its own filter (company +
+				 * type=BANK). If the row's actually-saved bank doesn't
+				 * happen to be in that filtered list for any reason —
+				 * renamed since, deactivated, a data mismatch — the
+				 * <select> has no matching <option> to show as selected,
+				 * and silently renders blank even though the value is
+				 * correctly saved on the row. Guaranteeing the row's own
+				 * current value is always present in the list closes
+				 * that gap regardless of the underlying reason.
+				 */
+				$options = getCompanyDraweeBankNames($company->id);
+				if ($value && ! in_array($value, $options, true)) {
+					array_unshift($options, $value);
+				}
 			} elseif ($isContractLoanSchedule && $fieldName === 'account_number') {
 				$type = 'account_number_select';
 			} elseif (in_array($fieldName, $dateFields, true)) {
@@ -764,7 +804,7 @@ class SalesGatheringTestController extends Controller
 				'label' => $label,
 				'type' => $type,
 				'value' => $value,
-				'options' => $type === 'bank_select' ? getCompanyDraweeBankNames($company->id) : null,
+				'options' => $options,
 			];
 		})->values();
 
@@ -785,10 +825,34 @@ class SalesGatheringTestController extends Controller
 			'mediumTermLoanId' => ! $isContractLoanSchedule ? $loanId : null,
 		]);
 	}
+	/**
+	 * ⚠️ REAL BUG FIXED HERE (client-flagged): this used to run
+	 * str_replace(",", "", $value) on EVERY submitted field — not
+	 * just numeric ones. For ContractLoanSchedule specifically, that
+	 * included `drawee_bank` (a bank's display NAME, not a number)
+	 * and `account_number`. Any bank whose name legitimately contains
+	 * a comma (a perfectly normal thing in a display name) would get
+	 * silently mangled before prepareContractLoanScheduleRowForStorage()
+	 * tried to look it up — the lookup would then fail to find a
+	 * match, and drawee_bank_id would be saved as null, silently
+	 * erasing a correctly-selected bank on every single save (which
+	 * also cascades into Account Number disappearing on the next
+	 * edit, since that field's options are keyed off Drawee Bank).
+	 * Now this only strips thousands-separator commas from fields
+	 * that are actually numeric — everything else (bank names,
+	 * account numbers, cheque numbers, dates, statuses, notes, etc.)
+	 * passes through completely untouched.
+	 */
 	protected function removeCommaFromNumbers(array $items):array{
+		$numericFieldNames = [
+			'beginning_balance', 'cheque_amount', 'schedule_payment',
+			'interest_amount', 'principle_amount', 'end_balance', 'remaining',
+			'invoice_amount', 'vat_amount', 'withhold_amount', 'collected_amount',
+			'paid_amount', 'net_balance', 'net_invoice_amount',
+		];
 		$result = [];
 		foreach($items as $key => $value){
-			$result[$key] = str_replace(",","",$value);
+			$result[$key] = in_array($key, $numericFieldNames, true) ? str_replace(",","",$value) : $value;
 		}
 		return $result ;
 	}
@@ -860,11 +924,21 @@ class SalesGatheringTestController extends Controller
 			: null;
 		$chequeAmount = (float) ($tableDataArr['cheque_amount'] ?? 0);
 
+		// Bug fix (client-flagged, confirmed 2026-08-15): same resolution as
+		// SalesGatheringTestJob's bulk-import path — see that class for the
+		// full explanation. This is the single-row path (the "Create" form
+		// and "Edit cached row" screen), so it needs the same fix.
+		$accountNumberText = trim((string) ($tableDataArr['account_number'] ?? ''));
+		$financialInstitutionAccountId = ($draweeBankId && $accountNumberText !== '')
+			? \App\Models\FinancialInstitutionAccount::findByAccountNumber($accountNumberText, $companyId, $draweeBankId)?->id
+			: null;
+
 		unset($tableDataArr['drawee_bank']);
 
 		return array_merge($tableDataArr, [
 			'leasing_contract_id' => $contractId,
 			'drawee_bank_id' => $draweeBankId,
+			'financial_institution_account_id' => $financialInstitutionAccountId,
 			'remaining' => $chequeAmount,
 			'status' => resolveLoanScheduleStatus($chequeAmount, $chequeAmount, $tableDataArr['date'] ?? null),
 		]);
@@ -937,12 +1011,39 @@ class SalesGatheringTestController extends Controller
 					
 					
 		if ($modelName === 'ContractLoanSchedule') {
+			/**
+			 * Bug fix (client-flagged, confirmed 2026-08-15): hiding the
+			 * Edit button in the UI for a paid/partially-paid installment
+			 * (see InvoiceUpload/Index.vue) only stops it from that
+			 * screen — this route had no matching check, so the same edit
+			 * could still be submitted directly. Guarded here too, same
+			 * condition as the UI: any recorded payment blocks it.
+			 */
+			if ((float) $model->getRemaining() < (float) $model->getChequeAmount()) {
+				toastr()->error(__('This installment has a payment recorded against it and can no longer be edited.'));
+				return redirect()->back();
+			}
+
 			$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','company_id','leasing_contract_id','loanId','medium_term_loan_id']);
 			$tableDataArr['company_id'] = $companyId;
 			$tableDataArr = $this->removeCommaFromNumbers($tableDataArr);
 			$tableDataArr = $this->prepareContractLoanScheduleRowForStorage($companyId, $tableDataArr, $request);
 			$model->update($tableDataArr);
 		} elseif ($modelName === 'LoanSchedule') {
+			/**
+			 * Bug fix (client-flagged, confirmed 2026-08-15): hiding the
+			 * Edit button in the UI for a paid/partially-paid Medium Term
+			 * Loan installment (see InvoiceUpload/Index.vue) only stops
+			 * it from that screen — this route had no matching check, so
+			 * the same edit could still be submitted directly. Guarded
+			 * here too, same condition as the UI: any recorded payment
+			 * blocks it.
+			 */
+			if ((float) $model->getRemaining() < (float) $model->getSchedulePayment()) {
+				toastr()->error(__('This installment has a payment recorded against it and can no longer be edited.'));
+				return redirect()->back();
+			}
+
 			$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','company_id','leasing_contract_id','loanId','medium_term_loan_id']);
 			$tableDataArr['company_id'] = $companyId;
 			$tableDataArr = $this->removeCommaFromNumbers($tableDataArr);

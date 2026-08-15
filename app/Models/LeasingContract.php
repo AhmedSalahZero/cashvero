@@ -7,6 +7,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @property int $id
@@ -163,10 +164,30 @@ class LeasingContract extends Model
         return $this->hasMany(ContractLoanSchedule::class);
     }
 
+    /**
+     * Bug fix (2026-08-15): this used to just call $schedule->delete() for
+     * every installment on the schedule, without first deleting each
+     * installment's payment settlements. Those settlements are what create
+     * rows in loan_statements (the account ledger), so deleting the contract
+     * this way left orphaned loan_statements / contract_loan_schedule_settlements
+     * rows behind — pointing at a schedule/contract that no longer existed.
+     *
+     * destroySchedule() in LeasingContractController already does this
+     * correctly (settlement->deleteAllRelations() + settlement->delete()
+     * before schedule->delete()). This now reuses that same pattern so
+     * deleting a whole contract (destroy()/update() in the controller)
+     * cleans up fully instead of leaving ledger entries behind.
+     */
     public function deleteRelations(): void
     {
-        $this->contractLoanSchedules->each(function (ContractLoanSchedule $schedule) {
-            $schedule->delete();
+        DB::transaction(function () {
+            $this->contractLoanSchedules->each(function (ContractLoanSchedule $schedule) {
+                $schedule->settlements->each(function (ContractLoanScheduleSettlement $settlement) {
+                    $settlement->deleteAllRelations();
+                    $settlement->delete();
+                });
+                $schedule->delete();
+            });
         });
     }
 

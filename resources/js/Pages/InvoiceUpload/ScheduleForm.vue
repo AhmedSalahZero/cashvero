@@ -33,15 +33,47 @@ const accountNumberOptions = ref([]);
 const initialAccountNumber = props.fields.find(f => f.field === 'account_number')?.value || '';
 let firstLoad = true;
 
+/**
+ * ⚠️ REAL BUG FIXED HERE (client-flagged): "Drawee Bank and Account
+ * Number does not get fetched in edit mode." The Drawee Bank field
+ * itself is fine (its options come straight from props, available
+ * immediately) — the actual problem is Account Number. It starts
+ * with an EMPTY options list, only filled in once the async
+ * loadAccountNumbers() lookup resolves. Until then (or if that
+ * lookup is slow or fails), there is no matching <option> for the
+ * row's own saved account number, so the native <select> can't show
+ * it as selected — even though form.account_number already holds
+ * the correct value internally. Fixed by seeding the options list
+ * with the row's own saved account number right away, so it's
+ * always displayable from the very first render; the real fetch
+ * still runs and supersedes this with the full, authoritative list.
+ */
+if (initialAccountNumber) {
+    accountNumberOptions.value = [initialAccountNumber];
+}
+
 async function loadAccountNumbers() {
     if (!props.accountNumbersUrl) return;
     const draweeBank = form.drawee_bank || '';
     if (!draweeBank) {
-        accountNumberOptions.value = [];
+        // ⚠️ REAL BUG FIXED HERE (client-flagged): this used to reset
+        // accountNumberOptions to an empty array whenever Drawee Bank
+        // was blank — wiping out the row's own saved account number
+        // (seeded above) even though Account Number is a perfectly
+        // valid, independently-saved value. A blank Drawee Bank no
+        // longer erases an already-known Account Number.
+        accountNumberOptions.value = initialAccountNumber ? [initialAccountNumber] : [];
         return;
     }
     const { data } = await window.axios.get(props.accountNumbersUrl, { params: { drawee_bank: draweeBank } });
-    accountNumberOptions.value = data.data || [];
+    const fetched = data.data || [];
+    // Keep the row's own saved account number visible even if the
+    // fresh lookup doesn't happen to include it (e.g. an account
+    // that's since been deactivated) — better to show a stale-but-
+    // correct value than silently drop it from the dropdown.
+    accountNumberOptions.value = (firstLoad && initialAccountNumber && !fetched.includes(initialAccountNumber))
+        ? [initialAccountNumber, ...fetched]
+        : fetched;
     if (firstLoad && initialAccountNumber && accountNumberOptions.value.includes(initialAccountNumber)) {
         form.account_number = initialAccountNumber;
     }

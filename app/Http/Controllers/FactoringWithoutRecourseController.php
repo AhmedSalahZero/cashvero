@@ -131,6 +131,9 @@ class FactoringWithoutRecourseController
             'urls' => [
                 'create' => route('factoring.without-recourse.create', ['company' => $company->id]),
                 'index' => route('factoring.without-recourse.index', ['company' => $company->id]),
+                // See FactoringWithRecourseController::index() for the full
+                // explanation — same missing-key bug, same fix.
+                'getAccountNumbersForType' => $this->companyScopedUrl($company, 'money-received/get-account-numbers-based-on-account-type'),
             ],
         ]);
     }
@@ -236,8 +239,8 @@ class FactoringWithoutRecourseController
                 'created_by' => auth()->id(),
             ]);
 
-            $commentEn = __('Factoring Amount From Account Number #:accountNumber', ['accountNumber' => $transaction->account_number]);
-            $commentAr = __('Factoring Amount From Account Number #:accountNumber', ['accountNumber' => $transaction->account_number], 'ar');
+            $commentEn = __('Factoring Without Recourse Amount For Invoice #:invoiceNumber', ['invoiceNumber' => $invoice->getInvoiceNumber()]);
+            $commentAr = __('Factoring Without Recourse Amount For Invoice #:invoiceNumber', ['invoiceNumber' => $invoice->getInvoiceNumber()], 'ar');
 
             $transaction->storeBankDebitStatement(
                 $company->id,
@@ -319,8 +322,8 @@ class FactoringWithoutRecourseController
                 'updated_by' => auth()->id(),
             ]);
 
-            $commentEn = __('Factoring Amount From Account Number #:accountNumber', ['accountNumber' => $factoringTransaction->account_number]);
-            $commentAr = __('Factoring Amount From Account Number #:accountNumber', ['accountNumber' => $factoringTransaction->account_number], 'ar');
+            $commentEn = __('Factoring Without Recourse Amount For Invoice #:invoiceNumber', ['invoiceNumber' => $invoice->getInvoiceNumber()]);
+            $commentAr = __('Factoring Without Recourse Amount For Invoice #:invoiceNumber', ['invoiceNumber' => $invoice->getInvoiceNumber()], 'ar');
 
             $factoringTransaction->storeBankDebitStatement(
                 $company->id,

@@ -83,4 +83,15 @@ class LetterOfCreditFacilityTermAndCondition extends Model
 	{
 		return $this->belongsTo(LetterOfCreditFacility::class , 'letter_of_credit_facility_id','id');
 	}
+
+	/**
+	 * Facility Renewal — Phase 6. Which dated chapter (Original or a
+	 * specific renewal) this rate row belongs to. Rows created before
+	 * this feature shipped were backfilled onto their facility's
+	 * Original chapter — see the terms_history_id migration.
+	 */
+	public function termsHistory()
+	{
+		return $this->belongsTo(LetterOfCreditFacilityTermsHistory::class , 'terms_history_id','id');
+	}
 }

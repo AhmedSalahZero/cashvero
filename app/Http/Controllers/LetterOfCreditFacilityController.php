@@ -144,17 +144,22 @@ class LetterOfCreditFacilityController
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
 			'canCreate' => hasAuthFor('create letter of credit facility'),
 			'createUrl' => route('create.letter.of.credit.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
+			'lcTypes' => LcTypes::getAll(),
 			'rows' => $letterOfCreditFacilities->map(function (LetterOfCreditFacility $lcf) use ($company, $financialInstitution) {
+				$latestChapter = $lcf->getLatestTerms();
 				return [
 					'id' => $lcf->id,
 					'name' => $lcf->getName(),
 					'type' => $lcf->getType(),
 					'type_formatted' => LetterOfCreditFacility::getTypes()[$lcf->getType()] ?? $lcf->getType(),
-					'contract_start_date_formatted' => $lcf->getContractStartDateFormatted(),
+					'contract_start_date_formatted' => $lcf->getCurrentChapterStartDateFormatted(),
 					'contract_end_date_formatted' => $lcf->getContractEndDateFormatted(),
 					'currency' => $lcf->getCurrency(),
 					'limit_formatted' => $lcf->getLimitFormatted(),
-					'term_and_conditions' => $lcf->termAndConditions->map(fn ($tc) => [
+					'borrowing_rate_formatted' => number_format((float) $lcf->borrowing_rate, 2),
+					'bank_margin_rate_formatted' => number_format((float) $lcf->bank_margin_rate, 2),
+					'interest_rate_formatted' => number_format((float) $lcf->interest_rate, 2),
+					'term_and_conditions' => ($latestChapter?->termAndConditions ?? $lcf->termAndConditions)->map(fn ($tc) => [
 						'lc_type_formatted' => $tc->getLcTypeFormatted(),
 						'cash_cover_rate_formatted' => $tc->getCashCoverRate() . ' %',
 						'commission_rate_formatted' => $tc->getCommissionRate() . ' %',
@@ -163,6 +168,26 @@ class LetterOfCreditFacilityController
 					])->values(),
 					'edit_url' => route('edit.letter.of.credit.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'letterOfCreditFacility' => $lcf->id]),
 					'delete_url' => route('delete.letter.of.credit.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'letterOfCreditFacility' => $lcf->id]),
+					'renew_url' => route('letter-of-credit-facility.renew', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'letterOfCreditFacility' => $lcf->id]),
+					'delete_renewal_url' => route('letter-of-credit-facility.delete-renewal', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'letterOfCreditFacility' => $lcf->id]),
+					'has_renewals' => $lcf->hasRenewals(),
+					'terms_history' => $lcf->termsHistories->map(fn ($t) => [
+						'id' => $t->id,
+						'effective_date_formatted' => $t->getEffectiveDateFormatted(),
+						'contract_end_date_formatted' => $t->getContractEndDateFormatted(),
+						'limit_formatted' => $t->getLimitFormatted(),
+						'borrowing_rate' => $t->borrowing_rate,
+						'bank_margin_rate' => $t->bank_margin_rate,
+						'interest_rate' => $t->interest_rate,
+						'is_original' => (bool) $t->is_original,
+						'term_and_conditions' => $t->termAndConditions->map(fn ($tc) => [
+							'lc_type_formatted' => $tc->getLcTypeFormatted(),
+							'cash_cover_rate_formatted' => $tc->getCashCoverRate() . ' %',
+							'commission_rate_formatted' => $tc->getCommissionRate() . ' %',
+							'min_commission_fees_formatted' => number_format($tc->getMinCommissionFees()),
+							'issuance_fees_formatted' => number_format($tc->getIssuanceFees()),
+						])->values(),
+					])->values(),
 				];
 			})->values(),
 			'backUrl' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
@@ -247,6 +272,15 @@ class LetterOfCreditFacilityController
 
 		$letterOfCreditFacility->handleEndOfMonthInterestForOverdraft($data['contract_start_date'],$data['contract_end_date'],$company->id);
 
+		/**
+		 * Facility Renewal — Phase 6. Every facility gets its
+		 * "chapter one" terms-history row the moment it's created —
+		 * same fix already applied to every earlier facility type —
+		 * so its first-ever Renew doesn't wrongly become the ONLY
+		 * history row.
+		 */
+		$originalTermsHistory = $letterOfCreditFacility->createOriginalTermsHistory();
+
 		$currencyName = $letterOfCreditFacility->getCurrency();
 		$source = LetterOfCreditIssuance::LC_FACILITY;
 
@@ -259,6 +293,7 @@ class LetterOfCreditFacilityController
 		//	$currentLcType = $termAndConditionArr['lc_type'] ;
 			// if($currentOutstandingBalance){
 				$letterOfCreditFacility->termAndConditions()->create(array_merge($termAndConditionArr , [
+					'terms_history_id' => $originalTermsHistory->id,
 				]));
 			// }
 			// if($currentOutstandingBalance > 0){
@@ -365,12 +400,28 @@ class LetterOfCreditFacilityController
      $currencyName = $letterOfCreditFacility->getCurrency();
      LetterOfCreditStatement::deleteButTriggerChangeOnLastElement($letterOfCreditFacility->letterOfCreditStatements->where('type',LetterOfCreditIssuance::LC_FACILITY_BEGINNING_BALANCE));
      LetterOfCreditCashCoverStatement::deleteButTriggerChangeOnLastElement($letterOfCreditFacility->letterOfCreditCashCoverStatements->where('type',LetterOfCreditIssuance::LC_FACILITY_BEGINNING_BALANCE));
-		$letterOfCreditFacility->termAndConditions->each(function($termAndCondition){
+
+		/**
+		 * Facility Renewal — Phase 6. The regular Edit screen always
+		 * edits whichever chapter is CURRENTLY the live, running one
+		 * (same rule as Clean/Fully Secured Overdraft) — so this
+		 * only ever touches the LATEST chapter's rate rows, never a
+		 * past renewal's. If the facility somehow has zero
+		 * terms-history rows yet (pre-dates this feature), its
+		 * Original chapter is backfilled first.
+		 */
+		if ($letterOfCreditFacility->termsHistories()->count() === 0) {
+			$letterOfCreditFacility->createOriginalTermsHistory();
+		}
+		$latestChapter = $letterOfCreditFacility->getLatestTerms();
+
+		$letterOfCreditFacility->termAndConditions()->where('terms_history_id', $latestChapter->id)->get()->each(function($termAndCondition){
 			$termAndCondition->delete();
 		});
 
 		foreach($termAndConditions as $termAndConditionArr){
 			$letterOfCreditFacility->termAndConditions()->create(array_merge($termAndConditionArr , [
+				'terms_history_id' => $latestChapter->id,
 			]));
             // $termAndConditionArr['outstanding_date'] = $request->get('outstanding_date');
 			// $currentOutstandingBalance = $termAndConditionArr['outstanding_balance'] ;
@@ -386,6 +437,19 @@ class LetterOfCreditFacilityController
 			
 
 		}
+
+		$latestChapter->update([
+			'effective_date' => $latestChapter->is_original ? $letterOfCreditFacility->contract_start_date : $latestChapter->effective_date,
+			'limit' => $letterOfCreditFacility->limit,
+			'cd_or_td_lending_percentage' => $letterOfCreditFacility->cd_or_td_lending_percentage,
+			'borrowing_rate' => $letterOfCreditFacility->borrowing_rate,
+			'bank_margin_rate' => $letterOfCreditFacility->bank_margin_rate,
+			'interest_rate' => $letterOfCreditFacility->interest_rate,
+			'min_interest_rate' => $letterOfCreditFacility->min_interest_rate,
+			'highest_debt_balance_rate' => $letterOfCreditFacility->highest_debt_balance_rate,
+			'admin_fees_rate' => $letterOfCreditFacility->admin_fees_rate,
+			'contract_end_date' => $letterOfCreditFacility->contract_end_date,
+		]);
 		// $type = $request->get('type','letter-of-credit-facilities');
 		
 		// $activeTab = $type ;
@@ -416,6 +480,56 @@ class LetterOfCreditFacilityController
 		});
 		$letterOfCreditFacility->delete();
 		return redirect()->back()->with('success',__('Item Has Been Delete Successfully'));
+	}
+
+	/**
+	 * Facility Renewal — Phase 6. Records a new dated set of terms
+	 * (both the flat Financing Terms & Conditions and the full 3-row
+	 * LC-type matrix) for an EXISTING LC Facility — see
+	 * LetterOfCreditFacility::renew() for the full rules.
+	 */
+	public function renew(Company $company, \App\Http\Requests\RenewLetterOfCreditFacilityRequest $request, FinancialInstitution $financialInstitution, LetterOfCreditFacility $letterOfCreditFacility)
+	{
+		$effectiveDate = Carbon::make($request->get('effective_date'))->format('Y-m-d');
+		$contractEndDate = $request->get('contract_end_date')
+			? Carbon::make($request->get('contract_end_date'))->format('Y-m-d')
+			: null;
+
+		try {
+			$letterOfCreditFacility->renew($effectiveDate, [
+				'limit' => $request->get('limit'),
+				'cd_or_td_lending_percentage' => $request->get('cd_or_td_lending_percentage'),
+				'borrowing_rate' => $request->get('borrowing_rate'),
+				'bank_margin_rate' => $request->get('bank_margin_rate'),
+				'min_interest_rate' => $request->get('min_interest_rate'),
+				'highest_debt_balance_rate' => $request->get('highest_debt_balance_rate'),
+				'admin_fees_rate' => $request->get('admin_fees_rate'),
+				'contract_end_date' => $contractEndDate,
+				'notes' => $request->get('notes'),
+			], $request->get('termAndConditions', []), auth()->user()->id);
+		} catch (\InvalidArgumentException $e) {
+			return redirect()->back()->withErrors(['effective_date' => $e->getMessage()]);
+		}
+
+		return redirect()
+			->route('view.letter.of.credit.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id])
+			->with('success', __('Facility Renewed Successfully'));
+	}
+
+	/**
+	 * Deletes the facility's most recent renewal only — see
+	 * LetterOfCreditFacility::deleteLatestRenewal() for the full
+	 * rules.
+	 */
+	public function deleteRenewal(Company $company, FinancialInstitution $financialInstitution, LetterOfCreditFacility $letterOfCreditFacility)
+	{
+		try {
+			$letterOfCreditFacility->deleteLatestRenewal();
+		} catch (\InvalidArgumentException $e) {
+			return redirect()->back()->withErrors(['renewal' => $e->getMessage()]);
+		}
+
+		return redirect()->back()->with('success', __('Renewal Deleted — Facility Reverted To Previous Terms'));
 	}
 
 	/**

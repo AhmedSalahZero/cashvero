@@ -77,6 +77,7 @@ class SidebarMenu
                 self::item(__('LG & LC Statement'), $user->can('view bank statement report'), route('view.lg.lc.bank.statement', ['company' => $companyId]), inertia: true, icon: 'files'),
                 self::item(__('Cash Expense Statement'), $user->can('view cash expense report'), route('view.cash.expense.statement', ['company' => $companyId]), inertia: true, icon: 'credit-card'),
                 self::item(__('Partner Statement'), $user->can('view partners statement report'), route('view.partners.statement', ['company' => $companyId]), inertia: true, icon: 'handshake'),
+                self::item(__('Taxes & Insurance'), $user->can('view partners statement report'), route('view.taxes.insurance.statement', ['company' => $companyId]), inertia: true, icon: 'receipt'),
                 self::item(__('Withdrawal Statement'), $user->can('view withdrawals settlement report'), route('view.withdrawals.settlement.report', ['company' => $companyId]), inertia: true, icon: 'arrow-down-circle'),
             ]),
 

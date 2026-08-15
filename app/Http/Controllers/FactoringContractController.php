@@ -117,7 +117,7 @@ class FactoringContractController
             'rows' => $contracts->map(function (FactoringContract $contract) use ($company, $factoringCompany) {
                 return [
                     'id' => $contract->id,
-                    'start_date_formatted' => $contract->getContractStartDateFormatted(),
+                    'start_date_formatted' => $contract->getCurrentChapterStartDateFormatted() ?: $contract->getContractStartDateFormatted(),
                     'end_date_formatted' => $contract->getContractEndDateFormatted(),
                     'recourse_type_label' => $contract->getRecourseTypeLabel(),
                     'currency' => $contract->getCurrency(),
@@ -127,6 +127,23 @@ class FactoringContractController
                     'interest_rate_formatted' => $contract->getInterestRateFormatted(),
                     'edit_url' => route('factoring.contracts.edit', ['company' => $company->id, 'factoringCompany' => $factoringCompany->id, 'factoringContract' => $contract->id]),
                     'delete_url' => route('factoring.contracts.destroy', ['company' => $company->id, 'factoringCompany' => $factoringCompany->id, 'factoringContract' => $contract->id]),
+                    'renew_url' => route('factoring.contracts.renew', ['company' => $company->id, 'factoringCompany' => $factoringCompany->id, 'factoringContract' => $contract->id]),
+                    'delete_renewal_url' => route('factoring.contracts.delete-renewal', ['company' => $company->id, 'factoringCompany' => $factoringCompany->id, 'factoringContract' => $contract->id]),
+                    'has_renewals' => $contract->hasRenewals(),
+                    'terms_history' => $contract->termsHistories->map(fn ($t) => [
+                        'id' => $t->id,
+                        'effective_date_formatted' => $t->getEffectiveDateFormatted(),
+                        'contract_end_date_formatted' => $t->getContractEndDateFormatted(),
+                        'limit_formatted' => $t->getLimitFormatted(),
+                        'borrowing_rate' => $t->borrowing_rate,
+                        'margin_rate' => $t->margin_rate,
+                        'interest_rate' => $t->interest_rate,
+                        'min_interest_rate' => $t->min_interest_rate,
+                        'highest_debt_balance_rate' => $t->highest_debt_balance_rate,
+                        'admin_fees_rate' => $t->admin_fees_rate,
+                        'to_be_setteled_max_within_days' => $t->to_be_setteled_max_within_days,
+                        'is_original' => (bool) $t->is_original,
+                    ])->values(),
                 ];
             })->values(),
             'canUpdate' => hasAuthFor('update clean overdraft'),
@@ -192,6 +209,7 @@ class FactoringContractController
         $contract = FactoringContract::create($data);
         $contract->storeOutstandingBreakdown($request, $company);
         $contract->storeLimitStatement($company->id);
+        $contract->createOriginalTermsHistory();
 
         return redirect()
             ->route('factoring.contracts.index', ['company' => $company->id, 'factoringCompany' => $factoringCompany->id])
@@ -274,6 +292,30 @@ class FactoringContractController
         $factoringContract->storeOutstandingBreakdown($request, $company);
         $factoringContract->syncLimitStatement($company->id);
 
+        /**
+         * Facility Renewal — Phase 7. The regular Edit screen always
+         * edits whichever chapter is CURRENTLY the live, running one
+         * — same rule as every other facility type — so this syncs
+         * the LATEST terms-history row (backfilling an Original
+         * chapter first if this contract somehow has none yet).
+         */
+        if ($factoringContract->termsHistories()->count() === 0) {
+            $factoringContract->createOriginalTermsHistory();
+        }
+        $latestChapter = $factoringContract->getLatestTerms();
+        $latestChapter->update([
+            'effective_date' => $latestChapter->is_original ? $factoringContract->contract_start_date : $latestChapter->effective_date,
+            'limit' => $factoringContract->limit,
+            'borrowing_rate' => $factoringContract->borrowing_rate,
+            'margin_rate' => $factoringContract->margin_rate,
+            'interest_rate' => $factoringContract->interest_rate,
+            'min_interest_rate' => $factoringContract->min_interest_rate,
+            'highest_debt_balance_rate' => $factoringContract->highest_debt_balance_rate,
+            'admin_fees_rate' => $factoringContract->admin_fees_rate,
+            'to_be_setteled_max_within_days' => $factoringContract->to_be_setteled_max_within_days,
+            'contract_end_date' => $factoringContract->contract_end_date,
+        ]);
+
         return redirect()
             ->route('factoring.contracts.index', ['company' => $company->id, 'factoringCompany' => $factoringCompany->id])
             ->with('success', __('Item Has Been Updated Successfully'));
@@ -288,6 +330,54 @@ class FactoringContractController
         $factoringContract->delete();
 
         return redirect()->back()->with('success', __('Item Has Been Delete Successfully'));
+    }
+
+    /**
+     * Facility Renewal — Phase 7 (final facility type). Records a new
+     * dated set of terms for an EXISTING Factoring Contract. Unlike
+     * store(), this never creates a new factoring_contracts row.
+     */
+    public function renew(Company $company, \App\Http\Requests\RenewFactoringContractRequest $request, FactoringCompany $factoringCompany, FactoringContract $factoringContract)
+    {
+        $effectiveDate = Carbon::make($request->get('effective_date'))->format('Y-m-d');
+        $contractEndDate = $request->get('contract_end_date')
+            ? Carbon::make($request->get('contract_end_date'))->format('Y-m-d')
+            : null;
+
+        try {
+            $factoringContract->renew($effectiveDate, [
+                'limit' => $request->get('limit'),
+                'borrowing_rate' => $request->get('borrowing_rate'),
+                'margin_rate' => $request->get('margin_rate'),
+                'min_interest_rate' => $request->get('min_interest_rate'),
+                'highest_debt_balance_rate' => $request->get('highest_debt_balance_rate'),
+                'admin_fees_rate' => $request->get('admin_fees_rate'),
+                'to_be_setteled_max_within_days' => $request->get('to_be_setteled_max_within_days'),
+                'contract_end_date' => $contractEndDate,
+                'notes' => $request->get('notes'),
+            ], auth()->user()->id);
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->back()->withErrors(['effective_date' => $e->getMessage()]);
+        }
+
+        return redirect()
+            ->route('factoring.contracts.index', ['company' => $company->id, 'factoringCompany' => $factoringCompany->id])
+            ->with('success', __('Facility Renewed Successfully'));
+    }
+
+    /**
+     * Deletes the contract's most recent renewal only — see
+     * FactoringContract::deleteLatestRenewal() for the full rules.
+     */
+    public function deleteRenewal(Company $company, FactoringCompany $factoringCompany, FactoringContract $factoringContract)
+    {
+        try {
+            $factoringContract->deleteLatestRenewal();
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->back()->withErrors(['renewal' => $e->getMessage()]);
+        }
+
+        return redirect()->back()->with('success', __('Renewal Deleted — Facility Reverted To Previous Terms'));
     }
 
     protected function getCommonDataArr(): array
