@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Interfaces\Models\IHaveCreditOverdraftStatement;
+use App\Interfaces\Models\IHaveMediumTermLoanCreditStatement;
 use App\Models\OpeningBalance;
 use App\Models\OutgoingTransfer;
 use App\Services\Api\OdooPayment;
@@ -144,7 +145,7 @@ use Illuminate\Support\Facades\DB;
  * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\Models\MoneyPayment whereUserId($value)
  * @mixin \Eloquent
  */
-class MoneyPayment extends Model implements IHaveCreditOverdraftStatement
+class MoneyPayment extends Model implements IHaveCreditOverdraftStatement, IHaveMediumTermLoanCreditStatement
 {
     protected $with = [
         // 'payableCheque'
@@ -724,6 +725,13 @@ class MoneyPayment extends Model implements IHaveCreditOverdraftStatement
     {
         return $this->hasOne(OverdraftAgainstAssignmentOfContractBankStatement::class, 'money_payment_id', 'id');
     }
+    /**
+     * * السحبة من قرض متوسط الاجل .. البنك دفع للمورد من القرض مباشرة
+     */
+    public function mediumTermLoanCreditBankStatement():HasOne
+    {
+        return $this->hasOne(MediumTermLoanBankStatement::class, 'money_payment_id', 'id');
+    }
     public function cashInSafeCreditStatement():HasOne
     {
         return $this->hasOne(CashInSafeStatement::class, 'money_payment_id', 'id');
@@ -798,6 +806,9 @@ class MoneyPayment extends Model implements IHaveCreditOverdraftStatement
         }
         if ($this->overdraftAgainstAssignmentOfContractCreditBankStatement) {
             return $this->overdraftAgainstAssignmentOfContractCreditBankStatement;
+        }
+        if ($this->mediumTermLoanCreditBankStatement) {
+            return $this->mediumTermLoanCreditBankStatement;
         }
         if ($this->cashInSafeCreditStatement) {
             return $this->cashInSafeCreditStatement ;

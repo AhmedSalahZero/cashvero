@@ -2,11 +2,13 @@
 namespace App\Traits\Models;
 
 use App\Interfaces\Models\IHaveCreditOverdraftStatement;
+use App\Interfaces\Models\IHaveMediumTermLoanCreditStatement;
 use App\Models\AccountType;
 use App\Models\CleanOverdraft;
 use App\Models\FinancialInstitutionAccount;
 use App\Models\FullySecuredOverdraft;
 use App\Models\LetterOfCreditIssuance;
+use App\Models\MediumTermLoan;
 use App\Models\MoneyPayment;
 use App\Models\OverdraftAgainstAssignmentOfContract;
 use App\Models\OverdraftAgainstCommercialPaper;
@@ -91,6 +93,33 @@ trait HasCreditStatements
 			]) ;
 			
 			// $this->storeOverdraftAgainstAssignmentOfContractCreditBankStatement($moneyType,$odAgainstAssignmentOfContract,$statementDate,$paidAmount,$commentEn,$commentAr);
+		}
+		elseif($this instanceof IHaveMediumTermLoanCreditStatement && $accountType && $accountType->getSlug() == AccountType::MEDIUM_TERM_LOAN){
+			/**
+			 * * سحبة من قرض متوسط الاجل .. البنك بيدفع للمورد من القرض مباشرة
+			 * * فا بتنزل
+			 * * credit
+			 * * زي اي تسهيل ائتماني تاني .. والفرق الوحيد ان مفيش فوايد هنا لان
+			 * * فايدة القرض اصلا داخلة جوه ال
+			 * * schedule_payment
+			 * * بتاع القسط
+			 * @var MediumTermLoan|null $mediumTermLoan
+			 */
+			$mediumTermLoan = MediumTermLoan::findByAccountNumber($accountNumber,$companyId,$bankId);
+			if($mediumTermLoan){
+				$this->mediumTermLoanCreditBankStatement()->create([
+					'type'=>$moneyType ,
+					'medium_term_loan_id'=>$mediumTermLoan->id ,
+					'company_id'=>$this->company_id?:$companyId ,
+					'date'=>$statementDate,
+					'limit'=>$mediumTermLoan->getLimit(),
+					'beginning_balance'=>0 ,
+					'debit'=>0,
+					'credit'=>$paidAmount,
+					'comment_en'=>$commentEn,
+					'comment_ar'=>$commentAr
+				]);
+			}
 		}
 		elseif($this instanceof IHaveCreditOverdraftStatement && $this->isCashPayment()){
 			$this->cashInSafeCreditStatement()->create([

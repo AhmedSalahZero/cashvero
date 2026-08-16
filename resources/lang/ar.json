@@ -1354,5 +1354,11 @@
     "The Account Has Been Saved But It Was Not Synced With Odoo Because The Current User Has No Odoo Username Or Password":"تم حفظ الحساب و لكن لم تتم المزامنة مع أودو لأن المستخدم الحالي ليس لديه اسم مستخدم أو كلمة مرور في أودو , برجاء ضبطها ثم حفظ الحساب مرة أخرى",
     "The Safe Has Been Saved But It Was Not Synced With Odoo Because The Current User Has No Odoo Username Or Password":"تم حفظ الخزنة و لكن لم تتم المزامنة مع أودو لأن المستخدم الحالي ليس لديه اسم مستخدم أو كلمة مرور في أودو , برجاء ضبطها ثم حفظ الخزنة مرة أخرى",
     "The Safe Has Been Saved But Syncing With Odoo Failed":"تم حفظ الخزنة و لكن فشلت المزامنة مع أودو",
-    "The Safe Has Been Saved But The Odoo Code Was Not Found In Odoo Chart Of Accounts":"تم حفظ الخزنة و لكن لم يتم العثور على كود أودو في شجرة حسابات أودو , لذلك لم يتم تحديث الربط مع أودو"
+    "The Safe Has Been Saved But The Odoo Code Was Not Found In Odoo Chart Of Accounts":"تم حفظ الخزنة و لكن لم يتم العثور على كود أودو في شجرة حسابات أودو , لذلك لم يتم تحديث الربط مع أودو",
+    "Existing (already drawn — repayment only)":"قرض قائم (اتصرف بالفعل — سداد أقساط فقط)",
+    "New (not consumed yet — can pay suppliers)":"قرض جديد (لسه ما اتصرفش — ينفع تدفع بيه للموردين)",
+    "Medium Term Loan":"قرض متوسط الأجل",
+    "This exceeds what is left of the loan. Reduce the amount or pick another account.":"المبلغ ده أكبر من المتبقي من القرض. قلّل المبلغ أو اختار حساب تاني.",
+    "Supplier payments have already been made from this loan, so it can't be edited. Delete those payments first if you need to make changes.":"فيه مدفوعات موردين اتعملت من القرض ده، فمينفعش يتعدّل. امسح المدفوعات دي الأول لو محتاج تعدّل.",
+    "Supplier payments have already been made from this loan, so it can't be deleted. Delete those payments first.":"فيه مدفوعات موردين اتعملت من القرض ده، فمينفعش يتحذف. امسح المدفوعات دي الأول."
 }

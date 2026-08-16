@@ -54,8 +54,20 @@ class AccountType extends Model
 	const LETTER_OF_CREDIT_LCS = 'letter-of-credit-lcs';
 	CONST CERTIFICATE_OF_DEPOSIT= 'certificate-of-deposit-cd';
 	CONST TIME_OF_DEPOSIT= 'time-of-deposit-td';
+	/**
+	 * * قرض متوسط الاجل لما يتستخدم كمصدر دفع (يعني البنك بيدفع للمورد من القرض مباشرة)
+	 * * مقصود انه مش ضمن
+	 * * OVERDRAFT_ACCOUNT_SLUGS
+	 * * ولا ضمن
+	 * * onlyCashAccounts()
+	 * * علشان ما يظهرش في كل الشاشات .. هو بيتضاف يدوي في شاشة ال
+	 * * Money Payment
+	 * * بس
+	 */
+	CONST MEDIUM_TERM_LOAN = 'medium-term-loan';
 	CONST  OVERDRAFT_ACCOUNT_SLUGS = [self::FULLY_SECURED_OVERDRAFT,self::CLEAN_OVERDRAFT,self::OVERDRAFT_AGAINST_COMMERCIAL_PAPER,self::OVERDRAFT_AGAINST_ASSIGNMENT_OF_CONTRACTS];
-	
+	CONST  CASH_ACCOUNT_SLUGS = [self::CURRENT_ACCOUNT,self::FULLY_SECURED_OVERDRAFT,self::CLEAN_OVERDRAFT,self::OVERDRAFT_AGAINST_COMMERCIAL_PAPER,self::OVERDRAFT_AGAINST_ASSIGNMENT_OF_CONTRACTS];
+
 	protected $guarded =[
 		'id'
 	];
@@ -65,7 +77,7 @@ class AccountType extends Model
  */
 	public function scopeOnlyCashAccounts(Builder $builder)
 	{
-		return $builder->onlySlugs([self::CURRENT_ACCOUNT,self::FULLY_SECURED_OVERDRAFT,self::CLEAN_OVERDRAFT,self::OVERDRAFT_AGAINST_COMMERCIAL_PAPER,self::OVERDRAFT_AGAINST_ASSIGNMENT_OF_CONTRACTS]);
+		return $builder->onlySlugs(self::CASH_ACCOUNT_SLUGS);
 	}
 	/**
  * @param Builder<self> $builder
@@ -190,6 +202,30 @@ class AccountType extends Model
 	public function isCurrentAccount():bool
 	{
 		return $this->slug === self::CURRENT_ACCOUNT ;
+	}
+	/**
+ * @param Builder<self> $builder
+ * @return Builder<self>
+ */
+	public function scopeOnlyMediumTermLoan(Builder $builder)
+	{
+		return $builder->onlySlugs([self::MEDIUM_TERM_LOAN]);
+	}
+	public function isMediumTermLoanAccount():bool
+	{
+		return $this->slug === self::MEDIUM_TERM_LOAN ;
+	}
+	/**
+	 * * الحسابات اللي الرصيد المتاح فيها هو ال
+	 * * room
+	 * * (الحد ناقص المسحوب) مش ال
+	 * * end_balance
+	 * * وبنستخدمها في
+	 * * MoneyReceivedController::updateNetBalanceBasedOnAccountNumber()
+	 */
+	public function isRoomBasedAccount():bool
+	{
+		return $this->isOverdraftAccount() || $this->isMediumTermLoanAccount();
 	}
 	public function getModelName()
 	{

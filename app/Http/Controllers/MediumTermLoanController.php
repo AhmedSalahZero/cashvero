@@ -136,6 +136,7 @@ class MediumTermLoanController
                     'duration_formatted' => $loan->getDurationFormatted(),
                     'installment_interval_formatted' => $loan->getPaymentInstallmentIntervalFormatted(),
                     'upload_schedule_url' => route('view.uploading', ['company' => $company->id, 'model' => 'LoanSchedule', 'loanId' => $loan->id]),
+                    'statement_url' => route('loans.statement', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'mediumTermLoan' => $loan->id]),
                     'edit_url' => route('loans.edit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'mediumTermLoan' => $loan->id]),
                     'delete_url' => route('loans.destroy', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'mediumTermLoan' => $loan->id]),
                 ];
@@ -144,6 +145,86 @@ class MediumTermLoanController
             'canUpdate' => hasAuthFor('update medium term loan'),
             'canDelete' => hasAuthFor('delete medium term loan'),
             'backUrl' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+            'navUrls' => [
+                'home' => route('home', ['company' => $company->id]),
+                'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+                'customers' => route('partners.index', ['company' => $company->id, 'type' => 'customers']),
+                'suppliers' => route('partners.index', ['company' => $company->id, 'type' => 'suppliers']),
+                'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
+            ],
+        ]);
+    }
+
+    /**
+     * MTL Statement — the loan's own statement, in two halves.
+     *
+     * Requested by the project owner (2026-08-16): "لازم نفصل بين الفايدة
+     * اللي انا كاتبها والفايدة اللي انا دافعها ... نشوف اصل ال interest كام
+     * واندفع منها كام واصل القسط كام واندفع منه كام."
+     *
+     *   1. Repayment breakdown — per installment and in total: interest
+     *      DUE vs interest PAID vs remaining, and the same for principle.
+     *      Computed straight off loan_schedules + settlements, so it works
+     *      for every loan, including "existing" ones that were never drawn
+     *      through CashVero and therefore own no facility ledger at all.
+     *
+     *   2. Facility ledger — only for a loan that IS drawn from here:
+     *      drawdowns (credit), installment repayments (principle in debit,
+     *      interest recorded alongside but deliberately outside the balance
+     *      formula), running balance and room.
+     *
+     * Read-only. No new financial logic lives here — the allocation rule is
+     * the single one in LoanScheduleSettlement, reused by both halves so
+     * the ledger and the breakdown can never disagree.
+     */
+    public function statement(Company $company, FinancialInstitution $financialInstitution, MediumTermLoan $mediumTermLoan)
+    {
+        $breakdown = $mediumTermLoan->getRepaymentBreakdown();
+        $isPayableFacility = $mediumTermLoan->isNotConsumedYet();
+
+        $ledger = $isPayableFacility
+            ? $mediumTermLoan->bankStatements()->orderByRaw('full_date asc , id asc')->get()
+            : collect();
+
+        return \Inertia\Inertia::render('MediumTermLoan/Statement', [
+            'company' => ['id' => $company->id],
+            'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
+            'loan' => [
+                'id' => $mediumTermLoan->id,
+                'name' => $mediumTermLoan->getName(),
+                'currency_formatted' => $mediumTermLoan->getCurrencyFormatted(),
+                'limit' => (float) $mediumTermLoan->getLimit(),
+                'account_number' => $mediumTermLoan->getAccountNumber(),
+                'start_date_formatted' => $mediumTermLoan->getStartDateFormatted(),
+                'end_date_formatted' => $mediumTermLoan->getEndDateFormatted(),
+                'interest_rate_formatted' => number_format($mediumTermLoan->getInterestRate(), 2).' %',
+                'consumption_status' => $mediumTermLoan->getConsumptionStatus(),
+                'is_payable_facility' => $isPayableFacility,
+                // Drawn is derived from room so it can never disagree with the
+                // ledger's own trigger-computed figure.
+                'available_room' => $isPayableFacility ? $mediumTermLoan->getAvailableRoomAt() : 0.0,
+                'drawn' => $isPayableFacility
+                    ? (float) $mediumTermLoan->getLimit() - $mediumTermLoan->getAvailableRoomAt()
+                    : 0.0,
+            ],
+            'breakdown' => $breakdown['rows'],
+            'totals' => $breakdown['totals'],
+            'ledger' => $ledger->map(function (\App\Models\MediumTermLoanBankStatement $row) {
+                return [
+                    'id' => $row->id,
+                    'date_formatted' => $row->date ? \Carbon\Carbon::make($row->date)->format('d-m-Y') : __('N/A'),
+                    'type' => $row->type,
+                    'is_repayment' => $row->type === \App\Models\MediumTermLoanBankStatement::INSTALLMENT_REPAYMENT,
+                    'beginning_balance' => (float) $row->beginning_balance,
+                    'debit' => (float) $row->debit,
+                    'credit' => (float) $row->credit,
+                    'interest_amount' => (float) $row->interest_amount,
+                    'end_balance' => (float) $row->end_balance,
+                    'room' => (float) $row->room,
+                    'comment' => $row->{'comment_'.app()->getLocale()} ?: $row->comment_en,
+                ];
+            })->values(),
+            'backUrl' => route('loans.index', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
             'navUrls' => [
                 'home' => route('home', ['company' => $company->id]),
                 'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
@@ -169,6 +250,9 @@ class MediumTermLoanController
             'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
             'currencies' => getCurrencies(),
             'installmentIntervals' => \App\Helpers\HVero::getDurationIntervalTypesForSelect(),
+            'consumptionStatuses' => MediumTermLoan::getConsumptionStatusesForSelect(),
+            'hasOdoo' => $company->hasOdooCredentials(),
+            'isConsumptionLocked' => false,
             'isLocked' => false,
             'model' => null,
             'submitUrl' => route('loans.store', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
@@ -184,7 +268,10 @@ class MediumTermLoanController
     }
 
     /**
-     * Stores a new Medium Term Loan. UNCHANGED, deliberately.
+     * Stores a new Medium Term Loan.
+     *
+     * The Odoo sync at the end is the only addition — see
+     * syncLoanWithOdoo() for why it is now required.
      */
     public function store(Company $company, Request $request, FinancialInstitution $financialInstitution)
     {
@@ -193,7 +280,66 @@ class MediumTermLoanController
         $mediumTermLoan->status = MediumTermLoan::RUNNING;
         $mediumTermLoan->storeBasicForm($request);
         $activeTab = $type;
-        return redirect()->route('loans.index', ['company' => $company->id, 'active' => $activeTab, 'financialInstitution' => $financialInstitution->id])->with('success', __('Data Store Successfully'));
+
+        $odooSyncFailureMessage = $this->syncLoanWithOdoo($company, $mediumTermLoan);
+
+        $redirect = redirect()->route('loans.index', ['company' => $company->id, 'active' => $activeTab, 'financialInstitution' => $financialInstitution->id]);
+
+        if ($odooSyncFailureMessage) {
+            return $redirect->with('fail', $odooSyncFailureMessage);
+        }
+
+        return $redirect->with('success', __('Data Store Successfully'));
+    }
+
+    /**
+     * Resolves the loan's Odoo Code against Odoo's chart of accounts and
+     * writes back journal_id / odoo_id / the payment-method ids.
+     *
+     * Required because the loan is now a paying account: when a settlement
+     * syncs, OdooPayment::createPayment() asks the paying account for its
+     * journal via MoneyPayment::getBankAccountJournalId(), which is typed
+     * `: int`. A loan with no journal_id therefore doesn't just sync
+     * badly — it throws a TypeError and the payment fails. Bank accounts
+     * never hit this because their Odoo Code has always been synced on
+     * save; this gives the loan the identical treatment.
+     *
+     * Mirrors FinancialInstitutionAccountController::syncAccountWithOdoo()
+     * deliberately, including its messages: the loan itself is already
+     * saved by this point, so a sync failure is reported, never fatal.
+     *
+     * Note update() re-enters store(), so this covers editing too.
+     *
+     * @return string|null error message, or null when everything is fine
+     */
+    private function syncLoanWithOdoo(Company $company, MediumTermLoan $mediumTermLoan): ?string
+    {
+        if (! $company->hasOdooCredentials()) {
+            return null;
+        }
+
+        if (! $company->hasOdooIntegrationCredentials()) {
+            return __('The Account Has Been Saved But It Was Not Synced With Odoo Because The Current User Has No Odoo Username Or Password');
+        }
+
+        $odooCode = $mediumTermLoan->getOdooCode();
+        if (! $odooCode) {
+            return null;
+        }
+
+        try {
+            $isSynced = (new \App\Services\Api\OdooService($company))->syncFinancialInstitutions($mediumTermLoan);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return __('The Account Has Been Saved But Syncing With Odoo Failed').' : '.$exception->getMessage();
+        }
+
+        if (! $isSynced) {
+            return __('The Account Has Been Saved But The Odoo Code Was Not Found In Odoo Chart Of Accounts').' : '.$odooCode;
+        }
+
+        return null;
     }
 
     /**
@@ -215,12 +361,22 @@ class MediumTermLoanController
         // action) before editing is allowed again.
         $isLocked = $mediumTermLoan->loanSchedules()->exists();
 
+        // Separate, narrower lock than $isLocked above: once a supplier has
+        // actually been paid out of this loan, flipping it back to
+        // "existing" would strand those payments against an account the
+        // system no longer considers payable. The rest of the form stays
+        // editable (subject to $isLocked); only this one field freezes.
+        $isConsumptionLocked = $mediumTermLoan->hasDrawdowns();
+
         return \Inertia\Inertia::render('MediumTermLoan/Form', [
             'mode' => 'edit',
             'company' => ['id' => $company->id],
             'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
             'currencies' => getCurrencies(),
             'installmentIntervals' => \App\Helpers\HVero::getDurationIntervalTypesForSelect(),
+            'consumptionStatuses' => MediumTermLoan::getConsumptionStatusesForSelect(),
+            'hasOdoo' => $company->hasOdooCredentials(),
+            'isConsumptionLocked' => $isConsumptionLocked,
             'isLocked' => $isLocked,
             'model' => [
                 'id' => $mediumTermLoan->id,
@@ -237,6 +393,9 @@ class MediumTermLoanController
                 'already_paid_amount' => (float) $mediumTermLoan->already_paid_amount,
                 'first_installment_date' => $mediumTermLoan->first_installment_date,
                 'remaining_installment_count' => $mediumTermLoan->remaining_installment_count,
+                'consumption_status' => $mediumTermLoan->getConsumptionStatus(),
+                'odoo_code' => $mediumTermLoan->getOdooCode(),
+                'available_room_formatted' => $mediumTermLoan->getAvailableRoomAtFormatted(),
             ],
             'submitUrl' => route('loans.update', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'mediumTermLoan' => $mediumTermLoan->id]),
             'deleteScheduleUrl' => route('loans.schedule.destroy', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'mediumTermLoan' => $mediumTermLoan->id]),
@@ -264,6 +423,18 @@ class MediumTermLoanController
             return redirect()
                 ->back()
                 ->with('fail', __('This loan has an uploaded schedule and can\'t be edited. Delete the schedule first if you need to make changes.'));
+        }
+
+        // update() works by DELETING this loan and re-creating it (see the
+        // method docblock). That is survivable for a loan nobody has drawn
+        // from, but a loan that has already paid suppliers owns bank
+        // statement rows and Money Payment records keyed to its id —
+        // deleting it would strand every one of them. Blocked outright
+        // rather than silently corrupting them.
+        if ($mediumTermLoan->hasDrawdowns()) {
+            return redirect()
+                ->back()
+                ->with('fail', __('Supplier payments have already been made from this loan, so it can\'t be edited. Delete those payments first if you need to make changes.'));
         }
 
         $mediumTermLoan->deleteRelations();
@@ -305,6 +476,15 @@ class MediumTermLoanController
      */
     public function destroy(Company $company, FinancialInstitution $financialInstitution, MediumTermLoan $mediumTermLoan)
     {
+        // Same reasoning as update(): a loan that has paid suppliers owns
+        // statement rows and Money Payment records keyed to its id. Deleting
+        // it would leave them pointing at nothing.
+        if ($mediumTermLoan->hasDrawdowns()) {
+            return redirect()
+                ->back()
+                ->with('fail', __('Supplier payments have already been made from this loan, so it can\'t be deleted. Delete those payments first.'));
+        }
+
         $mediumTermLoan->deleteRelations();
         $mediumTermLoan->delete();
         return redirect()->back()->with('success', __('Item Has Been Delete Successfully'));
@@ -467,6 +647,23 @@ class MediumTermLoanController
         $commentAr = __('Settlement For Loan '.$loanSchedule->getMediumTermLoanName().' Installment No. '.$loanSchedule->getInstallmentNumber(), [], 'ar');
         $loanScheduleSettlement->handleCreditStatement($company->id, $financialInstitutionId, $accountType, $currentAccountNumber, null, $date, $amount, null, null, $commentEn, $commentAr);
         $loanScheduleSettlement->handleLoanStatement($company->id, $financialInstitutionId, $currentAccountNumber, $date, $amount, $commentEn, $commentAr);
+        /**
+         * * لو القرض دا كان بيتدفع منه فواتير (يعني
+         * * consumption_status = new
+         * * واتسحب منه فعلا) يبقي الجزء الخاص بال
+         * * principle
+         * * من القسط دا بينزل
+         * * debit
+         * * على حساب القرض نفسه .. فا المسحوب بيقل وال
+         * * room
+         * * بيرجع يزيد. الفايدة عمرها ما بتلمس الحساب دا.
+         * * والجزء بتاع الفايدة بيتسجل في نفس الحركة في عمود
+         * * interest_amount
+         * * — تسجيل بس عشان الكشف يفرّق بين الفايدة المستحقة والمدفوعة،
+         * * وعمره ما بيحرك الرصيد.
+         * @see LoanScheduleSettlement::handleMediumTermLoanRepayment()
+         */
+        $loanScheduleSettlement->handleMediumTermLoanRepayment($company->id, $commentEn, $commentAr);
         // ⚠️ Same confirmed fix as ContractLoanScheduleController's
         // equivalent method: this was back(), leaving the user on the
         // same settlement page after paying instead of the schedule

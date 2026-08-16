@@ -1458,11 +1458,24 @@ class MoneyReceivedController
         $balanceRow = DB::table($statementTableName)->where($foreignKeyName, $accountNumberModel->id)->where('date', '<=', $statementDate)->orderByRaw('date desc , id desc')->first();
         $NetBalanceRow = DB::table($statementTableName)->where($foreignKeyName, $accountNumberModel->id)->orderByRaw('date desc , id desc')->first();
 		
-        $column = $accountType->isOverdraftAccount() ? 'room' : 'end_balance';
-        $balance = 0;
+        $column = $accountType->isRoomBasedAccount() ? 'room' : 'end_balance';
+        /**
+         * * القرض متوسط الاجل بيتفتح من غير اي رو افتتاحي في ال
+         * * statement
+         * * خالص (مش زي التسهيلات التانية) .. يبقي غياب الرو مش معناه رصيد
+         * * صفر، معناه ان لسه ما اتسحبش منه حاجه لحد التاريخ ده .. فا المتاح
+         * * هو قيمة القرض كلها.
+         *
+         * * ولاحظ ان دا لازم يتطبق على كل تاريخ لوحده مش على القرض ككل:
+         * * لو اتسحب في 01-02 وانت بتدخل دفعة بتاريخ 15-01 يبقي المتاح في
+         * * التاريخ ده لسه الحد الكامل .. من غير كده كانت الدفعة المؤرخة قبل
+         * * اول سحبة هتترفض غلط بحجة عدم كفاية الرصيد.
+         */
+        $defaultBalance = $accountType->isMediumTermLoanAccount() ? (float) $accountNumberModel->getLimit() : 0 ;
+        $balance = $defaultBalance;
         $balanceDate = '';
 
-        $netBalance = 0;
+        $netBalance = $defaultBalance;
         if ($balanceRow) {
             $balance = $balanceRow->{$column} ;
             $balanceDate = Carbon::make($balanceRow->date)->format('d-m-Y') ;

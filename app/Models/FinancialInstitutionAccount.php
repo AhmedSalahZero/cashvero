@@ -75,7 +75,7 @@ use Illuminate\Support\Str;
  * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\Models\FinancialInstitutionAccount whereUpdatedAt($value)
  * @mixin \Eloquent
  */
-class FinancialInstitutionAccount extends Model
+class FinancialInstitutionAccount extends Model implements \App\Interfaces\Models\ISyncsWithOdooChartOfAccount
 {
 	const NUMBER_OF_YEARS_FOR_INTEREST_IN_CURRENT_STATEMENT = 1 ;
 	use HasLastStatementAmount ,HasCompany,HasOdooPaymentMethod,HasBankStatement,IsLockableBankAccount;

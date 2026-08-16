@@ -9,6 +9,7 @@ use App\Rules\AmountCanNotBeGreaterThanEndBalanceAtPaymentDate;
 use App\Rules\AtLeaseOneSettlementMustBeExist;
 use App\Rules\ContractDownPaymentRule;
 use App\Rules\DateMustBeGreaterThanOrEqualDate;
+use App\Rules\MediumTermLoanRoomRule;
 use App\Rules\ReceivingOrPaymentDateRule;
 use App\Rules\SettlementPlusWithoutCanNotBeGreaterNetBalance;
 use App\Rules\UnappliedAmountForContractAsDownPaymentRule;
@@ -122,6 +123,13 @@ class StoreMoneyPaymentRequest extends FormRequest
 			'purchases_orders_amounts'=>$partnerType =='is_supplier' ? [new UnappliedAmountForContractAsDownPaymentRule($this->unapplied_amount?:0,$this->is_down_payment,$paidAmount)] : [], 
 			'allocations'=>[new ValidAllocationsRule()],
 			'amount_can_not_be_greater_than_end_balance_at_payment_date'=>new AmountCanNotBeGreaterThanEndBalanceAtPaymentDate($type,$this->input('paid_amount.'.$type),$this->route('company'),$this->input('account_type.'.$type),$this->input('account_number.'.$type),$financialInstitutionId,$this->delivery_date,$this->delivery_branch_id,null),
+			/**
+			 * * سحبة من قرض متوسط الاجل ما ينفعش تتخطى المتبقي من القرض
+			 * * والرول دي بتغطي ال
+			 * * payable_cheque
+			 * * كمان اللي الرول اللي فوق مش بتغطيه
+			 */
+			'medium_term_loan_room'=>new MediumTermLoanRoomRule($this->route('company'),$this->input('paid_amount.'.$type),$accountTypeId,$accountNumber,$financialInstitutionId,$type == MoneyPayment::PAYABLE_CHEQUE ? $this->due_date : $this->delivery_date),
 			'downPayment_over_contract'=>[new ContractDownPaymentRule($paidAmount,false)]
         ];
     }

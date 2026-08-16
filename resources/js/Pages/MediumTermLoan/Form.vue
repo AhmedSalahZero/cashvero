@@ -9,7 +9,14 @@ const props = defineProps({
     financialInstitution: Object,
     currencies: Object,
     installmentIntervals: Array, // [{value, title}]
+    consumptionStatuses: Array, // [{value, title}]
+    // True when the company is connected to Odoo at all — the Odoo Code
+    // field is pointless noise otherwise.
+    hasOdoo: { type: Boolean, default: false },
     isLocked: { type: Boolean, default: false },
+    // Narrower than isLocked: true once a supplier has actually been paid
+    // out of this loan, which freezes ONLY the New/Existing field.
+    isConsumptionLocked: { type: Boolean, default: false },
     model: Object,
     submitUrl: String,
     deleteScheduleUrl: String,
@@ -44,7 +51,20 @@ const form = ref({
     already_paid_amount: props.model?.already_paid_amount ?? 0,
     first_installment_date: props.model?.first_installment_date ?? '',
     remaining_installment_count: props.model?.remaining_installment_count ?? '',
+    // 'existing' = the company already drew and spent this loan before
+    // joining CashVero, so there is nothing left to pay suppliers with —
+    // it only gets repaid. 'new' = not consumed yet, so the loan shows up
+    // as a payable account on the Money Payment screen and supplier
+    // invoices can be settled straight out of it.
+    consumption_status: props.model?.consumption_status ?? 'existing',
+    // Odoo Code — same field bank accounts have. On save it is looked up
+    // in Odoo's chart of accounts and the loan's journal / payment-method
+    // ids are filled in from there. Without it, an Odoo-connected company
+    // cannot sync a payment made out of this loan at all.
+    odoo_code: props.model?.odoo_code ?? '',
 });
+
+const isNewFacility = computed(() => form.value.consumption_status === 'new');
 
 // Interest Rate = Borrowing Rate + Margin Rate — always, read-only,
 // matches the original's own client-side formula exactly.
@@ -170,6 +190,49 @@ function deleteSchedule() {
                             </select>
                         </div>
                     </div>
+                </div>
+
+                <div class="cvr-card mt-4">
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-1">Loan Status</h2>
+                    <p class="text-xs cvr-text-muted mb-4">
+                        Has this loan already been drawn and spent, or is the money still sitting
+                        with the bank waiting to be used?
+                    </p>
+                    <div class="cvr-form-grid-3">
+                        <div>
+                            <label class="cvr-form-label">New or Existing *</label>
+                            <select v-model="form.consumption_status" :disabled="isConsumptionLocked" class="cvr-input w-full px-3 py-2 rounded" :class="isConsumptionLocked ? 'opacity-70' : ''">
+                                <option v-for="opt in consumptionStatuses" :key="opt.value" :value="opt.value">{{ opt.title }}</option>
+                            </select>
+                            <p v-if="isConsumptionLocked" class="text-xs cvr-text-muted mt-1">
+                                Locked — supplier payments have already been made from this loan.
+                            </p>
+                        </div>
+                        <div v-if="hasOdoo && isNewFacility">
+                            <label class="cvr-form-label">Odoo Code</label>
+                            <input v-model="form.odoo_code" type="text" class="cvr-input w-full px-3 py-2 rounded" />
+                            <p class="text-xs cvr-text-muted mt-1">
+                                Required to sync payments made from this loan to Odoo — it's looked up in
+                                Odoo's chart of accounts to find the loan's journal.
+                            </p>
+                        </div>
+                        <div v-if="isNewFacility">
+                            <label class="cvr-form-label">Available Room</label>
+                            <input disabled :value="model?.available_room_formatted ?? netBalance" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
+                            <p class="text-xs cvr-text-muted mt-1">Limit minus what has been drawn so far.</p>
+                        </div>
+                    </div>
+                    <p v-if="isNewFacility" class="text-xs cvr-text-muted mt-3">
+                        This loan will appear as a payable account on the Money Payment screen, so supplier
+                        invoices can be settled directly out of it — up to the Available Room above. When you
+                        later repay an installment, only its <strong>principle</strong> portion comes off the
+                        drawn balance; the interest portion never touches this account, because the
+                        installment already includes it. Repaying principle frees the room up again.
+                    </p>
+                    <p v-else class="text-xs cvr-text-muted mt-3">
+                        An existing loan is repayment-only — it won't be offered as a paying account, since
+                        the money was already drawn and spent before joining CashVero.
+                    </p>
                 </div>
 
                 <div class="cvr-card mt-4">

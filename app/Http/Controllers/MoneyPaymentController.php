@@ -104,6 +104,29 @@ class MoneyPaymentController
 {
     use GeneralFunctions;
 
+    /**
+     * The accounts a supplier payment can be paid FROM.
+     *
+     * This is AccountType::onlyCashAccounts() PLUS the Medium Term Loan.
+     * The MTL is appended here rather than folded into onlyCashAccounts()
+     * on purpose (scope agreed 2026-08-16): a loan is a payment source on
+     * THIS screen only. Cash Expense, Internal Transfer, Buy/Sell Currency
+     * and the Bank Statement screen all call onlyCashAccounts() too, and
+     * none of them should start offering loans.
+     *
+     * Only loans with consumption_status = 'new' ever produce account
+     * numbers — see MediumTermLoan::getAllAccountNumberForCurrency(), which
+     * getAccountNumbersForAccountType() resolves dynamically off
+     * AccountType::model_name. So an already-drawn ("existing") loan shows
+     * the type in the dropdown but yields no selectable account.
+     */
+    protected function paymentAccountTypes()
+    {
+        return AccountType::onlySlugs(
+            array_merge(AccountType::CASH_ACCOUNT_SLUGS, [AccountType::MEDIUM_TERM_LOAN])
+        )->get(['id', 'name_en', 'name_ar']);
+    }
+
 // 	protected function applyFilter(Request $request, $query)
 // {
 //     $searchFieldName = $request->get('field');
@@ -282,7 +305,7 @@ class MoneyPaymentController
         }
 
         $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->with('bank:id,view_name')->get(['id', 'type', 'name', 'bank_id']);
-        $accountTypes = AccountType::onlyCashAccounts()->get(['id', 'name_en', 'name_ar']);
+        $accountTypes = $this->paymentAccountTypes();
         $user = auth()->user();
 
         return Inertia::render('MoneyPayment/Index', [
@@ -411,7 +434,7 @@ class MoneyPaymentController
             return $this->createDownPayment($company);
         }
 
-        $accountTypes = AccountType::onlyCashAccounts()->get(['id', 'name_en', 'name_ar']);
+        $accountTypes = $this->paymentAccountTypes();
         $selectedBranches = Branch::getBranchesForCurrentCompany($company->id);
         $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->with('bank:id,view_name')->get(['id', 'type', 'name', 'bank_id']);
         $selectedCurrency = $supplierInvoiceId ? SupplierInvoice::where('id', $supplierInvoiceId)->first()->getCurrency() : null;
@@ -450,7 +473,7 @@ class MoneyPaymentController
     {
         $selectedBranches = Branch::getBranchesForCurrentCompany($company->id);
         $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->with('bank:id,view_name')->get(['id', 'type', 'name', 'bank_id']);
-        $accountTypes = AccountType::onlyCashAccounts()->get(['id', 'name_en', 'name_ar']);
+        $accountTypes = $this->paymentAccountTypes();
         $suppliers = Partner::orderBy('name')->where('is_supplier', 1)->where('company_id', $company->id)->onlyThatHaveSupplierContracts()->pluck('name', 'id');
 
         return Inertia::render('MoneyPayment/DownPaymentForm', [
@@ -861,7 +884,7 @@ class MoneyPaymentController
             return $this->editDownPayment($company, $moneyPayment);
         }
 
-        $accountTypes = AccountType::onlyCashAccounts()->get(['id', 'name_en', 'name_ar']);
+        $accountTypes = $this->paymentAccountTypes();
         $selectedBranches = Branch::getBranchesForCurrentCompany($company->id);
         $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->with('bank:id,view_name')->get(['id', 'type', 'name', 'bank_id']);
         $suppliers = Partner::orderBy('name')->where($partnerType, 1)->where('company_id', $company->id)->pluck('name', 'id');
@@ -896,7 +919,7 @@ class MoneyPaymentController
     {
         $selectedBranches = Branch::getBranchesForCurrentCompany($company->id);
         $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->with('bank:id,view_name')->get(['id', 'type', 'name', 'bank_id']);
-        $accountTypes = AccountType::onlyCashAccounts()->get(['id', 'name_en', 'name_ar']);
+        $accountTypes = $this->paymentAccountTypes();
         $suppliers = Partner::orderBy('name')->where('is_supplier', 1)->where('company_id', $company->id)
             ->when($moneyPayment->isDownPaymentOverContract(), fn ($q) => $q->onlyThatHaveSupplierContracts())
             ->pluck('name', 'id');

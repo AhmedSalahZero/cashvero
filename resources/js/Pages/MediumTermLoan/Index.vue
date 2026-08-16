@@ -86,6 +86,7 @@ function destroyRow() {
                             <td class="px-3 py-3">
                                 <div class="flex items-center gap-1.5 flex-wrap">
                                     <a v-if="canUpload" :href="row.upload_schedule_url" class="cvr-action-btn" title="Upload Loan Schedule & Apply Payments">📤💵</a>
+                                    <Link :href="row.statement_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs" title="Interest & principle: due vs paid, plus the drawdown ledger">Statement</Link>
                                     <Link v-if="canUpdate" :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</Link>
                                     <button v-if="canDelete" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
                                 </div>

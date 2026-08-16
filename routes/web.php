@@ -345,6 +345,7 @@ Route::middleware([])->group(function () {
                     Route::get('financial-institutions/{financialInstitution}/medium-term-loan', 'MediumTermLoanController@index')->name('loans.index');
                     Route::get('financial-institutions/{financialInstitution}/medium-term-loan/create', 'MediumTermLoanController@create')->name('loans.create');
                     Route::post('financial-institutions/{financialInstitution}/medium-term-loan/store', 'MediumTermLoanController@store')->name('loans.store');
+                    Route::get('financial-institutions/{financialInstitution}/medium-term-loan/{mediumTermLoan}/statement', 'MediumTermLoanController@statement')->name('loans.statement');
                     Route::get('financial-institutions/{financialInstitution}/medium-term-loan/{mediumTermLoan}/edit', 'MediumTermLoanController@edit')->name('loans.edit');
                     Route::put('financial-institutions/{financialInstitution}/medium-term-loan/{mediumTermLoan}/update', 'MediumTermLoanController@update')->name('loans.update');
                     Route::delete('financial-institutions/{financialInstitution}/medium-term-loan/{mediumTermLoan}/delete', 'MediumTermLoanController@destroy')->name('loans.destroy');

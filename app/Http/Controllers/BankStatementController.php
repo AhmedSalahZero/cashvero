@@ -11,6 +11,7 @@ use App\Models\FinancialInstitution;
 use App\Models\FinancialInstitutionAccount;
 use App\Models\FullySecuredOverdraft;
 use App\Models\LetterOfGuaranteeIssuance;
+use App\Models\MediumTermLoan;
 use App\Models\OverdraftAgainstAssignmentOfContract;
 use App\Models\OverdraftAgainstCommercialPaper;
 use App\Models\TimeOfDeposit;
@@ -88,7 +89,18 @@ class BankStatementController
         $selectedAccountTypeName = $request->get('accountType');
         $selectedCurrency  = $request->get('currency');
         $financialInstitutionBanks = FinancialInstitution::onlyForCompany($company->id)->onlyBanks()->get();
-        $accountTypes = AccountType::onlyCashAccounts()->get();
+        /**
+         * * القرض متوسط الأجل مش ضمن
+         * * onlyCashAccounts()
+         * * (شوف AccountType) — بيتضاف هنا بس علشان اليوزر يقدر يشوف كشف
+         * * حساب القرض اللي بيدفع منه فواتير. ودي حاجه مختلفة عن كونه
+         * * مصدر دفع، اللي متاح في شاشة ال
+         * * Money Payment
+         * * بس.
+         */
+        $accountTypes = AccountType::onlySlugs(
+            array_merge(AccountType::CASH_ACCOUNT_SLUGS, [AccountType::MEDIUM_TERM_LOAN])
+        )->get();
 
         return \Inertia\Inertia::render('Statements/BankStatement/Index', [
             'company' => ['id' => $company->id],
@@ -352,6 +364,26 @@ class BankStatementController
                   * assigned contracts.
                   */
                  ->selectRaw('* , overdraft_against_assignment_of_contract_bank_statements.limit as statement_limit, overdraft_against_assignment_of_contract_bank_statements.id as id, (select oaacth.`limit` from overdraft_against_assignment_of_contract_terms_histories oaacth where oaacth.overdraft_against_assignment_of_contract_id = overdraft_against_assignment_of_contract_bank_statements.overdraft_against_assignment_of_contract_id and oaacth.effective_date <= overdraft_against_assignment_of_contract_bank_statements.date order by oaacth.effective_date desc, oaacth.id desc limit 1) as `limit`');
+        } elseif ($accountType->isMediumTermLoanAccount()) {
+            $statementModelName = 'MediumTermLoanBankStatement';
+            $statementTable = 'medium_term_loan_bank_statements';
+            $mediumTermLoan = MediumTermLoan::findByAccountNumber($accountNumber, $company->id, $financialInstitutionId);
+
+            $freshQuery = fn () => DB::table('medium_term_loan_bank_statements')
+                ->where('medium_term_loan_bank_statements.company_id', $company->id)
+                ->where('date', '>=', $startDate)
+                ->where('date', '<=', $endDate)
+                ->where('medium_term_loan_id', $mediumTermLoan->id)
+                ->join('medium_term_loans', 'medium_term_loan_bank_statements.medium_term_loan_id', '=', 'medium_term_loans.id')
+                ->where('medium_term_loans.currency', '=', $currencyName)
+                ->orderByRaw('medium_term_loan_bank_statements.full_date desc , medium_term_loan_bank_statements.id desc')
+                /**
+                 * Same `limit` column collision the Clean Overdraft branch above
+                 * documents: both tables have one, and `select *` lets whichever
+                 * MySQL hydrates last win. Re-selecting the statement row's own
+                 * `limit` last forces it to be the one that survives.
+                 */
+                ->selectRaw('*,medium_term_loan_bank_statements.id as id, medium_term_loan_bank_statements.`limit` as `limit`');
         }
 
         if (is_null($freshQuery) || ! $freshQuery()->exists()) {

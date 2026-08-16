@@ -3,6 +3,7 @@ namespace App\Services\Api;
 
 use App\Helpers\HStr;
 use App\Http\Controllers\MoneyReceivedController;
+use App\Interfaces\Models\ISyncsWithOdooChartOfAccount;
 use App\Http\Requests\StoreMoneyReceivedRequest;
 use App\Models\CashVeroBranch;
 use App\Models\Company;
@@ -21,6 +22,7 @@ use App\Services\Api\Traits\CommonHelper;
 use App\Services\Api\Traits\HasUnlink;
 use Carbon\Carbon;
 use Exception;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -875,8 +877,16 @@ class OdooService
 	 * * بترجع true لو الحساب اترط فعلا بحساب في شجرة حسابات اودو
 	 * * و false لو الكود مش موجود في اودو (ساعتها الربط القديم بيفضل زي ما هو)
 	 * * علشان اللي بينده يقدر يعرف المستخدم بدل ما الموضوع يعدي في صمت
+	 *
+	 * * الباراميتر بقى
+	 * * ISyncsWithOdooChartOfAccount
+	 * * بدل
+	 * * FinancialInstitutionAccount
+	 * * لان القرض متوسط الاجل بقى هو كمان حساب ينفع تدفع منه، ومحتاج نفس
+	 * * الربط بالظبط. جسم الميثود ما اتغيرش: هو اصلا مش بيستخدم غير
+	 * * getOdooCode() و getAttributes() و update().
 	 */
-	public function syncFinancialInstitutions(FinancialInstitutionAccount $financialInstitutionAccount): bool
+	public function syncFinancialInstitutions(Model&ISyncsWithOdooChartOfAccount $financialInstitutionAccount): bool
 	{
 		$odooSetting = $this->company->odooSetting;
 

@@ -70,6 +70,9 @@ class RepairStatementBalancesCommand extends Command
         'letter_of_guarantee_statements' => ['keys' => ['company_id', 'currency', 'lg_facility_id', 'financial_institution_id', 'source', 'lg_type'], 'filter' => null],
         'letter_of_guarantee_cash_cover_statements' => ['keys' => ['company_id', 'currency', 'lg_facility_id', 'financial_institution_id', 'source', 'lg_type'], 'filter' => null],
         'loan_statements' => ['keys' => ['company_id', 'financial_institution_account_id'], 'filter' => null],
+        // القرض متوسط الأجل لما يتستخدم كمصدر دفع — ملهوش عمود priority
+        // وتريجره بيسلسل بـ full_date + id زي loan_statements بالظبط
+        'medium_term_loan_bank_statements' => ['keys' => ['company_id', 'medium_term_loan_id'], 'filter' => null],
     ];
 
     /** الترتيب المرجعي — نفس اللي التقارير بتعرض بيه ونفس اللي التريجر بيسلسل بيه بعد الإصلاح */
