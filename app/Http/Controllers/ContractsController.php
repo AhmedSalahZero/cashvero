@@ -149,9 +149,22 @@ class ContractsController
 		 * action URL pre-resolved, since Inertia serializes props to
 		 * JSON and Ziggy isn't installed in this project.
 		 */
-		$permissionSlug = str_plural(strtolower($type)) . ' contracts';
-		$canCreate = hasAuthFor('view ' . $permissionSlug);
-		$canUpdate = hasAuthFor('update ' . $permissionSlug);
+		/**
+		 * ⚠️ REAL BUG FIXED HERE (2026-08 permissions audit, F-04):
+		 * $canCreate read `hasAuthFor('view ' . $permissionSlug)` —
+		 * the VIEW permission — so the "Add Contract" button appeared
+		 * for anyone who could merely look at the list. And $canDelete
+		 * did not exist at all, even though 'delete customers contracts'
+		 * and 'delete suppliers contracts' are real permissions, so the
+		 * delete control was ungated in the UI.
+		 *
+		 * `$type` is 'Customer' or 'Supplier', giving the module prefix.
+		 */
+		$permissionModule = strtolower($type) . '_contract';
+		$canCreate = hasAuthFor($permissionModule . '.create');
+		$canUpdate = hasAuthFor($permissionModule . '.update');
+		$canDelete = hasAuthFor($permissionModule . '.delete');
+		$canApprove = hasAuthFor($permissionModule . '.approve');
 
 		$mainFunctionalCurrency = $company->getMainFunctionalCurrency();
 		$mapInvoice = function ($invoice) use ($mainFunctionalCurrency) {
@@ -277,6 +290,8 @@ class ContractsController
 			'pageTitle' => $customerOrSupplierContractsText,
 			'canCreate' => $canCreate,
 			'canUpdate' => $canUpdate,
+			'canDelete' => $canDelete,
+			'canApprove' => $canApprove,
 			'hasProjectNameColumn' => $hasProjectNameColumn,
 			/**
 			 * * لما الشركة مربوطة بأودو ، توزيع أوامر الشراء بيتحدد من

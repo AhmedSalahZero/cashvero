@@ -2,11 +2,14 @@
 import { ref, computed } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import RecordLogButton from '@/Components/RecordLogButton.vue';
 
 const props = defineProps({
     company: Object,
     categories: Array,
     createUrl: String,
+    // { canCreate, canUpdate, canDelete }
+    permissions: { type: Object, default: () => ({}) },
 });
 
 /* ── Search (client-side) — matches category name or any of its item
@@ -80,7 +83,7 @@ function destroyRow() {
                     />
                 </div>
 
-                <Link :href="createUrl" class="cvr-btn-copper inline-flex items-center gap-1 px-3 py-1.5 rounded text-sm whitespace-nowrap">
+                <Link v-if="permissions.canCreate" :href="createUrl" class="cvr-btn-copper inline-flex items-center gap-1 px-3 py-1.5 rounded text-sm whitespace-nowrap">
                     + New Category
                 </Link>
             </div>
@@ -115,8 +118,9 @@ function destroyRow() {
                                 </td>
                                 <td class="px-4 py-3 text-center" @click.stop>
                                     <div class="flex items-center justify-center gap-2">
-                                        <Link :href="category.edit_url" class="cvr-action-btn" title="Edit">✎</Link>
-                                        <button @click="confirmDelete(category)" class="cvr-action-btn cvr-action-btn-danger" title="Delete">🗑</button>
+                                        <RecordLogButton subject="CashExpenseCategory" :id="category.id" :company-id="company.id" />
+                                        <Link v-if="permissions.canUpdate" :href="category.edit_url" class="cvr-action-btn" title="Edit">✎</Link>
+                                        <button v-if="permissions.canDelete" @click="confirmDelete(category)" class="cvr-action-btn cvr-action-btn-danger" title="Delete">🗑</button>
                                     </div>
                                 </td>
                             </tr>

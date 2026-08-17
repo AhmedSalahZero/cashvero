@@ -112,7 +112,7 @@ class FactoringContractController
         return \Inertia\Inertia::render('FactoringContract/Index', [
             'company' => ['id' => $company->id],
             'factoringCompany' => ['id' => $factoringCompany->id, 'name' => $factoringCompany->getName()],
-            'canCreate' => hasAuthFor('create clean overdraft'),
+            'canCreate' => hasAuthFor('factoring_contract.create'),
             'createUrl' => route('factoring.contracts.create', ['company' => $company->id, 'factoringCompany' => $factoringCompany->id]),
             'rows' => $contracts->map(function (FactoringContract $contract) use ($company, $factoringCompany) {
                 return [
@@ -146,8 +146,8 @@ class FactoringContractController
                     ])->values(),
                 ];
             })->values(),
-            'canUpdate' => hasAuthFor('update clean overdraft'),
-            'canDelete' => hasAuthFor('delete clean overdraft'),
+            'canUpdate' => hasAuthFor('factoring_contract.update'),
+            'canDelete' => hasAuthFor('factoring_contract.delete'),
             'backUrl' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'factoring_companies']),
             'navUrls' => [
                 'home' => route('home', ['company' => $company->id]),

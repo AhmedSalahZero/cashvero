@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import RecordLogButton from '@/Components/RecordLogButton.vue';
 import { todayDate } from '@/composables/today';
 /* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
    الحماية الحقيقية على السيرفر في الـ Form Request. */
@@ -52,7 +53,9 @@ const rows = computed(() => currentTab.value.paginator?.data || []);
    Only meaningful on the two tabs that support it (matches the
    original's has-batch-collection=1 on Cheques In Safe / Rejected
    Cheques only). Cleared whenever the tab changes. */
-const hasBatchCollection = computed(() => ['cheque', 'cheque-rejected'].includes(props.activeTab));
+const hasBatchCollection = computed(() =>
+    ['cheque', 'cheque-rejected'].includes(props.activeTab)
+    && Boolean(props.permissions.canChangeChequeStatus));
 const selectedIds = ref([]);
 watch(() => props.activeTab, () => { selectedIds.value = []; });
 function toggleSelect(id) {
@@ -116,15 +119,6 @@ function goToPage(url) {
 const deleteTarget = ref(null);
 function destroyRow() {
     router.delete(deleteTarget.value.delete_url, { onFinish: () => { deleteTarget.value = null; } });
-}
-
-/* ── Review confirmation ──────────────────────────────────────── */
-const reviewTarget = ref(null);
-function confirmReview() {
-    router.post(reviewTarget.value.review_url, {
-        model_name: 'MoneyReceived',
-        table_name: 'money_received',
-    }, { onFinish: () => { reviewTarget.value = null; } });
 }
 
 /* ── User comment / Odoo error / Odoo references modals ─────────── */
@@ -493,36 +487,35 @@ function submitApplyCollection() {
                             <!-- Control -->
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-1 flex-wrap">
+                                    <RecordLogButton subject="MoneyReceived" :id="row.id" :company-id="company.id" />
                                     <button v-if="row.has_comment" @click="commentTarget = row" class="cvr-action-btn" title="User Comment">💬</button>
                                     <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Odoo Error">🐞</button>
                                     <button v-if="row.is_fully_integrated_with_odoo" @click="integratedTarget = row" class="cvr-action-btn" title="Fully Integrated">👍</button>
 
                                     <!-- Cheques In Safe -->
                                     <template v-if="activeTab === 'cheque'">
-                                        <button v-if="permissions.canReview && !row.is_reviewed" @click="reviewTarget = row" class="cvr-action-btn" title="Reviewed">✅</button>
                                         <Link v-if="permissions.canUpdate && !row.is_open_balance" :href="row.edit_url" class="cvr-action-btn" title="Edit">✏️</Link>
-                                        <button @click="openSendToCollection(row)" class="cvr-action-btn" title="Send Under Collection">🏦</button>
+                                        <button v-if="permissions.canChangeChequeStatus" @click="openSendToCollection(row)" class="cvr-action-btn" title="Send Under Collection">🏦</button>
                                         <button v-if="permissions.canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Delete">🗑️</button>
                                     </template>
 
                                     <!-- Rejected Cheques (no Edit — matches original, which had it commented out) -->
                                     <template v-else-if="activeTab === 'cheque-rejected'">
-                                        <button v-if="permissions.canReview && !row.is_reviewed && !row.is_open_balance" @click="reviewTarget = row" class="cvr-action-btn" title="Reviewed">✅</button>
-                                        <button @click="openSendToCollection(row)" class="cvr-action-btn" title="Send Under Collection">🏦</button>
+                                        <button v-if="permissions.canChangeChequeStatus" @click="openSendToCollection(row)" class="cvr-action-btn" title="Send Under Collection">🏦</button>
                                         <button v-if="permissions.canDelete && !row.is_open_balance" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Delete">🗑️</button>
                                     </template>
 
                                     <!-- Cheques Under Collection -->
                                     <template v-else-if="activeTab === 'cheque-under-collection'">
-                                        <button v-if="permissions.canUpdate && !row.is_open_balance" @click="openSendToCollection(row)" class="cvr-action-btn" title="Edit Deposit Info">✏️</button>
-                                        <button v-if="row.due_status_bool" @click="openApplyCollection(row)" class="cvr-action-btn" title="Apply Collection">🪙</button>
-                                        <Link :href="row.send_to_safe_url" class="cvr-action-btn" title="Send In Safe">↩️</Link>
-                                        <Link v-if="row.due_status_bool && permissions.canDelete" :href="row.send_to_rejected_safe_url" class="cvr-action-btn-danger cvr-action-btn" title="Rejected">🚫</Link>
+                                        <button v-if="permissions.canChangeChequeStatus && !row.is_open_balance" @click="openSendToCollection(row)" class="cvr-action-btn" title="Edit Deposit Info">✏️</button>
+                                        <button v-if="permissions.canChangeChequeStatus && row.due_status_bool" @click="openApplyCollection(row)" class="cvr-action-btn" title="Apply Collection">🪙</button>
+                                        <Link v-if="permissions.canChangeChequeStatus" :href="row.send_to_safe_url" class="cvr-action-btn" title="Send In Safe">↩️</Link>
+                                        <Link v-if="row.due_status_bool && permissions.canChangeChequeStatus" :href="row.send_to_rejected_safe_url" class="cvr-action-btn-danger cvr-action-btn" title="Rejected">🚫</Link>
                                     </template>
 
                                     <!-- Collected Cheques -->
                                     <template v-else-if="activeTab === 'cheque-collected'">
-                                        <Link :href="row.send_to_under_collection_url" class="cvr-action-btn" title="Under Collection">↩️</Link>
+                                        <Link v-if="permissions.canChangeChequeStatus" :href="row.send_to_under_collection_url" class="cvr-action-btn" title="Under Collection">↩️</Link>
                                     </template>
 
                                     <!-- Incoming Transfer / Cash In Safe / Cash In Bank -->
@@ -562,17 +555,6 @@ function submitApplyCollection() {
                     <div class="flex justify-end gap-2">
                         <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
                         <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Delete</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Review confirmation -->
-            <div v-if="reviewTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Mark this as reviewed?</h2>
-                    <div class="flex justify-end gap-2">
-                        <button @click="reviewTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="confirmReview" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
                     </div>
                 </div>
             </div>

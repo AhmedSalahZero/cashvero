@@ -2,6 +2,7 @@
 import { ref, reactive, watch, computed } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import RecordLogButton from '@/Components/RecordLogButton.vue';
 import { todayDate } from '@/composables/today';
 /* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
    الحماية الحقيقية على السيرفر. */
@@ -206,6 +207,7 @@ function destroyRow() {
                             <td class="px-4 py-3">{{ row.account_number }}</td>
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-1">
+                                    <RecordLogButton subject="FactoringTransaction" :id="row.id" :company-id="company.id" />
                                     <Link v-if="canUpdate && !row.is_settled" :href="row.edit_url" class="cvr-action-btn" title="Edit">✏️</Link>
                                     <button v-if="canAct && !row.is_settled" @click="openSettle(row)" class="cvr-action-btn" title="Mark As Settled">✅</button>
                                     <button v-if="canAct && row.is_settled" @click="revertSettleTarget = row" class="cvr-action-btn" title="Reset Settlement">↩️</button>

@@ -20,6 +20,7 @@
 import { ref } from 'vue';
 import { Link, useForm, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { usePermissions } from '@/composables/usePermissions';
 
 const props = defineProps({
     company: Object,
@@ -33,6 +34,8 @@ const props = defineProps({
     indexUrl: String,
     backUrl: String,
 });
+
+const { can } = usePermissions();
 
 /* ── ISO → MM/DD/YYYY, same converter used on Time Of Deposit's
    renewal dates — the backend's mutator only understands the slash
@@ -138,7 +141,7 @@ function destroyRow() {
                             <td class="px-4 py-3 text-center">
                                 <div v-if="row.is_last" class="flex items-center justify-center gap-2">
                                     <Link :href="row.edit_url" class="cvr-action-btn" title="Edit">✎</Link>
-                                    <button @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" title="Delete">🗑</button>
+                                    <button v-if="can('adjusted_due_date.delete')" @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" title="Delete">🗑</button>
                                 </div>
                             </td>
                         </tr>

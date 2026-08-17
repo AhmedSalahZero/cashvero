@@ -79,6 +79,13 @@ class CashExpenseCategoryController
             'company' => ['id' => $company->id],
             'categories' => $rows,
             'createUrl' => route('cash.expense.category.create', ['company' => $company->id]),
+            // Previously ungated in the UI — this list had no permission
+            // flags at all (2026-08 audit, F-07).
+            'permissions' => [
+                'canCreate' => hasAuthFor('cash_expense_category.create'),
+                'canUpdate' => hasAuthFor('cash_expense_category.update'),
+                'canDelete' => hasAuthFor('cash_expense_category.delete'),
+            ],
         ]);
     }
 

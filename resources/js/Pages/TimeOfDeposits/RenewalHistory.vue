@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { usePermissions } from '@/composables/usePermissions';
 
 const props = defineProps({
     company: Object,
@@ -16,6 +17,8 @@ const props = defineProps({
     backUrl: String,
     navUrls: Object,
 });
+
+const { can } = usePermissions();
 
 const page = usePage();
 const isEdit = props.mode === 'edit';
@@ -135,7 +138,7 @@ function destroyRow() {
                     </div>
                     <div class="flex justify-end gap-2">
                         <Link :href="indexUrl" class="cvr-btn-secondary px-4 py-2 rounded border">Cancel</Link>
-                        <button type="submit" :disabled="submitting" class="cvr-btn-primary px-4 py-2 rounded">
+                        <button v-if="can('time_of_deposit.renew')" type="submit" :disabled="submitting" class="cvr-btn-primary px-4 py-2 rounded">
                             {{ submitting ? 'Saving...' : 'Save' }}
                         </button>
                     </div>
@@ -171,7 +174,7 @@ function destroyRow() {
                                     <Link :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">
                                         Edit
                                     </Link>
-                                    <button @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">
+                                    <button v-if="can('time_of_deposit.renew')" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">
                                         Delete
                                     </button>
                                 </div>

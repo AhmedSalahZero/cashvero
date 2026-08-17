@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import RecordLogButton from '@/Components/RecordLogButton.vue';
 
 const props = defineProps({
     company: Object,
@@ -83,6 +84,7 @@ function destroyRow() {
                             <td class="px-3 py-3 capitalize cvr-text-secondary">{{ row.installment_interval_formatted }}</td>
                             <td class="px-3 py-3">
                                 <div class="flex items-center gap-1.5 flex-wrap">
+                                    <RecordLogButton subject="LeasingContract" :id="row.id" :company-id="company.id" />
                                     <a v-if="canUpload" :href="row.upload_schedule_url" class="cvr-action-btn" title="Upload Contract Schedule">📤💵</a>
                                     <Link v-if="canUpdate" :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</Link>
                                     <button v-if="canDelete" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>

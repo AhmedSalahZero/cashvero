@@ -210,9 +210,9 @@ class InternalMoneyTransferController
             'bankToSafeTab' => fn () => $buildTab(InternalMoneyTransfer::BANK_TO_SAFE),
             'safeToSafeTab' => fn () => $buildTab(InternalMoneyTransfer::SAFE_TO_SAFE),
             'searchValue' => $request->get('value'),
-            'canCreate' => hasAuthFor('create internal money transfer'),
-            'canUpdate' => hasAuthFor('update internal money transfer'),
-            'canDelete' => hasAuthFor('delete internal money transfer'),
+            'canCreate' => hasAuthFor('internal_money_transfer.create'),
+            'canUpdate' => hasAuthFor('internal_money_transfer.update'),
+            'canDelete' => hasAuthFor('internal_money_transfer.delete'),
             'indexUrl' => route('internal-money-transfers.index', ['company' => $company->id]),
             'createUrls' => collect($this->allTypes())->mapWithKeys(fn ($label, $type) => [
                 $type => route('internal-money-transfers.create', ['company' => $company->id, 'type' => $type]),
@@ -356,11 +356,18 @@ class InternalMoneyTransferController
 		 * * التعديل معمول كـ حذف ثم إنشاء
 		 * * فلازم يكون كله في ترانزاكشن واحدة
 		 */
-		OdooSync::transaction(function () use ($company, $type, $request, $internalMoneyTransfer) {
-			$internalMoneyTransfer->deleteRelations();
-			$internalMoneyTransfer->delete();
+		/**
+		 * Wrapped so the delete+create above records as the single edit it
+		 * is, and this record's history follows it onto the new row.
+		 * See App\Support\Activity\ActivityLogger::asUpdate().
+		 */
+		\App\Support\Activity\ActivityLogger::asUpdate($internalMoneyTransfer, function () use ($company, $type, $request, $internalMoneyTransfer) {
+			OdooSync::transaction(function () use ($company, $type, $request, $internalMoneyTransfer) {
+				$internalMoneyTransfer->deleteRelations();
+				$internalMoneyTransfer->delete();
 
-			$this->storeWithinTransaction($company,$type,$request);
+				$this->storeWithinTransaction($company,$type,$request);
+			});
 		});
 		$activeTab = $type ;
 		return redirect()->route('internal-money-transfers.index',['company'=>$company->id,'active'=>$activeTab])->with('success',__('Item Has Been Updated Successfully'));

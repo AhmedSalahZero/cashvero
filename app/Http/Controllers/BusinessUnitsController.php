@@ -17,6 +17,13 @@ class BusinessUnitsController
         $items = $company->businessUnits()->orderBy('name')->get();
 
         return \Inertia\Inertia::render('Settings/SimpleMasterList', [
+            // Shared master-list page — each controller supplies its own
+            // module's rights so one screen cannot leak another's.
+            'permissions' => [
+                'canCreate' => hasAuthFor('business_unit.create'),
+                'canUpdate' => hasAuthFor('business_unit.update'),
+                'canDelete' => hasAuthFor('business_unit.delete'),
+            ],
             'company' => ['id' => $company->id],
             'title' => 'Business Units',
             'subtitle' => 'Used to categorize customer invoices by business unit',

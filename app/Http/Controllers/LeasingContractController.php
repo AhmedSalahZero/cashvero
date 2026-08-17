@@ -98,7 +98,7 @@ class LeasingContractController
             // original index's @if(hasAuthFor(...)) guards. Using
             // 'create/update/delete leasing contract' (which don't
             // exist) made these buttons invisible to everyone.
-            'canCreate' => hasAuthFor('create medium term loan'),
+            'canCreate' => hasAuthFor('leasing_contract.create'),
             'createUrl' => route('leasing.contracts.create', ['company' => $company->id, 'leasingCompany' => $leasingCompany->id]),
             'rows' => $contracts->map(function (LeasingContract $contract) use ($company, $leasingCompany) {
                 return [
@@ -117,9 +117,9 @@ class LeasingContractController
                     'delete_url' => route('leasing.contracts.destroy', ['company' => $company->id, 'leasingCompany' => $leasingCompany->id, 'leasingContract' => $contract->id]),
                 ];
             })->values(),
-            'canUpload' => hasAuthFor('create medium term loan'),
-            'canUpdate' => hasAuthFor('update medium term loan'),
-            'canDelete' => hasAuthFor('delete medium term loan'),
+            'canUpload' => hasAuthFor('leasing_contract.create'),
+            'canUpdate' => hasAuthFor('leasing_contract.update'),
+            'canDelete' => hasAuthFor('leasing_contract.delete'),
             'backUrl' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'leasing_companies']),
             'navUrls' => [
                 'home' => route('home', ['company' => $company->id]),
@@ -239,9 +239,16 @@ class LeasingContractController
                 ->with('fail', __('This leasing contract has an uploaded schedule and can\'t be edited. Delete the schedule first if you need to make changes.'));
         }
 
-        $leasingContract->deleteRelations();
-        $leasingContract->delete();
-        $this->store($company, $request, $leasingCompany);
+        /**
+         * The edit deletes this contract and re-creates it — wrapped so
+         * it records as one edit and the history follows the contract.
+         * See App\Support\Activity\ActivityLogger::asUpdate().
+         */
+        \App\Support\Activity\ActivityLogger::asUpdate($leasingContract, function () use ($company, $request, $leasingCompany, $leasingContract) {
+            $leasingContract->deleteRelations();
+            $leasingContract->delete();
+            $this->store($company, $request, $leasingCompany);
+        });
 
         return redirect()
             ->route('leasing.contracts.index', [

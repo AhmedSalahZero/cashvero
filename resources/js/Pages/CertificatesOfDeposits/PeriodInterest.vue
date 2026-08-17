@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { usePermissions } from '@/composables/usePermissions';
 
 const props = defineProps({
     company: Object,
@@ -11,6 +12,8 @@ const props = defineProps({
     backUrl: String,
     navUrls: Object,
 });
+
+const { can } = usePermissions();
 
 const deleteTarget = ref(null);
 function confirmDelete(row) { deleteTarget.value = row; }
@@ -47,7 +50,7 @@ function destroyRow() {
                             <td class="px-4 py-3 whitespace-nowrap cvr-text-secondary">{{ row.date }}</td>
                             <td class="px-4 py-3 cvr-num-green">{{ row.amount_formatted }} {{ certificatesOfDeposit.currency?.toUpperCase() }}</td>
                             <td class="px-4 py-3">
-                                <button @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">
+                                <button v-if="can('certificate_of_deposit.settle')" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">
                                     Delete
                                 </button>
                             </td>

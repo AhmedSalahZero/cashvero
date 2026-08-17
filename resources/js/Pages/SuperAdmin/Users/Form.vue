@@ -36,6 +36,16 @@ function onAvatarChange(event) {
 // matches the original's JS fadeIn/fadeOut toggle exactly.
 const showMaxUsers = computed(() => form.value.role === 'company-admin');
 
+/**
+ * Permissions are held per user, so changing the role does NOT rewrite
+ * them — this person's set may have been tuned since the account was
+ * created, and silently replacing it would discard that. Offer it as an
+ * explicit opt-in, and only once the role has actually changed.
+ */
+const originalRole = props.model?.role ?? '';
+const resetPermissionsToRole = ref(false);
+const roleChanged = computed(() => isEdit && form.value.role !== originalRole && form.value.role !== '');
+
 function toggleCompany(id, checked) {
     if (!props.canEditCompanies) {
         return;
@@ -65,6 +75,7 @@ function submit() {
         payload.password_confirmation = form.value.password_confirmation;
     }
     if (showMaxUsers.value) payload.max_users = form.value.max_users;
+    if (roleChanged.value && resetPermissionsToRole.value) payload.reset_permissions_to_role = 1;
     if (avatarFile.value) payload.avatar = avatarFile.value;
 
     if (isEdit) {
@@ -151,6 +162,22 @@ function submit() {
                                 <option v-for="opt in roleOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
                             </select>
                             <p v-if="errorFor('role')" class="text-xs mt-1 cvr-num-red">{{ errorFor('role') }}</p>
+
+                            <p v-if="!isEdit" class="text-xs cvr-text-muted mt-1.5">
+                                The role's permission template is copied to this user on save. You can fine-tune it
+                                afterwards from the Users list.
+                            </p>
+
+                            <label v-if="roleChanged" class="flex items-start gap-2 mt-3 cursor-pointer">
+                                <input type="checkbox" v-model="resetPermissionsToRole" class="mt-0.5" />
+                                <span class="text-xs cvr-text-secondary">
+                                    Replace this user's permissions with the new role's template.
+                                    <span class="cvr-text-muted">
+                                        Leave unticked to keep their current permissions exactly as they are —
+                                        the role is only a label unless you tick this.
+                                    </span>
+                                </span>
+                            </label>
                             <div v-if="showMaxUsers" class="mt-3">
                                 <label class="cvr-form-label">Max Users Allowed *</label>
                                 <input v-model="form.max_users" type="number" class="cvr-input w-full px-3 py-2 rounded" />

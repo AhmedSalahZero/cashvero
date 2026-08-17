@@ -103,14 +103,14 @@ class CleanOverdraftController
 		$cleanOverdrafts =   $this->applyFilter($request,$cleanOverdrafts) ;
 
 		$lockableAccountType = AccountType::onlyCleanOverdraft()->first();
-		$canUpdate = hasAuthFor('update clean overdraft');
-		$canDelete = hasAuthFor('delete clean overdraft');
-		$canCreateRate = hasAuthFor('create clean overdraft');
+		$canUpdate = hasAuthFor('clean_overdraft.update');
+		$canDelete = hasAuthFor('clean_overdraft.delete');
+		$canCreateRate = hasAuthFor('clean_overdraft.create');
 
         return \Inertia\Inertia::render('CleanOverdraft/Index', [
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
-			'canCreate' => hasAuthFor('create clean overdraft'),
+			'canCreate' => hasAuthFor('clean_overdraft.create'),
 			'canUpdate' => $canUpdate,
 			'canDelete' => $canDelete,
 			'canCreateRate' => $canCreateRate,

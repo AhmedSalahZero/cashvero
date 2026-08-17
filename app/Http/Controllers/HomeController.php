@@ -66,6 +66,26 @@ class HomeController extends Controller
 		 * @var User $user
 		 */
 		$companies = $user->companies;
+
+		/**
+		 * An account with no permissions at all.
+		 *
+		 * This is a real state, not an edge case: with user-based
+		 * permissions a newly created user holds nothing until an
+		 * administrator configures them. Falling through would redirect
+		 * them straight into a dashboard they cannot open, so they'd meet
+		 * a bare 403 with no explanation and nowhere to go.
+		 *
+		 * Show them what actually happened instead. Nothing here is
+		 * sensitive — it is the absence of access being reported.
+		 */
+		if (\App\Support\Permissions\PermissionResolver::grantedKeys($user) === []) {
+			return \Inertia\Inertia::render('Home/NoAccess', [
+				'userName' => $user->getName(),
+				'roleName' => $user->getRoleName(),
+			]);
+		}
+
 		if (count($companies) > 1) {
 			return \Inertia\Inertia::render('Home/CompanyPicker', [
 				'companies' => $companies->map(fn (Company $c) => [

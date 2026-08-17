@@ -73,13 +73,6 @@ use Inertia\Inertia;
  *   *customer's* contract (`storeNewAllocation()`) — a feature with no
  *   equivalent on the Money Received side. Scoped for the Form page,
  *   not the Index page.
- * - Review permission gate: unlike Money Received (which uses a real,
- *   seeded `review money received` permission via getReviewPermissionName()),
- *   the review modal here is gated directly on `update supplier payment`
- *   in the original Blade — getReviewPermissionName('MoneyPayment')
- *   returns 'review supplier payments' (plural), which is NOT a seeded
- *   permission in HAuth.php, so that helper is unusable here. Matched
- *   the Blade's actual gate, not the unused helper.
  * - "Resend To Odoo" is ALSO broken in the original for this model:
  *   the shared `_user_odoo_modal.blade.php` partial hardcodes its
  *   form action as `route('resend.with.odoo', ['moneyReceived'=>...])`
@@ -322,9 +315,11 @@ class MoneyPaymentController
             'financialInstitutionBanks' => $financialInstitutionBanks->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()]),
             'accountTypes' => $accountTypes->map(fn ($a) => ['id' => $a->id, 'name' => $a->getName()]),
             'permissions' => [
-                'canCreate' => $user->can('create supplier payment'),
-                'canUpdate' => $user->can('update supplier payment'),
-                'canDelete' => $user->can('delete supplier payment'),
+                'canCreate' => $user->can('money_payment.create'),
+                'canUpdate' => $user->can('money_payment.update'),
+                'canDelete' => $user->can('money_payment.delete'),
+                // Marking a payable cheque / outgoing transfer as paid.
+                'canMarkAsPaid' => $user->can('money_payment.mark_as_paid'),
             ],
             'companyHasOdoo' => $company->hasOdooIntegrationCredentials(),
             'urls' => [
@@ -354,7 +349,6 @@ class MoneyPaymentController
             'currency' => $moneyPayment->getPaymentCurrency(),
             'currency_formatted' => $moneyPayment->getCurrencyToPaymentCurrencyFormatted(),
             'is_open_balance' => $moneyPayment->isOpenBalance(),
-            'is_reviewed' => $moneyPayment->isReviewed(),
             'has_comment' => $moneyPayment->hasComment(),
             'user_comment' => $moneyPayment->hasComment() ? $moneyPayment->getUserComment() : null,
             'has_odoo_error' => $company->hasOdooIntegrationCredentials() && $moneyPayment->hasOdooError(),
@@ -363,7 +357,6 @@ class MoneyPaymentController
             'odoo_reference_names' => $company->hasOdooIntegrationCredentials() && $moneyPayment->fullyIntegratedWithOdoo() ? $moneyPayment->getOdooReferenceNames() : [],
             'edit_url' => route('edit.money.payment', ['company' => $company->id, 'moneyPayment' => $moneyPayment->id]),
             'delete_url' => route('delete.money.payment', ['company' => $company->id, 'moneyPayment' => $moneyPayment->id]),
-            'review_url' => route('confirmed.review', ['company' => $company->id, 'model' => $moneyPayment->id]),
             // ⚠️ No resend_odoo_url here — see class docblock. The
             // shared _user_odoo_modal partial's "Resend" button posts
             // to a route hard-bound to MoneyReceivedController's
@@ -988,24 +981,31 @@ class MoneyPaymentController
          * * فلازم يكون كله في ترانزاكشن واحدة
          * * قبل كده لو أي حاجة ضربت في النص كان السجل القديم بيروح والجديد بيتعمل ناقص
          */
-        OdooSync::transaction(function () use ($company, $request, $moneyPayment, $newType) {
-            $oldSettlementsForMoneyReceivedWithDownPayment  = $moneyPayment->settlementsForDownPaymentThatComeFromMoneyModel ;
-            $request->merge([
-                'journal_entry_id'=>$moneyPayment->journal_entry_id,
-                'account_bank_statement_line_id'=>$moneyPayment->account_bank_statement_line_id,
-            ]);
-            $moneyPayment->deleteRelations();
-            $moneyPaidAmountHasChanged = $moneyPayment->getAmount() != $request->input('paid_amount.'.$newType);
-            $moneyPayment->delete();
-            $newMoneyPayment = $this->storeWithinTransaction($company, $request, true);
-            if (!$moneyPaidAmountHasChanged) {
-                $newMoneyPayment->storeNewSettlement(
-                    $oldSettlementsForMoneyReceivedWithDownPayment->toArray(),
-                    $newMoneyPayment->getPartnerId(),
-                    $company,
-                    1
-                );
-            }
+        /**
+         * Wrapped so the delete+create below records as the single edit
+         * it is, and this payment's history follows it onto the new row.
+         * See App\Support\Activity\ActivityLogger::asUpdate().
+         */
+        \App\Support\Activity\ActivityLogger::asUpdate($moneyPayment, function () use ($company, $request, $moneyPayment, $newType) {
+            OdooSync::transaction(function () use ($company, $request, $moneyPayment, $newType) {
+                $oldSettlementsForMoneyReceivedWithDownPayment  = $moneyPayment->settlementsForDownPaymentThatComeFromMoneyModel ;
+                $request->merge([
+                    'journal_entry_id'=>$moneyPayment->journal_entry_id,
+                    'account_bank_statement_line_id'=>$moneyPayment->account_bank_statement_line_id,
+                ]);
+                $moneyPayment->deleteRelations();
+                $moneyPaidAmountHasChanged = $moneyPayment->getAmount() != $request->input('paid_amount.'.$newType);
+                $moneyPayment->delete();
+                $newMoneyPayment = $this->storeWithinTransaction($company, $request, true);
+                if (!$moneyPaidAmountHasChanged) {
+                    $newMoneyPayment->storeNewSettlement(
+                        $oldSettlementsForMoneyReceivedWithDownPayment->toArray(),
+                        $newMoneyPayment->getPartnerId(),
+                        $company,
+                        1
+                    );
+                }
+            });
         });
         $activeTab = $newType;
         return redirect()->route('view.money.payment', ['company'=>$company->id,'active'=>$activeTab])->with('success', __('Money Payment Has Been Updated Successfully'));

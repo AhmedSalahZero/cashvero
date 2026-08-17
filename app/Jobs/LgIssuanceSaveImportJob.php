@@ -26,6 +26,14 @@ class LgIssuanceSaveImportJob implements ShouldQueue
 
     public function handle(): void
     {
+        /**
+         * Bulk import: per-row history here would be thousands of
+         * entries describing one human action ("imported a file"), which
+         * buries the events a person actually cares about. The import
+         * itself is the auditable event, not each row it created.
+         */
+        $activityMute = \App\Support\Activity\ActivityLogger::mute();
+
         $run = LgIssuanceImportRun::find($this->importRunId);
         if (! $run) {
             return;

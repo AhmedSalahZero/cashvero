@@ -62,6 +62,7 @@ import {
     ChevronDown,
     ChevronRight,
     Circle,
+    Shield,
 } from '@lucide/vue';
 
 const props = defineProps({
@@ -122,6 +123,7 @@ const ICONS = {
     'chevron-down': ChevronDown,
     'chevron-right': ChevronRight,
     circle: Circle,
+    shield: Shield,
 };
 
 const icon = computed(() => ICONS[props.name] ?? Circle);

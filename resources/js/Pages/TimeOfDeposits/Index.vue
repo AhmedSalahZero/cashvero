@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import RecordLogButton from '@/Components/RecordLogButton.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 
 const props = defineProps({
@@ -274,6 +275,7 @@ function submitReverse() {
                             <td v-if="activeTab === 'broken'" class="px-4 py-3 cvr-num-amber">{{ row.break_interest_amount_formatted }}</td>
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-2">
+                                    <RecordLogButton subject="TimeOfDeposit" :id="row.id" :company-id="company.id" />
                                     <Link :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">
                                         Edit
                                     </Link>

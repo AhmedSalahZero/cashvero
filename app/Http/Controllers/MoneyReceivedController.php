@@ -280,10 +280,15 @@ class MoneyReceivedController
             'financialInstitutionBanks' => $financialInstitutionBanks->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()]),
             'accountTypes' => $accountTypes->map(fn ($a) => ['id' => $a->id, 'name' => $a->getName()]),
             'permissions' => [
-                'canCreate' => $user->can('create money received'),
-                'canUpdate' => $user->can('update money received'),
-                'canDelete' => $user->can('delete money received'),
-                'canReview' => $user->can(getReviewPermissionName('MoneyReceived')),
+                'canCreate' => $user->can('money_received.create'),
+                'canUpdate' => $user->can('money_received.update'),
+                'canDelete' => $user->can('money_received.delete'),
+                // Moving a cheque through its lifecycle (send under
+                // collection, apply collection, return to safe, reject).
+                // Enforced on every one of those routes by
+                // EnforcePermission; this flag only keeps the buttons
+                // honest so nobody is offered an action that 403s.
+                'canChangeChequeStatus' => $user->can('money_received.change_cheque_status'),
             ],
             'companyHasOdoo' => $company->hasOdooIntegrationCredentials(),
             'urls' => [
@@ -319,7 +324,6 @@ class MoneyReceivedController
             'currency' => $moneyReceived->getReceivingCurrency(),
             'currency_formatted' => $moneyReceived->getCurrencyToReceivingCurrencyFormatted(),
             'is_open_balance' => $moneyReceived->isOpenBalance(),
-            'is_reviewed' => $moneyReceived->isReviewed(),
             'has_comment' => $moneyReceived->hasComment(),
             'user_comment' => $moneyReceived->hasComment() ? $moneyReceived->getUserComment() : null,
             'has_odoo_error' => $company->hasOdooIntegrationCredentials() && $moneyReceived->hasOdooError(),
@@ -328,7 +332,6 @@ class MoneyReceivedController
             'odoo_reference_names' => $company->hasOdooIntegrationCredentials() && $moneyReceived->fullyIntegratedWithOdoo() ? $moneyReceived->getOdooReferenceNames() : [],
             'edit_url' => route('edit.money.receive', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
             'delete_url' => route('delete.money.receive', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
-            'review_url' => route('confirmed.review', ['company' => $company->id, 'model' => $moneyReceived->id]),
             'resend_odoo_url' => route('resend.with.odoo', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
         ];
 
@@ -1040,24 +1043,36 @@ class MoneyReceivedController
          * * فلازم يكون كله في ترانزاكشن واحدة
          * * قبل كده لو أي حاجة ضربت في النص كان السجل القديم بيروح والجديد بيتعمل ناقص
          */
-        OdooSync::transaction(function () use ($company, $request, $moneyReceived, $newType) {
-            $oldSettlementsForMoneyReceivedWithDownPayment  = $moneyReceived->settlementsForDownPaymentThatComeFromMoneyModel ;
-            $moneyReceivedAmountHasChanged = $moneyReceived->getAmount() != $request->input('received_amount.'.$newType);
+        /**
+         * asUpdate() exists for the delete+create pattern above: it mutes
+         * the observer for the duration (so the audit trail does not show
+         * an unrelated delete and create), carries this record's history
+         * onto the new row, and writes one `updated` entry with the real
+         * before/after diff. Without it an edit here reads as "created a
+         * moment ago, no history" on a row the user has been editing for
+         * weeks. See App\Support\Activity\ActivityLogger::asUpdate().
+         */
+        \App\Support\Activity\ActivityLogger::asUpdate($moneyReceived, function () use ($company, $request, $moneyReceived, $newType) {
+            OdooSync::transaction(function () use ($company, $request, $moneyReceived, $newType) {
+                $oldSettlementsForMoneyReceivedWithDownPayment  = $moneyReceived->settlementsForDownPaymentThatComeFromMoneyModel ;
+                $moneyReceivedAmountHasChanged = $moneyReceived->getAmount() != $request->input('received_amount.'.$newType);
 
-            $moneyReceived->deleteRelations();
-            $moneyReceived->delete();
+                $moneyReceived->deleteRelations();
+                $moneyReceived->delete();
 
-            $newMoneyReceived = $this->storeWithinTransaction($company, $request, true);
+                $newMoneyReceived = $this->storeWithinTransaction($company, $request, true);
 
-            if (!$moneyReceivedAmountHasChanged) {
-                $newMoneyReceived->storeNewSettlement(
-                    $oldSettlementsForMoneyReceivedWithDownPayment->toArray(),
-                    $newMoneyReceived->getPartnerId(),
-                    $company,
-                    1
-                );
-            }
+                if (!$moneyReceivedAmountHasChanged) {
+                    $newMoneyReceived->storeNewSettlement(
+                        $oldSettlementsForMoneyReceivedWithDownPayment->toArray(),
+                        $newMoneyReceived->getPartnerId(),
+                        $company,
+                        1
+                    );
+                }
+            });
         });
+
         $activeTab = $newType;
 
         return redirect()->route('view.money.receive', ['company' => $company->id, 'active' => $activeTab])
@@ -1549,15 +1564,6 @@ class MoneyReceivedController
         return response()->json([
             'partners'=>$partners
         ]);
-    }
-    public function markAsConfirmed(Company $company, Request $request, int $modelId)
-    {
-        $tableName = $request->get('table_name');
-        DB::table($tableName)->where('id', $modelId)->update([
-            'is_reviewed'=>1,
-            'reviewed_by'=>auth()->user()->id
-        ]);
-        return redirect()->back();
     }
     public function resendToOdoo(Company $company, Request $request, MoneyReceived $moneyReceived)
     {

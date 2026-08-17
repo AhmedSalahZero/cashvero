@@ -17,6 +17,13 @@ class SalesPersonsController
         $items = $company->salesPersons()->orderBy('name')->get();
 
         return \Inertia\Inertia::render('Settings/SimpleMasterList', [
+            // Shared master-list page — each controller supplies its own
+            // module's rights so one screen cannot leak another's.
+            'permissions' => [
+                'canCreate' => hasAuthFor('sales_person.create'),
+                'canUpdate' => hasAuthFor('sales_person.update'),
+                'canDelete' => hasAuthFor('sales_person.delete'),
+            ],
             'company' => ['id' => $company->id],
             'title' => 'Sales Persons',
             'subtitle' => 'Used to categorize customer invoices by sales person',

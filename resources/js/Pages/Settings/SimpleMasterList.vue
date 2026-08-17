@@ -23,6 +23,9 @@ const props = defineProps({
     itemLabel: String, // e.g. "Business Sector" — used in placeholders/modal titles
     items: Array, // [{ id, name, ...extraFieldValues, update_url, delete_url }]
     createUrl: String,
+    // { canCreate, canUpdate, canDelete } — supplied per module
+    // by whichever controller renders this shared page.
+    permissions: { type: Object, default: () => ({}) },
     extraFields: {
         type: Array,
         default: () => [],
@@ -168,7 +171,7 @@ function destroyRow() {
                     </div>
                 </div>
                 <p v-if="addError" class="text-xs mt-2" style="color: var(--cvr-danger-text);">{{ addError }}</p>
-                <div class="flex justify-end mt-3">
+                <div v-if="permissions.canCreate" class="flex justify-end mt-3">
                     <button
                         @click="submitAdd"
                         :disabled="addSubmitting || !newName.trim()"
@@ -210,8 +213,8 @@ function destroyRow() {
                             </td>
                             <td class="px-4 py-3 text-center">
                                 <div class="flex items-center justify-center gap-2">
-                                    <button @click="openEdit(row)" class="cvr-action-btn" title="Edit">✎</button>
-                                    <button @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" title="Delete">🗑</button>
+                                    <button v-if="permissions.canUpdate" @click="openEdit(row)" class="cvr-action-btn" title="Edit">✎</button>
+                                    <button v-if="permissions.canDelete" @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" title="Delete">🗑</button>
                                 </div>
                             </td>
                         </tr>

@@ -100,9 +100,9 @@ class FactoringWithoutRecourseController
                 ->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()])->values(),
             'accountTypes' => AccountType::onlyCashAccounts()->get()
                 ->map(fn ($a) => ['id' => $a->id, 'name' => $a->getName()])->values(),
-            'canCreate' => hasAuthFor('create supplier payment'),
-            'canUpdate' => hasAuthFor('update supplier payment'),
-            'canDelete' => hasAuthFor('delete supplier payment'),
+            'canCreate' => hasAuthFor('factoring_without_recourse.create'),
+            'canUpdate' => hasAuthFor('factoring_without_recourse.update'),
+            'canDelete' => hasAuthFor('factoring_without_recourse.delete'),
             'transactions' => $transactions->through(fn (FactoringTransaction $t) => [
                 'id' => $t->id,
                 'factoring_date_formatted' => $t->getFactoringDateFormatted(),

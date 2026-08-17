@@ -17,6 +17,13 @@ class BusinessSectorsController
         $items = $company->businessSectors()->orderBy('name')->get();
 
         return \Inertia\Inertia::render('Settings/SimpleMasterList', [
+            // Shared master-list page — each controller supplies its own
+            // module's rights so one screen cannot leak another's.
+            'permissions' => [
+                'canCreate' => hasAuthFor('business_sector.create'),
+                'canUpdate' => hasAuthFor('business_sector.update'),
+                'canDelete' => hasAuthFor('business_sector.delete'),
+            ],
             'company' => ['id' => $company->id],
             'title' => 'Business Sectors',
             'subtitle' => 'Used to categorize customer invoices by sector',

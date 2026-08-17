@@ -156,18 +156,18 @@ class FinancialInstitutionController
 
 		// Permission flags — resolved once here since Vue can't call hasAuthFor()/can() directly
 		$permissions = [
-			'create' => hasAuthFor('create financial institutions'),
-			'update' => hasAuthFor('update financial institutions'),
-			'delete' => hasAuthFor('delete financial institutions'),
-			'view_time_of_deposit' => hasAuthFor('view time of deposit'),
-			'view_certificate_of_deposit' => hasAuthFor('view certificate of deposit'),
-			'view_fully_secured_overdraft' => hasAuthFor('view fully secured overdraft'),
-			'view_clean_overdraft' => hasAuthFor('view clean overdraft'),
-			'view_overdraft_against_commercial_paper' => hasAuthFor('view overdraft against commercial paper'),
-			'view_overdraft_against_assignment_of_contract' => hasAuthFor('view overdraft against assignment of contract'),
-			'view_letter_of_guarantee_issuance' => hasAuthFor('view letter of guarantee issuance'),
-			'view_letter_of_credit_facility' => hasAuthFor('view letter of credit facility'),
-			'view_medium_term_loan' => hasAuthFor('view medium term loan'),
+			'create' => hasAuthFor('financial_institution.create'),
+			'update' => hasAuthFor('financial_institution.update'),
+			'delete' => hasAuthFor('financial_institution.delete'),
+			'view_time_of_deposit' => hasAuthFor('time_of_deposit.view'),
+			'view_certificate_of_deposit' => hasAuthFor('certificate_of_deposit.view'),
+			'view_fully_secured_overdraft' => hasAuthFor('fully_secured_overdraft.view'),
+			'view_clean_overdraft' => hasAuthFor('clean_overdraft.view'),
+			'view_overdraft_against_commercial_paper' => hasAuthFor('overdraft_commercial_paper.view'),
+			'view_overdraft_against_assignment_of_contract' => hasAuthFor('overdraft_assignment_contract.view'),
+			'view_letter_of_guarantee_issuance' => hasAuthFor('lg_issuance.view'),
+			'view_letter_of_credit_facility' => hasAuthFor('lc_facility.view'),
+			'view_medium_term_loan' => hasAuthFor('medium_term_loan.view'),
 		];
 
 		// ── Banks tab ────────────────────────────────────────────────
@@ -586,6 +586,15 @@ class FinancialInstitutionController
 				'id' => $company->id,
 			],
 			'backUrl' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+			// The bank-accounts list had no permission flags at all
+			// (2026-08 audit, F-07) — Edit / Delete / Lock were shown
+			// to anyone who could open the page.
+			'permissions' => [
+				'canCreate' => hasAuthFor('bank_account.create'),
+				'canUpdate' => hasAuthFor('bank_account.update'),
+				'canDelete' => hasAuthFor('bank_account.delete'),
+				'canLock' => hasAuthFor('bank_account.lock'),
+			],
 			'navUrls' => [
 				'home' => route('home', ['company' => $company->id]),
 				'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),

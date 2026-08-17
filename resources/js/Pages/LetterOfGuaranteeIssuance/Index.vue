@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import RecordLogButton from '@/Components/RecordLogButton.vue';
 
 const props = defineProps({
     company: Object,
@@ -9,6 +10,9 @@ const props = defineProps({
     filterDates: Object,
     lgTypes: Object,     // { 'bid-bond': 'Bid Bond', ... }
     createUrls: Object,  // { 'lg-facility': url, 'against-cd': url, ... }
+    // { canCreate, canUpdate, canDelete, canCancel, canRenew, canImport }
+    // This page previously had no permission gating at all.
+    permissions: { type: Object, default: () => ({}) },
     tabDataUrl: String,
     tabs: Object,        // { 'bid-bond': { current_page, last_page, total, loaded, rows: [...] }, ... }
     navUrls: Object,
@@ -220,10 +224,10 @@ const odooErrorTarget = ref(null);
                     </button>
                 </div>
                 <div class="flex items-center gap-2">
-                    <Link :href="createUrls['lg-facility']" class="cvr-btn-copper px-3 py-1.5 rounded text-sm">+ Via LG Facility</Link>
-                    <Link :href="createUrls['against-cd']" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">+ Against CD</Link>
-                    <Link :href="createUrls['against-td']" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">+ Against TD</Link>
-                    <Link :href="createUrls['hundred-percentage-cash-cover']" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">+ 100% Cash Cover</Link>
+                    <Link v-if="permissions.canCreate" :href="createUrls['lg-facility']" class="cvr-btn-copper px-3 py-1.5 rounded text-sm">+ Via LG Facility</Link>
+                    <Link v-if="permissions.canCreate" :href="createUrls['against-cd']" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">+ Against CD</Link>
+                    <Link v-if="permissions.canCreate" :href="createUrls['against-td']" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">+ Against TD</Link>
+                    <Link v-if="permissions.canCreate" :href="createUrls['hundred-percentage-cash-cover']" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">+ 100% Cash Cover</Link>
                 </div>
             </div>
 
@@ -283,17 +287,18 @@ const odooErrorTarget = ref(null);
                             <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.renewal_date_formatted }}</td>
                             <td class="px-3 py-3">
                                 <div class="flex items-center gap-1.5 flex-wrap">
+                                    <RecordLogButton subject="LetterOfGuaranteeIssuance" :id="row.id" :company-id="company.id" />
                                     <button v-if="row.has_comment" @click="commentTarget = row" class="cvr-action-btn" title="User Comment">💬</button>
                                     <button v-if="row.fully_integrated_with_odoo" @click="odooTarget = row" class="cvr-action-btn" title="Odoo References">👍</button>
                                     <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn" style="color: #EF4444;" title="Odoo Error">🐛</button>
-                                    <Link :href="row.renewal_date_url" class="cvr-action-btn" title="Renewal">🔄</Link>
+                                    <Link v-if="permissions.canRenew" :href="row.renewal_date_url" class="cvr-action-btn" title="Renewal">🔄</Link>
 
-                                    <button v-if="row.is_running || row.is_expired" @click="openCancel(row)" class="cvr-action-btn" title="Cancel Letter">🚫</button>
-                                    <button v-if="row.is_running && row.is_advanced_payment" @click="openAdvancedPayment(row)" class="cvr-action-btn" title="Amount To Be Decreased">⚖️</button>
-                                    <button v-if="row.is_cancelled" @click="openBackToRunning(row)" class="cvr-action-btn" title="Back To Running">↩️</button>
+                                    <button v-if="permissions.canCancel && (row.is_running || row.is_expired)" @click="openCancel(row)" class="cvr-action-btn" title="Cancel Letter">🚫</button>
+                                    <button v-if="permissions.canUpdate && row.is_running && row.is_advanced_payment" @click="openAdvancedPayment(row)" class="cvr-action-btn" title="Amount To Be Decreased">⚖️</button>
+                                    <button v-if="permissions.canCancel && row.is_cancelled" @click="openBackToRunning(row)" class="cvr-action-btn" title="Back To Running">↩️</button>
 
-                                    <Link v-if="!row.is_cancelled" :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</Link>
-                                    <button v-if="!row.is_cancelled" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
+                                    <Link v-if="permissions.canUpdate && !row.is_cancelled" :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</Link>
+                                    <button v-if="permissions.canDelete && !row.is_cancelled" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
                                 </div>
                             </td>
                         </tr>
@@ -427,8 +432,8 @@ const odooErrorTarget = ref(null);
                                 <td class="px-3 py-2 cvr-num">{{ h.amount_formatted }}</td>
                                 <td class="px-3 py-2">
                                     <div class="flex items-center gap-2">
-                                        <button @click="openEditAdvancedPayment(h)" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</button>
-                                        <button @click="confirmDeleteAdvancedPayment(h)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
+                                        <button v-if="permissions.canUpdate" @click="openEditAdvancedPayment(h)" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</button>
+                                        <button v-if="permissions.canUpdate" @click="confirmDeleteAdvancedPayment(h)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
                                     </div>
                                 </td>
                             </tr>

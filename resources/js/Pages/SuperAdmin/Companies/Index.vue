@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { usePermissions } from '@/composables/usePermissions';
 import Pagination from '@/Components/Pagination.vue';
 
 const props = defineProps({
@@ -11,6 +12,8 @@ const props = defineProps({
     createUrl: String,
     removeUrl: String,
 });
+
+const { can } = usePermissions();
 
 const rows = computed(() => props.paginator?.data || []);
 
@@ -56,7 +59,7 @@ function removeImage(row) {
                         <span class="cvr-text-muted text-sm">🔍</span>
                         <input v-model="searchTerm" type="text" placeholder="Search companies..." class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
                     </div>
-                    <Link :href="createUrl" class="cvr-btn-copper px-3 py-1.5 rounded text-sm inline-flex items-center gap-1">
+                    <Link v-if="can('company.create')" :href="createUrl" class="cvr-btn-copper px-3 py-1.5 rounded text-sm inline-flex items-center gap-1">
                         + Add
                     </Link>
                 </div>
@@ -75,15 +78,15 @@ function removeImage(row) {
                         <tr v-for="row in rows" :key="row.id" class="cvr-table-row">
                             <td class="px-3 py-3">
                                 <img v-if="row.image_url" :src="row.image_url" alt="image" class="w-20 h-20 object-cover rounded" />
-                                <button v-if="row.remove_image_url" @click="removeImage(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs mt-2">
+                                <button v-if="row.remove_image_url && can('company.update')" @click="removeImage(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs mt-2">
                                     Delete Image
                                 </button>
                             </td>
                             <td class="px-3 py-3 cvr-text-primary">{{ row.name }}</td>
                             <td class="px-3 py-3">
                                 <div class="flex items-center gap-1.5">
-                                    <Link :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</Link>
-                                    <button @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
+                                    <Link v-if="can('company.update')" :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</Link>
+                                    <button v-if="can('company.delete')" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
                                 </div>
                             </td>
                         </tr>

@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { usePermissions } from '@/composables/usePermissions';
 
 const props = defineProps({
     mode: String, // 'create' | 'edit'
@@ -16,6 +17,8 @@ const props = defineProps({
     backUrl: String,
     navUrls: Object,
 });
+
+const { can } = usePermissions();
 
 const page = usePage();
 const isEdit = props.mode === 'edit';
@@ -102,7 +105,7 @@ function deleteSchedule() {
 
             <div v-if="isLocked" class="mb-4 px-4 py-3 rounded cvr-badge-overdue text-sm flex items-center justify-between gap-3 flex-wrap">
                 <span>This contract has an uploaded schedule and can't be edited. Delete the schedule first if you need to make changes.</span>
-                <button type="button" :disabled="deletingSchedule" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap" @click="deleteSchedule">
+                <button v-if="can('leasing_contract.manage_schedule')" type="button" :disabled="deletingSchedule" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap" @click="deleteSchedule">
                     {{ deletingSchedule ? 'Deleting...' : 'Delete Schedule' }}
                 </button>
             </div>

@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import RecordLogButton from '@/Components/RecordLogButton.vue';
 
 /*
  * BuyOrSellCurrencies/Index.vue
@@ -231,6 +232,7 @@ const odooErrorTarget = ref(null);
                                     </template>
                                     <td v-if="canUpdate || canDelete" class="px-3 py-3">
                                         <div class="flex items-center gap-2">
+                                            <RecordLogButton subject="BuyOrSellCurrency" :id="row.id" :company-id="company.id" />
                                             <button v-if="row.user_comment" @click="commentTarget = row" class="cvr-action-btn" title="User Comment">💬</button>
                                             <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Odoo Error">🐞</button>
                                             <button v-if="row.is_fully_integrated_with_odoo" @click="odooRefTarget = row" class="cvr-action-btn" title="Fully Integrated">👍</button>

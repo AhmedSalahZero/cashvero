@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import RecordLogButton from '@/Components/RecordLogButton.vue';
 
 const props = defineProps({
     company: Object,
@@ -12,8 +13,33 @@ const props = defineProps({
     companyHasOdoo: Boolean,
     indexUrl: String,
     createUrl: String,
+    /**
+     * Per-type rights, keyed by the same type segment as the tabs:
+     * { customers: { view, create, update, delete }, employees: {…}, … }
+     */
     permissions: Object,
+    /** Rights for the tab currently on screen. */
+    activePermissions: Object,
 });
+
+/**
+ * Can the acting user perform `action` on this specific row?
+ *
+ * A partner can belong to several types at once, so holding the right
+ * for any of them is enough — matching what the server allows for that
+ * record. Falls back to the active tab's rights if the row carries no
+ * type (shouldn't happen, but this must never throw).
+ */
+function rowCan(row, action) {
+    const keys = row?.type_keys ?? [];
+    if (keys.length === 0) return Boolean(props.activePermissions?.[action]);
+    return keys.some((k) => props.permissions?.[k]?.[action]);
+}
+
+/** Show the control column at all? */
+function anyRowControls() {
+    return Boolean(props.activePermissions?.update || props.activePermissions?.delete);
+}
 
 /* ── Type filter pills ───────────────────────────────────────────
    NEW: the original Blade page had no way to filter by partner
@@ -123,8 +149,10 @@ function destroyRow() {
                     </button>
                 </div>
 
+                <!-- Was ungated entirely — shown to every user regardless
+                     of any create permission (2026-08 audit, F-05). -->
                 <Link
-                    v-if="!companyHasOdoo"
+                    v-if="!companyHasOdoo && activePermissions?.create"
                     :href="createUrl"
                     class="cvr-btn-copper inline-flex items-center gap-1 px-3 py-1.5 rounded text-sm whitespace-nowrap"
                 >
@@ -158,7 +186,7 @@ function destroyRow() {
                             <th class="px-4 py-3 text-center whitespace-nowrap">Other Partner</th>
                             <th class="px-4 py-3 text-center">Employee</th>
                             <th class="px-4 py-3 text-center">Shareholder</th>
-                            <th v-if="permissions.update" class="px-4 py-3 text-center">Control</th>
+                            <th v-if="anyRowControls()" class="px-4 py-3 text-center">Control</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -187,10 +215,14 @@ function destroyRow() {
                             <td class="px-4 py-3 text-center">
                                 <span :class="row.is_shareholder ? 'text-emerald-500' : 'text-red-500'">{{ row.is_shareholder ? '✓' : '✕' }}</span>
                             </td>
-                            <td v-if="permissions.update" class="px-4 py-3 text-center">
+                            <!-- Gated per row type, not per active tab: the Edit
+                                 control previously had no check of its own and
+                                 relied entirely on this cell being rendered. -->
+                            <td v-if="anyRowControls()" class="px-4 py-3 text-center">
                                 <div class="flex items-center justify-center gap-2">
-                                    <Link :href="row.edit_url" class="cvr-action-btn" title="Edit">✎</Link>
-                                    <button v-if="permissions.delete && !companyHasOdoo" @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" title="Delete">🗑</button>
+                                    <RecordLogButton subject="Partner" :id="row.id" :company-id="company.id" />
+                                    <Link v-if="rowCan(row, 'update')" :href="row.edit_url" class="cvr-action-btn" title="Edit">✎</Link>
+                                    <button v-if="rowCan(row, 'delete') && !companyHasOdoo" @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" title="Delete">🗑</button>
                                 </div>
                             </td>
                         </tr>

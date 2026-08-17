@@ -341,6 +341,15 @@ if (page.flash?.success || page.flash?.error) {
                                 <NavIcon name="user" :size="16" />
                                 Users
                             </Link>
+                            <Link
+                                v-if="superAdminUrls.roles"
+                                :href="superAdminUrls.roles"
+                                @click="adminMenuOpen = false"
+                                class="flex items-center gap-2 w-full text-left px-4 py-2 text-sm cvr-text-secondary cvr-table-row"
+                            >
+                                <NavIcon name="shield" :size="16" />
+                                Roles &amp; Permissions
+                            </Link>
                         </div>
                     </div>
 

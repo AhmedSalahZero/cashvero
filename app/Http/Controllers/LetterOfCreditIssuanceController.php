@@ -383,6 +383,16 @@ class LetterOfCreditIssuanceController
                 LetterOfCreditIssuance::LC_FACILITY => route('create.letter.of.credit.issuance', ['company' => $company->id, 'source' => LetterOfCreditIssuance::LC_FACILITY]),
                 LetterOfCreditIssuance::HUNDRED_PERCENTAGE_CASH_COVER => route('create.letter.of.credit.issuance', ['company' => $company->id, 'source' => LetterOfCreditIssuance::HUNDRED_PERCENTAGE_CASH_COVER]),
             ],
+            /**
+             * Previously ungated — see the LG issuance note; the same
+             * four permissions existed and were never checked.
+             */
+            'permissions' => [
+                'canCreate' => hasAuthFor('lc_issuance.create'),
+                'canUpdate' => hasAuthFor('lc_issuance.update'),
+                'canDelete' => hasAuthFor('lc_issuance.delete'),
+                'canSettle' => hasAuthFor('lc_issuance.settle'),
+            ],
             'sightLcTab' => fn () => $buildTab(LcTypes::SIGHT_LC),
             'deferredTab' => fn () => $buildTab(LcTypes::DEFERRED),
             'cashAgainstDocumentTab' => fn () => $buildTab(LcTypes::CASH_AGAINST_DOCUMENT),
@@ -943,24 +953,31 @@ class LetterOfCreditIssuanceController
          * * فلازم يكون كله في ترانزاكشن واحدة
          * * قبل كده لو أي حاجة ضربت في النص كان الاعتماد القديم بيروح والجديد بيتعمل ناقص
          */
-        OdooSync::transaction(function () use ($company, $request, $letterOfCreditIssuance, $source) {
-            /**
-             * * المصاريف الإضافية مش بتتعاد مع الاعتماد الجديد ، فبنمسك الـ ids
-             * * بتاعتها ونرجّعها على السجل الجديد بعد ما يتعمل. من غير كده كانت
-             * * بتفضل مربوطة بـ id اتمسح (مصاريف يتيمة ما بتظهرش في أي شاشة)
-             */
-            $expenseIds = $letterOfCreditIssuance->expenses()->pluck('id')->toArray();
+        /**
+         * Wrapped so the delete+create below records as one edit and
+         * this issuance's history follows it onto the new row.
+         * See App\Support\Activity\ActivityLogger::asUpdate().
+         */
+        \App\Support\Activity\ActivityLogger::asUpdate($letterOfCreditIssuance, function () use ($company, $request, $letterOfCreditIssuance, $source) {
+            OdooSync::transaction(function () use ($company, $request, $letterOfCreditIssuance, $source) {
+                /**
+                 * * المصاريف الإضافية مش بتتعاد مع الاعتماد الجديد ، فبنمسك الـ ids
+                 * * بتاعتها ونرجّعها على السجل الجديد بعد ما يتعمل. من غير كده كانت
+                 * * بتفضل مربوطة بـ id اتمسح (مصاريف يتيمة ما بتظهرش في أي شاشة)
+                 */
+                $expenseIds = $letterOfCreditIssuance->expenses()->pluck('id')->toArray();
 
-            $letterOfCreditIssuance->deleteAllRelations(false);
-            $letterOfCreditIssuance->delete();
+                $letterOfCreditIssuance->deleteAllRelations(false);
+                $letterOfCreditIssuance->delete();
 
-            $this->storeWithinTransaction($company, $request, $source);
+                $this->storeWithinTransaction($company, $request, $source);
 
-            if (count($expenseIds) && $this->lastStoredIssuance) {
-                LcIssuanceExpense::whereIn('id', $expenseIds)->update([
-                    'lc_issuance_id' => $this->lastStoredIssuance->id
-                ]);
-            }
+                if (count($expenseIds) && $this->lastStoredIssuance) {
+                    LcIssuanceExpense::whereIn('id', $expenseIds)->update([
+                        'lc_issuance_id' => $this->lastStoredIssuance->id
+                    ]);
+                }
+            });
         });
         return redirect()->route('view.letter.of.credit.issuance', ['company' => $company->id, 'active' => $request->get('lc_type')])->with('success', __('Data Store Successfully'));
     }

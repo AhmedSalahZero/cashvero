@@ -185,7 +185,38 @@ class UserController extends Controller
             return $authUser->can('create user') || ($existingUser && $existingUser->hasRole(User::USER));
         }
 
-        return false;
+        /**
+         * Custom roles created in Role Management. Assigning one is
+         * gated by `user.assign_roles`, plus a rule that closes the
+         * obvious escalation route: you may not hand someone a role
+         * carrying permissions you do not hold yourself, otherwise
+         * anyone able to assign roles could mint themselves an admin
+         * via a custom role. (RoleController applies the mirror-image
+         * rule when the role is built.)
+         */
+        if (! $authUser->hasPermissionKey('user.assign_roles')) {
+            return $existingUser && $existingUser->hasRoleName($role);
+        }
+
+        if (\App\Support\Permissions\PermissionResolver::isSuperAdmin($authUser)) {
+            return true;
+        }
+
+        $roleModel = \Spatie\Permission\Models\Role::where('name', $role)->where('guard_name', 'web')->first();
+
+        if (! $roleModel) {
+            return false;
+        }
+
+        $held = array_fill_keys(\App\Support\Permissions\PermissionResolver::grantedKeys($authUser), true);
+
+        foreach ($roleModel->permissions->pluck('name') as $permissionName) {
+            if (! isset($held[$permissionName])) {
+                return $existingUser && $existingUser->hasRoleName($role);
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -266,10 +297,23 @@ class UserController extends Controller
             $companies = Company::whereIn('id', $assignableIds)->get();
         }
 
+        /**
+         * Role options are read from the roles table rather than a
+         * hardcoded list, so a role created in Role Management becomes
+         * assignable here immediately — that is the whole point of
+         * Role → Permissions → User being configurable.
+         *
+         * authUserCanAssignRole() still decides which of them THIS user
+         * may hand out, and store()/update() re-check it, so widening
+         * the list does not widen anyone's authority.
+         */
         $roleOptions = [];
-        foreach ([User::SUPER_ADMIN => 'Super Admin', User::COMPANY_ADMIN => 'Company Admin', User::MANAGER => 'Manager', User::USER => 'User'] as $roleValue => $roleLabel) {
-            if ($this->authUserCanAssignRole($authUser, $roleValue, $user)) {
-                $roleOptions[] = ['value' => $roleValue, 'label' => $roleLabel];
+        foreach (\Spatie\Permission\Models\Role::where('guard_name', 'web')->orderBy('id')->get() as $role) {
+            if ($this->authUserCanAssignRole($authUser, $role->name, $user)) {
+                $roleOptions[] = [
+                    'value' => $role->name,
+                    'label' => ucwords(str_replace('-', ' ', $role->name)),
+                ];
             }
         }
 
@@ -360,11 +404,22 @@ class UserController extends Controller
 
         app()->make(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
         app()->make(\Spatie\Permission\PermissionRegistrar::class)->clearClassPermissions();
-        $permissions = HAuth::getPermissions($newUser->getSystemsNames());
-        foreach ($permissions as $permissionArr) {
-            $permission = Permission::findByName($permissionArr['name']);
-            $newUser->assignNewPermission($permissionArr, $permission);
-        }
+
+        /**
+         * Seed the new user's OWN permissions from the role they were
+         * given. Permissions in this application are user-based — the
+         * role is a template copied once, here, and never consulted
+         * again (see App\Support\Permissions\PermissionResolver).
+         *
+         * Replaces the previous loop over HAuth::getPermissions(), which
+         * copied a fixed, code-level default list. Reading the role's
+         * actual rows instead means whatever an admin has configured in
+         * Role Management is what a new user of that role starts with.
+         *
+         * Passing the acting user applies the escalation guard: nobody
+         * can seed a new account with more than they hold themselves.
+         */
+        \App\Support\Permissions\RoleTemplate::applyTo($newUser, $request->role, auth()->user());
 
         ImageSave::saveIfExist('image', $newUser);
 
@@ -421,11 +476,31 @@ class UserController extends Controller
         $companyIds = $this->resolveCompanyIdsForWrite($authUser, $request->input('companies'), $user);
         abort_unless(count($companyIds) > 0, 422, __('Select at least one company.'));
 
-        $user->update($request->except('avatar', 'companies'));
+        $previousRole = $user->getRoleName();
+
+        $user->update($request->except('avatar', 'companies', 'reset_permissions_to_role'));
         $user->companies()->sync($companyIds);
         @count($user->roles) == 0 ?: $user->removeRole($user->roles[0]->name);
 
         $user->assignRole($request->role);
+
+        /**
+         * Changing the role does NOT rewrite this user's permissions.
+         *
+         * Permissions here are user-based: the role was a template
+         * copied at creation, and this person's set may have been tuned
+         * since. Silently re-applying a template on every save would
+         * discard that tuning — the exact surprise this model exists to
+         * avoid.
+         *
+         * The form offers an explicit "reset permissions to the new
+         * role's template" checkbox for when that IS what's wanted; it
+         * is opt-in, and only meaningful when the role actually changed.
+         */
+        if ($request->boolean('reset_permissions_to_role') && $previousRole !== $request->input('role')) {
+            \App\Support\Permissions\RoleTemplate::applyTo($user, $request->input('role'), $authUser);
+        }
+
         ImageSave::saveIfExist('avatar', $user);
 
         return redirect()->back();

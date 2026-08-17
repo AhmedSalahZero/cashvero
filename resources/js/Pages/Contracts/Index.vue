@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import RecordLogButton from '@/Components/RecordLogButton.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import Pagination from '@/Components/Pagination.vue';
 
@@ -58,6 +59,11 @@ const props = defineProps({
     pageTitle: String,
     canCreate: Boolean,
     canUpdate: Boolean,
+    // canDelete/canApprove are new: contract delete permissions existed
+    // but were never sent to this page, so Delete was ungated in the UI
+    // (2026-08 audit, F-04).
+    canDelete: Boolean,
+    canApprove: Boolean,
     hasProjectNameColumn: Boolean,
     // When the company is wired to Odoo, PO allocation is driven from
     // Odoo itself, so the Allocate action is removed from Supplier
@@ -321,6 +327,7 @@ function submitAllocations() {
                                 <td class="px-4 py-3 cvr-num">{{ row.amount_formatted }} {{ row.currency }}</td>
                                 <td class="px-4 py-3">
                                     <div class="flex items-center gap-2">
+                                        <RecordLogButton subject="Contract" :id="row.id" :company-id="company.id" />
                                         <Link :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">
                                             Edit
                                         </Link>
@@ -347,20 +354,22 @@ function submitAllocations() {
                                         >✔️</button>
 
                                         <button
-                                            v-if="activeTab === 'running_and_against' && canUpdate"
+                                            v-if="activeTab === 'running_and_against' && canApprove"
                                             @click="confirmMarkFinished(row)"
                                             class="cvr-action-btn"
                                             title="Mark As Finished"
                                         >👍</button>
 
                                         <button
-                                            v-if="activeTab === 'finished' && canUpdate"
+                                            v-if="activeTab === 'finished' && canApprove"
                                             @click="confirmMarkRunningAndAgainst(row)"
                                             class="cvr-action-btn"
                                             title="Mark As Running And Against"
                                         >👍</button>
 
-                                        <Dropdown>
+                                        <!-- The whole Options menu disappears when its
+                                             only entry is one the user may not perform. -->
+                                        <Dropdown v-if="canDelete">
                                             <template #trigger="{ toggle }">
                                                 <button @click="toggle" class="cvr-tag">Options ▾</button>
                                             </template>

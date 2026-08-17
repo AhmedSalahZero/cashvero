@@ -30,9 +30,19 @@ class Kernel extends HttpKernel
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
             \App\Http\Middleware\EnsureRouteModelsBelongToCompany::class,
             \App\Http\Middleware\canViewCurrentCompany::class,
+            /**
+             * Central backend authorization — must sit AFTER
+             * SubstituteBindings (so the route and its bound models are
+             * resolved) and after the company-scoping middleware above,
+             * so a 403 for "wrong company" still wins over a 403 for
+             * "wrong permission". Sits BEFORE HandleInertiaRequests so a
+             * denied request never pays to build the sidebar.
+             *
+             * Requests without an authenticated user pass straight
+             * through; the `auth` route middleware rejects those.
+             */
+            \App\Http\Middleware\EnforcePermission::class,
             \App\Http\Middleware\HandleInertiaRequests::class,
-			
-            
         ],
 
         'api' => [
@@ -60,6 +70,11 @@ class Kernel extends HttpKernel
         'localeViewPath'          => \Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath::class,
         'checkIfAccountExpired'          => CheckIfAccountExpired::class,
 		'isCashManagement'=>CashManagementMiddleware::class,
+		/**
+		 * Explicit per-route guard, e.g. ->middleware('permission:role.update').
+		 * Accepts several keys meaning "any of".
+		 */
+		'permission'      => \App\Http\Middleware\RequirePermission::class,
 
     ];
 }

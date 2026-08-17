@@ -16,6 +16,13 @@ class DeductionsController
         $items = $company->deductions()->orderBy('name')->get();
 
         return \Inertia\Inertia::render('Settings/SimpleMasterList', [
+            // Shared master-list page — each controller supplies its own
+            // module's rights so one screen cannot leak another's.
+            'permissions' => [
+                'canCreate' => hasAuthFor('deduction.create'),
+                'canUpdate' => hasAuthFor('deduction.update'),
+                'canDelete' => hasAuthFor('deduction.delete'),
+            ],
             'company' => ['id' => $company->id],
             'title' => 'Deductions',
             'subtitle' => 'Deduction types available across the app',

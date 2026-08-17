@@ -103,7 +103,7 @@ class LetterOfGuaranteeFacilityController
 		return \Inertia\Inertia::render('LetterOfGuaranteeFacility/Index', [
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
-			'canCreate' => hasAuthFor('create letter of guarantee facility'),
+			'canCreate' => hasAuthFor('lg_facility.create'),
 			'createUrl' => route('create.letter.of.guarantee.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
 			'lgTypes' => \App\Enums\LgTypes::getAll(),
 			'commissionIntervals' => getCommissionInterval(),

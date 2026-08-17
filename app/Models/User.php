@@ -138,27 +138,125 @@ class User extends Authenticatable implements HasMedia
     {
         return $this->name ;
     }
-	public function getRoleName()
+	/**
+	 * ⚠️ REAL BUG FIXED HERE (2026-08 permissions audit):
+	 * every one of these read `$this->roles->first()->name` directly,
+	 * which throws "Attempt to read property on null" for a user with
+	 * no role assigned — and `model_has_roles` holds a row for only a
+	 * fraction of the users in this database. Any code path reaching
+	 * isSuperAdmin() for such a user 500'd. They now degrade to null /
+	 * false instead.
+	 */
+	public function getRoleName(): ?string
 	{
-		return $this->roles->first()->name;
+		return $this->roles->first()?->name;
 	}
-	
-	public function isSuperAdmin()
+
+	public function isSuperAdmin(): bool
 	{
-		return  $this->roles->first()->name == 'super-admin';
+		return $this->hasRoleName(self::SUPER_ADMIN);
 	}
-	public function isCompanyAdmin():bool 
+	public function isCompanyAdmin():bool
 	{
-	
-		return  $this->roles->first()->name == 'company-admin';
+		return $this->hasRoleName(self::COMPANY_ADMIN);
 	}
-	public function isManager():bool 
+	public function isManager():bool
 	{
-		return  $this->roles->first()->name == 'manager';
+		return $this->hasRoleName(self::MANAGER);
 	}
-	public function isUser():bool 
+	public function isUser():bool
 	{
-		return  $this->roles->first()->name == 'user';
+		return $this->hasRoleName(self::USER);
+	}
+
+	/**
+	 * Null-safe role-name comparison. Uses the loaded `roles` relation
+	 * rather than hasRole() so it never throws for an unknown name.
+	 */
+	public function hasRoleName(string $roleName): bool
+	{
+		return $this->roles->contains('name', $roleName);
+	}
+
+	/**
+	 * ⚠️ THE HINGE OF THE USER-BASED MODEL.
+	 *
+	 * Spatie registers its own `Gate::before` (PermissionRegistrar::
+	 * registerPermissions) which calls exactly this method, and its
+	 * default implementation resolves through hasPermissionTo() — the
+	 * union of ROLE and DIRECT grants.
+	 *
+	 * Leaving that in place meant `$user->can('view cash expenses')`
+	 * silently passed on a permission held only by the user's role,
+	 * reinstating role inheritance through the back door even though
+	 * PermissionResolver had been made user-only. Gate::before callbacks
+	 * run in registration order and Spatie's is registered first, so an
+	 * application-level `before` could not reliably win the race either.
+	 *
+	 * Overriding here fixes it at the source: every path — Gate, can(),
+	 * @can, authorize(), Spatie's own gate — now resolves against the
+	 * user's own permissions and nothing else.
+	 *
+	 * Names outside the registry (ad-hoc gates, policies) keep Spatie's
+	 * behaviour. That fallback is inlined rather than delegated with
+	 * `parent::` because HasPermissions is a TRAIT — it is flattened
+	 * into this class, so there is no parent implementation to call.
+	 */
+	public function checkPermissionTo($permission, $guardName = null): bool
+	{
+		if (is_string($permission)) {
+			if (\App\Support\Permissions\PermissionRegistry::has($permission)) {
+				return \App\Support\Permissions\PermissionResolver::allows($this, $permission);
+			}
+
+			if (\App\Support\Permissions\PermissionRegistry::isLegacyName($permission)) {
+				return \App\Support\Permissions\PermissionResolver::allowsName($this, $permission);
+			}
+		}
+
+		// Verbatim copy of Spatie's own implementation.
+		try {
+			return $this->hasPermissionTo($permission, $guardName);
+		} catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {
+			return false;
+		}
+	}
+
+	/**
+	 * Does this user hold a canonical permission key such as
+	 * `cash_expense.delete`?
+	 *
+	 * Resolves against this user's OWN permissions plus the Super Admin
+	 * bypass — a role grants nothing on its own; see
+	 * App\Support\Permissions\PermissionResolver.
+	 *
+	 * Prefer this (or `$user->can('cash_expense.delete')`, which now
+	 * resolves identically) over any role-name check in business logic.
+	 */
+	public function hasPermissionKey(string $key): bool
+	{
+		return \App\Support\Permissions\PermissionResolver::allows($this, $key);
+	}
+
+	/**
+	 * Does this user hold at least one of these keys?
+	 *
+	 * @param  string[]  $keys
+	 */
+	public function hasAnyPermissionKey(array $keys): bool
+	{
+		return \App\Support\Permissions\PermissionResolver::allowsAny($this, $keys);
+	}
+
+	/**
+	 * Every canonical permission key this user holds — the exact list
+	 * shared with the frontend.
+	 *
+	 * @return string[]
+	 */
+	public function permissionKeys(): array
+	{
+		return \App\Support\Permissions\PermissionResolver::grantedKeys($this);
 	}
 	public function usersCreatedBy():HasMany
 	{

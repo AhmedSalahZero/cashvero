@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import RecordLogButton from '@/Components/RecordLogButton.vue';
 
 const props = defineProps({
     company: Object,
@@ -84,6 +85,7 @@ function destroyRow() {
                             <td class="px-4 py-3">{{ row.to_lc_issuance_name }}</td>
                             <td v-if="canUpdate || canDelete" class="px-4 py-3">
                                 <div class="flex items-center gap-1">
+                                    <RecordLogButton subject="LcSettlementInternalMoneyTransfer" :id="row.id" :company-id="company.id" />
                                     <Link v-if="canUpdate" :href="row.edit_url" class="cvr-action-btn" title="Edit">✏️</Link>
                                     <button v-if="canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Delete">🗑️</button>
                                 </div>

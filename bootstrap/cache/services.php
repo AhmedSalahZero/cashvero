@@ -50,9 +50,10 @@
     46 => 'Barryvdh\\LaravelIdeHelper\\IdeHelperServiceProvider',
     47 => 'App\\Providers\\AppServiceProvider',
     48 => 'App\\Providers\\AuthServiceProvider',
-    49 => 'App\\Providers\\EventServiceProvider',
-    50 => 'App\\Providers\\RouteServiceProvider',
-    51 => 'App\\Providers\\BlueprintMacroServiceProvider',
+    49 => 'App\\Providers\\ActivityServiceProvider',
+    50 => 'App\\Providers\\EventServiceProvider',
+    51 => 'App\\Providers\\RouteServiceProvider',
+    52 => 'App\\Providers\\BlueprintMacroServiceProvider',
   ),
   'eager' => 
   array (
@@ -89,9 +90,10 @@
     30 => 'Maatwebsite\\Excel\\ExcelServiceProvider',
     31 => 'App\\Providers\\AppServiceProvider',
     32 => 'App\\Providers\\AuthServiceProvider',
-    33 => 'App\\Providers\\EventServiceProvider',
-    34 => 'App\\Providers\\RouteServiceProvider',
-    35 => 'App\\Providers\\BlueprintMacroServiceProvider',
+    33 => 'App\\Providers\\ActivityServiceProvider',
+    34 => 'App\\Providers\\EventServiceProvider',
+    35 => 'App\\Providers\\RouteServiceProvider',
+    36 => 'App\\Providers\\BlueprintMacroServiceProvider',
   ),
   'deferred' => 
   array (

@@ -113,14 +113,14 @@ class FullySecuredOverdraftController
 		$fullySecuredOverdrafts =   $this->applyFilter($request,$fullySecuredOverdrafts) ;
 
 		$lockableAccountType = AccountType::onlyFullySecuredOverdraft()->first();
-		$canUpdate = hasAuthFor('update fully secured overdraft');
-		$canDelete = hasAuthFor('delete fully secured overdraft');
-		$canCreateRate = hasAuthFor('create fully secured overdraft');
+		$canUpdate = hasAuthFor('fully_secured_overdraft.update');
+		$canDelete = hasAuthFor('fully_secured_overdraft.delete');
+		$canCreateRate = hasAuthFor('fully_secured_overdraft.create');
 
 		return \Inertia\Inertia::render('FullySecuredOverdraft/Index', [
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
-			'canCreate' => hasAuthFor('create fully secured overdraft'),
+			'canCreate' => hasAuthFor('fully_secured_overdraft.create'),
 			'canUpdate' => $canUpdate,
 			'canDelete' => $canDelete,
 			'canCreateRate' => $canCreateRate,

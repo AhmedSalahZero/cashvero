@@ -120,7 +120,7 @@ class MediumTermLoanController
         return \Inertia\Inertia::render('MediumTermLoan/Index', [
             'company' => ['id' => $company->id],
             'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
-            'canCreate' => hasAuthFor('create medium term loan'),
+            'canCreate' => hasAuthFor('medium_term_loan.create'),
             'createUrl' => route('loans.create', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
             'rows' => $mediumTermLoans->map(function (MediumTermLoan $loan) use ($company, $financialInstitution) {
                 return [
@@ -141,9 +141,9 @@ class MediumTermLoanController
                     'delete_url' => route('loans.destroy', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'mediumTermLoan' => $loan->id]),
                 ];
             })->values(),
-            'canUpload' => hasAuthFor('create medium term loan'),
-            'canUpdate' => hasAuthFor('update medium term loan'),
-            'canDelete' => hasAuthFor('delete medium term loan'),
+            'canUpload' => hasAuthFor('medium_term_loan.create'),
+            'canUpdate' => hasAuthFor('medium_term_loan.update'),
+            'canDelete' => hasAuthFor('medium_term_loan.delete'),
             'backUrl' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
             'navUrls' => [
                 'home' => route('home', ['company' => $company->id]),
@@ -437,10 +437,19 @@ class MediumTermLoanController
                 ->with('fail', __('Supplier payments have already been made from this loan, so it can\'t be edited. Delete those payments first if you need to make changes.'));
         }
 
-        $mediumTermLoan->deleteRelations();
-        $mediumTermLoan->delete();
         $type = MediumTermLoan::RUNNING;
-        $this->store($company, $request, $financialInstitution);
+
+        /**
+         * The edit deletes this loan and re-creates it, so without this
+         * wrapper the audit trail shows an unrelated delete and create
+         * and the loan's history stops at the old row.
+         * See App\Support\Activity\ActivityLogger::asUpdate().
+         */
+        \App\Support\Activity\ActivityLogger::asUpdate($mediumTermLoan, function () use ($company, $request, $financialInstitution, $mediumTermLoan) {
+            $mediumTermLoan->deleteRelations();
+            $mediumTermLoan->delete();
+            $this->store($company, $request, $financialInstitution);
+        });
         $activeTab = $type;
         return redirect()->route('loans.index', ['company' => $company->id, 'active' => $activeTab, 'financialInstitution' => $financialInstitution->id])->with('success', __('Item Has Been Updated Successfully'));
     }

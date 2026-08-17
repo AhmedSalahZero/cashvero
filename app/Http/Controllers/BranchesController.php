@@ -99,7 +99,7 @@ class BranchesController
 
         return \Inertia\Inertia::render('SafeAccounts/Index', [
             'company' => ['id' => $company->id],
-            'canCreate' => hasAuthFor('create branches'),
+            'canCreate' => hasAuthFor('branch.create'),
             'createUrl' => route('branches.create', ['company' => $company->id]),
             'rows' => $branches->map(function (CashVeroBranch $branch) use ($company) {
                 return [
@@ -111,8 +111,8 @@ class BranchesController
                     'delete_url' => route('branches.destroy', ['company' => $company->id, 'branch' => $branch->id]),
                 ];
             })->values(),
-            'canUpdate' => hasAuthFor('update branches'),
-            'canDelete' => hasAuthFor('delete branches'),
+            'canUpdate' => hasAuthFor('branch.update'),
+            'canDelete' => hasAuthFor('branch.delete'),
             'navUrls' => [
                 'home' => route('home', ['company' => $company->id]),
                 'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),

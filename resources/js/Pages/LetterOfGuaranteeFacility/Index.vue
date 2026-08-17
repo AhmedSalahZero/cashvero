@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import RecordLogButton from '@/Components/RecordLogButton.vue';
 
 const props = defineProps({
     company: Object,
@@ -170,6 +171,7 @@ function submitRenew() {
                             <td class="px-4 py-3 cvr-num">{{ row.limit_formatted }}</td>
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-2">
+                                    <RecordLogButton subject="LetterOfGuaranteeFacility" :id="row.id" :company-id="company.id" />
                                     <button @click="openTerms(row)" class="cvr-btn-secondary inline-flex items-center gap-1 px-2 py-1 rounded border text-xs">
                                         🏷️ Click Here
                                     </button>

@@ -232,7 +232,7 @@ class CertificatesOfDepositsController
 			],
 			'activeTab' => $currentType,
 			'filterDates' => $filterDates,
-			'canCreate' => hasAuthFor('create certificate of deposit'),
+			'canCreate' => hasAuthFor('certificate_of_deposit.create'),
 			'deposits' => [
 				CertificatesOfDeposit::RUNNING => $mapCertificates($runningCertificatesOfDeposits),
 				CertificatesOfDeposit::MATURED => $mapCertificates($maturedCertificatesOfDeposits),

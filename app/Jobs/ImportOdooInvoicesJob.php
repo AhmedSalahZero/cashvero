@@ -34,6 +34,14 @@ class ImportOdooInvoicesJob implements ShouldQueue
      */
     public function handle()
     {
+        /**
+         * Bulk import: per-row history here would be thousands of
+         * entries describing one human action ("imported a file"), which
+         * buries the events a person actually cares about. The import
+         * itself is the auditable event, not each row it created.
+         */
+        $activityMute = \App\Support\Activity\ActivityLogger::mute();
+
 		$companies = Company::all();
 		foreach($companies as $company){
 			if($company->hasOdooIntegrationCredentials()){

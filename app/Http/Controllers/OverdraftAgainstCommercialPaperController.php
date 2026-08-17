@@ -114,14 +114,14 @@ class OverdraftAgainstCommercialPaperController
 		$overdraftAgainstCommercialPapers =   $this->applyFilter($request,$overdraftAgainstCommercialPapers) ;
 
 		$lockableAccountType = AccountType::onlyOverdraftAgainstCommercialPaper()->first();
-		$canUpdate = hasAuthFor('update overdraft against commercial paper');
-		$canDelete = hasAuthFor('delete overdraft against commercial paper');
-		$canCreateRate = hasAuthFor('create overdraft against commercial paper');
+		$canUpdate = hasAuthFor('overdraft_commercial_paper.update');
+		$canDelete = hasAuthFor('overdraft_commercial_paper.delete');
+		$canCreateRate = hasAuthFor('overdraft_commercial_paper.create');
 
         return \Inertia\Inertia::render('OverdraftAgainstCommercialPaper/Index', [
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
-			'canCreate' => hasAuthFor('create overdraft against commercial paper'),
+			'canCreate' => hasAuthFor('overdraft_commercial_paper.create'),
 			'canUpdate' => $canUpdate,
 			'canDelete' => $canDelete,
 			'canCreateRate' => $canCreateRate,

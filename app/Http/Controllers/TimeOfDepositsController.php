@@ -282,7 +282,7 @@ class TimeOfDepositsController
 			],
 			'activeTab' => $currentType,
 			'filterDates' => $filterDates,
-			'canCreate' => hasAuthFor('create time of deposit'),
+			'canCreate' => hasAuthFor('time_of_deposit.create'),
 			'deposits' => [
 				TimeOfDeposit::RUNNING => $mapDeposits($runningTimeOfDeposits),
 				TimeOfDeposit::MATURED => $mapDeposits($maturedTimeOfDeposits),

@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import RecordLogButton from '@/Components/RecordLogButton.vue';
 
 /*
  * ForeignExchangeRate/Index.vue
@@ -229,6 +230,7 @@ function destroyRow() {
                             <td class="px-4 py-3 cvr-num">{{ rate.reciprocal_exchange_rate_formatted }}</td>
                             <td v-if="canUpdate || canDelete" class="px-4 py-3">
                                 <div v-if="rate.is_editable" class="flex items-center gap-2">
+                                    <RecordLogButton subject="ForeignExchangeRate" :id="rate.id" :company-id="company.id" />
                                     <a :href="rate.edit_url" class="cvr-action-btn" title="Edit">✏️</a>
                                     <button @click="confirmDelete(rate)" class="cvr-action-btn" title="Delete">🗑️</button>
                                 </div>

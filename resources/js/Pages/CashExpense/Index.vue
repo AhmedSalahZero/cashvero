@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import RecordLogButton from '@/Components/RecordLogButton.vue';
 import { todayDate } from '@/composables/today';
 /* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
    الحماية الحقيقية على السيرفر في الـ Form Request. */
@@ -31,6 +32,8 @@ const props = defineProps({
     canCreate: Boolean,
     canUpdate: Boolean,
     canDelete: Boolean,
+    // Marking a payable cheque / outgoing transfer as actually paid.
+    canMarkAsPaid: Boolean,
     outgoingTransferTab: Object, // {label, rows: paginator, startDate, endDate, hasBatchCollection}
     cashPaymentTab: Object,
     payableChequeTab: Object,
@@ -220,7 +223,7 @@ const odooErrorTarget = ref(null);
                         </div>
                         <button @click="applyFilters(type)" class="cvr-btn-secondary px-4 py-2 rounded border">Apply</button>
                         <button
-                            v-if="tab.hasBatchCollection && (selectedIds[type] || []).length"
+                            v-if="canMarkAsPaid && tab.hasBatchCollection && (selectedIds[type] || []).length"
                             @click="openMarkPaidModal(type)"
                             class="cvr-btn-primary px-4 py-2 rounded ml-auto"
                         >
@@ -233,7 +236,7 @@ const odooErrorTarget = ref(null);
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th v-if="tab.hasBatchCollection" class="px-3 py-3 text-left">Select</th>
+                                    <th v-if="canMarkAsPaid && tab.hasBatchCollection" class="px-3 py-3 text-left">Select</th>
                                     <th class="px-3 py-3 text-left whitespace-nowrap">Category</th>
                                     <th class="px-3 py-3 text-left whitespace-nowrap">Expense Name</th>
                                     <th class="px-3 py-3 text-left whitespace-nowrap">Payment Date</th>
@@ -242,12 +245,12 @@ const odooErrorTarget = ref(null);
                                     </th>
                                     <th class="px-3 py-3 text-left">Amount</th>
                                     <th class="px-3 py-3 text-left">Currency</th>
-                                    <th v-if="canUpdate || canDelete" class="px-3 py-3 text-left">Control</th>
+                                    <th v-if="canUpdate || canDelete || canMarkAsPaid" class="px-3 py-3 text-left">Control</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr v-for="row in tab.rows.data" :key="row.id" class="cvr-table-row">
-                                    <td v-if="tab.hasBatchCollection" class="px-3 py-3">
+                                    <td v-if="canMarkAsPaid && tab.hasBatchCollection" class="px-3 py-3">
                                         <input
                                             type="checkbox"
                                             :checked="isSelected(type, row.id)"
@@ -274,12 +277,13 @@ const odooErrorTarget = ref(null);
                                     <td class="px-3 py-3 cvr-text-primary">{{ row.currency }}</td>
                                     <td v-if="canUpdate || canDelete" class="px-3 py-3">
                                         <div class="flex items-center gap-2">
+                                            <RecordLogButton subject="CashExpense" :id="row.id" :company-id="company.id" />
                                             <button v-if="row.user_comment" @click="commentTarget = row" class="cvr-action-btn" title="User Comment">💬</button>
                                             <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Odoo Error">🐞</button>
                                             <button v-if="row.is_fully_integrated_with_odoo" @click="odooRefTarget = row" class="cvr-action-btn" title="Fully Integrated">👍</button>
                                             <Link v-if="canUpdate && row.edit_url" :href="row.edit_url" class="cvr-action-btn" title="Edit">✏️</Link>
                                             <button
-                                                v-if="tab.hasBatchCollection && row.can_mark_paid"
+                                                v-if="canMarkAsPaid && tab.hasBatchCollection && row.can_mark_paid"
                                                 @click="openMarkPaidModalForRow(type, row.id)"
                                                 class="cvr-action-btn"
                                                 title="Mark As Paid"

@@ -151,6 +151,21 @@ class PartnersController
                 'is_other_partner' => $partner->isOtherPartner(),
                 'is_employee' => $partner->isEmployee(),
                 'is_shareholder' => $partner->isShareholder(),
+                /**
+                 * The type keys this row belongs to (a partner can be
+                 * several at once). The page uses these to look the row
+                 * up in the permission matrix, so an Edit button on an
+                 * employee row obeys `employee.update` rather than
+                 * whatever the active tab happens to be.
+                 */
+                'type_keys' => array_values(array_filter([
+                    $partner->isCustomer() ? 'customers' : null,
+                    $partner->isSupplier() ? 'suppliers' : null,
+                    $partner->isEmployee() ? 'employees' : null,
+                    $partner->isShareholder() ? 'shareholders' : null,
+                    $partner->isSubsidiaryCompany() ? 'subsidiary-companies' : null,
+                    $partner->isOtherPartner() ? 'other-partners' : null,
+                ])),
                 'edit_url' => route('partners.edit', ['company' => $company->id, 'partner' => $partner->id]),
                 'delete_url' => route('partners.destroy', ['company' => $company->id, 'partner' => $partner->id]),
             ]);
@@ -164,14 +179,79 @@ class PartnersController
             'companyHasOdoo' => $company->hasOdooIntegrationCredentials(),
             'indexUrl' => route('partners.index', ['company' => $company->id]),
             'createUrl' => route('partners.create', ['company' => $company->id]),
-            'permissions' => [
-                'update' => hasAuthFor('update customers'),
-                // No dedicated delete permission exists in the original app —
-                // 'update customers' gated both edit and (implicitly) delete
-                // there too, so the same single permission is used here.
-                'delete' => hasAuthFor('update customers'),
-            ],
+            /**
+             * ⚠️ REAL BUG FIXED HERE (2026-08 permissions audit, F-05):
+             *
+             * This screen serves SIX partner types, but every one of
+             * them was gated by the single 'update customers'
+             * permission — so anyone allowed to edit a customer could
+             * also edit and delete employees and shareholders, the most
+             * sensitive records in the module. Delete had no permission
+             * of its own, and the Create button had none at all.
+             *
+             * Rights are now resolved per type from the registry. The
+             * frontend picks the entry matching the active tab, and
+             * RoutePermissionMap enforces the same set on the server.
+             */
+            'permissions' => self::permissionMatrix(),
+            'activePermissions' => self::permissionsForType($type),
         ]);
+    }
+
+    /**
+     * URL type segment → permission module.
+     */
+    private const TYPE_MODULES = [
+        'customers' => 'customer',
+        'suppliers' => 'supplier',
+        'employees' => 'employee',
+        'shareholders' => 'shareholder',
+        'subsidiary-companies' => 'subsidiary_company',
+        'other-partners' => 'other_partner',
+    ];
+
+    /**
+     * Per-type create/update/delete rights, so the page can gate each
+     * tab independently.
+     *
+     * @return array<string, array{create:bool, update:bool, delete:bool}>
+     */
+    private static function permissionMatrix(): array
+    {
+        $matrix = [];
+
+        foreach (self::TYPE_MODULES as $type => $module) {
+            $matrix[$type] = [
+                'view' => hasAuthFor("{$module}.view"),
+                'create' => hasAuthFor("{$module}.create"),
+                'update' => hasAuthFor("{$module}.update"),
+                'delete' => hasAuthFor("{$module}.delete"),
+            ];
+        }
+
+        return $matrix;
+    }
+
+    /**
+     * Rights for the tab currently on screen. The "all" tab shows every
+     * type at once, so a control is offered when the user may perform
+     * that action on at least one type — the row-level buttons are then
+     * gated by the row's own type in the page.
+     */
+    private static function permissionsForType(string $type): array
+    {
+        $matrix = self::permissionMatrix();
+
+        if (isset($matrix[$type])) {
+            return $matrix[$type];
+        }
+
+        return [
+            'view' => (bool) collect($matrix)->contains(fn ($p) => $p['view']),
+            'create' => (bool) collect($matrix)->contains(fn ($p) => $p['create']),
+            'update' => (bool) collect($matrix)->contains(fn ($p) => $p['update']),
+            'delete' => (bool) collect($matrix)->contains(fn ($p) => $p['delete']),
+        ];
     }
 
     public function create(Company $company)

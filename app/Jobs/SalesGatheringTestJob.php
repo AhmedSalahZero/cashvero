@@ -46,6 +46,14 @@ class SalesGatheringTestJob implements ShouldQueue
 
     public function handle()
     {
+        /**
+         * Bulk import: per-row history here would be thousands of
+         * entries describing one human action ("imported a file"), which
+         * buries the events a person actually cares about. The import
+         * itself is the auditable event, not each row it created.
+         */
+        $activityMute = \App\Support\Activity\ActivityLogger::mute();
+
 		if (in_array($this->modelName, ['LoanSchedule', 'ContractLoanSchedule'], true) && !$this->loanId) {
 			return;
 		}

@@ -15,6 +15,13 @@ class SalesChannelsController
         $items = $company->salesChannels()->orderBy('name')->get();
 
         return \Inertia\Inertia::render('Settings/SimpleMasterList', [
+            // Shared master-list page — each controller supplies its own
+            // module's rights so one screen cannot leak another's.
+            'permissions' => [
+                'canCreate' => hasAuthFor('sales_channel.create'),
+                'canUpdate' => hasAuthFor('sales_channel.update'),
+                'canDelete' => hasAuthFor('sales_channel.delete'),
+            ],
             'company' => ['id' => $company->id],
             'title' => 'Sales Channels',
             'subtitle' => 'Used to categorize customer invoices by sales channel',

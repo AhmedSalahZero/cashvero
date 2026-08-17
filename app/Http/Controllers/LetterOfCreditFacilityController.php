@@ -142,7 +142,7 @@ class LetterOfCreditFacilityController
 		return \Inertia\Inertia::render('LetterOfCreditFacility/Index', [
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
-			'canCreate' => hasAuthFor('create letter of credit facility'),
+			'canCreate' => hasAuthFor('lc_facility.create'),
 			'createUrl' => route('create.letter.of.credit.facility', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
 			'lcTypes' => LcTypes::getAll(),
 			'rows' => $letterOfCreditFacilities->map(function (LetterOfCreditFacility $lcf) use ($company, $financialInstitution) {

@@ -123,9 +123,9 @@ class OverdraftAgainstAssignmentOfContractController
 		$odAgainstAssignmentOfContracts =   $this->applyFilter($request,$odAgainstAssignmentOfContracts) ;
 
 		$lockableAccountType = AccountType::onlyOverdraftAgainstAssignmentOfContract()->first();
-		$canUpdate = hasAuthFor('update overdraft against assignment of contract');
-		$canDelete = hasAuthFor('delete overdraft against assignment of contract');
-		$canCreateRate = hasAuthFor('create overdraft against assignment of contract');
+		$canUpdate = hasAuthFor('overdraft_assignment_contract.update');
+		$canDelete = hasAuthFor('overdraft_assignment_contract.delete');
+		$canCreateRate = hasAuthFor('overdraft_assignment_contract.create');
 
 		$customers = Partner::where('is_customer',1)->onlyThatHaveCustomerContracts()->where('company_id',$company->id)->get();
 		$contracts = [];
@@ -147,7 +147,7 @@ class OverdraftAgainstAssignmentOfContractController
         return \Inertia\Inertia::render('OverdraftAgainstAssignmentOfContract/Index', [
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
-			'canCreate' => hasAuthFor('create overdraft against assignment of contract'),
+			'canCreate' => hasAuthFor('overdraft_assignment_contract.create'),
 			'canUpdate' => $canUpdate,
 			'canDelete' => $canDelete,
 			'canCreateRate' => $canCreateRate,

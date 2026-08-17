@@ -9,6 +9,8 @@ const props = defineProps({
     bankAccounts: Array,
     navUrls: Object,
     backUrl: String,
+    // { canCreate, canUpdate, canDelete, canLock }
+    permissions: { type: Object, default: () => ({}) },
 });
 
 /* ── KPIs (computed client-side from data already on the page) ─── */
@@ -165,21 +167,21 @@ function toggleLock() {
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-2">
                                     <Link
-                                        v-if="account.is_editable"
+                                        v-if="account.is_editable && permissions.canUpdate"
                                         :href="account.edit_url"
                                         class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs"
                                     >
                                         Edit
                                     </Link>
                                     <button
-                                        v-if="account.is_editable"
+                                        v-if="account.is_editable && permissions.canDelete"
                                         @click="confirmDelete(account)"
                                         class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs"
                                     >
                                         Delete
                                     </button>
                                     <button
-                                        v-if="account.is_lockable"
+                                        v-if="account.is_lockable && permissions.canLock"
                                         @click="confirmLockToggle(account)"
                                         class="cvr-action-btn"
                                         :class="account.is_active ? '' : 'cvr-action-btn-danger'"

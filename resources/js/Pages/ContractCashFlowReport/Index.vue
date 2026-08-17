@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { usePermissions } from '@/composables/usePermissions';
 
 const props = defineProps({
     company: Object,
@@ -69,7 +70,12 @@ function submit() {
     router.get(props.urls.result, query);
 }
 
+const { can } = usePermissions();
+
 /* ── Delete confirmation ──────────────────────────────────────── */
+/* Both pages delete a SAVED cash-flow report through the same
+   `delete.cashflow.report` route, so both obey the same key that
+   RoutePermissionMap enforces on it. */
 const deleteTarget = ref(null);
 function destroyReport() {
     router.delete(deleteTarget.value.delete_url, { onFinish: () => { deleteTarget.value = null; } });
@@ -187,7 +193,7 @@ function destroyReport() {
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-1">
                                     <Link :href="r.view_url" class="cvr-action-btn" title="View">✏️</Link>
-                                    <button @click="deleteTarget = r" class="cvr-action-btn-danger cvr-action-btn" title="Delete">🗑️</button>
+                                    <button v-if="can('cash_flow_report.delete')" @click="deleteTarget = r" class="cvr-action-btn-danger cvr-action-btn" title="Delete">🗑️</button>
                                 </div>
                             </td>
                         </tr>

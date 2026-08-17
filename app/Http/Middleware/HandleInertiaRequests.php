@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\Company;
+use App\Support\Permissions\PermissionResolver;
 use App\Support\SidebarMenu;
 use Inertia\Inertia;
 use Inertia\Middleware;
@@ -54,7 +55,31 @@ class HandleInertiaRequests extends Middleware
                  * explicitly so the topbar can gate the Company/User
                  * management icon by it.
                  */
-                'isSuperAdmin' => (bool) $request->user()?->isSuperAdmin(),
+                'isSuperAdmin' => PermissionResolver::isSuperAdmin($request->user()),
+                /**
+                 * The user's role name, so a page can display it. Never
+                 * branch on this for authorization — use can() with a
+                 * permission key, so roles stay reconfigurable without
+                 * touching code.
+                 */
+                'role' => $request->user()?->getRoleName(),
+                /**
+                 * Every canonical permission key this user holds, e.g.
+                 * ['money_received.view', 'cash_expense.create', …].
+                 *
+                 * Shared on every response so the frontend `can()`
+                 * helper answers instantly with no extra request. This
+                 * is ONE cached lookup (Spatie caches the permission
+                 * table; PermissionResolver memoises per request), not
+                 * a query per check.
+                 *
+                 * Inertia::always() so it survives partial reloads —
+                 * without it a page doing a partial visit would receive
+                 * no permissions at all and hide every button.
+                 */
+                'permissions' => Inertia::always(
+                    fn () => PermissionResolver::grantedKeys($request->user())
+                ),
             ],
             /**
              * Real logout URL (POST route('logout')) — the topbar needs
@@ -70,9 +95,10 @@ class HandleInertiaRequests extends Middleware
              * matching the two pages already migrated
              * (CompanyController::index / UserController::index).
              */
-            'superAdminUrls' => $request->user()?->isSuperAdmin() ? [
+            'superAdminUrls' => PermissionResolver::isSuperAdmin($request->user()) ? [
                 'companies' => route('companySection.index'),
                 'users' => route('user.index'),
+                'roles' => route('roles.index'),
             ] : null,
             /**
              * ⚠️ Real bug fixed here (the "notifications don't appear

@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import RecordLogButton from '@/Components/RecordLogButton.vue';
 import { todayDate } from '@/composables/today';
 /* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
    الحماية الحقيقية على السيرفر في الـ Form Request. */
@@ -45,7 +46,8 @@ const rows = computed(() => currentTab.value.paginator?.data || []);
    original's own checkbox column for that tab is commented out too
    — confirmed already-disabled, not a gap this migration introduces.
    See MoneyPaymentController's class docblock. */
-const hasBatchMarkAsPaid = computed(() => props.activeTab === 'payable_cheque');
+const hasBatchMarkAsPaid = computed(() =>
+    props.activeTab === 'payable_cheque' && Boolean(props.permissions.canMarkAsPaid));
 const selectedIds = ref([]);
 watch(() => props.activeTab, () => { selectedIds.value = []; });
 function toggleSelect(id) {
@@ -102,15 +104,6 @@ function goToPage(url) {
 const deleteTarget = ref(null);
 function destroyRow() {
     router.delete(deleteTarget.value.delete_url, { onFinish: () => { deleteTarget.value = null; } });
-}
-
-/* ── Review confirmation ──────────────────────────────────────── */
-const reviewTarget = ref(null);
-function confirmReview() {
-    router.post(reviewTarget.value.review_url, {
-        model_name: 'MoneyPayment',
-        table_name: 'money_payments',
-    }, { onFinish: () => { reviewTarget.value = null; } });
 }
 
 /* ── User comment / Odoo error display ───────────────────────────
@@ -347,20 +340,19 @@ function submitMarkAsPaid() {
                             <!-- Control -->
                             <td class="px-4 py-3 min-w-32">
                                 <div class="flex items-center gap-1 flex-wrap">
+                                    <RecordLogButton subject="MoneyPayment" :id="row.id" :company-id="company.id" />
                                     <button v-if="row.has_comment" @click="commentTarget = row" class="cvr-action-btn" title="User Comment">💬</button>
                                     <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Odoo Error">🐞</button>
                                     <button v-if="row.is_fully_integrated_with_odoo" @click="integratedTarget = row" class="cvr-action-btn" title="Fully Integrated">👍</button>
 
                                     <template v-if="activeTab === 'payable_cheque'">
-                                        <button v-if="permissions.canUpdate" @click="reviewTarget = row" class="cvr-action-btn" title="Reviewed">✅</button>
                                         <Link v-if="!row.is_open_balance" :href="row.edit_url" class="cvr-action-btn" title="Edit Cheque">✏️</Link>
-                                        <button v-if="row.is_due" @click="openMarkAsPaid(row)" class="cvr-action-btn" title="Mark As Paid">🏦</button>
+                                        <button v-if="permissions.canMarkAsPaid && row.is_due" @click="openMarkAsPaid(row)" class="cvr-action-btn" title="Mark As Paid">🏦</button>
                                         <button v-if="!row.is_open_balance && permissions.canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Delete">🗑️</button>
                                     </template>
 
                                     <template v-else>
                                         <template v-if="!row.is_open_balance">
-                                            <button v-if="permissions.canUpdate" @click="reviewTarget = row" class="cvr-action-btn" title="Reviewed">✅</button>
                                             <Link v-if="permissions.canUpdate" :href="row.edit_url" class="cvr-action-btn" title="Edit">✏️</Link>
                                             <button v-if="permissions.canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Delete">🗑️</button>
                                         </template>
@@ -397,17 +389,6 @@ function submitMarkAsPaid() {
                     <div class="flex justify-end gap-2">
                         <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
                         <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Delete</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Review confirmation -->
-            <div v-if="reviewTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Mark this as reviewed?</h2>
-                    <div class="flex justify-end gap-2">
-                        <button @click="reviewTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="confirmReview" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
                     </div>
                 </div>
             </div>

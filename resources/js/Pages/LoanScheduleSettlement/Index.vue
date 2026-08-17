@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { usePermissions } from '@/composables/usePermissions';
 import { todayDate } from '@/composables/today';
 /* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
    الحماية الحقيقية على السيرفر. */
@@ -21,6 +22,12 @@ const props = defineProps({
     backUrl: String,
     navUrls: Object,
 });
+
+const { can } = usePermissions();
+// Settlements are schedule edits — gated by `medium_term_loan.manage_schedule`,
+// the same key RoutePermissionMap enforces on the store/update/
+// delete routes. This page previously had no gating at all.
+const canManage = () => can('medium_term_loan.manage_schedule');
 
 const isEdit = !!props.editingSettlement;
 
@@ -164,7 +171,7 @@ const visibleSettlements = computed(() =>
                             </p>
                         </div>
                         <div class="flex gap-2">
-                            <button type="submit" :disabled="submitting" class="cvr-btn-primary px-4 py-2 rounded">
+                            <button v-if="canManage()" type="submit" :disabled="submitting" class="cvr-btn-primary px-4 py-2 rounded">
                                 {{ submitting ? 'Saving...' : 'Save' }}
                             </button>
                             <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">Back To Loan Schedule</Link>
@@ -196,8 +203,8 @@ const visibleSettlements = computed(() =>
                                 <!-- Only the LAST settlement is editable/deletable —
                                      confirmed from the original's @if($loop->last) guard. -->
                                 <div v-if="s.id === lastSettlementId" class="flex items-center gap-2">
-                                    <Link :href="s.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</Link>
-                                    <button @click="confirmDelete(s)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
+                                    <Link v-if="canManage()" :href="s.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</Link>
+                                    <button v-if="canManage()" @click="confirmDelete(s)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
                                 </div>
                             </td>
                         </tr>

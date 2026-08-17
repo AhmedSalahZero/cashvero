@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import RecordLogButton from '@/Components/RecordLogButton.vue';
 
 const props = defineProps({
     company: Object,
@@ -9,6 +10,9 @@ const props = defineProps({
     filterDates: Object,
     lcTypes: Object,     // { 'sight-lc': 'Sight LC', ... }
     createUrls: Object,  // { 'lc-facility': url, 'hundred-percentage-cash-cover': url }
+    // { canCreate, canUpdate, canDelete, canSettle }
+    // This page previously had no permission gating at all.
+    permissions: { type: Object, default: () => ({}) },
     sightLcTab: Object,        // { rows: paginator }
     deferredTab: Object,
     cashAgainstDocumentTab: Object,
@@ -260,8 +264,8 @@ const commentTarget = ref(null);
                     </button>
                 </div>
                 <div class="flex items-center gap-2">
-                    <Link :href="createUrls['lc-facility']" class="cvr-btn-copper px-3 py-1.5 rounded text-sm">+ Via LC Facility</Link>
-                    <Link :href="createUrls['hundred-percentage-cash-cover']" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">+ 100% Cash Cover</Link>
+                    <Link v-if="permissions.canCreate" :href="createUrls['lc-facility']" class="cvr-btn-copper px-3 py-1.5 rounded text-sm">+ Via LC Facility</Link>
+                    <Link v-if="permissions.canCreate" :href="createUrls['hundred-percentage-cash-cover']" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">+ 100% Cash Cover</Link>
                 </div>
             </div>
 
@@ -315,10 +319,11 @@ const commentTarget = ref(null);
                             <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.due_date_formatted }}</td>
                             <td class="px-3 py-3">
                                 <div class="flex items-center gap-1.5 flex-wrap">
+                                    <RecordLogButton subject="LetterOfCreditIssuance" :id="row.id" :company-id="company.id" />
                                     <button v-if="row.has_comment" @click="commentTarget = row" class="cvr-action-btn" title="User Comment">💬</button>
-                                    <button v-if="row.is_running" @click="openExpenses(row)" class="cvr-action-btn" title="Expenses">💵</button>
-                                    <button @click="openPay(row)" class="cvr-action-btn" title="Apply Payment">💰</button>
-                                    <button v-if="row.is_paid" @click="openBackToRunning(row)" class="cvr-action-btn" title="Back To Running">↩️</button>
+                                    <button v-if="permissions.canUpdate && row.is_running" @click="openExpenses(row)" class="cvr-action-btn" title="Expenses">💵</button>
+                                    <button v-if="permissions.canSettle" @click="openPay(row)" class="cvr-action-btn" title="Apply Payment">💰</button>
+                                    <button v-if="permissions.canSettle && row.is_paid" @click="openBackToRunning(row)" class="cvr-action-btn" title="Back To Running">↩️</button>
 
                                     <!-- Client-requested (2026-08-11): once
                                          an LC is paid, Edit and Delete no
@@ -326,8 +331,8 @@ const commentTarget = ref(null);
                                          Running" (above) is the correct way
                                          to undo a payment before editing or
                                          removing it. -->
-                                    <Link v-if="!row.is_paid" :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</Link>
-                                    <button v-if="!row.is_paid" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
+                                    <Link v-if="permissions.canUpdate && !row.is_paid" :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</Link>
+                                    <button v-if="permissions.canDelete && !row.is_paid" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
                                 </div>
                             </td>
                         </tr>
@@ -592,8 +597,8 @@ const commentTarget = ref(null);
                                 <td class="px-3 py-2 cvr-num">{{ e.amount_formatted }}</td>
                                 <td class="px-3 py-2">
                                     <div class="flex items-center gap-2">
-                                        <button @click="openEditExpense(e)" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</button>
-                                        <button @click="confirmDeleteExpense(e)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
+                                        <button v-if="permissions.canUpdate" @click="openEditExpense(e)" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</button>
+                                        <button v-if="permissions.canUpdate" @click="confirmDeleteExpense(e)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
                                     </div>
                                 </td>
                             </tr>

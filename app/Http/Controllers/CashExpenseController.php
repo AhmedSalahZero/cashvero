@@ -199,9 +199,11 @@ class CashExpenseController
 		return \Inertia\Inertia::render('CashExpense/Index', [
 			'company' => ['id' => $company->id],
 			'activeTab' => $activeTab,
-			'canCreate' => hasAuthFor('create cash expenses'),
-			'canUpdate' => hasAuthFor('update cash expenses'),
-			'canDelete' => hasAuthFor('delete cash expenses'),
+			'canCreate' => hasAuthFor('cash_expense.create'),
+			'canUpdate' => hasAuthFor('cash_expense.update'),
+			'canDelete' => hasAuthFor('cash_expense.delete'),
+			// Marking a payable cheque / outgoing transfer as paid.
+			'canMarkAsPaid' => hasAuthFor('cash_expense.mark_as_paid'),
 			'outgoingTransferTab' => fn () => $buildTab(CashExpense::OUTGOING_TRANSFER, __('Outgoing Transfer'), true),
 			'cashPaymentTab' => fn () => $buildTab(CashExpense::CASH_PAYMENT, __('Cash Payment'), false),
 			'payableChequeTab' => fn () => $buildTab(CashExpense::PAYABLE_CHEQUE, __('Payable Cheques'), true),
@@ -501,11 +503,18 @@ class CashExpenseController
 		 * * التعديل معمول كـ حذف ثم إنشاء
 		 * * فلازم يكون كله في ترانزاكشن واحدة
 		 */
-		OdooSync::transaction(function () use ($company, $request, $cashExpense) {
-			$cashExpense->deleteRelations();
-			$cashExpense->delete();
+		/**
+		 * Wrapped so the delete+create above records as the single edit it
+		 * is, and this record's history follows it onto the new row.
+		 * See App\Support\Activity\ActivityLogger::asUpdate().
+		 */
+		\App\Support\Activity\ActivityLogger::asUpdate($cashExpense, function () use ($company, $request, $cashExpense) {
+			OdooSync::transaction(function () use ($company, $request, $cashExpense) {
+				$cashExpense->deleteRelations();
+				$cashExpense->delete();
 
-			$this->storeWithinTransaction($company, $request);
+				$this->storeWithinTransaction($company, $request);
+			});
 		});
 
 		 $activeTab = $newType;

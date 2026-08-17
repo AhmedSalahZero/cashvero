@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\RecordActivityController;
+
 use App\Http\Controllers\DeleteAllRowsFromCaching;
 use App\Http\Controllers\DeleteMultiRowsFromCaching;
 use App\Http\Controllers\getUploadPercentage;
@@ -55,10 +57,52 @@ Route::middleware([])->group(function () {
                 Route::get('/edit/{company?}', 'UsersAndPermissionsController@edit')->middleware('isCashManagement')->name('edit');
                 Route::post('/update', 'UsersAndPermissionsController@update')->name('update');
             });
+
+            /**
+             * Role Management — create roles and decide what each one
+             * can do. Guarded centrally by EnforcePermission through
+             * RoutePermissionMap (role.view / role.create / role.update
+             * / role.delete); the explicit `permission:` middleware here
+             * is belt-and-braces so the requirement is visible at the
+             * route definition and survives any future map edit.
+             */
+            /**
+             * ⚠️ The second URL segment is deliberately a literal verb,
+             * never a bare {role} id.
+             *
+             * canViewCurrentCompany reads `Request()->segment(2)` and
+             * treats it as a company id whenever it is numeric — which
+             * only works because every URL normally carries a /{locale}
+             * prefix (hideDefaultLocaleInURL is false). A route shaped
+             * `roles/{role}/...` puts a number in that position the
+             * moment the prefix is absent, and the middleware then 403s
+             * on a company id that was never a company id.
+             *
+             * `roles/edit/{role}` keeps segment 2 non-numeric in every
+             * configuration. This mirrors the shape the app already uses
+             * elsewhere, e.g. `financial-institutions/edit/{financialInstitution}`.
+             */
+            Route::group(['prefix' => 'roles', 'as' => 'roles.'], function () {
+                Route::get('/all/{company?}', 'RoleController@index')->middleware('permission:role.view')->name('index');
+                Route::get('/create/{company?}', 'RoleController@create')->middleware('permission:role.create')->name('create');
+                Route::post('/store/{company?}', 'RoleController@store')->middleware('permission:role.create')->name('store');
+                Route::get('/edit/{role}/{company?}', 'RoleController@edit')->middleware('permission:role.update')->name('edit');
+                Route::put('/update/{role}/{company?}', 'RoleController@update')->middleware('permission:role.update')->name('update');
+                Route::delete('/destroy/{role}/{company?}', 'RoleController@destroy')->middleware('permission:role.delete')->name('destroy');
+            });
             Route::get('/', 'HomeController@index')->name('home');
 
             Route::prefix('{company}')->group(function () {
                 Route::get('update-currency-account-based-on-currency/{financialInstitution}', 'UpdateCurrentAccountBasedOnCurrencyController@index')->name('update.current.account.based.on.currency');
+
+                /**
+                 * Per-record history, read by the timeline modal.
+                 * Authorization is derived from the subject's own module
+                 * inside the controller (you may read the log of what you
+                 * may view), which is why this sits in PUBLIC_ROUTES —
+                 * the map cannot express "depends on the {subject}".
+                 */
+                Route::get('record-activity/{subject}/{id}', RecordActivityController::class)->name('record.activity');
 
                 Route::get('checkIfJobFinished/{modelName}', 'SalesGatheringTestController@activeJob')->name('active.job');
 
@@ -78,7 +122,14 @@ Route::middleware([])->group(function () {
 
                 Route::get('uploading/{model}/{loanId?}', 'SalesGatheringController@index')->name('view.uploading');
 
-                Route::get('Truncate/{model}', 'DeletingClass@truncate')->name('truncate');
+                /**
+                 * ⚠️ Was `Route::get(...)` — a GET request that
+                 * mass-deleted a table, triggerable from any external
+                 * page with no CSRF token (2026-08 audit, F-02).
+                 * DELETE puts it behind VerifyCsrfToken; the controller
+                 * whitelists {model} and demands a bulk-delete right.
+                 */
+                Route::delete('Truncate/{model}', 'DeletingClass@truncate')->name('truncate');
                 Route::delete('DeleteMultipleRows/{model}', 'DeletingClass@multipleRowsDeleting')->name('multipleRowsDelete');
                 Route::delete('delete-model', [DeleteSingleRecordController::class, '__invoke'])->name('delete.model');
 
@@ -683,7 +734,6 @@ Route::middleware([])->group(function () {
                     Route::get('get-partners-based-on-type/{currencyName}', 'MoneyReceivedController@getPartnersBasedOnCurrency');
                     Route::get('get-beneficiary-name-from-lg-issuance-based-on-currency', 'LetterOfGuaranteeIssuanceController@getBeneficiaryNameByCurrency')->name('get.beneficiary.name.by.currency');
                     Route::get('get-bank-name-from-lg-issuance-based-on-currency', 'LetterOfGuaranteeIssuanceController@getBankNameByCurrency')->name('get.bank.name.by.currency');
-                    Route::post('confirmed-reviewed/{model}', 'MoneyReceivedController@markAsConfirmed')->name('confirmed.review');
                     
                     Route::get('get-interest-rate-for-financial-institution-id', 'FinancialInstitutionController@getInterestRateForFinancialInstitution')->name('get.interest.rate.for.financial.institution.id');
 

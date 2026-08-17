@@ -217,9 +217,9 @@ class BuyOrSellCurrenciesController
             'bankToSafeTab' => fn () => $buildTab(BuyOrSellCurrency::BANK_TO_SAFE),
             'safeToSafeTab' => fn () => $buildTab(BuyOrSellCurrency::SAFE_TO_SAFE),
             'searchValue' => $request->get('value'),
-            'canCreate' => hasAuthFor('create buy or sell currency'),
-            'canUpdate' => hasAuthFor('update buy or sell currency'),
-            'canDelete' => hasAuthFor('delete buy or sell currency'),
+            'canCreate' => hasAuthFor('buy_or_sell_currency.create'),
+            'canUpdate' => hasAuthFor('buy_or_sell_currency.update'),
+            'canDelete' => hasAuthFor('buy_or_sell_currency.delete'),
             'indexUrl' => route('buy-or-sell-currencies.index', ['company' => $company->id]),
             'createUrl' => route('buy-or-sell-currencies.create', ['company' => $company->id]),
         ]);
@@ -383,11 +383,18 @@ class BuyOrSellCurrenciesController
 		 * * التعديل معمول كـ حذف ثم إنشاء
 		 * * فلازم يكون كله في ترانزاكشن واحدة
 		 */
-		return OdooSync::transaction(function () use ($company, $request, $buyOrSellCurrency) {
-			$buyOrSellCurrency->deleteRelations();
-			$buyOrSellCurrency->delete();
+		/**
+		 * Wrapped so the delete+create above records as the single edit it
+		 * is, and this record's history follows it onto the new row.
+		 * See App\Support\Activity\ActivityLogger::asUpdate().
+		 */
+		return \App\Support\Activity\ActivityLogger::asUpdate($buyOrSellCurrency, function () use ($company, $request, $buyOrSellCurrency) {
+			return OdooSync::transaction(function () use ($company, $request, $buyOrSellCurrency) {
+				$buyOrSellCurrency->deleteRelations();
+				$buyOrSellCurrency->delete();
 
-			return $this->storeWithinTransaction($company,$request);
+				return $this->storeWithinTransaction($company,$request);
+			});
 		});
 		// $activeTab = $type ;
 		// return redirect()->route('buy-or-sell-currencies.index',['company'=>$company->id,'active'=>$activeTab])->with('success',__('Item Has Been Updated Successfully'));

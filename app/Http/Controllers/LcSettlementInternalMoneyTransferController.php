@@ -69,9 +69,9 @@ class LcSettlementInternalMoneyTransferController
             'company' => ['id' => $company->id, 'name' => $company->getName()],
             'transfers' => $transfers,
             'filterDates' => ['startDate' => $startDate, 'endDate' => $endDate],
-            'canCreate' => auth()->user()->can('create lc settlement internal transfer'),
-            'canUpdate' => auth()->user()->can('update lc settlement internal transfer'),
-            'canDelete' => auth()->user()->can('delete lc settlement internal transfer'),
+            'canCreate' => auth()->user()->can('lc_settlement_transfer.create'),
+            'canUpdate' => auth()->user()->can('lc_settlement_transfer.update'),
+            'canDelete' => auth()->user()->can('lc_settlement_transfer.delete'),
             'urls' => [
                 'create' => route('lc-settlement-internal-money-transfers.create', ['company' => $company->id]),
                 'index' => route('lc-settlement-internal-money-transfers.index', ['company' => $company->id]),
@@ -199,11 +199,18 @@ class LcSettlementInternalMoneyTransferController
          * * التعديل معمول كـ حذف ثم إنشاء
          * * فلازم يكون كله في ترانزاكشن واحدة
          */
-        OdooSync::transaction(function () use ($company, $request, $lcSettlementInternalTransfer) {
-            $lcSettlementInternalTransfer->deleteRelations();
-            $lcSettlementInternalTransfer->delete();
+        /**
+         * Wrapped so the delete+create above records as the single edit it
+         * is, and this record's history follows it onto the new row.
+         * See App\Support\Activity\ActivityLogger::asUpdate().
+         */
+        \App\Support\Activity\ActivityLogger::asUpdate($lcSettlementInternalTransfer, function () use ($company, $request, $lcSettlementInternalTransfer) {
+	        OdooSync::transaction(function () use ($company, $request, $lcSettlementInternalTransfer) {
+	            $lcSettlementInternalTransfer->deleteRelations();
+	            $lcSettlementInternalTransfer->delete();
 
-            $this->storeWithinTransaction($company, $request);
+	            $this->storeWithinTransaction($company, $request);
+	        });
         });
 
         return redirect()->route('lc-settlement-internal-money-transfers.index', ['company' => $company->id])

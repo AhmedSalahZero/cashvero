@@ -224,6 +224,20 @@ class LetterOfGuaranteeIssuanceController
 				LetterOfGuaranteeIssuance::HUNDRED_PERCENTAGE_CASH_COVER => route('create.letter.of.guarantee.issuance', ['company' => $company->id, 'source' => LetterOfGuaranteeIssuance::HUNDRED_PERCENTAGE_CASH_COVER]),
 			],
 			'tabDataUrl' => route('letter.of.guarantee.issuance.tab.data', ['company' => $company->id]),
+			/**
+			 * This screen had NO permission flags at all before the
+			 * Roles & Permissions rollout, even though create/update/
+			 * delete permissions for LG issuance already existed and
+			 * were never checked anywhere (2026-08 audit, F-07).
+			 */
+			'permissions' => [
+				'canCreate' => hasAuthFor('lg_issuance.create'),
+				'canUpdate' => hasAuthFor('lg_issuance.update'),
+				'canDelete' => hasAuthFor('lg_issuance.delete'),
+				'canCancel' => hasAuthFor('lg_issuance.cancel'),
+				'canRenew'  => hasAuthFor('lg_issuance.renew'),
+				'canImport' => hasAuthFor('lg_issuance.import'),
+			],
 			'tabs' => $tabs,
 			'navUrls' => [
 				'home' => route('home', ['company' => $company->id]),
@@ -959,11 +973,18 @@ class LetterOfGuaranteeIssuanceController
          * * فلازم يكون كله في ترانزاكشن واحدة
          * * قبل كده لو أي حاجة ضربت في النص كان الخطاب القديم بيروح والجديد بيتعمل ناقص
          */
-        return OdooSync::transaction(function () use ($company, $request, $letterOfGuaranteeIssuance, $source) {
-            $letterOfGuaranteeIssuance->deleteAllRelations();
-            $letterOfGuaranteeIssuance->delete();
+        /**
+         * Wrapped so the delete+create below records as one edit and
+         * this issuance's history follows it onto the new row.
+         * See App\Support\Activity\ActivityLogger::asUpdate().
+         */
+        return \App\Support\Activity\ActivityLogger::asUpdate($letterOfGuaranteeIssuance, function () use ($company, $request, $letterOfGuaranteeIssuance, $source) {
+            return OdooSync::transaction(function () use ($company, $request, $letterOfGuaranteeIssuance, $source) {
+                $letterOfGuaranteeIssuance->deleteAllRelations();
+                $letterOfGuaranteeIssuance->delete();
 
-            return $this->storeWithinTransaction($company, $request, $source);
+                return $this->storeWithinTransaction($company, $request, $source);
+            });
         });
 
         // return redirect()->route('view.letter.of.guarantee.issuance', ['company'=>$company->id,'active'=>$request->get('lg_type')])->with('success', __('Data Store Successfully'));

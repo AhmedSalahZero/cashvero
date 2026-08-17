@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import RecordLogButton from '@/Components/RecordLogButton.vue';
 
 const page = usePage();
 const flashErrors = computed(() => page.props.errors || {});
@@ -173,6 +174,7 @@ function submitRenew() {
                             <td class="px-3 py-3 cvr-text-secondary">{{ row.interest_rate_formatted }} %</td>
                             <td class="px-3 py-3">
                                 <div class="flex items-center gap-1.5 flex-wrap">
+                                    <RecordLogButton subject="FactoringContract" :id="row.id" :company-id="company.id" />
                                     <button
                                         v-if="canUpdate"
                                         @click="openRenew(row)"

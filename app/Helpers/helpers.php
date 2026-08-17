@@ -1930,9 +1930,34 @@ function formatAccumulatedNetCash(array $netCashItems, array $dates)
     }
     return $formattedResult ;
 }
+/**
+ * Does the current user hold this permission?
+ *
+ * Accepts EITHER a canonical registry key ('cash_expense.delete') or a
+ * legacy permission name ('delete cash expenses'). Registry keys route
+ * through PermissionResolver, which honours Super Admin, role
+ * permissions and per-user overrides, and resolves legacy aliases —
+ * so the two forms agree.
+ *
+ * Prefer the dotted key in new code; the legacy branch exists only for
+ * call sites not yet migrated.
+ *
+ * Null-safe: returns false for a guest instead of fatalling, which
+ * matters for the console and queued jobs.
+ */
 function hasAuthFor($permissionName)
 {
-    return auth()->user()->can($permissionName);
+    $user = auth()->user();
+
+    if (! $user) {
+        return false;
+    }
+
+    if (\App\Support\Permissions\PermissionRegistry::has($permissionName)) {
+        return \App\Support\Permissions\PermissionResolver::allows($user, $permissionName);
+    }
+
+    return $user->can($permissionName);
 }
 function formatArrayAsGroup(array $permissions):array
 {
@@ -2018,19 +2043,6 @@ function getReviewedText(array $reviewedArr)
         $reviewedText = __('No');
     }
     return $reviewedText ;
-}
-function getReviewPermissionName($modelName):string
-{
-    if ($modelName == 'CashExpense') {
-        return 'review cash expenses';
-    }
-    if ($modelName =='MoneyReceived') {
-        return 'review money received';
-    }
-    if ($modelName=='MoneyPayment') {
-        return 'review supplier payments';
-    }
-    throw new \Exception('custom exception .. please add permission name here');
 }
 function AtLeastOnKeyIsTrue(array $items, string $key)
 {

@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { usePermissions } from '@/composables/usePermissions';
 import Pagination from '@/Components/Pagination.vue';
 
 const props = defineProps({
@@ -12,6 +13,8 @@ const props = defineProps({
     indexUrl: String,
     removeUrl: String,
 });
+
+const { can } = usePermissions();
 
 const rows = computed(() => props.paginator?.data || []);
 
@@ -48,7 +51,7 @@ function destroyRow() {
                         <span class="cvr-text-muted text-sm">🔍</span>
                         <input v-model="searchTerm" type="text" placeholder="Search users..." class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
                     </div>
-                    <Link :href="createUrl" class="cvr-btn-copper px-3 py-1.5 rounded text-sm inline-flex items-center gap-1">
+                    <Link v-if="can('user.create')" :href="createUrl" class="cvr-btn-copper px-3 py-1.5 rounded text-sm inline-flex items-center gap-1">
                         + Add
                     </Link>
                 </div>
@@ -75,9 +78,9 @@ function destroyRow() {
                             <td class="px-3 py-3 cvr-text-secondary">{{ row.companies.join(', ') }}</td>
                             <td class="px-3 py-3">
                                 <div class="flex items-center gap-1.5">
-                                    <Link :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</Link>
-                                    <Link :href="row.permissions_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs" title="Permissions">👁</Link>
-                                    <button @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
+                                    <Link v-if="can('user.update')" :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</Link>
+                                    <Link v-if="can('user.assign_roles')" :href="row.permissions_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs" title="Permissions">👁</Link>
+                                    <button v-if="can('user.delete')" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
                                 </div>
                             </td>
                         </tr>
