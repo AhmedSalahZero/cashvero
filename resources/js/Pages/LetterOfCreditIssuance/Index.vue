@@ -72,8 +72,6 @@ const payForm = ref({
     payment_currency: '',
     payment_account_type_id: '',
     payment_account_number_id: '',
-    interest_currency: '',
-    interest_amount: 0,
     lc_remaining_amount: 0,
     lc_type: '',
 });
@@ -107,8 +105,6 @@ function openPay(row) {
         payment_currency: row.payment_currency ?? '',
         payment_account_type_id: row.payment_account_type_id ?? (row.current_account_types[0]?.id ?? ''),
         payment_account_number_id: row.payment_account_number_id ?? '',
-        interest_currency: row.interest_currency ?? '',
-        interest_amount: row.interest_amount ?? 0,
         lc_remaining_amount: row.lc_amount ?? 0,
         lc_type: row.lc_type,
     };
@@ -314,7 +310,7 @@ const commentTarget = ref(null);
                             </td>
                             <td class="px-3 py-3 cvr-text-secondary max-w-[10rem] break-words">{{ row.bank_name }}</td>
                             <td class="px-3 py-3 cvr-text-secondary">{{ row.lc_code }}</td>
-                            <td class="px-3 py-3 cvr-num">{{ row.lc_amount_formatted }}</td>
+                            <td class="px-3 py-3 cvr-num">{{ row.lc_amount_formatted }} <span class="cvr-text-muted">{{ row.lc_currency?.toUpperCase() }}</span></td>
                             <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.issuance_date_formatted }}</td>
                             <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.due_date_formatted }}</td>
                             <td class="px-3 py-3">
@@ -466,18 +462,6 @@ const commentTarget = ref(null);
                                     <option v-for="a in filteredPaymentAccounts" :key="a.id" :value="a.id">{{ a.account_number }}</option>
                                 </select>
                                 <p v-if="payForm.payment_currency && !filteredPaymentAccounts.length" class="text-xs cvr-text-muted mt-1">No accounts in this currency for this bank.</p>
-                            </div>
-                            <div>
-                                <label class="cvr-form-label">Interest Currency *</label>
-                                <select v-model="payForm.interest_currency" class="cvr-input w-full px-3 py-2 rounded">
-                                    <option value="" disabled>Select</option>
-                                    <option :value="payTarget.company_main_currency">{{ payTarget.company_main_currency }}</option>
-                                    <option :value="payTarget.lc_currency">{{ payTarget.lc_currency?.toUpperCase() }}</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="cvr-form-label">Interest Amount</label>
-                                <input v-model="payForm.interest_amount" type="number" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                         </template>
                     </div>

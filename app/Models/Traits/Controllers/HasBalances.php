@@ -210,7 +210,23 @@ trait HasBalances
 						$currentDebit = $isCustomer ? 0 : $currentAmount;
 						$currentCredit = $isCustomer ? $currentAmount : 0 ;
 						$invoiceNumbers = implode('/',$moneyModel->settlements->pluck('invoice.invoice_number')->toArray());
-						$currentComment = method_exists($fullMoneyModelName,'generateComment')  ? $fullMoneyModelName::generateComment($moneyModel,app()->getLocale(),$invoiceNumbers,'') : __('LC Settlement Paid Invoices [ :numbers ]',['numbers'=>$invoiceNumbers],app()->getLocale());
+						/**
+						 * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-17): this checked
+						 * method_exists($fullMoneyModelName, ...) — but $fullMoneyModelName
+						 * is fixed to MoneyPayment for the whole loop (from
+						 * SupplierInvoice::MONEY_MODEL_NAME), even on the rows in this
+						 * same collection that are actually LetterOfCreditIssuance (merged
+						 * in just above for SupplierInvoice). Since MoneyPayment::generateComment()
+						 * always exists, the check was always true and always called
+						 * MoneyPayment::generateComment($moneyModel, ...) even when $moneyModel
+						 * was an LC row — crashing, since that method is type-hinted to
+						 * MoneyPayment and its body calls MoneyPayment-only methods
+						 * (isPayableCheque(), isCashPayment(), etc.) that don't exist on LC
+						 * Issuance. The "LC Settlement..." fallback right here was clearly
+						 * written for exactly this case; it just could never be reached.
+						 * Checking the row's OWN class fixes that.
+						 */
+						$currentComment = method_exists($moneyModel,'generateComment')  ? $moneyModel::generateComment($moneyModel,app()->getLocale(),$invoiceNumbers,'') : __('LC Settlement Paid Invoices [ :numbers ]',['numbers'=>$invoiceNumbers],app()->getLocale());
 						$currentData = []; 
 						$currentData['date'] = $dateReceivingFormatted;
 						$currentData['document_type'] = $moneyModelType;
@@ -264,7 +280,17 @@ trait HasBalances
 						  $currentDebit = $isCustomer ? 0 : $currentAmount;
 						  $currentCredit = $isCustomer ? $currentAmount : 0 ;
 						  $invoiceNumbers = implode('/',$moneyModel->settlements->pluck('invoice.invoice_number')->toArray());
-						  $currentComment = $fullMoneyModelName::generateComment($moneyModel,app()->getLocale(),$invoiceNumbers,'');
+						  /**
+						   * * Same fix as the other generateComment() call above in this
+						   * * method — guard against the row's own class, not the fixed
+						   * * $fullMoneyModelName, so an LC row here can't hit the same crash.
+						   * * (Currently unreachable for LC specifically, since
+						   * * LetterOfCreditIssuance::getReceivingOrPaymentCurrency() and
+						   * * ::getInvoiceCurrency() always return the same value, so this
+						   * * elseif can never be true when the sibling if() above was false —
+						   * * fixed anyway so it isn't a live trap if that ever changes.)
+						   */
+						  $currentComment = method_exists($moneyModel,'generateComment') ? $moneyModel::generateComment($moneyModel,app()->getLocale(),$invoiceNumbers,'') : __('LC Settlement Paid Invoices [ :numbers ]',['numbers'=>$invoiceNumbers],app()->getLocale());
 						  $currentData = []; 
 						  $currentData['date'] = $dateReceivingFormatted;
 						  $currentData['document_type'] = $moneyModelType;

@@ -203,16 +203,28 @@ protected static function array_sort_type($array)
 	public static function getUserCommentFromModel($stdClass)
 	{
 		$tableName = null ;
-			
-		if ($id = $stdClass->money_received_id) {
+
+		/**
+		 * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-17): same root
+		 * cause as helpers.php's getBankStatementReviewed() /
+		 * getBankStatementComment() — not every bank-statement table has
+		 * all five of these FK columns. medium_term_loan_bank_statements
+		 * only has money_payment_id / loan_schedule_settlement_id, so
+		 * reading money_received_id etc. directly on an MTL row threw
+		 * "Undefined property". `?? null` makes each check safe
+		 * regardless of whether the column exists on that table — same
+		 * pattern the letter_of_guarantee/letter_of_credit checks below
+		 * already used correctly via isset().
+		 */
+		if ($id = ($stdClass->money_received_id ?? null)) {
 			$tableName = 'money_received';
-		} elseif ($id = $stdClass->money_payment_id) {
+		} elseif ($id = ($stdClass->money_payment_id ?? null)) {
 			$tableName = 'money_payments';
-		} elseif ($id = $stdClass->cash_expense_id) {
+		} elseif ($id = ($stdClass->cash_expense_id ?? null)) {
 			$tableName = 'cash_expenses';
-		} elseif ($id = $stdClass->buy_or_sell_currency_id) {
+		} elseif ($id = ($stdClass->buy_or_sell_currency_id ?? null)) {
 			$tableName = 'buy_or_sell_currencies';
-		} elseif ($id = $stdClass->internal_money_transfer_id) {
+		} elseif ($id = ($stdClass->internal_money_transfer_id ?? null)) {
 			$tableName = 'internal_money_transfers';
 		}
 		// elseif($id = $stdClass->letter_of_guarantee_issuance_id){

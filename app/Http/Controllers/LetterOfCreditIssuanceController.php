@@ -269,8 +269,6 @@ class LetterOfCreditIssuanceController
             'payment_currency' => $lc->getPaymentCurrency(),
             'payment_account_type_id' => $lc->getPaymentAccountTypeId(),
             'payment_account_number_id' => $lc->getPaymentAccountNumberId(),
-            'interest_currency' => $lc->getInterestCurrency(),
-            'interest_amount' => $lc->getInterestAmount(),
             'current_account_types' => AccountType::onlyCurrentAccount()->get()->map(fn ($t) => ['id' => $t->id, 'name' => $t->getName()])->values(),
             'payment_accounts' => $currentAccountsForBank,
             // Expenses modal data
@@ -870,6 +868,31 @@ class LetterOfCreditIssuanceController
         }
         $commentEn = __('LC Issuance [:lcType] [:transactionName]', ['lcType' => $lcType, 'transactionName' => $transactionName], 'en');
         $commentAr = __('LC Issuance [:lcType] [:transactionName]', ['lcType' => $lcType, 'transactionName' => $transactionName], 'ar');
+        /**
+         * ⚠️ REVERTED (per audit, 2026-08-18) — an earlier change here
+         * this same day tagged these rows with $currency (the LC's own
+         * currency) and stored the raw, unconverted $lcAmount, to fix
+         * the LG&LC Dashboard's empty LC charts for a foreign-currency
+         * LC. That broke LetterOfCreditFacilityController::
+         * updateOutstandingBalanceAndLimits() — the calculation behind
+         * this Issuance form's own "Total LC Outstanding Balance" /
+         * "LC Type Outstanding Balance" / Room fields — which
+         * deliberately sums letter_of_credit_statements.end_balance
+         * across a facility WITHOUT filtering by currency (see its own
+         * "THIRD AND FINAL ATTEMPT" comment), because every row's
+         * debit/credit is required to already be in the company's main
+         * functional currency, regardless of the `currency` column's
+         * tag. Storing the LC's raw, unconverted amount here broke
+         * that: a facility with LCs issued both before and after that
+         * change now mixes converted and unconverted amounts in the
+         * same running total, which is what surfaced as "Outstanding
+         * not reading," "reads the LC amount instead of the actual
+         * outstanding," and a wrong sign. Reverted to the original,
+         * working values — $lcAmountInMainCurrency (converted) and
+         * $lcCashCoverOrCdOrTdCurrency — until the Dashboard's
+         * per-currency display can be fixed without changing what this
+         * shared table's numbers mean everywhere else that reads them.
+         */
         $model->handleLetterOfCreditStatement($financialInstitutionId, $source, $letterOfCreditFacilityId, $lcType, $company->id, $issuanceDate, 0, 0, $lcAmountInMainCurrency, $lcCashCoverOrCdOrTdCurrency, 0, $cdOrTdId, 'credit-lc-amount', $commentEn, $commentAr);
         $commentEn = __('LC Issuance Cash Cover [:lcType] [:transactionName]', ['lcType' => $lcType, 'transactionName' => $transactionName], 'en');
         $commentAr = __('LC Issuance Cash Cover [:lcType] [:transactionName]', ['lcType' => $lcType, 'transactionName' => $transactionName], 'ar');
@@ -1103,8 +1126,6 @@ class LetterOfCreditIssuanceController
         $paymentAccountTypeId = $request->get('payment_account_type_id');
         $paymentAccountNumberId = $request->get('payment_account_number_id');
         $lcRemainingAmount = $request->get('lc_remaining_amount');
-        $interestAmount = number_unformat($request->get('interest_amount', 0));
-        $interestCurrency = $request->get('interest_currency');
         $financialInstitutionId = $letterOfCreditIssuance->financial_institution_id;
         $financialDuration = $letterOfCreditIssuance->getFinancialDuration();
         $supplierName = $letterOfCreditIssuance->getSupplierName();
@@ -1118,8 +1139,6 @@ class LetterOfCreditIssuanceController
             'payment_currency' => $paymentCurrency,
             'payment_account_type_id' => $paymentAccountTypeId,
             'payment_account_number_id' => $paymentAccountNumberId,
-            'interest_amount' => $interestAmount,
-            'interest_currency' => $interestCurrency
         ]);
 
         $letterOfCreditFacility = $letterOfCreditIssuance->letterOfCreditFacility;
@@ -1137,6 +1156,14 @@ class LetterOfCreditIssuanceController
         LcOverdraftBankStatement::deleteButTriggerChangeOnLastElement($letterOfCreditIssuance->lcOverdraftBankStatements->where('source', $source)->where('is_credit', 1));
 
         $letterOfCreditFacilityId = $letterOfCreditFacility ? $letterOfCreditFacility->id : 0;
+        /**
+         * ⚠️ REVERTED (per audit, 2026-08-18) — reverted alongside the
+         * store() change above, for the same reason: this payment's
+         * debit needs to land in the same facility-wide, main-currency
+         * running total that updateOutstandingBalanceAndLimits() sums
+         * without filtering by currency. Restored to the original
+         * currency-selection logic.
+         */
         $letterOfCreditCurrency = $source == LetterOfCreditIssuance::AGAINST_TD || $source == LetterOfCreditIssuance::AGAINST_CD ? $letterOfCreditIssuance->getTdOrCdCurrency($source, $company->id) : $letterOfCreditIssuance->getLcCashCoverCurrency();
         $commentEn = __('LC Payment [:lcType] [:transactionName]', ['lcType' => $lcType, 'transactionName' => $transactionName], 'en');
         $commentAr = __('LC Payment [:lcType] [:transactionName]', ['lcType' => $lcType, 'transactionName' => $transactionName], 'ar');
@@ -1145,17 +1172,17 @@ class LetterOfCreditIssuanceController
         $commentAr = __('LC Cash Cover Payment [:lcType] [:transactionName]', ['lcType' => $lcType, 'transactionName' => $transactionName], 'ar');
         $letterOfCreditIssuance->handleLetterOfCreditCashCoverStatement($financialInstitutionId, $source, $letterOfCreditFacilityId, $lcType, $company->id, $paymentDate, 0, 0, $cashCoverAmount, $letterOfCreditIssuance->getLcCashCoverCurrency(), 0, LetterOfCreditIssuance::FOR_PAID);
         /**
-         * * الفوايد مصروف بنكي زي العمولة ومصاريف الإصدار ، فبتتخصم من نفس
-         * * حساب المصاريف والعمولات بتاع الاعتماد.
-         * *
-         * * ودي الحالة الوحيدة اللي فيها حساب أصلا: لما التمويل من البنك
-         * * الـ merge اللي فوق بيصفّر payment_account_number_id ، والدالة
-         * * بتاخد int مش nullable فكان بيحصل TypeError (صفحة 500)
+         * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-18): interest for a
+         * bank-financed LC used to be entered right here, at draw/"Mark as
+         * Paid" time — but the actual interest a bank charges depends on
+         * how many days pass until the company actually settles with the
+         * bank, which isn't known yet at this point. It's now entered
+         * per-settlement instead, on the LC Settlement Internal Transfer
+         * screen's "Mark As Settle" action — see LcSettlementInternalMoneyTransfer::
+         * handleInterestSettlement(). Self-financed LCs never had real
+         * interest to begin with (client-confirmed) — nothing replaces this
+         * for that case.
          */
-        $interestAccountId = $letterOfCreditIssuance->getFeesAndCommissionAccountId() ?: $paymentAccountNumberId;
-        if ($interestAmount > 0 && $interestAccountId) {
-            $letterOfCreditIssuance->storeCurrentAccountLcInterestPaymentCreditBankStatement($paymentDate, $interestAmount, $interestAccountId, 0, 1, __('LC Interest Payment [ :supplierName ] [ :lcType ] Transaction Name [ :transactionName ]', ['lcType' => __($lcType, [], 'en'), 'supplierName' => $supplierName, 'transactionName' => $transactionName], 'en'), __('LC Payment [ :supplierName ] [ :lcType ] Transaction Name [ :transactionName ]', ['lcType' => __($lcType, [], 'ar'), 'supplierName' => $supplierName, 'transactionName' => $transactionName], 'ar'));
-        }
         if ($source != LetterOfCreditIssuance::HUNDRED_PERCENTAGE_CASH_COVER) {
             $commentEn = __('Post Finance [ :noDays ] Days [ :supplierName ] [ :lcType ] Transaction Name [ :transactionName ]', ['noDays' => $financialDuration, 'supplierName' => $supplierName, 'lcType' => $lcType, 'transactionName' => $transactionName], 'en');
             $commentAr = __('Post Finance [ :noDays ] Days [ :supplierName ] [ :lcType ] Transaction Name [ :transactionName ]', ['noDays' => $financialDuration, 'supplierName' => $supplierName, 'lcType' => $lcType, 'transactionName' => $transactionName], 'ar');

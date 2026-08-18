@@ -155,6 +155,9 @@ class RoutePermissionMap
         'lc-settlement-internal-money-transfers.edit' => 'lc_settlement_transfer.update',
         'lc-settlement-internal-money-transfers.update' => 'lc_settlement_transfer.update',
         'lc-settlement-internal-money-transfers.destroy' => 'lc_settlement_transfer.delete',
+        'lc-settlement-internal-money-transfers.settle-data' => 'lc_settlement_transfer.view',
+        'lc-settlement-internal-money-transfers.settle' => 'lc_settlement_transfer.create',
+        'lc-settlement-internal-money-transfers.reset' => 'lc_settlement_transfer.delete',
 
         /* ──────────────── Currency & exchange rates ─────────────── */
         'buy-or-sell-currencies.index' => 'buy_or_sell_currency.view',

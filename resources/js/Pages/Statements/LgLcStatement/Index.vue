@@ -24,7 +24,7 @@ const props = defineProps({
     urls: Object, // { result, lgOrLcTypes, lcFacilitiesByBank }
 });
 
-const startDate = ref(todayDate());
+const startDate = ref(new Date(new Date().setFullYear(new Date().getFullYear() - 1)).toISOString().slice(0, 10));
 const endDate = ref(todayDate());
 const currency = ref('');
 const financialInstitutionId = ref('');

@@ -577,7 +577,17 @@ class LetterOfCreditFacilityController
         $minLcIssuanceFeesForCurrentLcType  = $letterOfCreditFacility && $selectedLcType && $letterOfCreditFacility->termAndConditionForLcType($selectedLcType) ? $letterOfCreditFacility->termAndConditionForLcType($selectedLcType)->issuance_fees : 0;
 		$lcAmountInMainCurrency = 0;
 		if($isLCFacilitySource && $letterOfCreditFacility){
-			$currencyName = $letterOfCreditFacility->getCurrency();
+			/**
+			 * $currencyName is kept here only for the informational
+			 * 'currency_name' field in the response below — it is no
+			 * longer used to filter the letter_of_credit_statements query
+			 * for LC_FACILITY source (see the query further down for why:
+			 * two earlier attempts both tried to guess a single currency
+			 * to filter by and both failed, because Cash Cover Currency is
+			 * a genuinely free, per-issuance choice that varies across
+			 * issuances against the very same facility).
+			 */
+			$currencyName = $request->get('lcCashCoverCurrency') ?: $company->getMainFunctionalCurrency();
 		}
 		if( $isCdSource && $cdOrTdAccountId){
 			$certificateOfDeposit = CertificatesOfDeposit::find($cdOrTdAccountId);
@@ -615,7 +625,33 @@ class LetterOfCreditFacilityController
 			$accountTypeId = $request->get('accountTypeId');
 			$letterOfCreditStatement = DB::table('letter_of_credit_statements')
 			->where('company_id',$company->id)
-			->where('currency',$currencyName)
+			/**
+			 * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-18), THIRD AND
+			 * FINAL ATTEMPT: two earlier attempts both tried to GUESS which
+			 * single currency value to filter by (the facility's own
+			 * currency, then the company's main currency, then the actual
+			 * submitted Cash Cover Currency) — all three failed, because
+			 * Cash Cover Currency is a genuinely free, PER-ISSUANCE choice.
+			 * Two different LCs against the very same facility can each
+			 * pick a different cash cover currency, so no single currency
+			 * value can ever correctly capture "everything outstanding
+			 * against this facility." The client's own real ledger (LG &
+			 * LC Statement) proves this: it runs ONE continuous balance
+			 * across issuances "AAA", "DDDDDDDD", "QQQQQQQ" together,
+			 * regardless of each one's own cash cover currency — so this
+			 * lookup should match that and stop filtering by currency
+			 * entirely for LC_FACILITY source. This is safe: every row's
+			 * numeric credit/debit is ALREADY always stored in the
+			 * company's main currency regardless of what the `currency`
+			 * column happens to be tagged with (see storeWithinTransaction()'s
+			 * $lcAmountInMainCurrency — deliberately untouched, correct,
+			 * real money-tracking) — so nothing here mixes incompatible
+			 * units by dropping this filter. lc_facility_id + lc_type +
+			 * source already fully scope this to exactly the right rows.
+			 */
+			->when($currentSource != LetterOfCreditIssuance::LC_FACILITY, function($query) use ($currencyName){
+				$query->where('currency',$currencyName);
+			})
 			->where('financial_institution_id',$financialInstitutionId)
 			->when($currentSource == LetterOfCreditIssuance::LC_FACILITY , function( $query) use ($letterOfCreditFacilityId){
 				$query->where('lc_facility_id',$letterOfCreditFacilityId);
@@ -634,8 +670,20 @@ class LetterOfCreditFacilityController
 			$totalLastOutstandingBalanceOfFourTypes += $letterOfCreditStatementEndBalance;
 		}
 		$limit = $letterOfCreditFacility ? $letterOfCreditFacility->getLimit() : 0;
-		$totalLastOutstandingBalanceOfFourTypes =abs($totalLastOutstandingBalanceOfFourTypes) - $lcAmountInMainCurrency;
-		$currentLcOutstanding = abs($currentLcOutstanding)  - $lcAmountInMainCurrency ;
+		/**
+		 * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-18): abs() was
+		 * only ever applied to the raw four-types sum BEFORE subtracting
+		 * this issuance's own amount (the edit-mode "exclude myself" step)
+		 * — so the FINAL figure could still land negative whenever this
+		 * issuance's own amount was larger than everything else combined,
+		 * which is exactly what made Total/Type Outstanding read as a
+		 * negative number in edit mode, and made Room read wrong as a
+		 * direct result. Outstanding is a magnitude — it should never be
+		 * signed — so abs() now wraps the FINAL figure, after the
+		 * subtraction, not before it.
+		 */
+		$totalLastOutstandingBalanceOfFourTypes = abs(abs($totalLastOutstandingBalanceOfFourTypes) - $lcAmountInMainCurrency);
+		$currentLcOutstanding = abs(abs($currentLcOutstanding)  - $lcAmountInMainCurrency) ;
 		 
 		
 		return response()->json([

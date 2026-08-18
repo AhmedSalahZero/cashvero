@@ -209,6 +209,20 @@ async function runLookup() {
             lcType: form.value.lc_type || '',
             source: props.source,
             letterOfCreditFacilityId: form.value.lc_facility_id || '',
+            /**
+             * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-18): Outstanding
+             * Balance is tracked in whatever currency Cash Cover is actually
+             * paid in — a real, user-picked field on this very form
+             * (lc_cash_cover_currency), not something derivable from the
+             * facility or the company's main currency (two earlier guesses
+             * that were both wrong — see the two "REAL BUG FIXED" comments
+             * around $currencyName in updateOutstandingBalanceAndLimits(),
+             * left in place as a record of what didn't work and why). This
+             * sends the actual value the user has chosen, matching exactly
+             * what storeWithinTransaction() itself uses when the record is
+             * saved.
+             */
+            lcCashCoverCurrency: form.value.lc_cash_cover_currency || '',
         });
         if (props.model?.id) params.set('lcIssuanceId', props.model.id);
         const res = await fetch(`${props.lookupUrl}?${params.toString()}`, { headers: { Accept: 'application/json' } });
@@ -238,7 +252,7 @@ async function runLookup() {
         if (thisRequest === lookupRequestToken) lookupLoading.value = false;
     }
 }
-watch(() => [form.value.financial_institution_id, form.value.lc_facility_id, form.value.lc_type], runLookup, { immediate: true });
+watch(() => [form.value.financial_institution_id, form.value.lc_facility_id, form.value.lc_type, form.value.lc_cash_cover_currency], runLookup, { immediate: true });
 
 /* ── Due Date = Issuance Date + LC Duration (Days) — read-only,
    auto-calculated, matches the original's own client-side formula

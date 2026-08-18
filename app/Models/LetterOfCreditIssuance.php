@@ -572,7 +572,33 @@ class LetterOfCreditIssuance extends Model
 	{
 		return $this->hasMany(LcOverdraftBankStatement::class,'lc_issuance_id','id')->orderBy('full_date','desc');
 	}
-	
+	/**
+	 * * كل التسويات (كاملة أو جزئية) اللي اتعملت للقرض ده مع البنك —
+	 * * دي بقت بديل الـ delete القديم؛ الـ Reset بيمسحهم كلهم مرة واحدة،
+	 * * وآخر واحد فيهم هو اللي شاشة الـ Index بتدّي عليه لينك التعديل.
+	 */
+	public function lcSettlementInternalMoneyTransfers()
+	{
+		return $this->hasMany(LcSettlementInternalMoneyTransfer::class,'to_letter_of_credit_issuance_id','id')->orderByDesc('transfer_date')->orderByDesc('id');
+	}
+	public function getLatestLcSettlementInternalMoneyTransfer():?LcSettlementInternalMoneyTransfer
+	{
+		return $this->lcSettlementInternalMoneyTransfers->first();
+	}
+	/**
+	 * * المتبقي فعليًا اللي لسه لازم يتسدد للبنك — أول تسوية بتبدأ من
+	 * * قيمة السحبة الأصلية (LC × (1 − Cash Cover Rate%))، واللي بيتسدد
+	 * * بيقل تلقائي مع كل Debit بيتسجل على كشف حساب الاعتماد.
+	 */
+	public function getRemainingBankSettlementAmount():float
+	{
+		return abs($this->getRemainingBalance());
+	}
+	public function isPendingBankSettlement():bool
+	{
+		return $this->isFinancedByBank() && $this->getStatus() == self::PAID && $this->getRemainingBankSettlementAmount() > 0.01 ;
+	}
+
 	public function handleLcCreditBankStatement(int $lcFacilityId,string $moneyType ,$limit , string $date , $paidAmount,$source,string $commentEn , string $commentAr)
 	{
 	
@@ -774,6 +800,21 @@ class LetterOfCreditIssuance extends Model
 	public function getReceivingOrPaymentMoneyDateFormatted()
 	{
 		return Carbon::make($this->getPaymentDate())->format('d-m-Y');
+	}
+	/**
+	 * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-17): HasBalances::appendBalances()
+	 * treats every row it pulls in for a Supplier Statement — MoneyPayment
+	 * AND LetterOfCreditIssuance alike — as a generic "money model" and
+	 * calls this on all of them. MoneyPayment/MoneyReceived get it from
+	 * IsMoney (via their own advanced_opening_balance_id column, used for
+	 * down-payment settlements). LetterOfCreditIssuance never used that
+	 * trait and has no such column — an LC settlement is never a down
+	 * payment/advance, so this is a plain, always-false stub rather than
+	 * pulling in the whole IsMoney trait for one flag.
+	 */
+	public function isAdvancedOpeningBalance():bool
+	{
+		return false;
 	}
 	public function getType()
 	{

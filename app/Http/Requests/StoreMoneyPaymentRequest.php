@@ -9,6 +9,7 @@ use App\Rules\AmountCanNotBeGreaterThanEndBalanceAtPaymentDate;
 use App\Rules\AtLeaseOneSettlementMustBeExist;
 use App\Rules\ContractDownPaymentRule;
 use App\Rules\DateMustBeGreaterThanOrEqualDate;
+use App\Rules\MediumTermLoanFirstInstallmentDateRule;
 use App\Rules\MediumTermLoanRoomRule;
 use App\Rules\ReceivingOrPaymentDateRule;
 use App\Rules\SettlementPlusWithoutCanNotBeGreaterNetBalance;
@@ -130,6 +131,12 @@ class StoreMoneyPaymentRequest extends FormRequest
 			 * * كمان اللي الرول اللي فوق مش بتغطيه
 			 */
 			'medium_term_loan_room'=>new MediumTermLoanRoomRule($this->route('company'),$this->input('paid_amount.'.$type),$accountTypeId,$accountNumber,$financialInstitutionId,$type == MoneyPayment::PAYABLE_CHEQUE ? $this->due_date : $this->delivery_date),
+			/**
+			 * * لسه ما اتصرفش لكن اليوم اللي هيتسدد فيه اول قسط وصل ..
+			 * * يبقي القرض معتبر اتصرف بالفعل ومينفعش يتدفع بيه فواتير
+			 * * تاني من التاريخ ده وما بعده
+			 */
+			'medium_term_loan_first_installment_date'=>new MediumTermLoanFirstInstallmentDateRule($this->route('company'),$accountTypeId,$accountNumber,$financialInstitutionId,$type == MoneyPayment::PAYABLE_CHEQUE ? $this->due_date : $this->delivery_date),
 			'downPayment_over_contract'=>[new ContractDownPaymentRule($paidAmount,false)]
         ];
     }

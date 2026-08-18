@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 use App\Http\Controllers\MoneyReceivedController;
+use App\Http\Requests\StoreMediumTermLoanRequest;
 use App\Models\AccountType;
 use App\Models\Bank;
 use App\Models\Company;
@@ -273,7 +274,7 @@ class MediumTermLoanController
      * The Odoo sync at the end is the only addition — see
      * syncLoanWithOdoo() for why it is now required.
      */
-    public function store(Company $company, Request $request, FinancialInstitution $financialInstitution)
+    public function store(Company $company, StoreMediumTermLoanRequest $request, FinancialInstitution $financialInstitution)
     {
         $type = MediumTermLoan::RUNNING;
         $mediumTermLoan = new MediumTermLoan;
@@ -415,7 +416,7 @@ class MediumTermLoanController
      * delete-then-recreate pattern as before. UPDATED: now blocked
      * once a schedule exists (see destroySchedule() below for why).
      */
-    public function update(Company $company, Request $request, FinancialInstitution $financialInstitution, MediumTermLoan $mediumTermLoan)
+    public function update(Company $company, StoreMediumTermLoanRequest $request, FinancialInstitution $financialInstitution, MediumTermLoan $mediumTermLoan)
     {
         // Server-side enforcement of the same lock shown in edit() — a
         // disabled form in the UI isn't a guarantee, this is.

@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\LetterOfCreditIssuance;
+use App\Rules\LetterOfCreditFacilityRoomRule;
 use App\Rules\UniqueToCompanyAndAdditionalColumnsRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -53,6 +54,27 @@ class StoreLetterOfCreditIssuanceRequest extends FormRequest
                     $this->currentIssuanceId(),
                     [['financial_institution_id', '=', $this->get('financial_institution_id')]],
                     __('This LC Code Already Exist For This Bank')
+                ),
+            ],
+            /**
+             * * سحبة من اعتماد لازم متتخطاش المتبقي من الفاسيليتي —
+             * * client-flagged (2026-08-18), جنب باج العملة اللي كان
+             * * بيخلي "Total LCs Room" يفضل يبين الحد كامل حتى مع
+             * * اعتمادات موجودة فعلا. مربوطة بمصدر lc-facility بس، من
+             * * route('source') مش من الريكويست نفسه.
+             */
+            'lc_facility_room' => [
+                new LetterOfCreditFacilityRoomRule(
+                    $this->route('company'),
+                    // Same conversion as LetterOfCreditIssuance::getLcAmountInMainCurrency() —
+                    // room is tracked in the company's main currency, so the
+                    // amount compared against it has to be in the same units.
+                    (float) number_unformat($this->input('lc_amount')) * (float) number_unformat($this->input('exchange_rate', 1)),
+                    $this->route('source'),
+                    $this->input('financial_institution_id'),
+                    $this->input('lc_facility_id'),
+                    $this->input('lc_type'),
+                    $this->currentIssuanceId() ?: null
                 ),
             ],
         ];

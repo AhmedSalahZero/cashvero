@@ -276,6 +276,16 @@ Route::middleware([])->group(function () {
                     Route::get('lc-settlement-internal-money-transfers/{lc_settlement_internal_transfer}/edit', 'LcSettlementInternalMoneyTransferController@edit')->name('lc-settlement-internal-money-transfers.edit');
                     Route::put('lc-settlement-internal-money-transfers/{lc_settlement_internal_transfer}/update', 'LcSettlementInternalMoneyTransferController@update')->name('lc-settlement-internal-money-transfers.update');
                     Route::delete('lc-settlement-internal-money-transfers/{lc_settlement_internal_transfer}/delete', 'LcSettlementInternalMoneyTransferController@destroy')->name('lc-settlement-internal-money-transfers.destroy');
+                    /**
+                     * Client-requested (2026-08-18): pending bank-financed LC
+                     * settlements now live on the same index page, keyed by the
+                     * LC Issuance itself rather than an existing transfer row —
+                     * see LcSettlementInternalMoneyTransferController's class
+                     * docblock for the full picture.
+                     */
+                    Route::get('lc-settlement-internal-money-transfers/{letterOfCreditIssuance}/settle-data', 'LcSettlementInternalMoneyTransferController@getSettleData')->name('lc-settlement-internal-money-transfers.settle-data');
+                    Route::post('lc-settlement-internal-money-transfers/{letterOfCreditIssuance}/settle', 'LcSettlementInternalMoneyTransferController@settle')->name('lc-settlement-internal-money-transfers.settle');
+                    Route::post('lc-settlement-internal-money-transfers/{letterOfCreditIssuance}/reset', 'LcSettlementInternalMoneyTransferController@reset')->name('lc-settlement-internal-money-transfers.reset');
                  
                  
                  

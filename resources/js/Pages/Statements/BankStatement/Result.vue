@@ -39,6 +39,7 @@ const props = defineProps({
     accountNumber: String,
     isAgainstCommercialPaper: Boolean,
     isAgainstAssignmentOfContract: Boolean,
+    isMediumTermLoan: Boolean,
     statementModelName: String,
     kpis: Object, // { beginningBalance, endingBalance, totalDebit, totalCredit, transactionCount }
     paginator: Object, // { data, links, current_page, last_page, total }
@@ -47,6 +48,29 @@ const props = defineProps({
 
 const rows = computed(() => props.paginator?.data || []);
 const showActualLimitColumn = computed(() => props.isAgainstCommercialPaper || props.isAgainstAssignmentOfContract);
+/**
+ * * Reviewed/Actions don't apply to the MTL facility (client-requested,
+ * * 2026-08-17): MTL rows are never "reviewed" (see getBankStatementReviewed()'s
+ * * can_not_be_reviewed branch) and neither Action button (commission fees /
+ * * end-of-month interest) ever applies to an MTL row either — both columns
+ * * are hidden for MTL only, every other facility type keeps them exactly as
+ * * before. Principle is the MTL-only replacement column.
+ */
+const showReviewedAndActionsColumns = computed(() => !props.isMediumTermLoan);
+
+// Kept in sync with the v-if list on the header row below, so the
+// "No movements found" row always spans the actual visible column count
+// instead of a number that silently drifts as columns are added/removed.
+const visibleColumnCount = computed(() => {
+    let count = 6; // #, Date, Beginning Balance, Debit, Credit, End Balance
+    if (!props.isCurrentAccount) count += 1; // Limit
+    if (showActualLimitColumn.value) count += 1; // Actual Limit
+    if (!props.isCurrentAccount) count += 2; // Room, Calculated Interest
+    if (props.isMediumTermLoan) count += 1; // Principle
+    if (showReviewedAndActionsColumns.value) count += 2; // Reviewed, Actions
+    count += 1; // Comment
+    return count;
+});
 
 function formatAmount(value) {
     return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -185,8 +209,9 @@ function submitInterest() {
                                 <th class="px-3 py-3 text-right">End Balance</th>
                                 <th v-if="!isCurrentAccount" class="px-3 py-3 text-right">Room</th>
                                 <th v-if="!isCurrentAccount" class="px-3 py-3 text-right">Calculated Interest</th>
-                                <th class="px-3 py-3 text-center">Reviewed</th>
-                                <th class="px-3 py-3 text-center">Actions</th>
+                                <th v-if="isMediumTermLoan" class="px-3 py-3 text-right">Principle</th>
+                                <th v-if="showReviewedAndActionsColumns" class="px-3 py-3 text-center">Reviewed</th>
+                                <th v-if="showReviewedAndActionsColumns" class="px-3 py-3 text-center">Actions</th>
                                 <th class="px-3 py-3 text-left min-w-[280px]">Comment</th>
                             </tr>
                         </thead>
@@ -204,11 +229,12 @@ function submitInterest() {
                                 <td class="px-3 py-2.5 text-right font-medium" :style="{ color: endBalanceColorVar(row.endBalance) }">{{ formatAmount(row.endBalance) }}</td>
                                 <td v-if="!isCurrentAccount" class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(row.room) }}</td>
                                 <td v-if="!isCurrentAccount" class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(row.interestAmount) }}</td>
-                                <td class="px-3 py-2.5 text-center">
+                                <td v-if="isMediumTermLoan" class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(row.principle) }}</td>
+                                <td v-if="showReviewedAndActionsColumns" class="px-3 py-2.5 text-center">
                                     <span v-if="reviewedBadgeClass(row.reviewedText)" :class="reviewedBadgeClass(row.reviewedText)">{{ row.reviewedText }}</span>
                                     <span v-else class="cvr-text-muted">{{ row.reviewedText }}</span>
                                 </td>
-                                <td class="px-3 py-2.5 text-center">
+                                <td v-if="showReviewedAndActionsColumns" class="px-3 py-2.5 text-center">
                                     <div class="flex items-center justify-center gap-1">
                                         <button v-if="row.isCommissionFees" @click="openFeesModal(row)" class="cvr-action-btn" title="Edit Commission Fees">✏️</button>
                                         <button v-if="row.interestType === 'end_of_month' || row.interestType === 'end_of_month_final'" @click="openInterestModal(row)" class="cvr-action-btn" title="Edit End-of-Month Interest">✏️</button>
@@ -220,7 +246,7 @@ function submitInterest() {
                                 </td>
                             </tr>
                             <tr v-if="rows.length === 0">
-                                <td colspan="13" class="px-4 py-8 text-center cvr-text-muted">No movements found for this date range.</td>
+                                <td :colspan="visibleColumnCount" class="px-4 py-8 text-center cvr-text-muted">No movements found for this date range.</td>
                             </tr>
                         </tbody>
                     </table>

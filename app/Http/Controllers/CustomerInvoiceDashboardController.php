@@ -813,13 +813,56 @@ class CustomerInvoiceDashboardController extends Controller
 		$date = $date ? HDate::formatDateFromDatePicker($date) : $currentDate;
 		// $year = explode('-',$date)[0];
 		$date = Carbon::make($date)->format('Y-m-d');
-		$allCurrencies = getCurrenciesForSuppliersAndCustomers($company->id) ;
+		/**
+		 * FIX (per request, 2026-08-18): this page used to reuse
+		 * getCurrenciesForSuppliersAndCustomers() — the SAME generic
+		 * currency list Cash Status uses, sourced from this company's
+		 * Branches and FinancialInstitutionAccounts, with nothing to
+		 * do with LG or LC at all. That meant every currency the
+		 * company has a bank account or branch in showed up as a
+		 * clickable pill here, even ones with zero LG/LC facilities —
+		 * clicking one of those correctly rendered an empty page (no
+		 * facility, so nothing to show), but with no way for the user
+		 * to tell "empty because broken" from "empty because there's
+		 * genuinely nothing here" — hence this dashboard's own pill
+		 * list now, scoped to only currencies where this company
+		 * actually has at least one Letter of Guarantee or Letter of
+		 * Credit facility on record (regardless of whether that
+		 * facility is currently active/expired — a currency the
+		 * company has ever used for LG/LC is still worth being able to
+		 * switch to and inspect).
+		 */
+		$allCurrencies = array_values(array_unique(array_merge(
+			DB::table('letter_of_guarantee_facilities')->where('company_id', $company->id)->whereNotNull('currency')->distinct()->pluck('currency')->toArray(),
+			DB::table('letter_of_credit_facilities')->where('company_id', $company->id)->whereNotNull('currency')->distinct()->pluck('currency')->toArray()
+		)));
 	
 		$details = [];
 		
 		$selectedFinancialInstitutionBankIds = [];
 		
-        $selectedCurrencies = $request->get('currencies', $allCurrencies) ;
+        /**
+		 * ⚠️ REAL BUG FIXED HERE (per audit, 2026-08-18): this read
+		 * $request->get('currencies', $allCurrencies) — the EXACT SAME
+		 * request param $currenciesToCompute below narrows on. The
+		 * comment just below always claimed "$selectedCurrencies itself
+		 * is left completely unchanged" (i.e. always the full currency
+		 * list, since it's what the currency PILL buttons render from),
+		 * but the code never actually did that: every time
+		 * LGLCStatus.vue's switchCurrency() asked the server to compute
+		 * just one currency (via ?currencies[]=USD), this line echoed
+		 * that SAME narrowed list straight back as 'selectedCurrencies'
+		 * — so the very next render collapsed the whole pill row down
+		 * to that one currency, permanently hiding every other pill
+		 * (nothing in the UI could ever ask for a currency whose button
+		 * no longer existed). Combined with activeCurrency needing to
+		 * match whatever currency actually got computed, this is what
+		 * made the page look entirely empty/stuck after clicking a
+		 * currency. $selectedCurrencies must always be the FULL
+		 * currency list — only $currenciesToCompute, just below, is
+		 * meant to narrow based on the request.
+		 */
+		$selectedCurrencies = $allCurrencies ;
 		/**
 		 * FIX (per audit, 2026-08-13): same reasoning as the Cash
 		 * Forecast dashboard fix — this used to default to EVERY
@@ -829,17 +872,17 @@ class CustomerInvoiceDashboardController extends Controller
 		 * FinancialInstitution::find() fix a few lines down) ran once
 		 * per currency, every visit, regardless of which one anyone
 		 * was actually looking at. $selectedCurrencies itself is left
-		 * completely unchanged — it's also what the currency PILL
-		 * buttons render from, further down, so narrowing it directly
-		 * would have hidden currencies as options entirely. This new,
-		 * separate, narrower list is what actually drives the
-		 * computation loop instead, defaulting to just the company's
-		 * main currency (mirroring the exact same default
-		 * LGLCStatus.vue's own activeCurrency already falls back to,
-		 * so the one currency computed by default is always the one
-		 * shown by default) — clicking a not-yet-loaded currency pill
-		 * (see LGLCStatus.vue's switchCurrency()) requests exactly
-		 * that one currency instead.
+		 * completely unchanged (see fix just above) — it's also what
+		 * the currency PILL buttons render from, further down, so
+		 * narrowing it directly would have hidden currencies as
+		 * options entirely. This new, separate, narrower list is what
+		 * actually drives the computation loop instead, defaulting to
+		 * just the company's main currency (mirroring the exact same
+		 * default LGLCStatus.vue's own activeCurrency already falls
+		 * back to, so the one currency computed by default is always
+		 * the one shown by default) — clicking a not-yet-loaded
+		 * currency pill (see LGLCStatus.vue's switchCurrency())
+		 * requests exactly that one currency instead.
 		 */
 		$currenciesToCompute = $request->filled('currencies')
 			? (array) $request->get('currencies')
@@ -902,6 +945,39 @@ class CustomerInvoiceDashboardController extends Controller
 				foreach ($selectedFinancialInstitutionBankIds as $financialInstitutionBankId) {
 					
 					$currentFinancialInstitution = $financialInstitutionsById->get($financialInstitutionBankId);
+					/**
+					 * ⚠️ REAL BUG FIXED HERE (per audit, 2026-08-18):
+					 * $financialInstitutionsById is keyed from
+					 * $financialInstitutionBanks, which is scoped to
+					 * ->onlyBanks() (type = 'bank') only. But
+					 * $financialInstitutionBankId here comes straight
+					 * from this currency's LG/LC facilities themselves
+					 * (see $financialInstitutionBankIds just above),
+					 * with no such type filter. If any facility for the
+					 * currency being computed is linked to a financial
+					 * institution that ISN'T typed 'bank', the lookup
+					 * above returns null — and every call below that
+					 * dereferenced it (->getName()) threw a fatal
+					 * "Call to a member function getName() on null",
+					 * taking the ENTIRE request down with a 500. Since
+					 * this only fires for whichever currency happens to
+					 * have such a facility, it looked exactly like "EGP
+					 * works fine, clicking USD blanks the page" — the
+					 * failed Inertia visit never reached
+					 * Inertia::render(), so props (and activeCurrency,
+					 * client-side) never updated, leaving the OLD
+					 * currency's pill stuck "active" over an empty
+					 * page. Skipping institutions the loop can't
+					 * resolve a bank record for — rather than crashing
+					 * — keeps every other (valid) currency's data
+					 * intact and simply omits the unresolvable one from
+					 * this currency's charts/table, which a broken
+					 * financial-institution link should do anyway
+					 * rather than take the whole dashboard down.
+					 */
+					if (! $currentFinancialInstitution) {
+						continue;
+					}
 					$statementTableFullClassName::getDashboardOutstandingPerFinancialInstitutionFormattedData($charts,$company,$currencyName , $date ,$financialInstitutionBankId,$currentFinancialInstitution->getName(),$source,$lgOrLcTypes);
 						
 					$lastLetterOfGuaranteeOrCreditFacilities = DB::table($letterOfFacilityTableName)

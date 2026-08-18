@@ -13,6 +13,7 @@ const props = defineProps({
     currencies: Array,
     financialInstitutionBanks: Array,
     accountTypes: Array,
+    interestDestinations: { type: Array, default: () => [] }, // [{value, title}]
     urls: Object,
 });
 
@@ -45,6 +46,15 @@ const fromAccountTypeId = ref(props.model?.from_account_type_id || (props.accoun
 const fromAccountNumber = ref(props.model?.from_account_number || '');
 const amount = ref(props.model?.amount ?? 0);
 const userComment = ref(props.model?.user_comment || '');
+/**
+ * Client-requested (2026-08-18): interest now lives on each individual
+ * settlement rather than at LC "Mark as Paid" time — see
+ * LcSettlementInternalMoneyTransferController's class docblock. Only
+ * ever edited here for the LATEST settlement of a bank-financed LC
+ * (this Form.vue page is only reachable that way now).
+ */
+const interestAmount = ref(props.model?.interest_amount ?? 0);
+const interestDestination = ref(props.model?.interest_destination || (props.interestDestinations[0]?.value ?? ''));
 
 /* ── LC Issuance options — cascades off From Bank + Currency ────── */
 const lcIssuances = ref(
@@ -96,6 +106,8 @@ function submit() {
         from_account_type_id: fromAccountTypeId.value,
         from_account_number: fromAccountNumber.value,
         amount: amount.value,
+        interest_amount: interestAmount.value,
+        interest_destination: interestDestination.value,
         user_comment: userComment.value,
     };
     if (isEdit.value) {
@@ -173,6 +185,24 @@ function submit() {
                             <label class="cvr-form-label">Amount *</label>
                             <input v-model="amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errors.amount" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.amount }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Interest -->
+                <div class="cvr-card-bg cvr-border border rounded-lg p-5">
+                    <h2 class="text-base font-medium cvr-text-primary mb-4">Interest</h2>
+                    <div class="cvr-form-grid-3">
+                        <div>
+                            <label class="cvr-form-label">Interest Amount</label>
+                            <input v-model="interestAmount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
+                            <p v-if="errors.interest_amount" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.interest_amount }}</p>
+                        </div>
+                        <div>
+                            <label class="cvr-form-label">Post Interest To</label>
+                            <select v-model="interestDestination" class="cvr-input w-full px-3 py-2 rounded">
+                                <option v-for="d in interestDestinations" :key="d.value" :value="d.value">{{ d.title }}</option>
+                            </select>
                         </div>
                     </div>
                 </div>

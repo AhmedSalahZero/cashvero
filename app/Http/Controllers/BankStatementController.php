@@ -407,6 +407,7 @@ class BankStatementController
             'isCurrentAccount' => $isCurrentAccount,
             'isAgainstCommercialPaper' => $accountType->isOverdraftAgainstCommercialPaperAccount(),
             'isAgainstAssignmentOfContract' => $accountType->isOverdraftAgainstAssignmentOfContractAccount(),
+            'isMediumTermLoan' => $accountType->isMediumTermLoanAccount(),
             'financialInstitutionName' => $financialInstitutionName,
             'accountNumber' => $accountNumber,
             'currencyName' => $currencyName,
@@ -419,7 +420,7 @@ class BankStatementController
      * export (via exportExcel()) read from — one formula for "what a row
      * means," used in both places, so they can never silently drift apart.
      */
-    private function mapStatementRow($row, string $lang, bool $isCurrentAccount, bool $isAgainstCommercialPaper, bool $isAgainstAssignmentOfContract): array
+    private function mapStatementRow($row, string $lang, bool $isCurrentAccount, bool $isAgainstCommercialPaper, bool $isAgainstAssignmentOfContract, bool $isMediumTermLoan = false): array
     {
         $reviewedArr = getBankStatementReviewed($row);
 
@@ -434,6 +435,15 @@ class BankStatementController
             'endBalance' => (float) ($row->end_balance ?? 0),
             'room' => ! $isCurrentAccount ? (float) ($row->room ?? 0) : null,
             'interestAmount' => ! $isCurrentAccount ? (float) ($row->interest_amount ?? 0) : null,
+            /**
+             * * "Principle" is deliberately just the row's own `debit` again,
+             * * not a new figure: on medium_term_loan_bank_statements, debit
+             * * IS the principle portion of a repaid installment (see that
+             * * table's trigger header) — this column just surfaces it next
+             * * to Room/Calculated Interest under its business name instead
+             * * of making the user infer it from the generic Debit column.
+             */
+            'principle' => $isMediumTermLoan ? (float) ($row->debit ?? 0) : null,
             'reviewedText' => getReviewedText($reviewedArr),
             'comment' => (isset($row->{'comment_'.$lang}) ? $row->{'comment_'.$lang} : null) ?: getBankStatementComment($row),
             'userComment' => \App\Helpers\HVero::getUserCommentFromModel($row),
@@ -461,6 +471,7 @@ class BankStatementController
         $isCurrentAccount = $data['isCurrentAccount'];
         $isAgainstCommercialPaper = $data['isAgainstCommercialPaper'];
         $isAgainstAssignmentOfContract = $data['isAgainstAssignmentOfContract'];
+        $isMediumTermLoan = $data['isMediumTermLoan'];
 
         /**
          * KPI totals still describe the FULL date range, not the current
@@ -476,7 +487,7 @@ class BankStatementController
 
         $lang = app()->getLocale();
         $paginator->getCollection()->transform(
-            fn ($row) => $this->mapStatementRow($row, $lang, $isCurrentAccount, $isAgainstCommercialPaper, $isAgainstAssignmentOfContract)
+            fn ($row) => $this->mapStatementRow($row, $lang, $isCurrentAccount, $isAgainstCommercialPaper, $isAgainstAssignmentOfContract, $isMediumTermLoan)
         );
 
         return \Inertia\Inertia::render('Statements/BankStatement/Result', [
@@ -488,6 +499,7 @@ class BankStatementController
             'accountNumber' => $data['accountNumber'],
             'isAgainstCommercialPaper' => $isAgainstCommercialPaper,
             'isAgainstAssignmentOfContract' => $isAgainstAssignmentOfContract,
+            'isMediumTermLoan' => $isMediumTermLoan,
             'statementModelName' => $data['statementModelName'],
             'kpis' => $kpis,
             // Same shape MoneyReceivedController's tabbed pagination already
@@ -528,6 +540,7 @@ class BankStatementController
         $isCurrentAccount = $data['isCurrentAccount'];
         $isAgainstCommercialPaper = $data['isAgainstCommercialPaper'];
         $isAgainstAssignmentOfContract = $data['isAgainstAssignmentOfContract'];
+        $isMediumTermLoan = $data['isMediumTermLoan'];
         $showActualLimit = $isAgainstCommercialPaper || $isAgainstAssignmentOfContract;
         $lang = app()->getLocale();
 
@@ -542,12 +555,25 @@ class BankStatementController
         if (! $isCurrentAccount) {
             array_push($headings, 'Room', 'Calculated Interest');
         }
-        array_push($headings, 'Reviewed', 'Comment');
+        /**
+         * * Reviewed doesn't apply to the MTL facility (it's not a
+         * * money_received-style row that goes through a review workflow —
+         * * see getBankStatementReviewed()'s can_not_be_reviewed branch),
+         * * so it's dropped from the MTL export the same way it's dropped
+         * * from the MTL screen. Principle is the MTL-only replacement,
+         * * matching the on-screen table.
+         */
+        if ($isMediumTermLoan) {
+            $headings[] = 'Principle';
+        } else {
+            $headings[] = 'Reviewed';
+        }
+        $headings[] = 'Comment';
 
         // The workbook is the whole range, not the page on screen, so the
         // export runs the same query unpaginated.
-        $rows = $data['query']()->get()->values()->map(function ($row, $index) use ($lang, $isCurrentAccount, $showActualLimit, $isAgainstCommercialPaper, $isAgainstAssignmentOfContract) {
-            $mapped = $this->mapStatementRow($row, $lang, $isCurrentAccount, $isAgainstCommercialPaper, $isAgainstAssignmentOfContract);
+        $rows = $data['query']()->get()->values()->map(function ($row, $index) use ($lang, $isCurrentAccount, $showActualLimit, $isAgainstCommercialPaper, $isAgainstAssignmentOfContract, $isMediumTermLoan) {
+            $mapped = $this->mapStatementRow($row, $lang, $isCurrentAccount, $isAgainstCommercialPaper, $isAgainstAssignmentOfContract, $isMediumTermLoan);
 
             $line = ['#' => $index + 1, 'Date' => $mapped['date']];
             if (! $isCurrentAccount) {
@@ -564,7 +590,11 @@ class BankStatementController
                 $line['Room'] = $mapped['room'];
                 $line['Calculated Interest'] = $mapped['interestAmount'];
             }
-            $line['Reviewed'] = $mapped['reviewedText'];
+            if ($isMediumTermLoan) {
+                $line['Principle'] = $mapped['principle'];
+            } else {
+                $line['Reviewed'] = $mapped['reviewedText'];
+            }
             $line['Comment'] = trim($mapped['comment'].' '.$mapped['userComment']);
 
             return $line;

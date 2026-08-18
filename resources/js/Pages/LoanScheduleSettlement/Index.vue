@@ -103,7 +103,7 @@ const visibleSettlements = computed(() =>
 
 <template>
     <AppLayout :nav-urls="navUrls">
-        <div class="p-6 max-w-6xl">
+        <div class="p-6">
             <div class="flex items-center gap-3 mb-1">
                 <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
                     ← Back To Loan Schedule

@@ -215,6 +215,14 @@ class LcSettlementInternalMoneyTransfer extends Model
     {
         return number_format($this->getAmount(), 0);
     }
+	public function getInterestAmount()
+	{
+		return $this->interest_amount ?: 0;
+	}
+	public function getInterestDestination():?string
+	{
+		return $this->interest_destination ;
+	}
 
 
 	
@@ -297,6 +305,65 @@ class LcSettlementInternalMoneyTransfer extends Model
 	
 		$this->handleBankTransfer($companyId , $fromFinancialInstitutionId ,  $fromAccountType , $fromAccountNumber , $transferDate ,0, $transferAmount,$commentEn,$commentAr);
 		$this->handleLetterOfCreditTransfer($companyId,$lcFacilityId,$lcFacilityLimit,$transferDate,$transferAmount,0,$letterOfCreditIssuance,$commentEn,$commentAr);
+	}
+	const INTEREST_TO_LC_OVERDRAFT = 'lc_overdraft';
+	const INTEREST_TO_CURRENT_ACCOUNT = 'current_account';
+	public static function getInterestDestinationsForSelect():array
+	{
+		return [
+			['value'=>self::INTEREST_TO_LC_OVERDRAFT , 'title'=>__('LC Overdraft Statement')],
+			['value'=>self::INTEREST_TO_CURRENT_ACCOUNT , 'title'=>__('Current Account (deducted immediately)')],
+		];
+	}
+	/**
+	 * Client-requested (2026-08-18): interest on a bank-financed LC is only
+	 * known at settlement time (it depends on the real settlement date,
+	 * not the original 15/30/whatever-day financing estimate), so it's
+	 * entered here — on each individual settlement — rather than at
+	 * "Mark as Paid" time. Two destinations, both client-specified:
+	 *
+	 *   lc_overdraft:     books BOTH a credit (interest newly owed) and a
+	 *                      debit (interest immediately paid) on the LC's
+	 *                      own Overdraft Statement — net zero effect on
+	 *                      the outstanding balance, but both legs visible
+	 *                      for audit, same as the principal's own
+	 *                      credit-at-draw/debit-at-settlement pattern.
+	 *   current_account:   a single credit (outflow) on the SAME current
+	 *                      account the principal is being paid from — a
+	 *                      plain cash expense, no LC Overdraft entry at
+	 *                      all.
+	 *
+	 * Every row this creates is tagged with lc_settlement_internal_money_transfer_id
+	 * = $this->id, exactly like the principal's own two rows — so
+	 * deleteRelations() (used by both Reset and Edit's delete+recreate)
+	 * cleans interest up automatically, with no separate reversal logic
+	 * needed.
+	 */
+	public function handleInterestSettlement(int $companyId , int $lcFacilityId , $lcFacilityLimit , AccountType $fromAccountType , string $fromAccountNumber , int $fromFinancialInstitutionId , LetterOfCreditIssuance $letterOfCreditIssuance , string $settlementDate , float $interestAmount , ?string $interestDestination , string $commentEn , string $commentAr):void
+	{
+		if ($interestAmount <= 0 || ! $interestDestination) {
+			return;
+		}
+		if ($interestDestination === self::INTEREST_TO_LC_OVERDRAFT) {
+			$this->handleLetterOfCreditTransfer($companyId,$lcFacilityId,$lcFacilityLimit,$settlementDate,0,$interestAmount,$letterOfCreditIssuance,$commentEn,$commentAr);
+			$this->handleLetterOfCreditTransfer($companyId,$lcFacilityId,$lcFacilityLimit,$settlementDate,$interestAmount,0,$letterOfCreditIssuance,$commentEn,$commentAr);
+			return;
+		}
+		if ($fromAccountType->isCurrentAccount()) {
+			$fromCurrentAccount = FinancialInstitutionAccount::findByAccountNumber($fromAccountNumber,$companyId,$fromFinancialInstitutionId);
+			CurrentAccountBankStatement::create([
+				'financial_institution_account_id'=>$fromCurrentAccount->id ,
+				'letter_of_credit_issuance_id'=>$letterOfCreditIssuance->id ,
+				'lc_settlement_internal_money_transfer_id'=>$this->id ,
+				'type'=>'lc_interest' ,
+				'company_id'=>$companyId ,
+				'date'=>$settlementDate ,
+				'credit'=>$interestAmount ,
+				'debit'=>0 ,
+				'comment_en'=>$commentEn ,
+				'comment_ar'=>$commentAr
+			]);
+		}
 	}
 	public function letterOfCreditIssuance()
 	{

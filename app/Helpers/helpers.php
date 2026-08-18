@@ -1836,16 +1836,25 @@ function getDifferenceBetweenTwoDatesInDays(Carbon $firstDate, Carbon $secondDat
 function getBankStatementReviewed($stdClass)
 {
     $tableName = null ;
-        
-    if ($id = $stdClass->money_received_id) {
+
+    /**
+     * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-17): not every
+     * bank-statement table has all five of these FK columns —
+     * medium_term_loan_bank_statements deliberately only has
+     * money_payment_id / loan_schedule_settlement_id (see its model
+     * docblock), so reading money_received_id etc. directly on an MTL
+     * row threw "Undefined property". `?? null` makes each check safe
+     * on any statement table, present column or not.
+     */
+    if ($id = ($stdClass->money_received_id ?? null)) {
         $tableName = 'money_received';
-    } elseif ($id = $stdClass->money_payment_id) {
+    } elseif ($id = ($stdClass->money_payment_id ?? null)) {
         $tableName = 'money_payments';
-    } elseif ($id = $stdClass->cash_expense_id) {
+    } elseif ($id = ($stdClass->cash_expense_id ?? null)) {
         $tableName = 'cash_expenses';
-    } elseif ($id = $stdClass->buy_or_sell_currency_id) {
+    } elseif ($id = ($stdClass->buy_or_sell_currency_id ?? null)) {
         $tableName = 'buy_or_sell_currencies';
-    } elseif ($id = $stdClass->internal_money_transfer_id) {
+    } elseif ($id = ($stdClass->internal_money_transfer_id ?? null)) {
         $tableName = 'internal_money_transfers';
     }
     if (is_null($tableName)) {
@@ -1866,20 +1875,21 @@ function getBankStatementComment($stdClass)
     $lang = app()->getLocale() ;
     $columnNameWithoutLang = 'comment_';
     $tableName = null ;
-    if ($id = $stdClass->money_received_id) {
+    // Same fix as getBankStatementReviewed() above — see its comment.
+    if ($id = ($stdClass->money_received_id ?? null)) {
         $tableName = 'money_received';
-    } elseif ($id = $stdClass->money_payment_id) {
+    } elseif ($id = ($stdClass->money_payment_id ?? null)) {
         $tableName = 'money_payments';
-    } elseif ($id = $stdClass->cash_expense_id) {
+    } elseif ($id = ($stdClass->cash_expense_id ?? null)) {
         $tableName = 'cash_expenses';
-    } elseif ($id = $stdClass->buy_or_sell_currency_id) {
+    } elseif ($id = ($stdClass->buy_or_sell_currency_id ?? null)) {
         $tableName = 'buy_or_sell_currencies';
         if ($stdClass->is_debit) {
             $columnNameWithoutLang = 'buy_comment_';
         } else {
             $columnNameWithoutLang = 'sell_comment_';
         }
-    } elseif ($id = $stdClass->internal_money_transfer_id) {
+    } elseif ($id = ($stdClass->internal_money_transfer_id ?? null)) {
         $tableName = 'internal_money_transfers';
         if ($stdClass->is_debit) {
             $columnNameWithoutLang = 'from_comment_';

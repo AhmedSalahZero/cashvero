@@ -52,7 +52,7 @@ const activeCurrency = ref(
 const filterDate = ref(props.date);
 
 function applyFilter() {
-    router.get(props.filterUrl, { date: filterDate.value }, { preserveScroll: true, preserveState: true });
+    router.get(props.filterUrl, { date: filterDate.value, currencies: [activeCurrency.value] }, { preserveScroll: true, preserveState: true });
 }
 
 /**
@@ -73,7 +73,23 @@ function switchCurrency(currency) {
         activeCurrency.value = currency;
         return;
     }
-    router.get(props.filterUrl, { date: filterDate.value, currencies: [currency] }, { preserveScroll: true, preserveState: true });
+    // BUG FIX: this used to fire the visit and return without ever
+    // updating activeCurrency. Inertia's preserveState:true keeps this
+    // component's local refs as-is across the visit, so activeCurrency
+    // stayed pointed at the OLD currency while props.reports/charts/
+    // canShowDashboardPerCurrency came back containing ONLY the newly
+    // requested currency — every lookup keyed on activeCurrency (
+    // reportFor(), typeChartData(), canShow, tableRows()) then missed,
+    // and since canShow gates the whole LG/LC section, the entire page
+    // appeared to go blank. Setting activeCurrency once the new data
+    // has actually landed fixes that.
+    router.get(props.filterUrl, { date: filterDate.value, currencies: [currency] }, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            activeCurrency.value = currency;
+        },
+    });
 }
 
 function fmt(value) {
