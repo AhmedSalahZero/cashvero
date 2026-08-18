@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import FormErrorSummary from '@/Components/FormErrorSummary.vue';
 import { todayDate } from '@/composables/today';
 /* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
    الحماية الحقيقية على السيرفر في الـ Form Request. */
@@ -10,7 +11,13 @@ const maxDate = todayDate();
 const props = defineProps({
     mode: String, // 'create' | 'edit'
     company: Object,
-    source: String,
+    /**
+     * Always 'lc-facility' for this form. Defaulted rather than left
+     * bare because an undefined here does not fail loudly — it is
+     * stringified into the lookup query as "undefined" and silently
+     * zeroes the Outstanding Balance.
+     */
+    source: { type: String, default: 'lc-facility' },
     currencies: Object,
     lcTypes: Object,
     lcCategories: Object,
@@ -327,9 +334,7 @@ function submit() {
                 {{ isEdit ? 'Edit' : 'Add' }} LC Issuance — Via LC Facility
             </h1>
 
-            <div v-if="Object.keys(page.props.errors || {}).length" class="mb-4 px-4 py-3 rounded cvr-badge-overdue text-sm">
-                Please fix the highlighted field(s) below before saving.
-            </div>
+            <FormErrorSummary />
 
             <form @submit.prevent="submit" class="space-y-6">
                 <!-- Letter Of Credit Type -->

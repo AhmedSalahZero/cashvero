@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import FormErrorSummary from '@/Components/FormErrorSummary.vue';
 
 /*
  * Contracts/Form.vue
@@ -196,9 +197,7 @@ function submit() {
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-6">{{ formTitle }}</h1>
 
-            <div v-if="Object.keys(page.props.errors || {}).length" class="mb-4 px-4 py-3 rounded cvr-badge-overdue text-sm">
-                Please fix the highlighted field(s) below before saving.
-            </div>
+            <FormErrorSummary />
 
             <form @submit.prevent="submit" class="space-y-6">
                 <!-- Contract Information -->

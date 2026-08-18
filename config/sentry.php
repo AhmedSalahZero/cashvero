@@ -7,8 +7,27 @@
  */
 return [
 
-    // @see https://docs.sentry.io/concepts/key-terms/dsn-explainer/
-    'dsn' => env('SENTRY_LARAVEL_DSN', env('SENTRY_DSN')),
+    /**
+     * @see https://docs.sentry.io/concepts/key-terms/dsn-explainer/
+     *
+     * ⚠️ Reporting is OFF in local and testing.
+     *
+     * This was unconditional, so every exception raised while developing
+     * — and every exception a phpunit run deliberately triggered — was
+     * sent to Sentry and emailed to the whole php-laravel project. A
+     * test asserting "this input must not 500" would file a production
+     * alert as a side effect of passing.
+     *
+     * An empty DSN disables the SDK entirely, which is the documented
+     * way to switch it off; nothing else in the config needs guarding.
+     *
+     * Set SENTRY_FORCE_ENABLE=true to report from these environments
+     * anyway, for when you are deliberately debugging the integration.
+     */
+    'dsn' => (
+        in_array(env('APP_ENV'), ['local', 'testing'], true)
+        && ! filter_var(env('SENTRY_FORCE_ENABLE', false), FILTER_VALIDATE_BOOLEAN)
+    ) ? null : env('SENTRY_LARAVEL_DSN', env('SENTRY_DSN')),
 
     // @see https://spotlightjs.com/
     // 'spotlight' => env('SENTRY_SPOTLIGHT', false),

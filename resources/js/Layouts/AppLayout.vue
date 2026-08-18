@@ -14,7 +14,13 @@ const userInitial = computed(() => userName.value.charAt(0).toUpperCase());
 const isSuperAdmin = computed(() => !!page.props.auth?.isSuperAdmin);
 const profileUrl = computed(() => page.props.profileUrl);
 const logoutUrl = computed(() => page.props.logoutUrl);
-const superAdminUrls = computed(() => page.props.superAdminUrls);
+/**
+ * Admin shortcuts the CURRENT USER may actually reach. Built from
+ * permissions server-side (HandleInertiaRequests), so this menu can
+ * never offer a screen the request would then refuse.
+ */
+const adminUrls = computed(() => page.props.adminUrls ?? {});
+const hasAdminLinks = computed(() => Object.keys(adminUrls.value).length > 0);
 
 /* ── User menu dropdown (username, top right) ─────────────────────
    Previously just a static name + avatar — no way to log out at all.
@@ -312,8 +318,11 @@ if (page.flash?.success || page.flash?.error) {
                 </button>
 
                 <div class="flex items-center gap-3">
-                    <!-- Super Admin: Company/User management -->
-                    <div v-if="isSuperAdmin" class="relative">
+                    <!-- Admin shortcuts — shown when the user holds at
+                         least one of company.view / user.view / role.view.
+                         Was v-if="isSuperAdmin", which made those three
+                         permissions unable to reveal it at all. -->
+                    <div v-if="hasAdminLinks" class="relative">
                         <button
                             @click="adminMenuOpen = !adminMenuOpen"
                             class="cvr-action-btn"
@@ -326,7 +335,8 @@ if (page.flash?.success || page.flash?.error) {
                             class="absolute right-0 mt-2 w-52 cvr-modal rounded-lg shadow-lg z-50 py-1"
                         >
                             <Link
-                                :href="superAdminUrls.companies"
+                                v-if="adminUrls.companies"
+                                :href="adminUrls.companies"
                                 @click="adminMenuOpen = false"
                                 class="flex items-center gap-2 w-full text-left px-4 py-2 text-sm cvr-text-secondary cvr-table-row"
                             >
@@ -334,7 +344,8 @@ if (page.flash?.success || page.flash?.error) {
                                 Companies
                             </Link>
                             <Link
-                                :href="superAdminUrls.users"
+                                v-if="adminUrls.users"
+                                :href="adminUrls.users"
                                 @click="adminMenuOpen = false"
                                 class="flex items-center gap-2 w-full text-left px-4 py-2 text-sm cvr-text-secondary cvr-table-row"
                             >
@@ -342,8 +353,8 @@ if (page.flash?.success || page.flash?.error) {
                                 Users
                             </Link>
                             <Link
-                                v-if="superAdminUrls.roles"
-                                :href="superAdminUrls.roles"
+                                v-if="adminUrls.roles"
+                                :href="adminUrls.roles"
                                 @click="adminMenuOpen = false"
                                 class="flex items-center gap-2 w-full text-left px-4 py-2 text-sm cvr-text-secondary cvr-table-row"
                             >

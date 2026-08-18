@@ -234,6 +234,11 @@ function submit() {
                                             />
                                             <span class="font-medium cvr-text-primary">{{ module.label }}</span>
                                         </label>
+                                        <!-- Only modules whose meaning is not
+                                             self-evident carry a hint. -->
+                                        <p v-if="module.hint" class="text-xs cvr-text-muted mt-1 leading-snug">
+                                            {{ module.hint }}
+                                        </p>
                                     </td>
                                     <td class="px-4 py-3">
                                         <div class="flex flex-wrap gap-x-6 gap-y-2">

@@ -892,6 +892,7 @@ class PermissionRegistry
         'user' => [
             'label' => 'Users',
             'group' => 'administration',
+            'hint' => 'The Users list: who exists, and creating or removing accounts. "Assign Roles" also unlocks the per-user permissions screen (the eye icon) where access is actually configured.',
             'actions' => [
                 'view' => ['view users'],
                 'create' => ['create user'],
@@ -903,6 +904,7 @@ class PermissionRegistry
         'role' => [
             'label' => 'Roles & Permissions',
             'group' => 'administration',
+            'hint' => 'The role TEMPLATES screen. Templates are copied onto a user when their account is created — editing one never changes an existing user.',
             'actions' => [
                 'view' => ['update permissions'],
                 'create' => ['update permissions'],
@@ -913,6 +915,7 @@ class PermissionRegistry
         'company' => [
             'label' => 'Companies',
             'group' => 'administration',
+            'hint' => 'The Companies list (the building icon in the top bar). Creating and removing companies themselves — not the data inside them.',
             'actions' => [
                 'view' => ['view company admin'],
                 'create' => ['create company admin'],
@@ -921,24 +924,38 @@ class PermissionRegistry
             ],
         ],
         'company_admin' => [
-            'label' => 'Company Admins',
+            'label' => 'Company Admin Accounts',
             'group' => 'administration',
+            'hint' => 'Reach over OTHER PEOPLE\'s Company Admin accounts — whether they show up in your Users list and whether you may hand out that role. It grants you none of a Company Admin\'s own abilities.',
+            'action_labels' => [
+                'view' => 'See Them In The Users List',
+                'create' => 'Create & Assign This Role',
+            ],
             'actions' => [
                 'view' => ['view company admin'],
                 'create' => ['create company admin'],
             ],
         ],
         'manager' => [
-            'label' => 'Managers',
+            'label' => 'Manager Accounts',
             'group' => 'administration',
+            'hint' => 'Same idea as Company Admin Accounts: whether other people\'s Manager accounts appear in your Users list, and whether you may hand out that role. Not a Manager\'s own abilities.',
+            'action_labels' => [
+                'view' => 'See Them In The Users List',
+                'create' => 'Create & Assign This Role',
+            ],
             'actions' => [
                 'view' => ['view managers'],
                 'create' => ['create manager'],
             ],
         ],
         'super_admin' => [
-            'label' => 'Super Admins',
+            'label' => 'Super Admin Accounts',
             'group' => 'administration',
+            'hint' => 'Whether other people\'s Super Admin accounts appear in your Users list. Nothing more: the Super Admin role can only ever be handed out by another Super Admin, and it bypasses every permission in this screen.',
+            'action_labels' => [
+                'view' => 'See Them In The Users List',
+            ],
             'actions' => ['view' => ['view super admin']],
         ],
 
@@ -1036,6 +1053,9 @@ class PermissionRegistry
     /** @var array<string, true>|null */
     private static ?array $legacyIndex = null;
 
+    /** @var array<string, string[]>|null */
+    private static ?array $legacyToKeys = null;
+
     /**
      * Raw module definitions.
      */
@@ -1068,7 +1088,17 @@ class PermissionRegistry
                     'group' => $def['group'],
                     'group_label' => self::GROUPS[$def['group']] ?? $def['group'],
                     'action' => $action,
-                    'action_label' => self::ACTION_LABELS[$action] ?? ucfirst(str_replace('_', ' ', $action)),
+                    /**
+                     * Per-module override first. A few modules use an
+                     * action whose generic label is actively misleading
+                     * for them — "View" on Manager Accounts does not mean
+                     * viewing a manager, it means whether those accounts
+                     * appear in the Users list at all.
+                     */
+                    'action_label' => $def['action_labels'][$action]
+                        ?? self::ACTION_LABELS[$action]
+                        ?? ucfirst(str_replace('_', ' ', $action)),
+                    'hint' => $def['hint'] ?? null,
                     'legacy' => array_values(array_unique($legacy)),
                 ];
             }
@@ -1135,6 +1165,32 @@ class PermissionRegistry
         }
 
         return self::$grantIndex[$key] ?? [$key];
+    }
+
+    /**
+     * Canonical keys that a legacy permission name stands for.
+     *
+     * The reverse of `grantNames()`. Needed because after
+     * `permissions:migrate-to-user` a user holds ONLY canonical keys, so
+     * a surviving call site written the old way — `can('view users')`,
+     * and App\Notification has 13 of them — would resolve against a name
+     * nobody holds any more and silently return false.
+     *
+     * @return string[]
+     */
+    public static function keysForLegacy(string $name): array
+    {
+        if (self::$legacyToKeys === null) {
+            $index = [];
+            foreach (self::all() as $key => $permission) {
+                foreach ($permission['legacy'] as $legacy) {
+                    $index[$legacy][] = $key;
+                }
+            }
+            self::$legacyToKeys = $index;
+        }
+
+        return self::$legacyToKeys[$name] ?? [];
     }
 
     /**
@@ -1215,6 +1271,11 @@ class PermissionRegistry
             $tree[$p['group']]['label'] = $p['group_label'];
             $tree[$p['group']]['modules'][$p['module']]['key'] = $p['module'];
             $tree[$p['group']]['modules'][$p['module']]['label'] = $p['module_label'];
+            // One-line explanation shown under the module name. Only the
+            // modules whose meaning is not obvious carry one — the
+            // Administration group especially, where "Managers" governs
+            // visibility of a role rather than that role's abilities.
+            $tree[$p['group']]['modules'][$p['module']]['hint'] = $p['hint'];
             $tree[$p['group']]['modules'][$p['module']]['permissions'][] = [
                 'key' => $p['key'],
                 'action' => $p['action'],

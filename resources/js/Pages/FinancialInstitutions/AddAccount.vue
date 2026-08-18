@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import FormErrorSummary from '@/Components/FormErrorSummary.vue';
 
 const props = defineProps({
     company: Object,
@@ -79,9 +80,7 @@ function submit() {
 
             <!-- General error banner — shows if anything failed, even if we
                  can't map it to a specific row for some reason -->
-            <div v-if="Object.keys(page.props.errors || {}).length" class="mb-4 px-4 py-3 rounded cvr-badge-overdue text-sm">
-                Please fix the highlighted field(s) below before saving.
-            </div>
+            <FormErrorSummary />
 
             <form @submit.prevent="submit" class="space-y-6">
                 <div class="cvr-card">

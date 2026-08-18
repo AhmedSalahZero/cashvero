@@ -2,6 +2,7 @@
 import { ref, reactive } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import FormErrorSummary from '@/Components/FormErrorSummary.vue';
 
 const props = defineProps({
     company: Object,
@@ -135,9 +136,7 @@ function submit() {
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">Other Integration Settings</h1>
             <p class="text-sm cvr-text-muted mb-6">Please insert Odoo Chart Of Account Number for each field below.</p>
 
-            <div v-if="Object.keys(page.props.errors || {}).length" class="mb-4 px-4 py-3 rounded cvr-badge-overdue text-sm">
-                Please fix the highlighted field(s) below before saving.
-            </div>
+            <FormErrorSummary />
 
             <form @submit.prevent="submit" class="space-y-6">
                 <div v-for="section in sections" :key="section.title" class="cvr-card">

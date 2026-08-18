@@ -19,6 +19,12 @@
     </filter>
     <php>
         <server name="APP_ENV" value="testing"/>
+        <!-- Belt and braces with config/sentry.php's environment gate:
+             a test suite exists to trigger failures, and none of them
+             are production incidents worth emailing anyone about. -->
+        <server name="SENTRY_LARAVEL_DSN" value=""/>
+        <server name="SENTRY_DSN" value=""/>
+        <server name="SENTRY_FORCE_ENABLE" value="false"/>
         <server name="BCRYPT_ROUNDS" value="4"/>
         <server name="CACHE_DRIVER" value="array"/>
         <server name="DB_CONNECTION" value="mysql"/>

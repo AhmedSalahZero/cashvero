@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import FormErrorSummary from '@/Components/FormErrorSummary.vue';
 import { todayDate } from '@/composables/today';
 /* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
    الحماية الحقيقية على السيرفر في الـ Form Request. */
@@ -394,9 +395,7 @@ function submit() {
             <div v-if="insufficientBalanceError" class="mb-4 px-4 py-3 rounded cvr-badge-overdue text-sm font-semibold">
                 No Enough Balance Amount to Process The Payment
             </div>
-            <div v-else-if="otherErrorCount" class="mb-4 px-4 py-3 rounded cvr-badge-overdue text-sm">
-                Please fix the highlighted field(s) below before saving.
-            </div>
+            <FormErrorSummary :except="['amount_can_not_be_greater_than_end_balance_at_payment_date']" />
 
             <form @submit.prevent="submit" class="space-y-6">
                 <div class="cvr-card space-y-4">

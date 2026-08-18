@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import FormErrorSummary from '@/Components/FormErrorSummary.vue';
 import { usePermissions } from '@/composables/usePermissions';
 
 const props = defineProps({
@@ -95,9 +96,7 @@ function destroyRow() {
                 <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">
                     {{ isEdit ? 'Edit Renewal' : 'Adjusted Renewal Date' }}
                 </h2>
-                <div v-if="Object.keys(page.props.errors || {}).length" class="mb-4 px-4 py-3 rounded cvr-badge-overdue text-sm">
-                    Please fix the highlighted field(s) below before saving.
-                </div>
+                <FormErrorSummary />
                 <form @submit.prevent="submit" class="space-y-4">
                     <div class="cvr-form-grid-4">
                         <div>

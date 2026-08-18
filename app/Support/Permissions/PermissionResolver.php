@@ -98,7 +98,25 @@ class PermissionResolver
             return true;
         }
 
-        return isset(self::heldNames($user)[$name]);
+        if (isset(self::heldNames($user)[$name])) {
+            return true;
+        }
+
+        /**
+         * The user may hold the CANONICAL key this legacy name stands
+         * for. After the move to user-based permissions everyone holds
+         * dotted keys only, so without this a legacy call site resolves
+         * against a name nobody has left and returns false — which is
+         * how `can('view users')` started refusing users who plainly
+         * held `user.view`.
+         */
+        foreach (PermissionRegistry::keysForLegacy($name) as $key) {
+            if (self::allows($user, $key)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

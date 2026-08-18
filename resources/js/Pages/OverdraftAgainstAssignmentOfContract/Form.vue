@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import FormErrorSummary from '@/Components/FormErrorSummary.vue';
 
 const props = defineProps({
     mode: String, // 'create' | 'edit'
@@ -121,9 +122,7 @@ function submit() {
             </h1>
             <p class="text-sm cvr-text-muted mb-6">{{ financialInstitution.name }}</p>
 
-            <div v-if="Object.keys(page.props.errors || {}).length" class="mb-4 px-4 py-3 rounded cvr-badge-overdue text-sm">
-                Please fix the highlighted field(s) below before saving.
-            </div>
+            <FormErrorSummary />
 
             <div v-if="isLockedByRenewal" class="mb-4 px-4 py-3 rounded border border-blue-400 bg-blue-50 text-blue-800 text-sm">
                 This facility has an active renewal, so this edits the <strong>current chapter's</strong> terms only.

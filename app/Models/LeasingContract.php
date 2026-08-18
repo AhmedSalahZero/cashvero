@@ -53,7 +53,17 @@ class LeasingContract extends Model
 
     public function getStartDateFormatted()
     {
-        return Carbon::make($this->getStartDate())->format('d-m-Y');
+        /**
+         * ⚠️ getStartDate() returns the INT 0 for a contract with no
+         * start date, and Carbon::make(0) is null — so this
+         * used to fatal with "Call to a member function format() on
+         * null" on any screen that formatted a dateless contract.
+         * Surfaced by the contract statement screen, which reads both
+         * dates unconditionally.
+         */
+        $date = Carbon::make($this->getStartDate());
+
+        return $date ? $date->format('d-m-Y') : '—';
     }
 
     public function setStartDateAttribute($value)
@@ -77,7 +87,17 @@ class LeasingContract extends Model
 
     public function getEndDateFormatted()
     {
-        return Carbon::make($this->getEndDate())->format('d-m-Y');
+        /**
+         * ⚠️ getEndDate() returns the INT 0 for a contract with no
+         * end date, and Carbon::make(0) is null — so this
+         * used to fatal with "Call to a member function format() on
+         * null" on any screen that formatted a dateless contract.
+         * Surfaced by the contract statement screen, which reads both
+         * dates unconditionally.
+         */
+        $date = Carbon::make($this->getEndDate());
+
+        return $date ? $date->format('d-m-Y') : '—';
     }
 
     public function setEndDateAttribute($value)

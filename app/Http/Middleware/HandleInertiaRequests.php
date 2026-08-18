@@ -90,16 +90,28 @@ class HandleInertiaRequests extends Middleware
             'profileUrl' => route('profile.edit'),
             'logoutUrl' => route('logout'),
             /**
-             * Only present for a super admin — the topbar's
-             * Company/User management icon links straight to these,
-             * matching the two pages already migrated
-             * (CompanyController::index / UserController::index).
+             * Admin shortcuts in the topbar.
+             *
+             * ⚠️ Was `isSuperAdmin ? [...] : null` — a ROLE check, which
+             * meant granting someone `user.view` or `role.view` changed
+             * nothing: the wrench menu stayed hidden because the URLs it
+             * needs were never sent. Reported as "I gave the person the
+             * Administration permissions and the icon still did not
+             * appear."
+             *
+             * Now each entry is present only when the user may actually
+             * reach that screen, which is the same key EnforcePermission
+             * checks on the route itself — so the menu can no longer
+             * disagree with what the server allows.
              */
-            'superAdminUrls' => PermissionResolver::isSuperAdmin($request->user()) ? [
-                'companies' => route('companySection.index'),
-                'users' => route('user.index'),
-                'roles' => route('roles.index'),
-            ] : null,
+            'adminUrls' => $request->user() ? array_filter([
+                'companies' => PermissionResolver::allows($request->user(), 'company.view')
+                    ? route('companySection.index') : null,
+                'users' => PermissionResolver::allows($request->user(), 'user.view')
+                    ? route('user.index') : null,
+                'roles' => PermissionResolver::allows($request->user(), 'role.view')
+                    ? route('roles.index') : null,
+            ]) : [],
             /**
              * ⚠️ Real bug fixed here (the "notifications don't appear
              * until I navigate elsewhere or reload" / "old and new

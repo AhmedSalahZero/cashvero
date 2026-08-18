@@ -682,8 +682,31 @@ class LetterOfCreditFacilityController
 		 * signed — so abs() now wraps the FINAL figure, after the
 		 * subtraction, not before it.
 		 */
-		$totalLastOutstandingBalanceOfFourTypes = abs(abs($totalLastOutstandingBalanceOfFourTypes) - $lcAmountInMainCurrency);
-		$currentLcOutstanding = abs(abs($currentLcOutstanding)  - $lcAmountInMainCurrency) ;
+		/**
+		 * ⚠️ REAL BUG FIXED HERE (client-flagged, 2026-08-18, second
+		 * round): the outer abs() turned an OVER-subtraction into a
+		 * bogus positive figure.
+		 *
+		 * In edit mode this issuance's own amount is subtracted so the
+		 * form shows what is outstanding EXCLUDING the record being
+		 * edited. But the two numbers are measured differently — the
+		 * statement end_balance is a running balance in cash-cover
+		 * currency, while $lcAmountInMainCurrency is this issuance's
+		 * amount converted to the main currency — so the subtraction can
+		 * legitimately go below zero. abs() then flipped that negative
+		 * into a positive number equal to the gap, which is exactly the
+		 * reported symptom: opening an LC for editing showed an
+		 * Outstanding Balance that tracked the LC's own value instead of
+		 * the facility's real usage (observed: 450,000 in create vs
+		 * 50,000 in edit for a 500,000 issuance — 50,000 being nothing
+		 * but the difference between the two measures).
+		 *
+		 * Outstanding is a magnitude that cannot be negative, and
+		 * "everything else is already covered by this issuance" means
+		 * zero, not the leftover gap. Clamped instead of mirrored.
+		 */
+		$totalLastOutstandingBalanceOfFourTypes = max(0, abs($totalLastOutstandingBalanceOfFourTypes) - $lcAmountInMainCurrency);
+		$currentLcOutstanding = max(0, abs($currentLcOutstanding) - $lcAmountInMainCurrency);
 		 
 		
 		return response()->json([

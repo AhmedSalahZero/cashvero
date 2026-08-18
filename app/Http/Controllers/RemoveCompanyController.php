@@ -52,7 +52,12 @@ class RemoveCompanyController extends Controller
     {
         // UI is Super-Admin-only; enforce the same gate on the server
         // so a forged POST from any authenticated session cannot wipe a company.
-        abort_unless($request->user()?->isSuperAdmin(), 403);
+        // Permission, not role — see RemoveUsercontroller.
+        abort_unless(
+            \App\Support\Permissions\PermissionResolver::allows($request->user(), 'company.delete'),
+            403,
+            __('You do not have permission to perform this action.')
+        );
 
         $company_id = $request->get('company_id') ;
      

@@ -53,9 +53,19 @@ Route::middleware([])->group(function () {
             Route::put('profile', 'ProfileController@update')->name('profile.update');
             Route::post('toggle-theme', 'ProfileController@toggleTheme')->name('theme.toggle');
 
-            Route::group(['prefix' => 'user-permissions/{user}/', 'as' => 'user.permissions.'], function () {
-                Route::get('/edit/{company?}', 'UsersAndPermissionsController@edit')->middleware('isCashManagement')->name('edit');
-                Route::post('/update', 'UsersAndPermissionsController@update')->name('update');
+            /**
+             * ⚠️ Verb before {user}, never `user-permissions/{user}/…`.
+             *
+             * canViewCurrentCompany reads Request()->segment(2) and treats
+             * it as a company id whenever it is numeric. The old shape put
+             * the USER id in that position, so the screen only worked
+             * because every URL normally carries a /{locale} prefix —
+             * remove or change that and it 403s on a "company" that was
+             * never a company. Same fix as the roles routes above.
+             */
+            Route::group(['prefix' => 'user-permissions', 'as' => 'user.permissions.'], function () {
+                Route::get('/edit/{user}/{company?}', 'UsersAndPermissionsController@edit')->middleware('isCashManagement')->name('edit');
+                Route::post('/update/{user}', 'UsersAndPermissionsController@update')->name('update');
             });
 
             /**

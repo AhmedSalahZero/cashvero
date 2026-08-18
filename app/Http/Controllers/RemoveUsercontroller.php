@@ -47,7 +47,13 @@ class RemoveUsercontroller extends Controller
     {
         // UI is Super-Admin-only; enforce the same gate on the server
         // so a forged POST from any authenticated session cannot delete users.
-        abort_unless($request->user()?->isSuperAdmin(), 403);
+        // Permission, not role — `user.delete` is what the route map
+        // enforces, and a role check here made granting it pointless.
+        abort_unless(
+            \App\Support\Permissions\PermissionResolver::allows($request->user(), 'user.delete'),
+            403,
+            __('You do not have permission to perform this action.')
+        );
 
         $user_id = $request->get('user_id') ;
      

@@ -1,5 +1,6 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
+import FormErrorSummary from '@/Components/FormErrorSummary.vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
@@ -97,9 +98,7 @@ function submit() {
                 </Link>
             </div>
 
-            <div v-if="Object.keys(page.props.errors || {}).length" class="mb-4 px-4 py-3 rounded cvr-badge-overdue text-sm">
-                Please fix the highlighted field(s) below before saving.
-            </div>
+            <FormErrorSummary />
 
             <form @submit.prevent="submit" class="space-y-6" enctype="multipart/form-data">
                 <!-- Sections -->

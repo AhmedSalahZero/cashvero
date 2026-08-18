@@ -578,6 +578,26 @@ class LetterOfCreditIssuanceController
             ] : null,
             'lookupUrl' => route('update.letter.of.credit.outstanding.balance.and.limit', ['company' => $company->id]),
             'exchangeRateLookupUrl' => route('get.exchange.rate.for.date.and.currencies', ['company' => $company->id]),
+            /**
+             * ⚠️ REAL BUG FIXED HERE: this prop was missing entirely,
+             * while the 100%-Cash-Cover variant of this method has always
+             * set it. LcFacilityForm.vue declares `source: String` with
+             * no default, so it was `undefined`, and the live
+             * limit/outstanding lookup builds its query with
+             * `new URLSearchParams({ source: props.source })` — which
+             * stringifies undefined to the literal "undefined".
+             *
+             * updateOutstandingBalanceAndLimits() then saw a source that
+             * is not `lc-facility`, so it skipped the lc_facility_id
+             * filter, applied a currency filter instead, and matched
+             * `where('source', 'undefined')` — no rows. The LC Limit
+             * still resolved (it is read straight from the facility,
+             * independent of source), which is why the form showed a
+             * correct 6,000,000 limit beside a 0 Outstanding Balance and
+             * a Room equal to the full limit. Reported as "everything is
+             * selected and Outstanding is still zero".
+             */
+            'source' => LetterOfCreditIssuance::LC_FACILITY,
             'submitUrl' => $model
                 ? route('update.letter.of.credit.issuance', ['company' => $company->id, 'letterOfCreditIssuance' => $model->id, 'source' => LetterOfCreditIssuance::LC_FACILITY])
                 : route('store.letter.of.credit.issuance', ['company' => $company->id, 'source' => LetterOfCreditIssuance::LC_FACILITY]),
@@ -798,9 +818,28 @@ class LetterOfCreditIssuanceController
         // can't re-read the raw, unresolved request value and overwrite this.
         $model->contract_id = $contractId;
         $model->contract_type = $contractType;
+        /**
+         * ⚠️ Set explicitly, for the same reason contract_id is above.
+         *
+         * purchase_order_id was left to $request->merge() +
+         * storeBasicForm()'s generic re-read, and did not survive it: an
+         * LC saved through "New PO" ended up with purchase_order_id
+         * null even though the PurchaseOrder row had just been created.
+         * getNewPoNumber() reads through that relation, so re-opening
+         * the issuance showed an EMPTY "New PO" field and the number the
+         * user typed was gone — reported as "New PO does not come in
+         * edit". Confirmed on LC #16: contract_type 'no-po',
+         * purchase_order_id null.
+         */
+        $model->purchase_order_id = $purchaseOrderId ?: null;
         $lcCommissionAmount = $request->get('lc_commission_amount', 0);
         $minLcCommissionAmount = $request->get('min_lc_commission_fees', 0);
-        $model->storeBasicForm($request, ['_token', 'save', '_method', 'contract_id', 'contract_type']);
+        // purchase_order_id excluded for the same reason as contract_id:
+        // it is resolved above (a PurchaseOrder may have just been
+        // created for a "New PO"), and storeBasicForm()'s generic
+        // re-read of the raw request would overwrite that with whatever
+        // the hidden field happened to submit.
+        $model->storeBasicForm($request, ['_token', 'save', '_method', 'contract_id', 'contract_type', 'purchase_order_id']);
         // * السجل الجديد عشان update() يقدر يرجّع عليه مصاريف السجل القديم
         $this->lastStoredIssuance = $model;
         $transactionName = $request->get('transaction_name');

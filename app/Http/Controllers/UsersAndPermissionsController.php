@@ -30,7 +30,22 @@ class UsersAndPermissionsController extends Controller
      */
     public function edit(User $user, ?Company $company = null)
     {
-        abort_unless(request()->user()?->isSuperAdmin(), 403);
+        /**
+         * ⚠️ Was `abort_unless(isSuperAdmin(), 403)`, which shadowed the
+         * permission the route already enforces (`user.assign_roles`):
+         * granting someone that right changed nothing, because this
+         * stricter role check refused them anyway. Reported as
+         * "I gave the person the Administration permissions and nothing
+         * happened."
+         *
+         * The route guard is the authority; this is kept only as an
+         * explicit statement of the same requirement at the action.
+         */
+        abort_unless(
+            \App\Support\Permissions\PermissionResolver::allows(request()->user(), 'user.assign_roles'),
+            403,
+            __('You do not have permission to perform this action.')
+        );
 
         $actor = request()->user();
         $held = $user->permissions->pluck('name')->flip();
@@ -100,7 +115,12 @@ class UsersAndPermissionsController extends Controller
      */
     public function update(Request $request, User $user)
     {
-        abort_unless($request->user()?->isSuperAdmin(), 403);
+        // Same reasoning as edit(): the permission, not the role.
+        abort_unless(
+            \App\Support\Permissions\PermissionResolver::allows($request->user(), 'user.assign_roles'),
+            403,
+            __('You do not have permission to perform this action.')
+        );
 
         $submitted = $request->input('permissions', []);
 
