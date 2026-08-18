@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Interfaces\Models\IHaveCreditOverdraftStatement;
+use App\Interfaces\Models\IHaveLeasingContractCreditStatement;
 use App\Interfaces\Models\IHaveMediumTermLoanCreditStatement;
 use App\Models\OpeningBalance;
 use App\Models\OutgoingTransfer;
@@ -145,7 +146,7 @@ use Illuminate\Support\Facades\DB;
  * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\Models\MoneyPayment whereUserId($value)
  * @mixin \Eloquent
  */
-class MoneyPayment extends Model implements IHaveCreditOverdraftStatement, IHaveMediumTermLoanCreditStatement
+class MoneyPayment extends Model implements IHaveCreditOverdraftStatement, IHaveMediumTermLoanCreditStatement, IHaveLeasingContractCreditStatement
 {
     protected $with = [
         // 'payableCheque'
@@ -154,6 +155,16 @@ class MoneyPayment extends Model implements IHaveCreditOverdraftStatement, IHave
     const CASH_PAYMENT  = 'cash_payment';
     const PAYABLE_CHEQUE  = 'payable_cheque';
     const OUTGOING_TRANSFER  = 'outgoing-transfer';
+    /**
+     * * الدفع من خلال شركة تأجير تمويلي: شركة التأجير هي اللي بتدفع للمورد
+     * * من عقد التأجير مباشرة .. فلوس الشركة نفسها ما بتتحركش خالص.
+     *
+     * ⚠️ القيمة لازم تفضل بالشكل ده (underscore/dash) لان
+     * @see deleteRelations()
+     * * بتحوّلها ب dashesToCamelCase عشان توصل لاسم العلاقة
+     * * leasingPayment
+     */
+    const LEASING  = 'leasing_payment';
     const INVOICE_SETTLEMENT_WITH_DOWN_PAYMENT = 'invoice-settlement-with-down-payment';
     const DOWN_PAYMENT = 'down-payment';
     const CLIENT_NAME ='supplier_name';
@@ -273,6 +284,7 @@ class MoneyPayment extends Model implements IHaveCreditOverdraftStatement, IHave
             self::CASH_PAYMENT,
             self::PAYABLE_CHEQUE,
             self::OUTGOING_TRANSFER,
+            self::LEASING,
         ];
     }
     
@@ -292,6 +304,10 @@ class MoneyPayment extends Model implements IHaveCreditOverdraftStatement, IHave
     public function isOutgoingTransfer():bool
     {
         return $this->getType() ==self::OUTGOING_TRANSFER;
+    }
+    public function isLeasingPayment():bool
+    {
+        return $this->getType() ==self::LEASING;
     }
     public function getPartnerName()
     {
@@ -732,6 +748,28 @@ class MoneyPayment extends Model implements IHaveCreditOverdraftStatement, IHave
     {
         return $this->hasOne(MediumTermLoanBankStatement::class, 'money_payment_id', 'id');
     }
+    /**
+     * * السحبة من عقد تأجير تمويلي .. شركة التأجير دفعت للمورد من العقد مباشرة
+     */
+    public function leasingContractCreditBankStatement():HasOne
+    {
+        return $this->hasOne(LeasingContractBankStatement::class, 'money_payment_id', 'id');
+    }
+    /**
+     * * بيانات الدفع من خلال ليزنج: شركة التأجير والعقد وبس
+     */
+    public function leasingPayment():HasOne
+    {
+        return $this->hasOne(LeasingPayment::class, 'money_payment_id', 'id');
+    }
+    public function getLeasingCompanyName()
+    {
+        return $this->leasingPayment ? $this->leasingPayment->getLeasingCompanyName() : __('N/A');
+    }
+    public function getLeasingContractName()
+    {
+        return $this->leasingPayment ? $this->leasingPayment->getLeasingContractName() : __('N/A');
+    }
     public function cashInSafeCreditStatement():HasOne
     {
         return $this->hasOne(CashInSafeStatement::class, 'money_payment_id', 'id');
@@ -809,6 +847,9 @@ class MoneyPayment extends Model implements IHaveCreditOverdraftStatement, IHave
         }
         if ($this->mediumTermLoanCreditBankStatement) {
             return $this->mediumTermLoanCreditBankStatement;
+        }
+        if ($this->leasingContractCreditBankStatement) {
+            return $this->leasingContractCreditBankStatement;
         }
         if ($this->cashInSafeCreditStatement) {
             return $this->cashInSafeCreditStatement ;

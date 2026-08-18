@@ -15,6 +15,8 @@ use App\Models\CustomerInvoice;
 use App\Models\FinancialInstitution;
 use App\Models\FinancialInstitutionAccount;
 use App\Models\ForeignExchangeRate;
+use App\Models\LeasingCompany;
+use App\Models\LeasingContract;
 use App\Models\MoneyPayment;
 use App\Models\MoneyReceived;
 use App\Models\Partner;
@@ -197,9 +199,11 @@ class MoneyPaymentController
     //     return $collection;
     // }
     /**
-     * The 3 tabs on the Money Payment index page, in the original's
-     * nav-tabs order. See class docblock for why there are only 3
-     * (no cheque-collection sub-lifecycle on the payment side).
+     * The tabs on the Money Payment index page, in the original's
+     * nav-tabs order. The first three are the original ones — see the
+     * class docblock for why there is no cheque-collection sub-lifecycle
+     * on the payment side; "Through Leasing" was added on top of them
+     * (2026-08-18).
      */
     protected function tabDefinitions(): array
     {
@@ -242,6 +246,23 @@ class MoneyPaymentController
                     'currency' => __('Currency'),
                     'payment_currency' => __('Payment Currency'),
                     'receipt_number' => __('Receipt Number'),
+                ],
+            ],
+            /**
+             * * الدفعات اللي شركة التأجير دفعتها للمورد من العقد مباشرة.
+             * * مفيش بنك ولا رقم حساب هنا ، فالاعمدة شركة التأجير والعقد.
+             */
+            MoneyPayment::LEASING => [
+                'label' => __('Through Leasing'),
+                'query' => 'getMoneyPaymentLeasing',
+                'page' => 'leasingPage',
+                'searchFields' => [
+                    'partner_name' => __('Supplier Name'),
+                    'delivery_date' => __('Payment Date'),
+                    'leasing_company_name' => __('Leasing Company'),
+                    'leasing_contract_name' => __('Contract Name'),
+                    'currency' => __('Currency'),
+                    'payment_currency' => __('Payment Currency'),
                 ],
             ],
         ];
@@ -389,6 +410,10 @@ class MoneyPaymentController
                 'branch_name' => $moneyPayment->getCashPaymentBranchName(),
                 'receipt_number' => $moneyPayment->getCashPaymentReceiptNumber(),
             ]),
+            MoneyPayment::LEASING => array_merge($common, [
+                'leasing_company_name' => $moneyPayment->getLeasingCompanyName(),
+                'leasing_contract_name' => $moneyPayment->getLeasingContractName(),
+            ]),
             default => $common,
         };
     }
@@ -406,8 +431,9 @@ class MoneyPaymentController
     }
 
     /**
-     * The 3 Money Payment "Money Type" options — matches the original
-     * Blade `<select id="type">`'s static option list exactly.
+     * The Money Payment "Money Type" options. The first three match the
+     * original Blade `<select id="type">`'s static option list exactly;
+     * "Through Leasing" was added on top of it (2026-08-18).
      */
     protected function moneyTypeOptions(): array
     {
@@ -415,6 +441,12 @@ class MoneyPaymentController
             ['value' => MoneyPayment::CASH_PAYMENT, 'label' => __('Cash Payment')],
             ['value' => MoneyPayment::PAYABLE_CHEQUE, 'label' => __('Payable Cheques')],
             ['value' => MoneyPayment::OUTGOING_TRANSFER, 'label' => __('Outgoing Transfer')],
+            /**
+             * * الدفع من خلال شركة تأجير تمويلي .. اخر خيار عشان دا اقل
+             * * الانواع استخداما ، والكارت بتاعه بيسال عن شركة التأجير
+             * * والعقد وبس (مفيش بنك ولا نوع حساب ولا رقم حساب)
+             */
+            ['value' => MoneyPayment::LEASING, 'label' => __('Through Leasing')],
         ];
     }
 
@@ -450,6 +482,7 @@ class MoneyPaymentController
             'selectedBranches' => collect($selectedBranches)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
             'financialInstitutionBanks' => $financialInstitutionBanks->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()]),
             'accountTypes' => $accountTypes->map(fn ($a) => ['id' => $a->id, 'name' => $a->getName()]),
+            'leasingCompanies' => $this->leasingCompaniesForForm($company),
             'urls' => $this->formUrls($company),
         ]);
     }
@@ -512,6 +545,23 @@ class MoneyPaymentController
      * ->name(...) in the original app — same root cause, same fix, as
      * MoneyReceivedController::formUrls().
      */
+    /**
+     * The Leasing Companies the "Through Leasing" card offers.
+     *
+     * Sent on every Money Payment form render (create and edit) exactly
+     * like financialInstitutionBanks is — the card is behind a money
+     * type the user can switch to at any moment, so the list has to be
+     * there before they do.
+     */
+    protected function leasingCompaniesForForm(Company $company)
+    {
+        return $company->leasingCompanies()
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (LeasingCompany $c) => ['id' => $c->id, 'name' => $c->getName()])
+            ->values();
+    }
+
     protected function formUrls(Company $company): array
     {
         return [
@@ -527,6 +577,7 @@ class MoneyPaymentController
             'getPartnersBasedOnCurrency' => $this->companyScopedUrl($company, 'get-partners-based-on-type'),
             'getBranchBasedOnCurrency' => route('get.branch.based.on.currency', ['company' => $company->id]),
             'getCashInSafeEndBalance' => route('get.current.end.balance.of.cash.in.safe.statement', ['company' => $company->id]),
+            'getLeasingContracts' => route('get.leasing.contracts.for.company', ['company' => $company->id]),
         ];
     }
 
@@ -566,6 +617,10 @@ class MoneyPaymentController
                 'account_type_id' => $moneyPayment->getOutgoingTransferAccountTypeId(),
                 'account_number' => $moneyPayment->getOutgoingTransferAccountNumber(),
             ] : null,
+            'leasing_payment' => $moneyPayment->isLeasingPayment() ? [
+                'leasing_company_id' => $moneyPayment->leasingPayment?->getLeasingCompanyId(),
+                'leasing_contract_id' => $moneyPayment->leasingPayment?->getLeasingContractId(),
+            ] : null,
             'payable_cheque' => $moneyPayment->isPayableCheque() ? [
                 'delivery_bank_id' => $moneyPayment->getPayableChequePaymentBankId(),
                 'account_type_id' => $moneyPayment->getPayableChequeAccountTypeId(),
@@ -574,6 +629,46 @@ class MoneyPaymentController
                 'cheque_number' => $moneyPayment->payableCheque?->getChequeNumber(),
             ] : null,
         ];
+    }
+
+    /**
+     * The contracts the "Through Leasing" card may pay from, for the
+     * chosen Leasing Company and payment currency.
+     *
+     * Deliberately its own endpoint rather than a reuse of
+     * getAccountNumbersForAccountType(): that one resolves an
+     * AccountType to a model and asks it for account NUMBERS, and this
+     * money type has no account type and no account numbers at all —
+     * contracts are identified by their name.
+     *
+     * Each row also carries the room available on the payment date, so
+     * the card can show it the moment a contract is picked without a
+     * second round trip.
+     */
+    public function getLeasingContractsForCompany(Company $company, Request $request)
+    {
+        $leasingCompanyId = (int) $request->get('leasingCompanyId');
+        $currency = $request->get('currency');
+        $date = $request->get('date') ?: null;
+
+        if (! $leasingCompanyId) {
+            return response()->json(['status' => true, 'contracts' => []]);
+        }
+
+        $contracts = LeasingContract::payableFor($company->id, $leasingCompanyId, $currency)
+            ->map(fn (LeasingContract $contract) => [
+                'id' => $contract->id,
+                'name' => $contract->getName(),
+                'currency' => $contract->getCurrency(),
+                'limit' => (float) $contract->getLimit(),
+                'available_room' => $contract->getAvailableRoomAt($date),
+            ])
+            ->values();
+
+        return response()->json([
+            'status' => true,
+            'contracts' => $contracts,
+        ]);
     }
 
     public function getContractsForSupplier(Company $company, Request $request)
@@ -757,6 +852,19 @@ class MoneyPaymentController
                 'account_number'=>$request->input('account_number.'.MoneyPayment::OUTGOING_TRANSFER),
                 'account_type'=>$request->input('account_type.'.MoneyPayment::OUTGOING_TRANSFER)
             ];
+        } elseif ($moneyType ==MoneyPayment::LEASING) {
+            /**
+             * * الدفع من خلال ليزنج: شركة التأجير هي اللي بتدفع للمورد من
+             * * العقد .. فمفيش بنك ولا نوع حساب ولا رقم حساب هنا خالص ، وعشان
+             * * كده $financialInstitutionId بيفضل null وكل قواعد حسابات البنوك
+             * * بتعدي من غير ما تشتغل.
+             */
+            $relationName = 'leasingPayment';
+            $relationData = [
+                'leasing_company_id'=>$request->input('leasing_company_id'),
+                'leasing_contract_id'=>$request->input('leasing_contract_id'),
+                'actual_payment_date'=>$data['delivery_date'],
+            ];
         } elseif ($moneyType ==MoneyPayment::PAYABLE_CHEQUE) {
             $relationName = 'payableCheque';
             $financialInstitutionId = $request->input('delivery_bank_id.'.MoneyPayment::PAYABLE_CHEQUE) ;
@@ -779,6 +887,13 @@ class MoneyPaymentController
         $deliveryBank = FinancialInstitution::find($financialInstitutionId);
         $deliveryBankName = $deliveryBank ? $deliveryBank->getName() : null;
         $bankNameOrBranchName =  $moneyType == MoneyPayment::CASH_PAYMENT ? Branch::find($relationData['delivery_branch_id'])->getName() : $deliveryBankName ;
+        /**
+         * * الجهة الدافعة في حالة الليزنج هي شركة التأجير مش بنك ، عشان
+         * * كشف حساب المورد يقول اسمها صح مش N/A
+         */
+        if ($moneyType == MoneyPayment::LEASING) {
+            $bankNameOrBranchName = LeasingCompany::find($relationData['leasing_company_id'])?->getName() ;
+        }
         $data['paid_amount'] =$amountInPaymentCurrency ;
         $data['amount_in_invoice_currency'] = $invoiceCurrencyAmount ;
 		 $exchangeRate = $currencyName == $paymentCurrency ? 1 : number_unformat($request->input('exchange_rate.'.$moneyType, 1)) ;
@@ -896,6 +1011,7 @@ class MoneyPaymentController
             'selectedBranches' => collect($selectedBranches)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
             'financialInstitutionBanks' => $financialInstitutionBanks->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()]),
             'accountTypes' => $accountTypes->map(fn ($a) => ['id' => $a->id, 'name' => $a->getName()]),
+            'leasingCompanies' => $this->leasingCompaniesForForm($company),
             'urls' => array_merge($this->formUrls($company), [
                 'update' => route('update.money.payment', ['company' => $company->id, 'moneyPayment' => $moneyPayment->id]),
             ]),

@@ -211,6 +211,13 @@ class ContractLoanScheduleController extends Controller
         $settlement->handleCreditStatement($company->id, $financialInstitutionId, $accountType, $currentAccountNumber, null, $date, $amount, null, null, $commentEn, $commentAr);
         $settlement->handleLoanStatement($company->id, $financialInstitutionId, $currentAccountNumber, $date, $amount, $commentEn, $commentAr);
 
+        /**
+         * * لو العقد ده اتدفعت منه فواتير موردين من خلال كاش فيرو (نوع الدفع
+         * * Through Leasing) يبقي ليه كشف حساب سحب/سداد خاص بيه .. والقسط
+         * * اللي اتسدد دلوقتي بيرجّع جزء ال principle بتاعه للمتاح فيه.
+         */
+        $settlement->handleLeasingContractRepayment($company->id, $commentEn, $commentAr);
+
         // ⚠️ Confirmed fix: this was back(), which leaves the user on
         // the same settlement page after paying — the natural next
         // step is seeing the updated schedule table, not re-settling

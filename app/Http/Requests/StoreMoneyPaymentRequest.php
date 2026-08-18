@@ -9,6 +9,7 @@ use App\Rules\AmountCanNotBeGreaterThanEndBalanceAtPaymentDate;
 use App\Rules\AtLeaseOneSettlementMustBeExist;
 use App\Rules\ContractDownPaymentRule;
 use App\Rules\DateMustBeGreaterThanOrEqualDate;
+use App\Rules\LeasingContractRoomRule;
 use App\Rules\MediumTermLoanFirstInstallmentDateRule;
 use App\Rules\MediumTermLoanRoomRule;
 use App\Rules\ReceivingOrPaymentDateRule;
@@ -18,6 +19,7 @@ use App\Rules\UniqueChequeNumberRule;
 use App\Rules\UniqueReceiptNumberForReceivingBranchRule;
 use App\Rules\ValidAllocationsRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreMoneyPaymentRequest extends FormRequest 
 {
@@ -100,6 +102,7 @@ class StoreMoneyPaymentRequest extends FormRequest
 		$accountTypeId = $this->input('account_type.'.$type);
 		$accountNumber = $this->input('account_number.'.$type);
 		$financialInstitutionId = $this->input('delivery_bank_id.'.$type);
+		$isLeasing = $type == MoneyPayment::LEASING ;
 		$openingBalanceDate = null;
 		if($financialInstitutionId && $accountTypeId && $accountNumber ){
 			$financialInstitution = FinancialInstitution::find($financialInstitutionId);
@@ -137,6 +140,22 @@ class StoreMoneyPaymentRequest extends FormRequest
 			 * * تاني من التاريخ ده وما بعده
 			 */
 			'medium_term_loan_first_installment_date'=>new MediumTermLoanFirstInstallmentDateRule($this->route('company'),$accountTypeId,$accountNumber,$financialInstitutionId,$type == MoneyPayment::PAYABLE_CHEQUE ? $this->due_date : $this->delivery_date),
+			/**
+			 * * الدفع من خلال ليزنج: شركة التأجير والعقد بس.
+			 * * ال exists بتضمن ان العقد بتاع الشركة دي فعلا وجاري ، وقاعدة
+			 * * ال room بتمنع الدفع باكتر من المتبقي في العقد بتاريخ الدفع.
+			 * * وباقي قواعد حسابات البنوك فوق بتعدي من غير ما تشتغل لان نوع
+			 * * الدفع ده مش في اي من قوايمها.
+			 */
+			'leasing_company_id'=>$isLeasing ? ['required'] : [],
+			'leasing_contract_id'=>$isLeasing ? [
+				'required',
+				Rule::exists('leasing_contracts','id')
+					->where('company_id',$companyId)
+					->where('leasing_company_id',$this->input('leasing_company_id'))
+					->where('status',\App\Models\LeasingContract::RUNNING),
+				new LeasingContractRoomRule($companyId,$this->input('paid_amount.'.$type),$this->input('leasing_company_id'),$this->delivery_date),
+			] : [],
 			'downPayment_over_contract'=>[new ContractDownPaymentRule($paidAmount,false)]
         ];
     }
@@ -155,6 +174,9 @@ class StoreMoneyPaymentRequest extends FormRequest
 			'due_date.required'=>__('Cheque Due Date Is Required'),
 			'delivery_date.required'=>__('Please Select Payment Date'),
 			'cheque_number.required'=>__('Please Insert Cheque Number'),
+			'leasing_company_id.required'=>__('Please Select Leasing Company'),
+			'leasing_contract_id.required'=>__('Please Select Contract Name'),
+			'leasing_contract_id.exists'=>__('This Contract Does Not Belong To The Selected Leasing Company'),
 		];
 	}
 	

@@ -113,6 +113,7 @@ class LeasingContractController
                     'duration_formatted' => $contract->getDurationFormatted(),
                     'installment_interval_formatted' => $contract->getPaymentInstallmentIntervalFormatted(),
                     'upload_schedule_url' => route('view.uploading', ['company' => $company->id, 'model' => 'ContractLoanSchedule', 'loanId' => $contract->id]),
+                    'statement_url' => route('leasing.contracts.statement', ['company' => $company->id, 'leasingCompany' => $leasingCompany->id, 'leasingContract' => $contract->id]),
                     'edit_url' => route('leasing.contracts.edit', ['company' => $company->id, 'leasingCompany' => $leasingCompany->id, 'leasingContract' => $contract->id]),
                     'delete_url' => route('leasing.contracts.destroy', ['company' => $company->id, 'leasingCompany' => $leasingCompany->id, 'leasingContract' => $contract->id]),
                 ];
@@ -129,6 +130,39 @@ class LeasingContractController
                 'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
             ],
         ]);
+    }
+
+    /**
+     * The contract's own statement, in two halves — mirrors
+     * MediumTermLoanController::statement().
+     *
+     * Half 1 is always shown: interest and principle, DUE vs PAID vs
+     * REMAINING, computed straight from the installment schedule. It is
+     * meaningful even for a contract CashVero never paid anything out
+     * of.
+     *
+     * Half 2 is the drawdown ledger, which only has rows once suppliers
+     * have actually been paid from the contract through the "Through
+     * Leasing" money type.
+     */
+    public function statement(Company $company, LeasingCompany $leasingCompany, LeasingContract $leasingContract)
+    {
+        return \Inertia\Inertia::render('LeasingContract/Statement', array_merge(
+            \App\Support\LeasingContractStatementData::for($leasingContract),
+            [
+                'company' => ['id' => $company->id],
+                'leasingCompany' => ['id' => $leasingCompany->id, 'name' => $leasingCompany->getName()],
+                'backUrl' => route('leasing.contracts.index', ['company' => $company->id, 'leasingCompany' => $leasingCompany->id]),
+                'backLabel' => __('Back to Leasing Contracts'),
+                'navUrls' => [
+                    'home' => route('home', ['company' => $company->id]),
+                    'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
+                    'customers' => route('partners.index', ['company' => $company->id, 'type' => 'customers']),
+                    'suppliers' => route('partners.index', ['company' => $company->id, 'type' => 'suppliers']),
+                    'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
+                ],
+            ]
+        ));
     }
 
     /**

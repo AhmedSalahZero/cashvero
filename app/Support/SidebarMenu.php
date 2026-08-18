@@ -72,6 +72,7 @@ class SidebarMenu
                 self::item(__('Bank Statement'), $user->hasPermissionKey('report_bank_statement.view'), route('view.bank.statement', ['company' => $companyId]), inertia: true, icon: 'landmark'),
                 self::item(__('Safe Statement'), $user->hasPermissionKey('report_safe_statement.view'), route('view.safe.statement', ['company' => $companyId]), inertia: true, icon: 'archive'),
                 self::item(__('Factoring Statement'), $user->hasPermissionKey('report_factoring_statement.view'), route('view.factoring.statement', ['company' => $companyId]), inertia: true, icon: 'receipt'),
+                self::item(__('Leasing Contract Statement'), $user->hasPermissionKey('report_leasing_contract_statement.view'), route('view.leasing.contract.statement', ['company' => $companyId]), inertia: true, icon: 'truck'),
                 self::item(__('LG By Beneficiary Name'), $user->hasPermissionKey('report_lg_by_beneficiary.view'), route('view.lg.by.beneficiary.name.report', ['company' => $companyId]), inertia: true, icon: 'file-badge'),
                 self::item(__('LG By Bank Name'), $user->hasPermissionKey('report_lg_by_bank.view'), route('view.lg.by.bank.name.report', ['company' => $companyId]), inertia: true, icon: 'building'),
                 self::item(__('LG & LC Statement'), $user->hasPermissionKey('report_lg_lc_statement.view'), route('view.lg.lc.bank.statement', ['company' => $companyId]), inertia: true, icon: 'files'),

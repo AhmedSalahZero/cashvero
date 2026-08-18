@@ -2,6 +2,7 @@
 namespace App\Traits\Models;
 
 use App\Interfaces\Models\IHaveCreditOverdraftStatement;
+use App\Interfaces\Models\IHaveLeasingContractCreditStatement;
 use App\Interfaces\Models\IHaveMediumTermLoanCreditStatement;
 use App\Models\AccountType;
 use App\Models\CleanOverdraft;
@@ -93,6 +94,32 @@ trait HasCreditStatements
 			]) ;
 			
 			// $this->storeOverdraftAgainstAssignmentOfContractCreditBankStatement($moneyType,$odAgainstAssignmentOfContract,$statementDate,$paidAmount,$commentEn,$commentAr);
+		}
+		/**
+		 * * الدفع من خلال ليزنج .. شركة التأجير دفعت للمورد من العقد مباشرة
+		 * * فا بتنزل credit على كشف حساب العقد وبتقلل المتاح فيه.
+		 *
+		 * ⚠️ الفرع ده مربوط بنوع الدفع نفسه مش بنوع الحساب ، عكس كل الفروع
+		 * * اللي فوق. الدفع من خلال ليزنج مالوش account type اصلا (مفيش بنك
+		 * * ولا رقم حساب) .. العقد بييجي من علاقة leasingPayment اللي
+		 * * الكنترولر بيعملها قبل ما ينده على الدالة دي.
+		 */
+		elseif($this instanceof IHaveLeasingContractCreditStatement && $moneyType == MoneyPayment::LEASING){
+			$leasingContract = $this->leasingPayment?->leasingContract ;
+			if($leasingContract){
+				$this->leasingContractCreditBankStatement()->create([
+					'type'=>$moneyType ,
+					'leasing_contract_id'=>$leasingContract->id ,
+					'company_id'=>$this->company_id?:$companyId ,
+					'date'=>$statementDate,
+					'limit'=>$leasingContract->getLimit(),
+					'beginning_balance'=>0 ,
+					'debit'=>0,
+					'credit'=>$paidAmount,
+					'comment_en'=>$commentEn,
+					'comment_ar'=>$commentAr
+				]);
+			}
 		}
 		elseif($this instanceof IHaveMediumTermLoanCreditStatement && $accountType && $accountType->getSlug() == AccountType::MEDIUM_TERM_LOAN){
 			/**

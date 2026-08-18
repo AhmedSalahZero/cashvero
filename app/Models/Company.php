@@ -802,6 +802,54 @@ class Company extends Model implements HasMedia
 		])
 		->orderByDesc('delivery_date') ;
     }
+    /**
+     * The "Through Leasing" tab's list — payments the leasing company
+     * made to a supplier straight out of a leasing contract.
+     *
+     * Same shape as getMoneyPaymentOutgoingTransfer(), minus every
+     * bank-account search field (this money type has no bank, no account
+     * type and no account number) and plus the two it does have.
+     */
+    public function getMoneyPaymentLeasing(?string $startDate = null, ?string $endDate = null, $activeTab = null): HasMany
+    {
+        return $this->moneyPayments()->whereNull('advanced_opening_balance_id')->where('type', MoneyPayment::LEASING)->filterByDeliveryDate($startDate, $endDate)
+		->when($activeTab == MoneyPayment::LEASING, function ($query) {
+			$searchFieldName = Request('field');
+			$value = Request('value');
+			$from = Request('from');
+			$to = Request('to');
+			$query->when($searchFieldName == 'partner_name',function() use ($query,$value){
+				$query->whereHas('partner',function($query) use ($value){
+					$query->where('name', 'like', '%'.$value.'%');
+				});
+			})
+			->when($searchFieldName == 'delivery_date',function() use ($query,$from,$to){
+				$query->whereBetween('delivery_date', [$from, $to]);
+			})
+			->when($searchFieldName == 'leasing_company_name',function() use ($query,$value){
+				$query->whereHas('leasingPayment.leasingCompany',function($query) use ($value){
+					$query->where('name', 'like', '%'.$value.'%');
+				});
+			})
+			->when($searchFieldName == 'leasing_contract_name',function() use ($query,$value){
+				$query->whereHas('leasingPayment.leasingContract',function($query) use ($value){
+					$query->where('name', 'like', '%'.$value.'%');
+				});
+			})
+			->when($searchFieldName == 'currency',function() use ($query,$value){
+				$query->where('currency', 'like', '%'.$value.'%');
+			})
+			->when($searchFieldName == 'payment_currency',function() use ($query,$value){
+				$query->where('payment_currency', 'like', '%'.$value.'%');
+			});
+		})
+		->with([
+			'partner:id,name',
+			'leasingPayment.leasingCompany:id,name',
+			'leasingPayment.leasingContract:id,name',
+		])
+		->orderByDesc('delivery_date') ;
+    }
 	// public function getMoneyPaymentOutgoingTransfer(?string $startDate = null, ?string $endDate = null):Collection
     // {
     //     return $this->moneyPayments->whereNull('advanced_opening_balance_id')->where('type', MoneyPayment::OUTGOING_TRANSFER)->filterByDeliveryDate($startDate, $endDate)->sortByDesc('delivery_date') ;

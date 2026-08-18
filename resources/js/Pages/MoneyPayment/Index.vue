@@ -29,7 +29,7 @@ const props = defineProps({
    cheque-collection sub-lifecycle (Under Collection/Collected/
    Rejected) the way Money Received does; a payable cheque goes
    straight from "payable" to "paid" in one step. */
-const tabOrder = ['payable_cheque', 'outgoing-transfer', 'cash_payment'];
+const tabOrder = ['payable_cheque', 'outgoing-transfer', 'cash_payment', 'leasing_payment'];
 
 function switchTab(key) {
     if (key === props.activeTab) return;
@@ -295,6 +295,15 @@ function submitMarkAsPaid() {
                                 <th class="px-4 py-3 text-left">Receipt Number</th>
                             </template>
 
+                            <!-- No bank / account type / account number here:
+                                 the leasing company is the paying party. -->
+                            <template v-else-if="activeTab === 'leasing_payment'">
+                                <th class="px-4 py-3 text-left">Leasing Company</th>
+                                <th class="px-4 py-3 text-left">Contract Name</th>
+                                <th class="px-4 py-3 text-left">Paid Amount</th>
+                                <th class="px-4 py-3 text-left">Currency</th>
+                            </template>
+
                             <th class="px-4 py-3 text-left">Control</th>
                         </tr>
                     </thead>
@@ -335,6 +344,13 @@ function submitMarkAsPaid() {
                                 <td class="px-4 py-3 cvr-num">{{ row.paid_amount_formatted }}</td>
                                 <td class="px-4 py-3 uppercase cvr-text-secondary">{{ row.currency_formatted }}</td>
                                 <td class="px-4 py-3 cvr-text-secondary">{{ row.receipt_number }}</td>
+                            </template>
+
+                            <template v-else-if="activeTab === 'leasing_payment'">
+                                <td class="px-4 py-3 cvr-text-secondary">{{ row.leasing_company_name }}</td>
+                                <td class="px-4 py-3 cvr-text-secondary">{{ row.leasing_contract_name }}</td>
+                                <td class="px-4 py-3 cvr-num">{{ row.paid_amount_formatted }}</td>
+                                <td class="px-4 py-3 uppercase cvr-text-secondary">{{ row.currency_formatted }}</td>
                             </template>
 
                             <!-- Control -->

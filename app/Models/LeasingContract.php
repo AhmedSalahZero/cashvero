@@ -285,4 +285,76 @@ class LeasingContract extends Model
             ->values()
             ->all();
     }
+
+    /* ─────────────────────────────────────────────────────────────────
+     | Leasing Contract as a SOURCE OF PAYMENT
+     |
+     | Reached through the "Through Leasing" money type on the Money
+     | Payment screen: the leasing company pays the supplier straight out
+     | of this contract, which draws its limit down. See the header of
+     | database/migrations/2026_08_18_150000_add_leasing_as_money_payment_type.php
+     | for the business shape and why this is a money type rather than an
+     | account type.
+     ───────────────────────────────────────────────────────────────── */
+
+    public function bankStatements(): HasMany
+    {
+        return $this->hasMany(LeasingContractBankStatement::class, 'leasing_contract_id', 'id');
+    }
+
+    /**
+     * * هل اتسحب من العقد دا اي حاجه فعلا (يعني اتدفع بيه فاتورة مورد)
+     */
+    public function hasDrawdowns(): bool
+    {
+        return $this->bankStatements()->where('credit', '>', 0)->exists();
+    }
+
+    /**
+     * * الرو المتاح = الحد ناقص المسحوب .. وبيزيد تاني كل ما يتسدد جزء من
+     * * ال principle من الاقساط (نفس قاعدة القرض متوسط الاجل بالظبط)
+     *
+     * ⚠️ العقد اللي لسه مافيش عليه اي حركة ما لوش صف في الجدول خالص .. يبقي
+     * * غياب الصف معناه "لسه ما اتسحبش منه حاجه" مش "الرصيد صفر" .. فالمتاح
+     * * هو الحد كله. ولاحظ ان دا لازم يتطبق على كل تاريخ لوحده: لو اتسحب في
+     * * 01-02 وانت بتدخل دفعة بتاريخ 15-01 يبقي المتاح في التاريخ ده لسه
+     * * الحد الكامل.
+     */
+    public function getAvailableRoomAt(?string $date = null): float
+    {
+        /**
+         * @var LeasingContractBankStatement|null $lastRow
+         */
+        $lastRow = $this->bankStatements()
+            ->when($date, fn ($q) => $q->where('date', '<=', $date))
+            ->orderByRaw('full_date desc , id desc')
+            ->first();
+
+        return $lastRow ? (float) $lastRow->getRoom() : (float) $this->getLimit();
+    }
+
+    public function getAvailableRoomAtFormatted(?string $date = null): string
+    {
+        return number_format($this->getAvailableRoomAt($date), 2);
+    }
+
+    /**
+     * The contracts the "Through Leasing" card may pay from: every
+     * RUNNING contract of the chosen leasing company, in this company,
+     * matching the payment currency.
+     *
+     * There is deliberately no new/existing flag (owner's decision,
+     * 2026-08-18) — a contract is payable simply by being running.
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, static>
+     */
+    public static function payableFor(int $companyId, int $leasingCompanyId, ?string $currencyName = null)
+    {
+        return self::where('company_id', $companyId)
+            ->where('leasing_company_id', $leasingCompanyId)
+            ->where('status', self::RUNNING)
+            ->when($currencyName, fn ($q) => $q->where('currency', $currencyName))
+            ->orderBy('name')
+            ->get();
+    }
 }

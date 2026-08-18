@@ -605,6 +605,17 @@ class PermissionRegistry
                 'export' => ['view bank statement report'],
             ],
         ],
+        'report_leasing_contract_statement' => [
+            'label' => 'Leasing Contract Statement',
+            'group' => 'reports',
+            'hint' => 'The installment breakdown and drawdown ledger of a leasing contract.',
+            // INHERITED: the leasing contract's own view permission, so
+            // whoever may open a contract may read its statement — the
+            // 📄 button on the contract list is gated by exactly that.
+            'actions' => [
+                'view' => ['view leasing contract'],
+            ],
+        ],
         'report_factoring_charges' => [
             'label' => 'Factoring Charges Statement',
             'group' => 'reports',

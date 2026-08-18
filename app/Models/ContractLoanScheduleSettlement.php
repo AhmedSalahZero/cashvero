@@ -136,10 +136,21 @@ class ContractLoanScheduleSettlement extends Model
         return $this->hasMany(LoanStatement::class, 'contract_loan_schedule_settlement_id', 'id')->orderBy('full_date', 'desc');
     }
 
+    /**
+     * The repayment rows this settlement posted on the leasing
+     * contract's own drawdown ledger — see
+     * handleLeasingContractRepayment() below.
+     */
+    public function leasingContractBankStatements()
+    {
+        return $this->hasMany(LeasingContractBankStatement::class, 'contract_loan_schedule_settlement_id', 'id')->orderBy('full_date', 'desc');
+    }
+
     public function deleteAllRelations(): void
     {
         CurrentAccountBankStatement::deleteButTriggerChangeOnLastElement($this->currentAccountCreditBankStatements);
         LoanStatement::deleteButTriggerChangeOnLastElement($this->loanStatements);
+        LeasingContractBankStatement::deleteButTriggerChangeOnLastElement($this->leasingContractBankStatements);
     }
 
     public function handleLoanStatement(int $companyId, int $financialInstitutionId, string $accountNumber, string $date, $debitAmount, string $commentEn, string $commentAr): void
@@ -152,6 +163,98 @@ class ContractLoanScheduleSettlement extends Model
             'is_credit' => 0,
             'date' => $date,
             'debit' => $debitAmount,
+            'comment_en' => $commentEn,
+            'comment_ar' => $commentAr,
+        ]);
+    }
+
+    /* ─────────────────────────────────────────────────────────────────
+     | Leasing Contract repayment
+     |
+     | Copies LoanScheduleSettlement::handleMediumTermLoanRepayment()
+     | for the leasing side: repaying an installment posts its PRINCIPLE
+     | portion as a debit on the contract's drawdown ledger, which lifts
+     | end_balance back toward zero and replenishes room. The interest
+     | portion is recorded next to it but never moves the balance —
+     | a leasing installment already bundles its interest inside
+     | schedule_payment, so adding it here would double-count it.
+     ───────────────────────────────────────────────────────────────── */
+
+    /**
+     * * جزء ال principle اللي اتسدد لحد اجمالي مبلغ $paidSoFar على القسط دا.
+     * * الفايدة بتتاخد الاول بالكامل ، فاللي بعدها بس هو اللي بيروح للاصل.
+     */
+    public static function principlePaidFor(float $paidSoFar, float $interestAmount, float $principleAmount): float
+    {
+        return max(0, min($paidSoFar - $interestAmount, $principleAmount));
+    }
+
+    /**
+     * * قيمة الفايدة اللي اتسددت لحد اجمالي مبلغ $paidSoFar على القسط دا.
+     * * الفايدة بتتاخد الاول بالكامل .. فا هي ابسط حاجه: اللي دفعته او قيمة
+     * * الفايدة .. ايهما اقل.
+     */
+    public static function interestPaidFor(float $paidSoFar, float $interestAmount): float
+    {
+        return max(0, min($paidSoFar, $interestAmount));
+    }
+
+    /**
+     * Posts this settlement's principle half onto the contract ledger.
+     *
+     * ⚠️ Deliberately computed as (paid AFTER this settlement) minus
+     * (paid BEFORE it), not as a share of this settlement's own amount:
+     * when an installment is paid over several settlements the interest
+     * must be taken in full first, and only then does the principle
+     * start moving. Taking a proportion of each payment would free room
+     * too early.
+     */
+    public function handleLeasingContractRepayment(int $companyId, string $commentEn, string $commentAr): void
+    {
+        $schedule = $this->contractLoanSchedule;
+        $leasingContract = $schedule?->leasingContract;
+
+        /**
+         * * لو العقد ما اتسحبش منه اي حاجه من خلال كاش فيرو يبقي مفيش حساب
+         * * ننزل عليه اصلا .. العقود القديمة اللي الشركة خدتها قبل كاش فيرو
+         * * بتتسدد اقساطها بس ، وتفصيلة الفايدة/الاصل بتاعتها بتظهر برضه في
+         * * شاشة كشف حساب العقد لانها بتتحسب من جدول الاقساط مباشرة.
+         */
+        if (! $leasingContract || ! $leasingContract->hasDrawdowns()) {
+            return;
+        }
+
+        $interestAmount = (float) $schedule->getInterestAmount();
+        $principleAmount = (float) $schedule->getPrincipleAmount();
+
+        /**
+         * * اللي اتدفع قبل الدفعة دي على نفس القسط .. مرتب بال id لان الشاشة
+         * * اصلا ما بتسمحش بتعديل او حذف غير اخر دفعة
+         */
+        $paidBefore = (float) $schedule->settlements()
+            ->where('id', '<', $this->id)
+            ->sum('amount');
+        $paidAfter = $paidBefore + (float) $this->getAmount();
+
+        $principleDebit = self::principlePaidFor($paidAfter, $interestAmount, $principleAmount)
+            - self::principlePaidFor($paidBefore, $interestAmount, $principleAmount);
+        $interestPaid = self::interestPaidFor($paidAfter, $interestAmount)
+            - self::interestPaidFor($paidBefore, $interestAmount);
+
+        if ($principleDebit <= 0 && $interestPaid <= 0) {
+            return;
+        }
+
+        $this->leasingContractBankStatements()->create([
+            'leasing_contract_id' => $leasingContract->id,
+            'company_id' => $companyId,
+            'type' => LeasingContractBankStatement::INSTALLMENT_REPAYMENT,
+            'date' => $this->getDate(),
+            'limit' => $leasingContract->getLimit(),
+            'beginning_balance' => 0,
+            'debit' => max(0, $principleDebit),
+            'credit' => 0,
+            'interest_amount' => max(0, $interestPaid),
             'comment_en' => $commentEn,
             'comment_ar' => $commentAr,
         ]);

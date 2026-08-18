@@ -32,6 +32,13 @@ const props = defineProps({
     selectedBranches: Array,
     financialInstitutionBanks: Array,
     accountTypes: Array,
+    /**
+     * Leasing companies for the "Through Leasing" card. That money type
+     * has no bank, no account type and no account number — the leasing
+     * company pays the supplier straight out of a contract — so its card
+     * asks only for the company and then the contract.
+     */
+    leasingCompanies: { type: Array, default: () => [] },
     urls: Object,
 });
 
@@ -175,6 +182,12 @@ const payableCheque = reactive({
     chequeNumber: props.model?.payable_cheque?.cheque_number || '',
 });
 
+const leasing = reactive({
+    leasingCompanyId: props.model?.leasing_payment?.leasing_company_id || '',
+    leasingContractId: props.model?.leasing_payment?.leasing_contract_id || '',
+});
+
+const leasingContracts = ref([]);
 const outgoingTransferAccountNumbers = ref([]);
 const payableChequeAccountNumbers = ref([]);
 const cashPaymentBalance = ref(null);
@@ -366,6 +379,27 @@ async function fetchSuppliersForPartnerType() {
     }
 }
 
+/* The contracts of the chosen leasing company, in the payment
+   currency, each already carrying the room available on the payment
+   date — so picking one shows the remaining amount with no second
+   round trip. Its own endpoint, not the account-number one: this money
+   type has no account type to resolve. */
+async function fetchLeasingContracts() {
+    leasingContracts.value = [];
+    if (!leasing.leasingCompanyId || !paymentCurrency.value) return;
+    const params = new URLSearchParams({
+        leasingCompanyId: leasing.leasingCompanyId,
+        currency: paymentCurrency.value,
+        date: deliveryDate.value || '',
+    });
+    const result = await fetchJson(`${props.urls.getLeasingContracts}?${params.toString()}`);
+    leasingContracts.value = result.data?.contracts || [];
+}
+
+const selectedLeasingContract = computed(() =>
+    leasingContracts.value.find(c => String(c.id) === String(leasing.leasingContractId)) || null,
+);
+
 /* ── Watchers ─────────────────────────────────────────────────── */
 watch(paymentCurrency, () => {
     fetchBranchesForCurrency();
@@ -373,6 +407,7 @@ watch(paymentCurrency, () => {
     if (moneyType.value === 'outgoing-transfer') fetchAccountNumbers(outgoingTransfer.accountTypeId, outgoingTransfer.deliveryBankId, outgoingTransferAccountNumbers);
     if (moneyType.value === 'payable_cheque') fetchAccountNumbers(payableCheque.accountTypeId, payableCheque.deliveryBankId, payableChequeAccountNumbers);
     if (moneyType.value === 'cash_payment') fetchCashPaymentBalance();
+    if (moneyType.value === 'leasing_payment') fetchLeasingContracts();
 });
 watch(invoiceCurrency, (newCurrency) => {
     if (partnerType.value === 'is_supplier' && newCurrency) {
@@ -397,13 +432,22 @@ watch(() => payableCheque.deliveryBankId, () => fetchAccountNumbers(payableChequ
 watch(() => outgoingTransfer.accountNumber, () => fetchAccountBalance(outgoingTransfer.accountTypeId, outgoingTransfer.accountNumber, outgoingTransfer.deliveryBankId, outgoingTransferBalance, outgoingTransferNetBalance));
 watch(() => payableCheque.accountNumber, () => fetchAccountBalance(payableCheque.accountTypeId, payableCheque.accountNumber, payableCheque.deliveryBankId, payableChequeBalance, payableChequeNetBalance));
 watch(() => cashPayment.deliveryBranchId, fetchCashPaymentBalance);
+watch(() => leasing.leasingCompanyId, () => {
+    // A contract belongs to exactly one leasing company, so a leftover
+    // selection from the previous one would be silently wrong.
+    leasing.leasingContractId = '';
+    fetchLeasingContracts();
+});
 watch(deliveryDate, () => {
     if (moneyType.value === 'cash_payment') fetchCashPaymentBalance();
+    // The room is read AT the payment date, so moving the date moves it.
+    if (moneyType.value === 'leasing_payment') fetchLeasingContracts();
     if (moneyType.value === 'outgoing-transfer') fetchAccountBalance(outgoingTransfer.accountTypeId, outgoingTransfer.accountNumber, outgoingTransfer.deliveryBankId, outgoingTransferBalance, outgoingTransferNetBalance);
     if (moneyType.value === 'payable_cheque') fetchAccountBalance(payableCheque.accountTypeId, payableCheque.accountNumber, payableCheque.deliveryBankId, payableChequeBalance, payableChequeNetBalance);
 });
 watch(moneyType, () => {
     if (moneyType.value === 'cash_payment') fetchCashPaymentBalance();
+    if (moneyType.value === 'leasing_payment') fetchLeasingContracts();
     if (moneyType.value === 'outgoing-transfer') fetchAccountBalance(outgoingTransfer.accountTypeId, outgoingTransfer.accountNumber, outgoingTransfer.deliveryBankId, outgoingTransferBalance, outgoingTransferNetBalance);
     if (moneyType.value === 'payable_cheque') fetchAccountBalance(payableCheque.accountTypeId, payableCheque.accountNumber, payableCheque.deliveryBankId, payableChequeBalance, payableChequeNetBalance);
 });
@@ -415,6 +459,7 @@ onMounted(() => {
         if (outgoingTransfer.accountTypeId) fetchAccountNumbers(outgoingTransfer.accountTypeId, outgoingTransfer.deliveryBankId, outgoingTransferAccountNumbers);
         if (payableCheque.accountTypeId) fetchAccountNumbers(payableCheque.accountTypeId, payableCheque.deliveryBankId, payableChequeAccountNumbers);
         if (moneyType.value === 'cash_payment') fetchCashPaymentBalance();
+        if (moneyType.value === 'leasing_payment') fetchLeasingContracts();
         if (moneyType.value === 'outgoing-transfer' && outgoingTransfer.accountNumber) fetchAccountBalance(outgoingTransfer.accountTypeId, outgoingTransfer.accountNumber, outgoingTransfer.deliveryBankId, outgoingTransferBalance, outgoingTransferNetBalance);
         if (moneyType.value === 'payable_cheque' && payableCheque.accountNumber) fetchAccountBalance(payableCheque.accountTypeId, payableCheque.accountNumber, payableCheque.deliveryBankId, payableChequeBalance, payableChequeNetBalance);
     } else {
@@ -494,6 +539,13 @@ function buildPayload() {
         payload.delivery_bank_id = { 'outgoing-transfer': outgoingTransfer.deliveryBankId };
         payload.account_type = { 'outgoing-transfer': outgoingTransfer.accountTypeId };
         payload.account_number = { 'outgoing-transfer': outgoingTransfer.accountNumber };
+    }
+    if (moneyType.value === 'leasing_payment') {
+        // Flat, not keyed by money type: there is exactly one of each on
+        // this form, unlike the bank fields which the original markup
+        // duplicates per money type.
+        payload.leasing_company_id = leasing.leasingCompanyId;
+        payload.leasing_contract_id = leasing.leasingContractId;
     }
     if (moneyType.value === 'payable_cheque') {
         payload.delivery_bank_id = { payable_cheque: payableCheque.deliveryBankId };
@@ -716,6 +768,55 @@ function submit() {
                     </div>
                     <div>
                         <label class="cvr-form-label">Transfer Amount [{{ paymentCurrency }}] *</label>
+                        <input v-model="paidAmount" type="number" step="any" min="0" class="cvr-input w-full px-3 py-2 rounded" />
+                    </div>
+                </div>
+                <div v-if="showExchangeRateFields" class="cvr-form-grid-2-narrow mt-4">
+                    <div>
+                        <label class="cvr-form-label">Exchange Rate *</label>
+                        <input v-model="exchangeRateInput" @blur="onExchangeRateBlur" type="text" inputmode="decimal" placeholder="e.g. 50 or 1/50" class="cvr-input w-full px-3 py-2 rounded" />
+                    </div>
+                    <div>
+                        <label class="cvr-form-label">Amount In Invoice Currency [{{ invoiceCurrency }}]</label>
+                        <input :value="amountInInvoiceCurrency" readonly class="cvr-input w-full px-3 py-2 rounded" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Through Leasing -->
+            <div v-if="moneyType === 'leasing_payment'" class="cvr-card-bg cvr-border border rounded-lg p-5 mb-5">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-base font-medium cvr-text-primary">Leasing Information</h2>
+                    <div v-if="selectedLeasingContract" class="text-sm cvr-text-secondary">
+                        Available: <span class="cvr-num">{{ Number(selectedLeasingContract.available_room).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
+                        <span class="cvr-text-muted"> / {{ Number(selectedLeasingContract.limit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
+                    </div>
+                </div>
+                <p class="text-xs cvr-text-muted mb-4">
+                    The leasing company pays the supplier directly out of the contract — your own bank accounts are not touched.
+                </p>
+                <div class="cvr-form-grid-6-3-3">
+                    <div>
+                        <label class="cvr-form-label">Leasing Company *</label>
+                        <select v-model="leasing.leasingCompanyId" class="cvr-input w-full px-3 py-2 rounded">
+                            <option value="">Select</option>
+                            <option v-for="c in [...leasingCompanies].sort((a, b) => a.name.localeCompare(b.name))" :key="c.id" :value="c.id">{{ c.name }}</option>
+                        </select>
+                        <p v-if="errors['leasing_company_id']" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors['leasing_company_id'] }}</p>
+                    </div>
+                    <div>
+                        <label class="cvr-form-label">Contract Name *</label>
+                        <select v-model="leasing.leasingContractId" class="cvr-input w-full px-3 py-2 rounded">
+                            <option value="">Select</option>
+                            <option v-for="c in leasingContracts" :key="c.id" :value="c.id">{{ c.name }}</option>
+                        </select>
+                        <p v-if="errors['leasing_contract_id']" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors['leasing_contract_id'] }}</p>
+                        <p v-else-if="leasing.leasingCompanyId && leasingContracts.length === 0" class="text-xs cvr-text-muted mt-1">
+                            This leasing company has no running contract in {{ paymentCurrency }}.
+                        </p>
+                    </div>
+                    <div>
+                        <label class="cvr-form-label">Paid Amount [{{ paymentCurrency }}] *</label>
                         <input v-model="paidAmount" type="number" step="any" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                 </div>

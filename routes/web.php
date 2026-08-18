@@ -166,6 +166,7 @@ Route::middleware([])->group(function () {
                     Route::get('leasing-companies/{leasingCompany}/contracts', 'LeasingContractController@index')->name('leasing.contracts.index');
                     Route::get('leasing-companies/{leasingCompany}/contracts/create', 'LeasingContractController@create')->name('leasing.contracts.create');
                     Route::post('leasing-companies/{leasingCompany}/contracts/store', 'LeasingContractController@store')->name('leasing.contracts.store');
+                    Route::get('leasing-companies/{leasingCompany}/contracts/{leasingContract}/statement', 'LeasingContractController@statement')->name('leasing.contracts.statement');
                     Route::get('leasing-companies/{leasingCompany}/contracts/{leasingContract}/edit', 'LeasingContractController@edit')->name('leasing.contracts.edit');
                     Route::put('leasing-companies/{leasingCompany}/contracts/{leasingContract}/update', 'LeasingContractController@update')->name('leasing.contracts.update');
                     Route::delete('leasing-companies/{leasingCompany}/contracts/{leasingContract}/delete', 'LeasingContractController@destroy')->name('leasing.contracts.destroy');
@@ -664,6 +665,14 @@ Route::middleware([])->group(function () {
                     Route::get('factoring-statement/currencies', 'FactoringStatementController@getCurrencies')->name('factoring.statement.currencies');
                     Route::get('factoring-statement/contracts', 'FactoringStatementController@getContracts')->name('factoring.statement.contracts');
 
+                    // Leasing Contract Statement — the sidebar route to the
+                    // same statement the 📄 button on a contract list opens,
+                    // reachable without knowing the leasing company first.
+                    Route::get('leasing-contract-statement', 'LeasingContractStatementController@index')->name('view.leasing.contract.statement');
+                    Route::get('leasing-contract-statement/result', 'LeasingContractStatementController@result')->name('result.leasing.contract.statement');
+                    Route::get('leasing-contract-statement/currencies', 'LeasingContractStatementController@getCurrencies')->name('leasing.contract.statement.currencies');
+                    Route::get('leasing-contract-statement/contracts', 'LeasingContractStatementController@getContracts')->name('leasing.contract.statement.contracts');
+
                     Route::get('factoring-charges-statement', 'FactoringChargesStatementController@index')->name('view.factoring.charges.statement');
                     Route::get('factoring-charges-statement/result', 'FactoringChargesStatementController@result')->name('result.factoring.charges.statement');
                     Route::get('factoring-charges-statement/export', 'FactoringChargesStatementController@exportExcel')->name('export.factoring.charges.statement');
@@ -840,6 +849,9 @@ Route::middleware([])->group(function () {
                 Route::get('down-payments/get-contracts-for-customer-with-start-and-end-date', 'MoneyReceivedController@getContractsForCustomerWithStartAndEndDate')->name('get.contracts.for.customer.with.start.and.end.date'); // ajax request
                 Route::get('down-payments/get-contracts-for-customer', 'MoneyReceivedController@getContractsForCustomer')->name('get.contracts.for.customer'); // ajax request
                 Route::get('down-payments/get-contracts-for-supplier', 'MoneyPaymentController@getContractsForSupplier')->name('get.contracts.for.supplier'); // ajax request
+                // The "Through Leasing" card's second dropdown — contracts of the
+                // chosen leasing company, with the room available on the payment date.
+                Route::get('money-payment/get-leasing-contracts', 'MoneyPaymentController@getLeasingContractsForCompany')->name('get.leasing.contracts.for.company'); // ajax request
                 Route::get('down-payments/get-sales-orders-for-contract/{contract_id}/{currency?}', 'MoneyReceivedController@getSalesOrdersForContract'); // ajax request
                 Route::get('down-payments/get-purchases-orders-for-contract/{contract_id}/{currency?}', 'MoneyPaymentController@getSalesOrdersForContract'); // ajax request
                 Route::post('update-payable-cheques/{moneyPayment}/{payableCheque}', 'MoneyPaymentController@updateOpeningPayableCheque')->name('update.opening.payable.cheque');
