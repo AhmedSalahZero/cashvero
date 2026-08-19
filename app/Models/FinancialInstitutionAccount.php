@@ -7,6 +7,8 @@ use App\Helpers\HArr;
 use App\Models\AccountInterest;
 use App\OdooSetting;
 use App\Support\LockableAccountSelector;
+use App\Support\ShareholderAccounts\AccountOwnerFilter;
+use App\Support\ShareholderAccounts\ShareholderAccountAccess;
 use App\Traits\HasBankStatement;
 use App\Traits\HasCompany;
 use App\Traits\HasLastStatementAmount;
@@ -78,9 +80,10 @@ use Illuminate\Support\Str;
 class FinancialInstitutionAccount extends Model implements \App\Interfaces\Models\ISyncsWithOdooChartOfAccount
 {
 	const NUMBER_OF_YEARS_FOR_INTEREST_IN_CURRENT_STATEMENT = 1 ;
-	use HasLastStatementAmount ,HasCompany,HasOdooPaymentMethod,HasBankStatement,IsLockableBankAccount;
+	use HasLastStatementAmount ,HasCompany,HasOdooPaymentMethod,HasBankStatement,IsLockableBankAccount,\App\Traits\Models\HasShareholderOwnership;
 		protected $casts = [
-			'synced_end_of_month_years'=>'array'
+			'synced_end_of_month_years'=>'array',
+			'is_shareholder_account'=>'boolean',
 		];
 		public static function boot()
 	{
@@ -229,6 +232,15 @@ class FinancialInstitutionAccount extends Model implements \App\Interfaces\Model
 			$query->where('financial_institution_accounts.is_active', 1);
 		}
 
+		/**
+		 * * حسابات الشركاء مش بتظهر لحد ماعندوش صلاحية
+		 * * shareholder_account.view
+		 * * القرار D6 في docs/shareholder-accounts.md
+		 */
+		if (! ShareholderAccountAccess::canView()) {
+			AccountOwnerFilter::forCompanyOnly()->applyToEloquent($query, 'financial_institution_accounts');
+		}
+
 		$accounts = $query->pluck('account_number', $keyName)->toArray();
 
 		if ($onlyActiveAccounts) {
@@ -242,7 +254,11 @@ class FinancialInstitutionAccount extends Model implements \App\Interfaces\Model
 			);
 		}
 
-		return $accounts;
+		/**
+		 * * القرار D7 : اسم الشريك يبان جنب رقم الحساب في العرض فقط
+		 * * القيمة المتخزنة تفضل رقم الحساب زي ما هي
+		 */
+		return static::decorateAccountNumbersWithShareholderNames($accounts, $keyName, (int) $companyId, (int) $financialInstitutionId);
 	}
 	
 	public static function findByAccountNumber($accountNumber,int $companyId,int $financialInstitutionId)

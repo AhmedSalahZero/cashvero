@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import FormErrorSummary from '@/Components/FormErrorSummary.vue';
+import ShareholderOwnershipFields from '@/Components/ShareholderOwnershipFields.vue';
 
 const props = defineProps({
     mode: String, // 'create' | 'edit'
@@ -15,6 +16,9 @@ const props = defineProps({
     submitUrl: String,
     backUrl: String,
     navUrls: Object,
+    // Shareholder ownership — docs/shareholder-accounts.md
+    canManageShareholderAccounts: { type: Boolean, default: false },
+    shareholders: { type: Array, default: () => [] },
 });
 
 const page = usePage();
@@ -33,6 +37,8 @@ const form = ref({
     interest_rate: props.model?.interest_rate ?? 0,
     interest_amount: props.model?.interest_amount ?? 0,
     is_at_maturity: props.model?.is_at_maturity ?? true,
+    is_shareholder_account: props.model?.is_shareholder_account ?? false,
+    shareholder_partner_id: props.model?.shareholder_partner_id ?? null,
 });
 
 /*
@@ -165,6 +171,13 @@ function submit() {
                                 <option v-for="a in maturityAccountOptions" :key="a.id" :value="a.id">{{ a.account_number }}</option>
                             </select>
                         </div>
+                        <ShareholderOwnershipFields
+                            :can-manage="canManageShareholderAccounts"
+                            :shareholders="shareholders"
+                            v-model:is-shareholder-account="form.is_shareholder_account"
+                            v-model:shareholder-partner-id="form.shareholder_partner_id"
+                            :owner-error="page.props.errors?.shareholder_partner_id ?? null"
+                        />
                     </div>
 
                     <div class="mt-4">

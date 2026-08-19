@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import ShareholderOwnershipFields from '@/Components/ShareholderOwnershipFields.vue';
 
 const props = defineProps({
     company: Object,
@@ -13,6 +14,9 @@ const props = defineProps({
     backUrl: String,
     submitUrl: String,
     navUrls: Object,
+    // Shareholder ownership — docs/shareholder-accounts.md
+    canManageShareholderAccounts: { type: Boolean, default: false },
+    shareholders: { type: Array, default: () => [] },
 });
 
 const page = usePage();
@@ -41,6 +45,8 @@ const form = ref({
     balance_date: toIsoDate(props.model.balance_date),
     currency: props.model.currency ?? '',
     exchange_rate: props.model.exchange_rate ?? 1,
+    is_shareholder_account: props.model.is_shareholder_account ?? false,
+    shareholder_partner_id: props.model.shareholder_partner_id ?? null,
 });
 const oldCurrency = props.model.currency; // sent back unchanged, matches original hidden field behavior
 
@@ -102,6 +108,8 @@ function submit() {
         currency: form.value.currency,
         old_currency: oldCurrency,
         exchange_rate: form.value.exchange_rate,
+        is_shareholder_account: form.value.is_shareholder_account,
+        shareholder_partner_id: form.value.shareholder_partner_id,
         account_interests: interestRows.value.map(({ _rowId, ...rest }) => rest),
     }, {
         onFinish: () => { submitting.value = false; },
@@ -163,6 +171,13 @@ function submit() {
                             <label class="cvr-form-label">Exchange Rate *</label>
                             <input v-model.number="form.exchange_rate" required type="number" step="0.0001" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                         </div>
+                        <ShareholderOwnershipFields
+                            :can-manage="canManageShareholderAccounts"
+                            :shareholders="shareholders"
+                            v-model:is-shareholder-account="form.is_shareholder_account"
+                            v-model:shareholder-partner-id="form.shareholder_partner_id"
+                            :owner-error="fieldError('shareholder_partner_id')"
+                        />
                     </div>
                 </div>
 

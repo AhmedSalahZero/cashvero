@@ -68,7 +68,11 @@ class MediumTermLoan extends Model implements \App\Interfaces\Models\ISyncsWithO
 	 * * "Call to undefined method"
 	 * * بدل ما يدي رسالة مفهومة.
 	 */
-	use HasBasicStoreRequest , HasOdooPaymentMethod ;
+	use HasBasicStoreRequest , HasOdooPaymentMethod , \App\Traits\Models\HasShareholderOwnership ;
+
+	protected $casts = [
+		'is_shareholder_account' => 'boolean',
+	];
 	const RUNNING = 'running';
 
 	/**
@@ -419,14 +423,23 @@ class MediumTermLoan extends Model implements \App\Interfaces\Models\ISyncsWithO
 	 */
 	public static function getAllAccountNumberForCurrency($companyId , $currencyName , $financialInstitutionId , string $keyName = 'account_number'):array
 	{
-		return self::where('company_id',$companyId)
+		$query = self::where('company_id',$companyId)
 			->where('currency',$currencyName)
 			->where('financial_institution_id',$financialInstitutionId)
 			->where('consumption_status',self::CONSUMPTION_NEW)
 			->whereNotNull('account_number')
-			->where('account_number','!=','')
-			->pluck('account_number',$keyName)
-			->toArray();
+			->where('account_number','!=','');
+
+		// D6 — hidden entirely from users without shareholder_account.view.
+		if (! \App\Support\ShareholderAccounts\ShareholderAccountAccess::canView()) {
+			\App\Support\ShareholderAccounts\AccountOwnerFilter::forCompanyOnly()
+				->applyToEloquent($query, 'medium_term_loans');
+		}
+
+		$accounts = $query->pluck('account_number',$keyName)->toArray();
+
+		// D7 — owner's name in the label only; the value stays the account number.
+		return static::decorateAccountNumbersWithShareholderNames($accounts, $keyName, (int) $companyId, (int) $financialInstitutionId);
 	}
 	public static function getAllAccountIdForCurrency($companyId , $currencyName , $financialInstitutionId):array
 	{

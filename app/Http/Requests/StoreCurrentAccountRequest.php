@@ -8,6 +8,8 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class StoreCurrentAccountRequest extends FormRequest
 {
+    use \App\Http\Requests\Concerns\ValidatesShareholderOwnership;
+
     /**
      * Determine if the user is authorized to make this request.
      *
@@ -23,7 +25,7 @@ class StoreCurrentAccountRequest extends FormRequest
     {
         $company = currentCompany();
 
-        return [
+        return $this->shareholderOwnershipRules('accounts.*.') + [
             'accounts.*.account_number'=>new UniqueAccountNumberRule($excludeAccountNumbers),
             // Same business rule as StoreFinancialInstitutionRequest (new
             // institution's first accounts): balance date can't be earlier
@@ -37,5 +39,10 @@ class StoreCurrentAccountRequest extends FormRequest
                 true
             )],
         ];
+    }
+
+    public function messages()
+    {
+        return $this->shareholderOwnershipMessages('accounts.*.');
     }
 }

@@ -5,6 +5,9 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 const props = defineProps({
     company: Object,
     rows: Array,
+    // docs/shareholder-accounts.md (D6) — the Owner column only exists
+    // for users allowed to see shareholder-owned accounts.
+    canViewShareholderAccounts: { type: Boolean, default: false },
 });
 
 const search = ref('');
@@ -13,7 +16,8 @@ const filteredRows = computed(() => {
     const q = search.value.toLowerCase();
     return props.rows.filter(r =>
         (r.bank_name || '').toLowerCase().includes(q) ||
-        (r.account_number || '').toLowerCase().includes(q)
+        (r.account_number || '').toLowerCase().includes(q) ||
+        (r.owner_name || '').toLowerCase().includes(q)
     );
 });
 </script>
@@ -39,6 +43,7 @@ const filteredRows = computed(() => {
                             <th class="px-3 py-3 text-left">Bank Name</th>
                             <th class="px-3 py-3 text-left">Account Type</th>
                             <th class="px-3 py-3 text-left">Account Number</th>
+                            <th v-if="canViewShareholderAccounts" class="px-3 py-3 text-left">Owner</th>
                             <th class="px-3 py-3 text-left">Currency</th>
                         </tr>
                     </thead>
@@ -48,10 +53,11 @@ const filteredRows = computed(() => {
                             <td class="px-3 py-3 cvr-text-primary whitespace-nowrap">{{ row.bank_name }}</td>
                             <td class="px-3 py-3 cvr-text-secondary whitespace-nowrap">{{ row.account_type }}</td>
                             <td class="px-3 py-3 cvr-text-secondary whitespace-nowrap">{{ row.account_number }}</td>
+                            <td v-if="canViewShareholderAccounts" class="px-3 py-3 cvr-text-secondary whitespace-nowrap">{{ row.owner_name }}</td>
                             <td class="px-3 py-3 cvr-text-secondary whitespace-nowrap">{{ row.currency }}</td>
                         </tr>
                         <tr v-if="filteredRows.length === 0">
-                            <td colspan="5" class="px-4 py-8 text-center cvr-text-muted">
+                            <td :colspan="canViewShareholderAccounts ? 6 : 5" class="px-4 py-8 text-center cvr-text-muted">
                                 No bank accounts found.
                             </td>
                         </tr>

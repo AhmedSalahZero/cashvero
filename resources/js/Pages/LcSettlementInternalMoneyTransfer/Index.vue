@@ -13,6 +13,7 @@ import { ref, watch } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import RecordLogButton from '@/Components/RecordLogButton.vue';
+import { mapAccountNumberOptions, accountNumberOption } from '@/composables/useAccountNumberOptions';
 
 const props = defineProps({
     company: Object,
@@ -106,7 +107,7 @@ async function fetchSettleAccountNumbers() {
     if (!settleForm.value.from_account_type_id || !settleForm.value.from_bank_id || !settleTarget.value) return;
     const url = `${props.urls.getAccountNumbersForType}/${settleForm.value.from_account_type_id}/${settleTarget.value.currency}/${settleForm.value.from_bank_id}`;
     const result = await fetchJson(url);
-    settleAccountNumbers.value = Object.values(result.data?.data || {});
+    settleAccountNumbers.value = mapAccountNumberOptions(result.data?.data);
 }
 watch(() => settleForm.value.from_account_type_id, fetchSettleAccountNumbers);
 
@@ -228,7 +229,7 @@ function confirmReset() {
                             <label class="cvr-form-label">Account Number *</label>
                             <select v-model="settleForm.from_account_number" class="cvr-input w-full px-3 py-2 rounded">
                                 <option value="">Select</option>
-                                <option v-for="n in settleAccountNumbers" :key="n" :value="n">{{ n }}</option>
+                                <option v-for="n in settleAccountNumbers" :key="n.value" :value="n.value">{{ n.label }}</option>
                             </select>
                         </div>
                     </div>

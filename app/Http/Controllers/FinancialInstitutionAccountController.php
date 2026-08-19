@@ -68,7 +68,7 @@ class FinancialInstitutionAccountController
 				'balance_date' => $financialInstitutionAccount->getBalanceDateForSelect(),
 				'currency' => $financialInstitutionAccount->getCurrency(),
 				'exchange_rate' => $financialInstitutionAccount->getExchangeRate(),
-			],
+			] + \App\Support\ShareholderAccounts\ShareholderAccountAccess::modelProps($financialInstitutionAccount),
 			'accountInterests' => $financialInstitutionAccount->accountInterests->map(function ($ai) {
 				return [
 					'id' => $ai->getId(),
@@ -79,6 +79,8 @@ class FinancialInstitutionAccountController
 			})->values(),
 			'currencies' => getCurrencies(),
 			'hasOdooIntegration' => $company->hasOdooIntegrationCredentials(),
+			// Shareholder ownership control — docs/shareholder-accounts.md
+			...\App\Support\ShareholderAccounts\ShareholderAccountAccess::formProps($company->id),
 			'backUrl' => route('view.all.bank.accounts', ['company' => $company->id, 'financialInstitution' => $financialInstitutionAccount->financialInstitution->id]),
 			'submitUrl' => route('update.financial.institutions.account', ['company' => $company->id, 'financialInstitution' => $financialInstitutionAccount->financialInstitution->id, 'financialInstitutionAccount' => $financialInstitutionAccount->id]),
 			'navUrls' => [
@@ -113,7 +115,7 @@ class FinancialInstitutionAccountController
 				'balance_date'=>$balanceDate,
 				'iban'=>$request->get('iban'),
 				'exchange_rate'=>$request->get('exchange_rate')
-			]);
+			] + \App\Support\ShareholderAccounts\ShareholderAccountAccess::ownershipFromRequest($request));
 
 
 			$currentAccountBeginningBalance = $financialInstitutionAccount->getOpeningBalanceFromCurrentAccountBankStatement() ;

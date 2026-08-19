@@ -28,6 +28,8 @@ use Illuminate\Validation\Rule;
  */
 class StoreMediumTermLoanRequest extends FormRequest
 {
+    use \App\Http\Requests\Concerns\ValidatesShareholderOwnership;
+
     public function authorize()
     {
         return true;
@@ -35,7 +37,7 @@ class StoreMediumTermLoanRequest extends FormRequest
 
     public function rules()
     {
-        return [
+        return $this->shareholderOwnershipRules() + [
             'name' => ['required', 'string', 'max:255'],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date'],
@@ -52,7 +54,7 @@ class StoreMediumTermLoanRequest extends FormRequest
 
     public function messages()
     {
-        return [
+        return $this->shareholderOwnershipMessages() + [
             'installment_payment_interval.required' => __('Please select the Installment Payment Interval.'),
             'installment_payment_interval.in' => __('Please select a valid Installment Payment Interval.'),
         ];

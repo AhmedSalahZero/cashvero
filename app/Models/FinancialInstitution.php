@@ -302,7 +302,17 @@ class FinancialInstitution extends Model
 					'iban'=>$accountArr['iban'],
 					'balance_date'=>$currentBalanceDate,
 					'company_id'=>getCurrentCompanyId(),
-				]);
+				] + (
+					/**
+					 * * ملكية الحساب : شركة ولا شريك
+					 * * بتترمي لو المستخدم ماعندوش صلاحية
+					 * * shareholder_account.view
+					 * * فا الحساب بيتخزن كحساب شركة زي الافتراضي
+					 */
+					\App\Support\ShareholderAccounts\ShareholderAccountAccess::canView()
+						? \App\Support\ShareholderAccounts\ShareholderAccountAccess::normalizeOwnership($accountArr)
+						: []
+				));
 				
 				$account->currentAccountBankStatements()->create([
 					'company_id'=>getCurrentCompanyId() ,

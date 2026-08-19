@@ -2,6 +2,7 @@
 
 namespace App\Support\CashDashboard;
 
+use App\Support\ShareholderAccounts\AccountOwnerFilter;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -77,7 +78,8 @@ class LatestStatementQuery
         int $companyId,
         string $date,
         array $bankIds,
-        array $currencies
+        array $currencies,
+        ?AccountOwnerFilter $ownerFilter = null
     ): array {
         if ($bankIds === [] || $currencies === []) {
             return [];
@@ -94,7 +96,7 @@ class LatestStatementQuery
             ->where('date', '<=', $date)
             ->groupBy('financial_institution_account_id');
 
-        return DB::table('current_account_bank_statements as statements')
+        $query = DB::table('current_account_bank_statements as statements')
             ->joinSub($latestSubquery, 'latest_rows', function ($join) {
                 $join->on('statements.id', '=', 'latest_rows.latest_id');
             })
@@ -102,7 +104,13 @@ class LatestStatementQuery
             ->where('accounts.company_id', $companyId)
             ->whereIn('accounts.financial_institution_id', $bankIds)
             ->whereIn('accounts.currency', $currencies)
-            ->where('accounts.is_active', 1)
+            ->where('accounts.is_active', 1);
+
+        // All accounts / Company accounts / one shareholder's accounts —
+        // docs/shareholder-accounts.md, decisions D2 and D3.
+        ($ownerFilter ?: AccountOwnerFilter::forCompanyOnly())->applyToQuery($query, 'accounts');
+
+        return $query
             ->select([
                 'statements.end_balance',
                 'accounts.account_number',

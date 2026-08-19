@@ -4,6 +4,7 @@ import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import RecordLogButton from '@/Components/RecordLogButton.vue';
 import { todayDate } from '@/composables/today';
+import { mapAccountNumberOptions, accountNumberOption } from '@/composables/useAccountNumberOptions';
 /* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
    الحماية الحقيقية على السيرفر في الـ Form Request. */
 const maxDate = todayDate();
@@ -161,7 +162,7 @@ async function openSendToCollection(row) {
         const url = `${props.urls.accountNumbersForType}/${collectionForm.value.account_type}/${collectionTarget.value.currency}/${collectionForm.value.drawl_bank_id}`;
         const res = await fetch(url);
         const data = await res.json();
-        collectionAccountNumbers.value = Object.values(data?.data || {});
+        collectionAccountNumbers.value = mapAccountNumberOptions(data?.data);
         if (collectionForm.value.account_number) {
             onCollectionAccountNumberChange();
         }
@@ -196,7 +197,7 @@ async function onCollectionAccountTypeChange() {
     const url = `${props.urls.accountNumbersForType}/${collectionForm.value.account_type}/${collectionTarget.value.currency}/${collectionForm.value.drawl_bank_id}`;
     const res = await fetch(url);
     const data = await res.json();
-    collectionAccountNumbers.value = Object.values(data?.data || {});
+    collectionAccountNumbers.value = mapAccountNumberOptions(data?.data);
 }
 async function onCollectionAccountNumberChange() {
     collectionBalance.value = { balance: 0, net_balance: 0, balance_date: '', net_balance_date: '' };
@@ -626,7 +627,7 @@ function submitApplyCollection() {
                             <label class="cvr-form-label">Account Number *</label>
                             <select v-model="collectionForm.account_number" @change="onCollectionAccountNumberChange" class="cvr-input w-full px-3 py-2 rounded">
                                 <option value="">Select</option>
-                                <option v-for="num in collectionAccountNumbers" :key="num" :value="num">{{ num }}</option>
+                                <option v-for="num in collectionAccountNumbers" :key="num.value" :value="num.value">{{ num.label }}</option>
                             </select>
                         </div>
                         <div>

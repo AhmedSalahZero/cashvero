@@ -3,6 +3,7 @@ import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { router, usePage, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { todayDate } from '@/composables/today';
+import { mapAccountNumberOptions, accountNumberOption } from '@/composables/useAccountNumberOptions';
 
 /**
  * Client-requested (2026-08-11): invoice/net-balance amounts should
@@ -314,7 +315,7 @@ async function fetchAccountNumbers(accountTypeId, financialInstitutionId, target
     if (!accountTypeId || !financialInstitutionId || !paymentCurrency.value) return;
     const url = `${props.urls.getAccountNumbersForType}/${accountTypeId}/${paymentCurrency.value}/${financialInstitutionId}`;
     const result = await fetchJson(url);
-    target.value = Object.values(result.data?.data || {});
+    target.value = mapAccountNumberOptions(result.data?.data);
 }
 async function fetchBranchesForCurrency() {
     if (!paymentCurrency.value) return;
@@ -701,7 +702,7 @@ function submit() {
                         <label class="cvr-form-label">Account Number *</label>
                         <select v-model="payableCheque.accountNumber" class="cvr-input w-full px-3 py-2 rounded">
                             <option value="">Select</option>
-                            <option v-for="n in payableChequeAccountNumbers" :key="n" :value="n">{{ n }}</option>
+                            <option v-for="n in payableChequeAccountNumbers" :key="n.value" :value="n.value">{{ n.label }}</option>
                         </select>
                         <p v-if="errors['account_number.payable_cheque']" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors['account_number.payable_cheque'] }}</p>
                     </div>
@@ -762,7 +763,7 @@ function submit() {
                         <label class="cvr-form-label">Account Number *</label>
                         <select v-model="outgoingTransfer.accountNumber" class="cvr-input w-full px-3 py-2 rounded">
                             <option value="">Select</option>
-                            <option v-for="n in outgoingTransferAccountNumbers" :key="n" :value="n">{{ n }}</option>
+                            <option v-for="n in outgoingTransferAccountNumbers" :key="n.value" :value="n.value">{{ n.label }}</option>
                         </select>
                         <p v-if="errors['account_number.outgoing-transfer']" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors['account_number.outgoing-transfer'] }}</p>
                     </div>

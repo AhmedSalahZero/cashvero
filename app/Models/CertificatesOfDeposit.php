@@ -131,7 +131,11 @@ use Illuminate\Support\Str;
  */
 class CertificatesOfDeposit extends Model implements IHasDebitCurrentAccountStatement
 {
-    use HasDebitStatements,HasDebitCurrentAccountStatement,HasCreditStatements,HasBlockedAgainst,HasLastStatementAmount,HasDepositAccount,HasDeleteOdoo,HasCompany,HasPeriodicInterest,IsLockableBankAccount ;
+    use HasDebitStatements,HasDebitCurrentAccountStatement,HasCreditStatements,HasBlockedAgainst,HasLastStatementAmount,HasDepositAccount,HasDeleteOdoo,HasCompany,HasPeriodicInterest,IsLockableBankAccount,\App\Traits\Models\HasShareholderOwnership ;
+
+    protected $casts = [
+        'is_shareholder_account' => 'boolean',
+    ];
     protected $guarded = ['id'];
     const RUNNING = 'running';
     const MATURED = 'matured';
@@ -339,7 +343,13 @@ class CertificatesOfDeposit extends Model implements IHasDebitCurrentAccountStat
         ->where('financial_institution_id', $financialInstitutionId)
         ->where('status', CertificatesOfDeposit::RUNNING);
 
-        return LockableAccountSelector::getAccountNumbers(
+        // D6 — hidden entirely from users without shareholder_account.view.
+        if (! \App\Support\ShareholderAccounts\ShareholderAccountAccess::canView()) {
+            \App\Support\ShareholderAccounts\AccountOwnerFilter::forCompanyOnly()
+                ->applyToEloquent($query, 'certificates_of_deposits');
+        }
+
+        $accounts = LockableAccountSelector::getAccountNumbers(
             $query,
             $companyId,
             $currencyName,
@@ -348,6 +358,9 @@ class CertificatesOfDeposit extends Model implements IHasDebitCurrentAccountStat
             true,
             static::class
         );
+
+        // D7 — owner's name in the label only; the value stays the account number.
+        return static::decorateAccountNumbersWithShareholderNames($accounts, $keyName, (int) $companyId, (int) $financialInstitutionId);
     }
     public static function findByAccountNumber(string $accountNumber, int $companyId)
     {

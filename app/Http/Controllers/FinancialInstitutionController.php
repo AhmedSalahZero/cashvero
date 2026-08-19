@@ -483,6 +483,8 @@ class FinancialInstitutionController
 			'hasOdooIntegration' => $company->hasOdooIntegrationCredentials(),
 			'backUrl' => route('view.all.bank.accounts', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
 			'submitUrl' => route('financial.institution.store.account', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
+			// Shareholder ownership control — docs/shareholder-accounts.md
+			...\App\Support\ShareholderAccounts\ShareholderAccountAccess::formProps($company->id),
 			'navUrls' => [
 				'home' => route('home', ['company' => $company->id]),
 				'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
@@ -544,7 +546,19 @@ class FinancialInstitutionController
 		// e.g. "FinancialInstitutionAccount" => its AccountType id.
 		$accountTypeIdsByModel = \App\Models\AccountType::pluck('id', 'model_name');
 
-		$bankAccounts = collect($rawGroups)->flatten()->map(function ($account) use ($company, $financialInstitution, $accountTypeIdsByModel) {
+		/**
+		 * * حسابات الشركاء ما تظهرش خالص لحد ماعندوش صلاحية
+		 * * shareholder_account.view
+		 * * (القرار D6 في docs/shareholder-accounts.md)
+		 * * الاوفر درافتات مالهاش الاعمدة دي اصلا فا بتعدي عادي
+		 */
+		$canViewShareholderAccounts = \App\Support\ShareholderAccounts\ShareholderAccountAccess::canView();
+
+		$bankAccounts = collect($rawGroups)->flatten()
+			->reject(fn ($account) => ! $canViewShareholderAccounts
+				&& method_exists($account, 'isShareholderAccount')
+				&& $account->isShareholderAccount())
+			->map(function ($account) use ($company, $financialInstitution, $accountTypeIdsByModel) {
 			$isEditable = $account instanceof \App\Models\FinancialInstitutionAccount;
 			$modelName = class_basename($account);
 			$accountTypeId = $accountTypeIdsByModel[$modelName] ?? null;
@@ -567,6 +581,11 @@ class FinancialInstitutionController
 					: null,
 				'delete_url' => $isEditable
 					? route('delete.financial.institutions.account', ['company' => $company->id, 'financialInstitutionAccount' => $account->id])
+					: null,
+				// Owner column — null on instruments that can't be owned
+				// by a shareholder at all (the overdraft family).
+				'shareholder_name' => method_exists($account, 'getShareholderName')
+					? $account->getShareholderName()
 					: null,
 				'is_lockable' => $isLockable,
 				'is_active' => $isLockable ? (bool) $account->isActive() : null,
@@ -594,6 +613,7 @@ class FinancialInstitutionController
 				'canUpdate' => hasAuthFor('bank_account.update'),
 				'canDelete' => hasAuthFor('bank_account.delete'),
 				'canLock' => hasAuthFor('bank_account.lock'),
+				'canViewShareholderAccounts' => $canViewShareholderAccounts,
 			],
 			'navUrls' => [
 				'home' => route('home', ['company' => $company->id]),

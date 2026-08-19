@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import FormErrorSummary from '@/Components/FormErrorSummary.vue';
+import ShareholderOwnershipFields from '@/Components/ShareholderOwnershipFields.vue';
 import { usePermissions } from '@/composables/usePermissions';
 
 const props = defineProps({
@@ -20,6 +21,9 @@ const props = defineProps({
     // out of this loan, which freezes ONLY the New/Existing field.
     isConsumptionLocked: { type: Boolean, default: false },
     model: Object,
+    // Shareholder ownership — docs/shareholder-accounts.md
+    canManageShareholderAccounts: { type: Boolean, default: false },
+    shareholders: { type: Array, default: () => [] },
     submitUrl: String,
     deleteScheduleUrl: String,
     backUrl: String,
@@ -61,6 +65,8 @@ const form = ref({
     // as a payable account on the Money Payment screen and supplier
     // invoices can be settled straight out of it.
     consumption_status: props.model?.consumption_status ?? 'existing',
+    is_shareholder_account: props.model?.is_shareholder_account ?? false,
+    shareholder_partner_id: props.model?.shareholder_partner_id ?? null,
     // Odoo Code — same field bank accounts have. On save it is looked up
     // in Odoo's chart of accounts and the loan's journal / payment-method
     // ids are filled in from there. Without it, an Odoo-connected company
@@ -210,6 +216,15 @@ function deleteSchedule() {
                                 Locked — supplier payments have already been made from this loan.
                             </p>
                         </div>
+                        <ShareholderOwnershipFields
+                            :can-manage="canManageShareholderAccounts"
+                            :shareholders="shareholders"
+                            v-model:is-shareholder-account="form.is_shareholder_account"
+                            v-model:shareholder-partner-id="form.shareholder_partner_id"
+                            :owner-error="page.props.errors?.shareholder_partner_id ?? null"
+                            :disabled="isLocked"
+                            hint="An owner's loan is filtered like their other accounts — it appears under All accounts and Shareholders accounts, not under Company accounts."
+                        />
                         <div v-if="hasOdoo && isNewFacility">
                             <label class="cvr-form-label">Odoo Code</label>
                             <input v-model="form.odoo_code" type="text" class="cvr-input w-full px-3 py-2 rounded" />

@@ -59,15 +59,62 @@ const props = defineProps({
     refreshChartUrl: String,
     accountNumbersUrl: String,
     dashboardTabUrls: Object,
+
+    /* ── Account owner filter — docs/shareholder-accounts.md ──────
+       Rendered only for a user holding shareholder_account.view (D6).
+       The backend pins everyone else to Company accounts regardless of
+       what the query string says, so hiding the control here is
+       presentation, not the guarantee. */
+    canManageShareholderAccounts: { type: Boolean, default: false },
+    accountOwner: { type: String, default: 'company' },
+    accountOwnerShareholderId: { type: [Number, String, null], default: null },
+    shareholders: { type: Array, default: () => [] },
 });
 
 /* ── Currency tabs ────────────────────────────────────────────── */
 const activeCurrency = ref(props.selectedCurrencies[0] || props.mainFunctionalCurrency);
 
-/* ── Date filter ──────────────────────────────────────────────── */
+/* ── Date + account owner filters ─────────────────────────────── */
 const filterDate = ref(props.date);
+
+/*
+ * Default is "Company accounts", never "All" (decision D2) — the page
+ * opens on official company figures and owner data is opt-in.
+ */
+const accountOwner = ref(props.accountOwner || 'company');
+const shareholderPartnerId = ref(props.accountOwnerShareholderId ?? '');
+
+/* An empty value here means "All shareholders" (decision D3). */
+const showsShareholderPicker = computed(() => accountOwner.value === 'shareholders');
+
+function onAccountOwnerChange() {
+    // A specific owner only means anything inside the shareholders view.
+    if (!showsShareholderPicker.value) {
+        shareholderPartnerId.value = '';
+    }
+    applyFilters();
+}
+
+/*
+ * One place that builds the query string, so changing the date never
+ * silently drops the owner selection (or the other way round).
+ */
+function applyFilters() {
+    const params = { date: filterDate.value };
+
+    if (props.canManageShareholderAccounts) {
+        params.account_owner = accountOwner.value;
+        if (accountOwner.value === 'shareholders' && shareholderPartnerId.value !== '') {
+            params.shareholder_partner_id = shareholderPartnerId.value;
+        }
+    }
+
+    router.get(props.filterUrl, params, { preserveScroll: true, preserveState: true });
+}
+
+/** Kept for the existing "Apply" button next to the date. */
 function applyDateFilter() {
-    router.get(props.filterUrl, { date: filterDate.value }, { preserveScroll: true, preserveState: true });
+    applyFilters();
 }
 
 /* ── Overdraft sections (generic over the 4 real types) ─────────
@@ -256,13 +303,37 @@ const expandedLoanId = ref(null);
 
             <DashboardTabs active="cash" :urls="dashboardTabUrls" />
 
-            <!-- Date filter -->
+            <!-- Date + account owner filters -->
             <div class="cvr-card-bg cvr-border border rounded-lg p-3 mb-6 flex items-end gap-3 flex-wrap">
                 <div>
                     <label class="cvr-form-label">As Of Date</label>
                     <input v-model="filterDate" type="date" class="cvr-input px-3 py-2 rounded" />
                 </div>
+
+                <div v-if="canManageShareholderAccounts">
+                    <label class="cvr-form-label">Accounts</label>
+                    <select v-model="accountOwner" @change="onAccountOwnerChange" class="cvr-select px-3 py-2 rounded">
+                        <option value="company">Company accounts</option>
+                        <option value="all">All accounts</option>
+                        <option value="shareholders">Shareholders accounts</option>
+                    </select>
+                </div>
+
+                <div v-if="canManageShareholderAccounts && showsShareholderPicker">
+                    <label class="cvr-form-label">Shareholder</label>
+                    <select v-model="shareholderPartnerId" @change="applyFilters" class="cvr-select px-3 py-2 rounded">
+                        <option value="">All shareholders</option>
+                        <option v-for="shareholder in shareholders" :key="shareholder.id" :value="shareholder.id">
+                            {{ shareholder.name }}
+                        </option>
+                    </select>
+                </div>
+
                 <button class="cvr-btn-primary px-4 py-2 rounded" @click="applyDateFilter">Apply</button>
+
+                <p v-if="canManageShareholderAccounts && accountOwner === 'shareholders'" class="text-xs cvr-text-muted w-full">
+                    Cash in safe, leasing and all overdraft facilities are company-only instruments, so they are excluded from this view.
+                </p>
             </div>
 
             <!-- Currency tabs -->

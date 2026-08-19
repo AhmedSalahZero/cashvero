@@ -36,7 +36,7 @@ class UpdateCurrentAccountRequest extends StoreCurrentAccountRequest
 		// $balanceDate = $financialInstitutionAccount->getBalanceDate() ;
 		$balanceDate = Request('balance_date');
 		$financialInstitutionId = $financialInstitutionAccount->getFinancialInstitutionId();
-        return [
+        return $this->shareholderOwnershipRules() + [
 			'beginning_balance_rule'=>new DateCanNotBeAfterAnyStatementRule($financialInstitutionAccount->id,$balanceDate),
 			// Business rule (confirmed with project owner, 2026-07-24): same
 			// floor as when opening a brand-new account — an existing
@@ -56,5 +56,10 @@ class UpdateCurrentAccountRequest extends StoreCurrentAccountRequest
 				new CanNotChangeCurrencyWhenAccountHasStatementsRule($financialInstitutionAccount),
 			]
 		];
+    }
+
+    public function messages()
+    {
+        return $this->shareholderOwnershipMessages();
     }
 }

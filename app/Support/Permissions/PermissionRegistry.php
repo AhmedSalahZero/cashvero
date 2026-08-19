@@ -418,6 +418,22 @@ class PermissionRegistry
             'group' => 'facilities',
             'actions' => ['view' => ['view financial institutions']],
         ],
+        /**
+         * Shareholder / owner personal accounts — see docs/shareholder-accounts.md
+         * (decision D6). Deliberately has NO legacy alias: it is a brand-new
+         * key, so nobody holds it until an admin grants it, and personal
+         * owner data stays hidden by default. Super Admins bypass as usual.
+         *
+         * Not a route permission — there are no shareholder-only screens.
+         * It gates *visibility*: the Cash Status owner filter, shareholder
+         * rows in account dropdowns, and shareholder rows in the bank
+         * accounts listing.
+         */
+        'shareholder_account' => [
+            'label' => 'Shareholder Accounts',
+            'group' => 'facilities',
+            'actions' => ['view' => []],
+        ],
         'leasing_company' => [
             'label' => 'Leasing Companies',
             'group' => 'facilities',
@@ -1043,7 +1059,7 @@ class PermissionRegistry
                 'approve', 'reject', 'cancel', 'settle', 'renew',
                 'manage_rates', 'manage_schedule', 'lock', 'sync',
             ],
-            'except_modules' => self::ADMIN_MODULES,
+            'except_modules' => [...self::ADMIN_MODULES, ...self::OWNER_PRIVATE_MODULES],
         ],
         // Read-only across the business, plus the ability to export what
         // they can already see. Everything else is granted deliberately
@@ -1051,9 +1067,22 @@ class PermissionRegistry
         'user' => [
             'modules' => 'all',
             'actions' => ['view', 'export'],
-            'except_modules' => self::ADMIN_MODULES,
+            'except_modules' => [...self::ADMIN_MODULES, ...self::OWNER_PRIVATE_MODULES],
         ],
     ];
+
+    /**
+     * Modules holding an owner's PERSONAL data rather than the company's.
+     *
+     * Kept out of the `manager` and `user` role templates on purpose: the
+     * rest of the registry is "everything by default, tighten later", but a
+     * shareholder's own bank accounts should be the other way round — an
+     * administrator grants it to the specific finance staff who need it.
+     * super-admin and company-admin still get it.
+     *
+     * See docs/shareholder-accounts.md (decision D6).
+     */
+    private const OWNER_PRIVATE_MODULES = ['shareholder_account'];
 
     /** @var array<string, array>|null */
     private static ?array $flat = null;

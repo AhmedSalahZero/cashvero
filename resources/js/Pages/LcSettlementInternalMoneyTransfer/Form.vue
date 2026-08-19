@@ -4,6 +4,7 @@ import { router, usePage, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import FormErrorSummary from '@/Components/FormErrorSummary.vue';
 import { todayDate } from '@/composables/today';
+import { mapAccountNumberOptions, accountNumberOption } from '@/composables/useAccountNumberOptions';
 /* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
    الحماية الحقيقية على السيرفر في الـ Form Request. */
 const maxDate = todayDate();
@@ -86,13 +87,13 @@ async function fetchRemainingBalance() {
 watch(toLetterOfCreditIssuanceId, fetchRemainingBalance, { immediate: true });
 
 /* ── From Account Number — cascades off Account Type + Bank + Currency ── */
-const fromAccountNumbers = ref(props.model?.from_account_number ? [props.model.from_account_number] : []);
+const fromAccountNumbers = ref(accountNumberOption(props.model?.from_account_number));
 async function fetchAccountNumbers() {
     fromAccountNumbers.value = [];
     if (!fromAccountTypeId.value || !fromBankId.value || !currency.value) return;
     const url = `${props.urls.getAccountNumbersForType}/${fromAccountTypeId.value}/${currency.value}/${fromBankId.value}`;
     const result = await fetchJson(url);
-    fromAccountNumbers.value = Object.values(result.data?.data || {});
+    fromAccountNumbers.value = mapAccountNumberOptions(result.data?.data);
 }
 watch([fromAccountTypeId, fromBankId, currency], fetchAccountNumbers, { immediate: true });
 
@@ -177,7 +178,7 @@ function submit() {
                             <label class="cvr-form-label">From Account Number *</label>
                             <select v-model="fromAccountNumber" class="cvr-input w-full px-3 py-2 rounded">
                                 <option value="">Select</option>
-                                <option v-for="n in fromAccountNumbers" :key="n" :value="n">{{ n }}</option>
+                                <option v-for="n in fromAccountNumbers" :key="n.value" :value="n.value">{{ n.label }}</option>
                             </select>
                         </div>
                         <div>

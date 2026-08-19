@@ -6,6 +6,7 @@ use App\Helpers\HArr;
 use App\Models\CertificatesOfDeposit;
 use App\Models\FinancialInstitution;
 use App\Models\TimeOfDeposit;
+use App\Support\ShareholderAccounts\AccountOwnerFilter;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -16,7 +17,8 @@ class DepositCashDashboardHelper
         string $currencyName,
         array $bankIds,
         int $cdAccountTypeId,
-        callable $bankNameResolver
+        callable $bankNameResolver,
+        ?AccountOwnerFilter $ownerFilter = null
     ): Collection {
         if ($bankIds === []) {
             return collect();
@@ -31,6 +33,9 @@ class DepositCashDashboardHelper
             ->where('certificates_of_deposits.status', CertificatesOfDeposit::RUNNING)
             ->whereIn('certificates_of_deposits.financial_institution_id', $bankIds)
             ->where('certificates_of_deposits.currency', $currencyName)
+            // Owner filter — docs/shareholder-accounts.md (D2/D3).
+            ->tap(fn ($query) => ($ownerFilter ?: AccountOwnerFilter::forCompanyOnly())
+                ->applyToQuery($query, 'certificates_of_deposits'))
             ->leftJoin('fully_secured_overdrafts', function ($query) use ($cdAccountTypeId) {
                 $query->on('fully_secured_overdrafts.cd_or_td_account_id', '=', 'certificates_of_deposits.id')
                     ->where('fully_secured_overdrafts.cd_or_td_account_type_id', $cdAccountTypeId);
@@ -69,7 +74,8 @@ class DepositCashDashboardHelper
         string $currencyName,
         array $bankIds,
         int $tdAccountTypeId,
-        callable $bankNameResolver
+        callable $bankNameResolver,
+        ?AccountOwnerFilter $ownerFilter = null
     ): Collection {
         if ($bankIds === []) {
             return collect();
@@ -84,6 +90,9 @@ class DepositCashDashboardHelper
             ->where('time_of_deposits.status', TimeOfDeposit::RUNNING)
             ->whereIn('time_of_deposits.financial_institution_id', $bankIds)
             ->where('time_of_deposits.currency', $currencyName)
+            // Owner filter — docs/shareholder-accounts.md (D2/D3).
+            ->tap(fn ($query) => ($ownerFilter ?: AccountOwnerFilter::forCompanyOnly())
+                ->applyToQuery($query, 'time_of_deposits'))
             ->leftJoin('fully_secured_overdrafts', function ($query) use ($tdAccountTypeId) {
                 $query->on('fully_secured_overdrafts.cd_or_td_account_id', '=', 'time_of_deposits.id')
                     ->where('fully_secured_overdrafts.cd_or_td_account_type_id', $tdAccountTypeId);

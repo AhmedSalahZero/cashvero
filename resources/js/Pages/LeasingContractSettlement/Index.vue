@@ -11,7 +11,7 @@ const maxDate = todayDate();
 const props = defineProps({
     company: Object,
     contractLoanSchedule: Object, // { id, leasing_contract_name, date_formatted, currency, beginning_balance_formatted, cheque_amount_formatted, cheque_number, drawee_bank_name, interest_amount_formatted, principle_amount_formatted, end_balance_formatted, settlement_default_date, remaining }
-    currentAccounts: Array,      // [account_number, ...]
+    currentAccounts: Array,      // [{value: account_number, label: shown text}, ...]
     currentAccountTypeId: Number,
     financialInstitutionId: Number,
     balanceLookupUrl: String,
@@ -34,7 +34,7 @@ const isEdit = !!props.editingSettlement;
 const form = ref({
     date: props.editingSettlement?.date ?? props.contractLoanSchedule.settlement_default_date,
     amount: props.editingSettlement?.amount ?? props.contractLoanSchedule.remaining,
-    current_account_number: props.editingSettlement?.current_account_number ?? (props.currentAccounts[0] ?? ''),
+    current_account_number: props.editingSettlement?.current_account_number ?? (props.currentAccounts[0]?.value ?? ''),
 });
 
 /* ── Live "Available Balance" lookup — same endpoint and same
@@ -166,7 +166,7 @@ const visibleSettlements = computed(() =>
                         <div>
                             <label class="cvr-form-label">Current Account *</label>
                             <select v-model="form.current_account_number" class="cvr-input w-full px-3 py-2 rounded">
-                                <option v-for="acc in currentAccounts" :key="acc" :value="acc">{{ acc }}</option>
+                                <option v-for="acc in currentAccounts" :key="acc.value" :value="acc.value">{{ acc.label }}</option>
                             </select>
                             <p class="text-xs cvr-text-muted mt-1">
                                 Available Balance <span v-if="balanceDateLabel">[ {{ balanceDateLabel }} ]</span>

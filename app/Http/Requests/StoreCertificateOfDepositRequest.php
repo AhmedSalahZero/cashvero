@@ -11,6 +11,8 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class StoreCertificateOfDepositRequest extends FormRequest
 {
+    use \App\Http\Requests\Concerns\ValidatesShareholderOwnership;
+
     /**
      * Determine if the user is authorized to make this request.
      *
@@ -27,7 +29,7 @@ class StoreCertificateOfDepositRequest extends FormRequest
 		$company  = $this->route('company');
 		$financialInstitutionAccount = FinancialInstitutionAccount::find(Request()->get('maturity_amount_added_to_account_id'));
 		$financialInstitutionBalanceDate = $financialInstitutionAccount->getOpeningBalanceDate() ;
-		$rules = [
+		$rules = $this->shareholderOwnershipRules() + [
             'account_number'=>new UniqueAccountNumberRule($excludeAccountNumbers),
 			'end_date'=>['required',new DateMustBeGreaterThanOrEqualDate(null,$financialInstitutionBalanceDate,__('End Date Must Be Greater Than Or Equal Account Opening Balance Date'))]
 			
@@ -39,5 +41,10 @@ class StoreCertificateOfDepositRequest extends FormRequest
 		}
 		
         return $rules;
+    }
+
+    public function messages()
+    {
+        return $this->shareholderOwnershipMessages();
     }
 }

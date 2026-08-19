@@ -3,6 +3,7 @@ import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { router, usePage, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { todayDate } from '@/composables/today';
+import { mapAccountNumberOptions, accountNumberOption, hasAccountNumber } from '@/composables/useAccountNumberOptions';
 /* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
    الحماية الحقيقية على السيرفر في الـ Form Request. */
 const maxDate = todayDate();
@@ -316,7 +317,7 @@ async function fetchAccountNumbers(accountTypeId, financialInstitutionId, target
     if (!accountTypeId || !financialInstitutionId || !receivingCurrency.value) return;
     const url = `${props.urls.getAccountNumbersForType}/${accountTypeId}/${receivingCurrency.value}/${financialInstitutionId}`;
     const result = await fetchJson(url);
-    target.value = Object.values(result.data?.data || {});
+    target.value = mapAccountNumberOptions(result.data?.data);
 }
 
 async function fetchCashInSafeBalance() {
@@ -622,7 +623,7 @@ function submit() {
                         <label class="cvr-form-label">Account Number *</label>
                         <select v-model="cashInBank.accountNumber" class="cvr-input w-full px-3 py-2 rounded">
                             <option value="">Select</option>
-                            <option v-for="n in cashInBankAccountNumbers" :key="n" :value="n">{{ n }}</option>
+                            <option v-for="n in cashInBankAccountNumbers" :key="n.value" :value="n.value">{{ n.label }}</option>
                         </select>
                         <p v-if="errors['account_number.cash-in-bank']" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors['account_number.cash-in-bank'] }}</p>
                     </div>
@@ -710,7 +711,7 @@ function submit() {
                         <label class="cvr-form-label">Account Number *</label>
                         <select v-model="incomingTransfer.accountNumber" class="cvr-input w-full px-3 py-2 rounded">
                             <option value="">Select</option>
-                            <option v-for="n in incomingTransferAccountNumbers" :key="n" :value="n">{{ n }}</option>
+                            <option v-for="n in incomingTransferAccountNumbers" :key="n.value" :value="n.value">{{ n.label }}</option>
                         </select>
                         <p v-if="errors['account_number.incoming-transfer']" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors['account_number.incoming-transfer'] }}</p>
                     </div>

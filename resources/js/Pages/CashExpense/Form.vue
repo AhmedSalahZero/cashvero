@@ -4,6 +4,7 @@ import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import FormErrorSummary from '@/Components/FormErrorSummary.vue';
 import { todayDate } from '@/composables/today';
+import { mapAccountNumberOptions, accountNumberOption, hasAccountNumber } from '@/composables/useAccountNumberOptions';
 /* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
    الحماية الحقيقية على السيرفر في الـ Form Request. */
 const maxDate = todayDate();
@@ -180,8 +181,8 @@ watch(() => form.value.expense_category_id, () => {
    Same AJAX endpoint the old jQuery form used
    (CashExpenseController@getAccountNumbersForAccountType) — read-only,
    untouched, just called from Vue via axios instead. */
-const outgoingTransferAccountNumberOptions = ref(props.model?.outgoing_transfer_account_number ? [props.model.outgoing_transfer_account_number] : []);
-const payableChequeAccountNumberOptions = ref(props.model?.payable_cheque_account_number ? [props.model.payable_cheque_account_number] : []);
+const outgoingTransferAccountNumberOptions = ref(accountNumberOption(props.model?.outgoing_transfer_account_number));
+const payableChequeAccountNumberOptions = ref(accountNumberOption(props.model?.payable_cheque_account_number));
 
 async function loadAccountNumbers(kind) {
     const bankId = kind === 'outgoing_transfer' ? form.value.outgoing_transfer_delivery_bank_id : form.value.payable_cheque_delivery_bank_id;
@@ -189,13 +190,13 @@ async function loadAccountNumbers(kind) {
     if (!bankId || !accountTypeId || !form.value.currency) return;
     const url = `/${props.locale}/${props.company.id}/cash-expense/get-account-numbers-based-on-account-type/${accountTypeId}/${form.value.currency}/${bankId}`;
     const { data } = await window.axios.get(url);
-    const options = Object.values(data.data || {});
+    const options = mapAccountNumberOptions(data.data);
     if (kind === 'outgoing_transfer') {
         outgoingTransferAccountNumberOptions.value = options;
-        if (!options.includes(form.value.outgoing_transfer_account_number)) form.value.outgoing_transfer_account_number = options[0] || '';
+        if (!hasAccountNumber(options, form.value.outgoing_transfer_account_number)) form.value.outgoing_transfer_account_number = options[0]?.value || '';
     } else {
         payableChequeAccountNumberOptions.value = options;
-        if (!options.includes(form.value.payable_cheque_account_number)) form.value.payable_cheque_account_number = options[0] || '';
+        if (!hasAccountNumber(options, form.value.payable_cheque_account_number)) form.value.payable_cheque_account_number = options[0]?.value || '';
     }
 }
 watch(() => [form.value.outgoing_transfer_delivery_bank_id, form.value.outgoing_transfer_account_type, form.value.currency], () => loadAccountNumbers('outgoing_transfer'));
@@ -523,7 +524,7 @@ function submit() {
                                 <label class="cvr-form-label">Account Number *</label>
                                 <select v-model="form.outgoing_transfer_account_number" class="cvr-input w-full px-3 py-2 rounded">
                                     <option value="">Select</option>
-                                    <option v-for="num in outgoingTransferAccountNumberOptions" :key="num" :value="num">{{ num }}</option>
+                                    <option v-for="num in outgoingTransferAccountNumberOptions" :key="num.value" :value="num.value">{{ num.label }}</option>
                                 </select>
                                 <p v-if="errorFor('account_number')" class="text-xs mt-1 cvr-num-red">{{ errorFor('account_number') }}</p>
                             </div>
@@ -579,7 +580,7 @@ function submit() {
                                 <label class="cvr-form-label">Account Number *</label>
                                 <select v-model="form.payable_cheque_account_number" class="cvr-input w-full px-3 py-2 rounded">
                                     <option value="">Select</option>
-                                    <option v-for="num in payableChequeAccountNumberOptions" :key="num" :value="num">{{ num }}</option>
+                                    <option v-for="num in payableChequeAccountNumberOptions" :key="num.value" :value="num.value">{{ num.label }}</option>
                                 </select>
                                 <p v-if="errorFor('account_number')" class="text-xs mt-1 cvr-num-red">{{ errorFor('account_number') }}</p>
                             </div>

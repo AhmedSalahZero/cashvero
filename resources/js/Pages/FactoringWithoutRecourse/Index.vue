@@ -8,6 +8,7 @@ import { todayDate } from '@/composables/today';
    الحماية الحقيقية على السيرفر. */
 const maxDate = todayDate();
 import Pagination from '@/Components/Pagination.vue';
+import { mapAccountNumberOptions, accountNumberOption } from '@/composables/useAccountNumberOptions';
 
 const props = defineProps({
     company: Object,
@@ -98,7 +99,7 @@ async function loadDifferenceAccountNumbers() {
     const url = `${props.urls.getAccountNumbersForType}/${differenceForm.account_type_id}/${differenceTarget.value.invoice_currency}/${differenceForm.financial_institution_id}`;
     const result = await fetchJson(url);
     if (requestId !== differenceAccountNumbersRequestId) return;
-    differenceAccountNumbers.value = Object.values(result.data?.data || {});
+    differenceAccountNumbers.value = mapAccountNumberOptions(result.data?.data);
 }
 function openDifference(row) {
     differenceTarget.value = row;
@@ -106,7 +107,7 @@ function openDifference(row) {
     differenceForm.financial_institution_id = row.financial_institution_id || '';
     differenceForm.account_type_id = row.account_type_id || '';
     differenceForm.account_number = row.account_number || '';
-    differenceAccountNumbers.value = row.account_number ? [row.account_number] : [];
+    differenceAccountNumbers.value = accountNumberOption(row.account_number);
     loadDifferenceAccountNumbers();
 }
 watch([() => differenceForm.account_type_id, () => differenceForm.financial_institution_id], () => {
@@ -287,7 +288,7 @@ function destroyRow() {
                             <label class="cvr-form-label">Account Number *</label>
                             <select v-model="differenceForm.account_number" class="cvr-input w-full px-3 py-2 rounded">
                                 <option value="">Select</option>
-                                <option v-for="n in differenceAccountNumbers" :key="n" :value="n">{{ n }}</option>
+                                <option v-for="n in differenceAccountNumbers" :key="n.value" :value="n.value">{{ n.label }}</option>
                             </select>
                         </div>
                     </div>

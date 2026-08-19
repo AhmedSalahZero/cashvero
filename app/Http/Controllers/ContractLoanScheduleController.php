@@ -115,7 +115,13 @@ class ContractLoanScheduleController extends Controller
                 'settlement_default_date' => $contractLoanSchedule->getSettlementDefaultDate(),
                 'remaining' => $contractLoanSchedule->getRemaining(),
             ],
-            'currentAccounts' => collect($currentAccounts)->values(),
+            // {value: stored account number, label: what the user reads}.
+            // The two differ for a shareholder-owned account (D7,
+            // docs/shareholder-accounts.md) — sending only the labels here
+            // would store the owner's name in current_account_number.
+            'currentAccounts' => collect($currentAccounts)
+                ->map(fn ($label, $accountNumber) => ['value' => (string) $accountNumber, 'label' => (string) $label])
+                ->values(),
             'currentAccountTypeId' => $currentAccountType?->id ?? 0,
             'financialInstitutionId' => $contractLoanSchedule->getFinancialInstitutionId(),
             'balanceLookupUrl' => route('update.balance.and.net.balance.based.on.account.number', ['company' => $company->id]),

@@ -8,6 +8,7 @@ import { todayDate } from '@/composables/today';
    الحماية الحقيقية على السيرفر. */
 const maxDate = todayDate();
 import Pagination from '@/Components/Pagination.vue';
+import { mapAccountNumberOptions, accountNumberOption } from '@/composables/useAccountNumberOptions';
 
 const props = defineProps({
     company: Object,
@@ -100,7 +101,7 @@ async function loadCollectAccountNumbers() {
     const url = `${props.urls.getAccountNumbersForType}/${collectForm.account_type_id}/${collectTarget.value.invoice_currency}/${collectForm.financial_institution_id}`;
     const result = await fetchJson(url);
     if (requestId !== collectAccountNumbersRequestId) return; // a newer request has since started — discard this stale result
-    collectAccountNumbers.value = Object.values(result.data?.data || {});
+    collectAccountNumbers.value = mapAccountNumberOptions(result.data?.data);
 }
 function openCollect(row) {
     collectTarget.value = row;
@@ -108,7 +109,7 @@ function openCollect(row) {
     collectForm.financial_institution_id = row.financial_institution_id || '';
     collectForm.account_type_id = row.account_type_id || '';
     collectForm.account_number = row.account_number || '';
-    collectAccountNumbers.value = row.account_number ? [row.account_number] : [];
+    collectAccountNumbers.value = accountNumberOption(row.account_number);
     loadCollectAccountNumbers();
 }
 watch([() => collectForm.account_type_id, () => collectForm.financial_institution_id], () => {
@@ -133,7 +134,7 @@ async function loadRejectAccountNumbers() {
     const url = `${props.urls.getAccountNumbersForType}/${rejectForm.account_type_id}/${rejectTarget.value.invoice_currency}/${rejectForm.financial_institution_id}`;
     const result = await fetchJson(url);
     if (requestId !== rejectAccountNumbersRequestId) return;
-    rejectAccountNumbers.value = Object.values(result.data?.data || {});
+    rejectAccountNumbers.value = mapAccountNumberOptions(result.data?.data);
 }
 function openReject(row) {
     rejectTarget.value = row;
@@ -142,7 +143,7 @@ function openReject(row) {
     rejectForm.financial_institution_id = row.financial_institution_id || '';
     rejectForm.account_type_id = row.account_type_id || '';
     rejectForm.account_number = row.account_number || '';
-    rejectAccountNumbers.value = row.account_number ? [row.account_number] : [];
+    rejectAccountNumbers.value = accountNumberOption(row.account_number);
     loadRejectAccountNumbers();
 }
 watch([() => rejectForm.account_type_id, () => rejectForm.financial_institution_id], () => {
@@ -301,7 +302,7 @@ function destroyRow() {
                             <label class="cvr-form-label">Account Number *</label>
                             <select v-model="collectForm.account_number" class="cvr-input w-full px-3 py-2 rounded">
                                 <option value="">Select</option>
-                                <option v-for="n in collectAccountNumbers" :key="n" :value="n">{{ n }}</option>
+                                <option v-for="n in collectAccountNumbers" :key="n.value" :value="n.value">{{ n.label }}</option>
                             </select>
                         </div>
                     </div>
@@ -349,7 +350,7 @@ function destroyRow() {
                             <label class="cvr-form-label">Account Number *</label>
                             <select v-model="rejectForm.account_number" class="cvr-input w-full px-3 py-2 rounded">
                                 <option value="">Select</option>
-                                <option v-for="n in rejectAccountNumbers" :key="n" :value="n">{{ n }}</option>
+                                <option v-for="n in rejectAccountNumbers" :key="n.value" :value="n.value">{{ n.label }}</option>
                             </select>
                         </div>
                     </div>

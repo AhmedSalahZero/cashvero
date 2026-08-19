@@ -56,8 +56,13 @@ class FinancialInstitutionFacilitiesController
      */
     public function bankAccounts(Company $company)
     {
-        $accounts = FinancialInstitutionAccount::with('financialInstitution.bank')
+        // Shareholder-owned accounts are hidden from anyone without
+        // shareholder_account.view — docs/shareholder-accounts.md (D6).
+        $canViewShareholderAccounts = \App\Support\ShareholderAccounts\ShareholderAccountAccess::canView();
+
+        $accounts = FinancialInstitutionAccount::with(['financialInstitution.bank', 'shareholderPartner'])
             ->where('company_id', $company->id)
+            ->when(! $canViewShareholderAccounts, fn ($query) => $query->onlyCompanyOwned())
             ->get();
 
         $rows = $accounts->map(fn ($account) => [
@@ -65,12 +70,14 @@ class FinancialInstitutionFacilitiesController
             'bank_name' => $account->financialInstitution?->getName() ?? __('N/A'),
             'account_type' => __('Current Account'),
             'account_number' => $account->account_number,
+            'owner_name' => $account->getShareholderName() ?? __('Company'),
             'currency' => $account->currency,
         ])->sortBy('bank_name')->values();
 
         return Inertia::render('FinancialInstitutionFacilities/BankAccounts', [
             'company' => ['id' => $company->id, 'name' => $company->getName()],
             'rows' => $rows,
+            'canViewShareholderAccounts' => $canViewShareholderAccounts,
         ]);
     }
 

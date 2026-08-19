@@ -16,6 +16,7 @@ import { ref, computed, watch } from 'vue'
 import { router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import { todayDate, clampDateToToday } from '@/composables/today'
+import { mapAccountNumberOptions, hasAccountNumber } from '@/composables/useAccountNumberOptions'
 
 const maxDate = todayDate()
 
@@ -61,9 +62,9 @@ async function loadAccountNumbers() {
 				currency: currency.value,
 			},
 		})
-		accountNumberOptions.value = Object.values(data.data || {})
-		if (!accountNumberOptions.value.includes(accountNumber.value)) {
-			accountNumber.value = accountNumberOptions.value[0] || ''
+		accountNumberOptions.value = mapAccountNumberOptions(data.data)
+		if (!hasAccountNumber(accountNumberOptions.value, accountNumber.value)) {
+			accountNumber.value = accountNumberOptions.value[0]?.value || ''
 		}
 	} finally {
 		loadingAccountNumbers.value = false
@@ -144,7 +145,7 @@ function submit() {
 							<option value="" disabled>
 								{{ loadingAccountNumbers ? 'Loading…' : (accountNumberOptions.length ? 'Select account number' : 'Select bank & account type first') }}
 							</option>
-							<option v-for="num in accountNumberOptions" :key="num" :value="num">{{ num }}</option>
+							<option v-for="num in accountNumberOptions" :key="num.value" :value="num.value">{{ num.label }}</option>
 						</select>
 					</div>
 				</div>

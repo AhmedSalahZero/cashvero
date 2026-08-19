@@ -278,6 +278,8 @@ class CertificatesOfDepositsController
 			])->values(),
 			'currencies' => getCurrencies(),
 			'hasOdooIntegration' => $company->hasOdooIntegrationCredentials(),
+			// Shareholder ownership control — docs/shareholder-accounts.md
+			...\App\Support\ShareholderAccounts\ShareholderAccountAccess::formProps($company->id),
 			'model' => null,
 			'submitUrl' => route('store.certificates.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
 			'backUrl' => route('view.certificates.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
@@ -301,6 +303,7 @@ class CertificatesOfDepositsController
 	public function store(Company $company  ,FinancialInstitution $financialInstitution, StoreCertificateOfDepositRequest $request){
 		
 		$data = $request->only( $this->getCommonDataArr());
+		$data += \App\Support\ShareholderAccounts\ShareholderAccountAccess::ownershipFromRequest($request);
 		foreach(['start_date','end_date'] as $dateField){
 			$data[$dateField] = $request->get($dateField) ? Carbon::make($request->get($dateField))->format('Y-m-d'):null;
 		}
@@ -352,6 +355,8 @@ class CertificatesOfDepositsController
 			])->values(),
 			'currencies' => getCurrencies(),
 			'hasOdooIntegration' => $company->hasOdooIntegrationCredentials(),
+			// Shareholder ownership control — docs/shareholder-accounts.md
+			...\App\Support\ShareholderAccounts\ShareholderAccountAccess::formProps($company->id),
 			'model' => [
 				'id' => $certificatesOfDeposit->id,
 				'account_number' => $certificatesOfDeposit->getAccountNumber(),
@@ -365,7 +370,7 @@ class CertificatesOfDepositsController
 				'interest_rate' => $certificatesOfDeposit->getInterestRate(),
 				'interest_amount' => $certificatesOfDeposit->getInterestAmount(),
 				'is_at_maturity' => !$certificatesOfDeposit->isPeriodically(),
-			],
+			] + \App\Support\ShareholderAccounts\ShareholderAccountAccess::modelProps($certificatesOfDeposit),
 			'submitUrl' => route('update.certificates.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'certificatesOfDeposit' => $certificatesOfDeposit->id]),
 			'backUrl' => route('view.certificates.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
 			'navUrls' => [
@@ -396,6 +401,7 @@ class CertificatesOfDepositsController
 		$accountNumberHasChanged = $deductedFromAccountId != $certificatesOfDeposit->deducted_from_account_id;
 		$data['updated_by'] = auth()->user()->id ;
 		$data = $request->only($this->getCommonDataArr());
+		$data += \App\Support\ShareholderAccounts\ShareholderAccountAccess::ownershipFromRequest($request);
 		foreach(['start_date','end_date'] as $dateField){
 			$data[$dateField] = $request->get($dateField) ? Carbon::make($request->get($dateField))->format('Y-m-d'):null;
 		}

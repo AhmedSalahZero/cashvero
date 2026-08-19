@@ -31,6 +31,7 @@ const filteredAccounts = computed(() => {
     return props.bankAccounts.filter(account => {
         const matchesSearch = !search.value ||
             account.account_number.toLowerCase().includes(search.value.toLowerCase()) ||
+            (account.shareholder_name || '').toLowerCase().includes(search.value.toLowerCase()) ||
             account.type_label.toLowerCase().includes(search.value.toLowerCase());
         const matchesCurrency = activeCurrency.value === 'all' || account.currency_formatted === activeCurrency.value;
         return matchesSearch && matchesCurrency;
@@ -144,6 +145,9 @@ function toggleLock() {
                             <th class="px-4 py-3 text-left">#</th>
                             <th class="px-4 py-3 text-left">Type</th>
                             <th class="px-4 py-3 text-left">Account Number</th>
+                            <!-- Owner column — only for users allowed to see
+                                 shareholder-owned accounts (docs/shareholder-accounts.md, D6) -->
+                            <th v-if="permissions.canViewShareholderAccounts" class="px-4 py-3 text-left">Owner</th>
                             <th class="px-4 py-3 text-left">Currency</th>
                             <th class="px-4 py-3 text-left">Balance</th>
                             <th class="px-4 py-3 text-left">Actions</th>
@@ -162,6 +166,9 @@ function toggleLock() {
                                 </span>
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap cvr-num">{{ account.account_number }}</td>
+                            <td v-if="permissions.canViewShareholderAccounts" class="px-4 py-3 cvr-text-secondary">
+                                {{ account.shareholder_name || 'Company' }}
+                            </td>
                             <td class="px-4 py-3 cvr-text-secondary">{{ account.currency_formatted }}</td>
                             <td class="px-4 py-3 cvr-num-green font-medium">{{ account.balance_formatted }}</td>
                             <td class="px-4 py-3">
@@ -193,7 +200,7 @@ function toggleLock() {
                             </td>
                         </tr>
                         <tr v-if="filteredAccounts.length === 0">
-                            <td colspan="6" class="px-4 py-8 text-center cvr-text-muted">
+                            <td :colspan="permissions.canViewShareholderAccounts ? 7 : 6" class="px-4 py-8 text-center cvr-text-muted">
                                 No accounts match your search.
                             </td>
                         </tr>

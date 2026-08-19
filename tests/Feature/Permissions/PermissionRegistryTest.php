@@ -59,12 +59,49 @@ class PermissionRegistryTest extends TestCase
      * always includes the canonical key plus the declared legacy aliases,
      * so the real assertion is that a legacy alias was declared at all.
      */
+    /**
+     * Keys that deliberately have no legacy alias.
+     *
+     * The rule above protects EXISTING access: a key that gates a screen
+     * people already use must name the permission governing it today, or
+     * enforcement day silently locks them out. That reasoning does not
+     * apply to a key guarding something nobody could reach before — there
+     * is no access to preserve, and inventing an alias would hand the new
+     * data to everyone holding some unrelated older permission.
+     *
+     * `shareholder_account.view` is exactly that case: it gates an owner's
+     * PERSONAL bank accounts, a new concept, and is meant to start off
+     * granted to nobody. See docs/shareholder-accounts.md (decision D6).
+     *
+     * Only add a key here when it guards genuinely new functionality.
+     *
+     * @var string[]
+     */
+    private const KEYS_WITHOUT_A_PREDECESSOR = [
+        'shareholder_account.view',
+    ];
+
+    /**
+     * An exemption is only legitimate while the key it names still exists —
+     * otherwise a renamed key would quietly keep its waiver and the real
+     * rule would stop covering it.
+     */
+    public function test_the_legacy_alias_exemptions_still_refer_to_real_keys(): void
+    {
+        foreach (self::KEYS_WITHOUT_A_PREDECESSOR as $key) {
+            $this->assertTrue(
+                PermissionRegistry::has($key),
+                "Exempted key {$key} no longer exists — remove it from KEYS_WITHOUT_A_PREDECESSOR."
+            );
+        }
+    }
+
     public function test_every_permission_declares_a_legacy_grant_name(): void
     {
         $orphans = [];
 
         foreach (PermissionRegistry::all() as $key => $permission) {
-            if ($permission['legacy'] === []) {
+            if ($permission['legacy'] === [] && ! in_array($key, self::KEYS_WITHOUT_A_PREDECESSOR, true)) {
                 $orphans[] = $key;
             }
 

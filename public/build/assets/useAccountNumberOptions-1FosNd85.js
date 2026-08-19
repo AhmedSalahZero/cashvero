@@ -1,0 +1,1 @@
+function e(n){return Object.entries(n||{}).map(([t,r])=>({value:String(t),label:String(r??t)}))}function i(n){return n?[{value:String(n),label:String(n)}]:[]}function a(n,t){return n.some(r=>r.value===String(t??""))}export{i as a,a as h,e as m};

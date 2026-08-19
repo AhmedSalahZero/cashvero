@@ -334,6 +334,8 @@ class TimeOfDepositsController
 			])->values(),
 			'currencies' => getCurrencies(),
 			'hasOdooIntegration' => $company->hasOdooIntegrationCredentials(),
+			// Shareholder ownership control — docs/shareholder-accounts.md
+			...\App\Support\ShareholderAccounts\ShareholderAccountAccess::formProps($company->id),
 			'model' => null,
 			'submitUrl' => route('store.time.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
 			'backUrl' => route('view.time.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
@@ -356,6 +358,7 @@ class TimeOfDepositsController
 	 */
 	public function store(Company $company  ,FinancialInstitution $financialInstitution, StoreTimeOfDepositRequest $request){
 		$data = $request->only( $this->getCommonDataArr());
+		$data += \App\Support\ShareholderAccounts\ShareholderAccountAccess::ownershipFromRequest($request);
 		foreach(['start_date','end_date'] as $dateField){
 			$data[$dateField] = $request->get($dateField) ? Carbon::make($request->get($dateField))->format('Y-m-d'):null;
 		}
@@ -411,6 +414,8 @@ class TimeOfDepositsController
 			])->values(),
 			'currencies' => getCurrencies(),
 			'hasOdooIntegration' => $company->hasOdooIntegrationCredentials(),
+			// Shareholder ownership control — docs/shareholder-accounts.md
+			...\App\Support\ShareholderAccounts\ShareholderAccountAccess::formProps($company->id),
 			'model' => [
 				'id' => $timeOfDeposit->id,
 				'account_number' => $timeOfDeposit->getAccountNumber(),
@@ -424,7 +429,7 @@ class TimeOfDepositsController
 				'interest_rate' => $timeOfDeposit->getInterestRate(),
 				'interest_amount' => $timeOfDeposit->getInterestAmount(),
 				'is_at_maturity' => !$timeOfDeposit->isPeriodically(),
-			],
+			] + \App\Support\ShareholderAccounts\ShareholderAccountAccess::modelProps($timeOfDeposit),
 			'submitUrl' => route('update.time.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'timeOfDeposit' => $timeOfDeposit->id]),
 			'backUrl' => route('view.time.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
 			'navUrls' => [
@@ -446,6 +451,7 @@ class TimeOfDepositsController
 	//	$accountNumberHasChanged = $deductedFromAccountId != $timeOfDeposit->getDeductedFromAccountId();
 		$data['updated_by'] = auth()->user()->id ;
 		$data = $request->only($this->getCommonDataArr());
+		$data += \App\Support\ShareholderAccounts\ShareholderAccountAccess::ownershipFromRequest($request);
 		foreach(['start_date','end_date'] as $dateField){
 			$data[$dateField] = $request->get($dateField) ? Carbon::make($request->get($dateField))->format('Y-m-d'):null;
 		}

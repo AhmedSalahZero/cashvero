@@ -255,6 +255,10 @@ class MediumTermLoanController
             'hasOdoo' => $company->hasOdooCredentials(),
             'isConsumptionLocked' => false,
             'isLocked' => false,
+            // Shareholder ownership control — docs/shareholder-accounts.md.
+            // A loan flagged as an owner's is filtered exactly like their
+            // other accounts (decision D1): ownership, nothing else.
+            ...\App\Support\ShareholderAccounts\ShareholderAccountAccess::formProps($company->id),
             'model' => null,
             'submitUrl' => route('loans.store', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
             'backUrl' => route('loans.index', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
@@ -280,6 +284,18 @@ class MediumTermLoanController
         $mediumTermLoan = new MediumTermLoan;
         $mediumTermLoan->status = MediumTermLoan::RUNNING;
         $mediumTermLoan->storeBasicForm($request);
+
+        /**
+         * storeBasicForm() copies any request field that matches a column,
+         * which would happily persist a leftover shareholder id on a loan
+         * the user just unticked. Re-writing the pair through the normaliser
+         * keeps the two columns consistent, and it returns [] for a user
+         * without the permission so their request cannot flag anything.
+         */
+        $ownership = \App\Support\ShareholderAccounts\ShareholderAccountAccess::ownershipFromRequest($request);
+        if ($ownership !== []) {
+            $mediumTermLoan->forceFill($ownership)->save();
+        }
         $activeTab = $type;
 
         $odooSyncFailureMessage = $this->syncLoanWithOdoo($company, $mediumTermLoan);
@@ -379,6 +395,8 @@ class MediumTermLoanController
             'hasOdoo' => $company->hasOdooCredentials(),
             'isConsumptionLocked' => $isConsumptionLocked,
             'isLocked' => $isLocked,
+            // Shareholder ownership control — docs/shareholder-accounts.md
+            ...\App\Support\ShareholderAccounts\ShareholderAccountAccess::formProps($company->id),
             'model' => [
                 'id' => $mediumTermLoan->id,
                 'name' => $mediumTermLoan->getName(),
@@ -397,7 +415,7 @@ class MediumTermLoanController
                 'consumption_status' => $mediumTermLoan->getConsumptionStatus(),
                 'odoo_code' => $mediumTermLoan->getOdooCode(),
                 'available_room_formatted' => $mediumTermLoan->getAvailableRoomAtFormatted(),
-            ],
+            ] + \App\Support\ShareholderAccounts\ShareholderAccountAccess::modelProps($mediumTermLoan),
             'submitUrl' => route('loans.update', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'mediumTermLoan' => $mediumTermLoan->id]),
             'deleteScheduleUrl' => route('loans.schedule.destroy', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'mediumTermLoan' => $mediumTermLoan->id]),
             'backUrl' => route('loans.index', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
@@ -566,7 +584,13 @@ class MediumTermLoanController
                 'settlement_default_date' => $loanSchedule->getSettlementDefaultDate(),
                 'remaining' => $loanSchedule->getRemaining(),
             ],
-            'currentAccounts' => collect($currentAccounts)->values(),
+            // {value: stored account number, label: what the user reads}.
+            // The two differ for a shareholder-owned account (D7,
+            // docs/shareholder-accounts.md) — sending only the labels here
+            // would store the owner's name in current_account_number.
+            'currentAccounts' => collect($currentAccounts)
+                ->map(fn ($label, $accountNumber) => ['value' => (string) $accountNumber, 'label' => (string) $label])
+                ->values(),
             'currentAccountTypeId' => $currentAccountType?->id ?? 0,
             'financialInstitutionId' => $loanSchedule->getFinancialInstitutionId(),
             'balanceLookupUrl' => route('update.balance.and.net.balance.based.on.account.number', ['company' => $company->id]),

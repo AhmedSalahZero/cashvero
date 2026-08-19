@@ -13,6 +13,7 @@ use App\Models\LeasingContract;
 use App\Support\CashDashboard\DepositCashDashboardHelper;
 use App\Support\CashDashboard\LatestStatementQuery;
 use App\Support\CashDashboard\OverdraftCashDashboardHelper;
+use App\Support\ShareholderAccounts\ShareholderAccountAccess;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +34,23 @@ class CashDashboardService
             $request->get('currencies', $allCurrencies) ?: [],
             fn ($currency) => (bool) $currency
         ));
+
+        /**
+         * * فلتر ملكية الحسابات : كل الحسابات / حسابات الشركة / حسابات الشركاء
+         * * الافتراضي حسابات الشركة (القرار D2) و اللي ماعندوش صلاحية
+         * * shareholder_account.view
+         * * بيتثبت على حسابات الشركة مهما بعت في الريكوست (القرار D6)
+         * * الملف : docs/shareholder-accounts.md
+         */
+        $canManageShareholderAccounts = ShareholderAccountAccess::canView();
+        $accountOwnerFilter = ShareholderAccountAccess::filterFromRequest($request);
+
+        /**
+         * * التسهيلات دي (كل انواع الاوفر درافت) بنكيا ما بتتعملش لفرد
+         * * فا هي دايما بتاعة الشركة .. ولما المستخدم يختار حسابات الشركاء بس
+         * * ما ينفعش نفضل نعرضله ارقام تسهيلات الشركة كأنها بتاعة الشريك
+         */
+        $includeCompanyOnlyInstruments = ! $accountOwnerFilter->isShareholdersOnly();
 
         $mainFunctionalCurrency = $company->getMainFunctionalCurrency();
         $foreignExchangeRates = ForeignExchangeRate::where('company_id', $companyId)->get();
@@ -63,24 +81,35 @@ class CashDashboardService
         $overdraftAgainstCommercialPaperAccountTypes = AccountType::onlyOverdraftAgainstCommercialPaper()->get();
         $overdraftAgainstAssignmentOfContractAccountTypes = AccountType::onlyOverdraftAgainstAssignmentOfContract()->get();
 
-        $hasFullySecuredOverdraftMap = OverdraftCashDashboardHelper::currenciesWithRecords('fully_secured_overdrafts', $companyId, $selectedCurrencies);
-        $hasCleanOverdraftMap = OverdraftCashDashboardHelper::currenciesWithRecords('clean_overdrafts', $companyId, $selectedCurrencies);
-        $hasOverdraftAgainstCommercialPaperMap = OverdraftCashDashboardHelper::currenciesWithRecords('overdraft_against_commercial_papers', $companyId, $selectedCurrencies);
-        $hasOverdraftAgainstAssignmentOfContractMap = OverdraftCashDashboardHelper::currenciesWithRecords('overdraft_against_assignment_of_contracts', $companyId, $selectedCurrencies);
+        $hasFullySecuredOverdraftMap = $includeCompanyOnlyInstruments ? OverdraftCashDashboardHelper::currenciesWithRecords('fully_secured_overdrafts', $companyId, $selectedCurrencies) : [];
+        $hasCleanOverdraftMap = $includeCompanyOnlyInstruments ? OverdraftCashDashboardHelper::currenciesWithRecords('clean_overdrafts', $companyId, $selectedCurrencies) : [];
+        $hasOverdraftAgainstCommercialPaperMap = $includeCompanyOnlyInstruments ? OverdraftCashDashboardHelper::currenciesWithRecords('overdraft_against_commercial_papers', $companyId, $selectedCurrencies) : [];
+        $hasOverdraftAgainstAssignmentOfContractMap = $includeCompanyOnlyInstruments ? OverdraftCashDashboardHelper::currenciesWithRecords('overdraft_against_assignment_of_contracts', $companyId, $selectedCurrencies) : [];
 
+        /**
+         * * القرار D1 : الفلتر بالملكية فقط ومتساوي على كل الأنواع
+         * * فا قرض الشريك بيتفلتر زي الحساب الجاري والـ TD/CD بالظبط
+         */
         $mediumTermLoansByCurrency = MediumTermLoan::query()
             ->where('company_id', $companyId)
             ->whereIn('currency', $selectedCurrencies)
+            ->ownedAccordingTo($accountOwnerFilter)
             ->with('loanSchedules')
             ->get()
             ->groupBy('currency');
 
-        $leasingContractsByCurrency = LeasingContract::query()
-            ->where('company_id', $companyId)
-            ->whereIn('currency', $selectedCurrencies)
-            ->with(['contractLoanSchedules', 'leasingCompany'])
-            ->get()
-            ->groupBy('currency');
+        /**
+         * * التأجير التمويلي زي الاوفر درافت والخزن : ما بيتعملش لفرد
+         * * فا دايما بتاع الشركة وما يظهرش في عرض حسابات الشركاء
+         */
+        $leasingContractsByCurrency = $includeCompanyOnlyInstruments
+            ? LeasingContract::query()
+                ->where('company_id', $companyId)
+                ->whereIn('currency', $selectedCurrencies)
+                ->with(['contractLoanSchedules', 'leasingCompany'])
+                ->get()
+                ->groupBy('currency')
+            : collect();
 
         $exchangeRates = [];
         foreach ($selectedCurrencies as $currencyName) {
@@ -95,12 +124,16 @@ class CashDashboardService
             }
         }
 
-        $fullySecuredOverdraftIdsByCurrency = OverdraftCashDashboardHelper::overdraftIdsByCurrency('fully_secured_overdrafts', $companyId, $selectedCurrencies, $date);
-        $cleanOverdraftIdsByCurrency = OverdraftCashDashboardHelper::overdraftIdsByCurrency('clean_overdrafts', $companyId, $selectedCurrencies, $date);
-        $overdraftAgainstCommercialPaperIdsByCurrency = OverdraftCashDashboardHelper::overdraftIdsByCurrency('overdraft_against_commercial_papers', $companyId, $selectedCurrencies, $date);
-        $overdraftAgainstAssignmentOfContractIdsByCurrency = OverdraftCashDashboardHelper::overdraftIdsByCurrency('overdraft_against_assignment_of_contracts', $companyId, $selectedCurrencies, $date);
+        $fullySecuredOverdraftIdsByCurrency = $includeCompanyOnlyInstruments ? OverdraftCashDashboardHelper::overdraftIdsByCurrency('fully_secured_overdrafts', $companyId, $selectedCurrencies, $date) : [];
+        $cleanOverdraftIdsByCurrency = $includeCompanyOnlyInstruments ? OverdraftCashDashboardHelper::overdraftIdsByCurrency('clean_overdrafts', $companyId, $selectedCurrencies, $date) : [];
+        $overdraftAgainstCommercialPaperIdsByCurrency = $includeCompanyOnlyInstruments ? OverdraftCashDashboardHelper::overdraftIdsByCurrency('overdraft_against_commercial_papers', $companyId, $selectedCurrencies, $date) : [];
+        $overdraftAgainstAssignmentOfContractIdsByCurrency = $includeCompanyOnlyInstruments ? OverdraftCashDashboardHelper::overdraftIdsByCurrency('overdraft_against_assignment_of_contracts', $companyId, $selectedCurrencies, $date) : [];
 
-        $cashInSafeByCurrency = LatestStatementQuery::latestCashInSafeByBranch(
+        /**
+         * * الخزن دايما بتاعة الشركة .. مفيش خزنة شخصية لشريك (القسم 1 في الملف)
+         * * فا لما الفلتر يبقى "حسابات الشركاء" الخزن ما تدخلش في الحساب
+         */
+        $cashInSafeByCurrency = $accountOwnerFilter->isShareholdersOnly() ? [] : LatestStatementQuery::latestCashInSafeByBranch(
             $companyId,
             $date,
             $branchIds,
@@ -110,7 +143,8 @@ class CashDashboardService
             $companyId,
             $date,
             $selectedFinancialInstitutionBankIds,
-            $selectedCurrencies
+            $selectedCurrencies,
+            $accountOwnerFilter
         );
 
         $fullySecuredOverdraftCardData = [];
@@ -348,7 +382,8 @@ class CashDashboardService
                 $currencyName,
                 $selectedFinancialInstitutionBankIds,
                 $cdAccountTypeId,
-                $bankNameResolver
+                $bankNameResolver,
+                $accountOwnerFilter
             );
             foreach ($certificateRows as $certificateRow) {
                 $details[$currencyName]['certificate_of_deposits'][] = (array) $certificateRow;
@@ -359,13 +394,14 @@ class CashDashboardService
                 $currencyName,
                 $selectedFinancialInstitutionBankIds,
                 $tdAccountTypeId,
-                $bankNameResolver
+                $bankNameResolver,
+                $accountOwnerFilter
             );
             foreach ($timeDepositRows as $timeDepositRow) {
                 $details[$currencyName]['time_of_deposits'][] = (array) $timeDepositRow;
             }
 
-            $cleanOverdraftCardData[$currencyName] = OverdraftCashDashboardHelper::yearCardData(
+            $cleanOverdraftCardData[$currencyName] = ! $includeCompanyOnlyInstruments ? [] : OverdraftCashDashboardHelper::yearCardData(
                 'clean_overdraft_bank_statements',
                 'clean_overdrafts',
                 'clean_overdraft_id',
@@ -377,7 +413,7 @@ class CashDashboardService
                 $cleanOverdraftIds,
                 $cleanLatest
             );
-            $fullySecuredOverdraftCardData[$currencyName] = OverdraftCashDashboardHelper::yearCardData(
+            $fullySecuredOverdraftCardData[$currencyName] = ! $includeCompanyOnlyInstruments ? [] : OverdraftCashDashboardHelper::yearCardData(
                 'fully_secured_overdraft_bank_statements',
                 'fully_secured_overdrafts',
                 'fully_secured_overdraft_id',
@@ -389,7 +425,7 @@ class CashDashboardService
                 $fullySecuredOverdraftIds,
                 $fullySecuredLatest
             );
-            $overdraftAgainstCommercialPaperCardData[$currencyName] = OverdraftCashDashboardHelper::yearCardData(
+            $overdraftAgainstCommercialPaperCardData[$currencyName] = ! $includeCompanyOnlyInstruments ? [] : OverdraftCashDashboardHelper::yearCardData(
                 'overdraft_against_commercial_paper_bank_statements',
                 'overdraft_against_commercial_papers',
                 'overdraft_against_commercial_paper_id',
@@ -401,7 +437,7 @@ class CashDashboardService
                 $overdraftAgainstCommercialPaperIds,
                 $commercialLatest
             );
-            $overdraftAgainstAssignmentOfContractCardData[$currencyName] = OverdraftCashDashboardHelper::yearCardData(
+            $overdraftAgainstAssignmentOfContractCardData[$currencyName] = ! $includeCompanyOnlyInstruments ? [] : OverdraftCashDashboardHelper::yearCardData(
                 'overdraft_against_assignment_of_contract_bank_statements',
                 'overdraft_against_assignment_of_contracts',
                 'overdraft_against_assignment_of_contract_id',
@@ -483,6 +519,13 @@ class CashDashboardService
             'hasOverdraftAgainstAssignmentOfContract'
         ), [
             'selectedFinancialInstitutionsIds' => $selectedFinancialInstitutionBankIds,
+            // Owner filter state + options for the Vue controls.
+            'canManageShareholderAccounts' => $canManageShareholderAccounts,
+            'accountOwner' => $accountOwnerFilter->owner,
+            'accountOwnerShareholderId' => $accountOwnerFilter->shareholderPartnerId,
+            'shareholders' => $canManageShareholderAccounts
+                ? ShareholderAccountAccess::shareholdersForSelect($companyId)
+                : [],
         ]);
     }
 

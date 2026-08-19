@@ -4,6 +4,7 @@ import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import FormErrorSummary from '@/Components/FormErrorSummary.vue';
 import { todayDate } from '@/composables/today';
+import { mapAccountNumberOptions, accountNumberOption, hasAccountNumber } from '@/composables/useAccountNumberOptions';
 /* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
    الحماية الحقيقية على السيرفر في الـ Form Request. */
 const maxDate = todayDate();
@@ -98,17 +99,17 @@ async function loadAccountNumbers(side) {
     if (!bankId || !accountTypeId || !form.value.currency) return;
     const url = `/${props.locale}/${props.company.id}/money-received/get-account-numbers-based-on-account-type/${accountTypeId}/${form.value.currency}/${bankId}`;
     const { data } = await window.axios.get(url);
-    const options = Object.values(data.data || {});
+    const options = mapAccountNumberOptions(data.data);
     if (side === 'from') {
         fromAccountNumberOptions.value = options;
-        if (!options.includes(form.value.from_account_number)) form.value.from_account_number = options[0] || '';
+        if (!hasAccountNumber(options, form.value.from_account_number)) form.value.from_account_number = options[0]?.value || '';
     } else {
         toAccountNumberOptions.value = options;
-        if (!options.includes(form.value.to_account_number)) form.value.to_account_number = options[0] || '';
+        if (!hasAccountNumber(options, form.value.to_account_number)) form.value.to_account_number = options[0]?.value || '';
     }
 }
-const fromAccountNumberOptions = ref(props.model?.from_account_number ? [props.model.from_account_number] : []);
-const toAccountNumberOptions = ref(props.model?.to_account_number ? [props.model.to_account_number] : []);
+const fromAccountNumberOptions = ref(accountNumberOption(props.model?.from_account_number));
+const toAccountNumberOptions = ref(accountNumberOption(props.model?.to_account_number));
 watch(() => [form.value.from_bank_id, form.value.from_account_type_id, form.value.currency], () => loadAccountNumbers('from'));
 watch(() => [form.value.to_bank_id, form.value.to_account_type_id, form.value.currency], () => loadAccountNumbers('to'));
 
@@ -318,7 +319,7 @@ function submit() {
                             <label class="cvr-form-label">From Account Number *</label>
                             <select v-model="form.from_account_number" class="cvr-input w-full px-3 py-2 rounded">
                                 <option value="">Select</option>
-                                <option v-for="num in fromAccountNumberOptions" :key="num" :value="num">{{ num }}</option>
+                                <option v-for="num in fromAccountNumberOptions" :key="num.value" :value="num.value">{{ num.label }}</option>
                             </select>
                             <p v-if="errorFor('from_account_number')" class="text-xs mt-1 cvr-num-red">{{ errorFor('from_account_number') }}</p>
                         </div>
@@ -355,7 +356,7 @@ function submit() {
                             <label class="cvr-form-label">To Account Number *</label>
                             <select v-model="form.to_account_number" class="cvr-input w-full px-3 py-2 rounded">
                                 <option value="">Select</option>
-                                <option v-for="num in toAccountNumberOptions" :key="num" :value="num">{{ num }}</option>
+                                <option v-for="num in toAccountNumberOptions" :key="num.value" :value="num.value">{{ num.label }}</option>
                             </select>
                             <p v-if="errorFor('to_account_number')" class="text-xs mt-1 cvr-num-red">{{ errorFor('to_account_number') }}</p>
                         </div>

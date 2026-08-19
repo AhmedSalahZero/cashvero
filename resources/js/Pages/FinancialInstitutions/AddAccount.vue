@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import FormErrorSummary from '@/Components/FormErrorSummary.vue';
+import ShareholderOwnershipFields from '@/Components/ShareholderOwnershipFields.vue';
 
 const props = defineProps({
     company: Object,
@@ -12,6 +13,9 @@ const props = defineProps({
     backUrl: String,
     submitUrl: String,
     navUrls: Object,
+    // Shareholder ownership — docs/shareholder-accounts.md
+    canManageShareholderAccounts: { type: Boolean, default: false },
+    shareholders: { type: Array, default: () => [] },
 });
 
 const page = usePage();
@@ -30,6 +34,8 @@ function blankAccountRow() {
         exchange_rate: 1,
         interest_rate: 0,
         min_balance: 0,
+        is_shareholder_account: false,
+        shareholder_partner_id: null,
     };
 }
 
@@ -151,6 +157,13 @@ function submit() {
                                 <label class="cvr-form-label">Min Balance *</label>
                                 <input v-model.number="row.min_balance" required type="number" step="0.01" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
+                            <ShareholderOwnershipFields
+                                :can-manage="canManageShareholderAccounts"
+                                :shareholders="shareholders"
+                                v-model:is-shareholder-account="row.is_shareholder_account"
+                                v-model:shareholder-partner-id="row.shareholder_partner_id"
+                                :owner-error="errorFor(index, 'shareholder_partner_id')"
+                            />
                         </div>
                         <div class="flex justify-end mt-3" v-if="accounts.length > 1">
                             <button type="button" @click="removeAccountRow(row._rowId)" class="cvr-btn-remove-row">
