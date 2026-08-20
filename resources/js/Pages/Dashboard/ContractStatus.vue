@@ -33,10 +33,13 @@ const props = defineProps({
     aging: Object,
     agingBuckets: Object,
     trend: Object,
-    trendMonths: Number,
-    asOfDate: String,
-    asOfDateFormatted: String,
-    isAsOfToday: Boolean,
+    period: Object,
+    startDate: String,
+    endDate: String,
+    startDateFormatted: String,
+    endDateFormatted: String,
+    isDefaultPeriod: Boolean,
+    defaultPeriodYears: Number,
     filterUrl: String,
     exportUrl: String,
     nearExpiryDays: Number,
@@ -70,6 +73,7 @@ const currencyKpis = computed(() => props.byCurrency?.[activeCurrency.value] || 
     utilization: 0,
     billed: 0,
     collected: 0,
+    withheld: 0,
     deductions: 0,
     uncollected: 0,
     collection_rate: 0,
@@ -118,28 +122,35 @@ function toggleQuality(key) {
     openQuality.value = openQuality.value === key ? null : key;
 }
 
-// ── as-of date filter ───────────────────────────────────────────────
-const filterDate = ref(props.asOfDate || '');
-watch(() => props.asOfDate, (value) => { filterDate.value = value || ''; });
+// ── period filter ───────────────────────────────────────────────────
+const filterStart = ref(props.startDate || '');
+const filterEnd = ref(props.endDate || '');
+watch(() => props.startDate, (value) => { filterStart.value = value || ''; });
+watch(() => props.endDate, (value) => { filterEnd.value = value || ''; });
 
-function applyDate() {
-    router.get(props.filterUrl, filterDate.value ? { date: filterDate.value } : {}, {
-        preserveScroll: true,
-        preserveState: false,
-    });
+function applyPeriod() {
+    router.get(
+        props.filterUrl,
+        { start_date: filterStart.value, end_date: filterEnd.value },
+        { preserveScroll: true, preserveState: false }
+    );
 }
 
-function resetDate() {
-    filterDate.value = '';
+function resetPeriod() {
     router.get(props.filterUrl, {}, { preserveScroll: true, preserveState: false });
 }
 
 const exportHref = computed(() => {
     const params = new URLSearchParams();
-    if (props.asOfDate) params.set('date', props.asOfDate);
+    if (props.startDate) params.set('start_date', props.startDate);
+    if (props.endDate) params.set('end_date', props.endDate);
     if (activeCurrency.value) params.set('currency', activeCurrency.value);
     const qs = params.toString();
     return qs ? `${props.exportUrl}?${qs}` : props.exportUrl;
+});
+
+const periodKpis = computed(() => props.period?.[activeCurrency.value] || {
+    invoice_count: 0, invoiced: 0, collected: 0, withheld: 0,
 });
 
 // ── aging ───────────────────────────────────────────────────────────
@@ -172,6 +183,27 @@ function barWidth(value) {
 function toggleDetail(key) {
     openDetail.value = openDetail.value === key ? null : key;
 }
+
+/*
+ * The Alerts cards used to drive the SAME openDetail as the Contract
+ * Counts cards at the top of the page, and the only table bound to
+ * those keys lives up there — so clicking "No Invoices Raised" opened
+ * a table the user could not see and the page appeared to jump. Alerts
+ * now own their own state and render their own table underneath.
+ */
+const openAlert = ref(null);
+function toggleAlert(key) {
+    openAlert.value = openAlert.value === key ? null : key;
+}
+
+const alertTitle = computed(() => ({
+    past_end_date: 'Past End Date (Still Open)',
+    ending_soon: `Ending Within ${props.nearExpiryDays} Days`,
+    not_invoiced: 'Contracts With No Invoices Yet',
+    over_billed: 'Over-Billed (Invoiced Above Contract Value)',
+}[openAlert.value] || 'Contracts'));
+
+const alertRows = computed(() => (openAlert.value ? props.details?.[openAlert.value] || [] : []));
 
 function fmt(value) {
     return Number(value || 0).toLocaleString(undefined, {
@@ -206,17 +238,29 @@ function fmtPct(value) {
             -->
             <div class="flex flex-wrap items-end gap-3 mb-4">
                 <div>
-                    <label class="block text-xs cvr-text-muted mb-1" for="contract-dashboard-as-of">As Of Date</label>
+                    <label class="block text-xs cvr-text-muted mb-1" for="contract-dashboard-start">Start Date</label>
                     <input
-                        id="contract-dashboard-as-of"
-                        v-model="filterDate"
+                        id="contract-dashboard-start"
+                        v-model="filterStart"
                         type="date"
                         class="cvr-input px-2 py-1.5 rounded border text-sm"
-                        @keyup.enter="applyDate"
+                        @keyup.enter="applyPeriod"
                     />
                 </div>
-                <button type="button" class="cvr-btn-primary px-3 py-1.5 rounded border text-sm" @click="applyDate">Apply</button>
-                <button v-if="!isAsOfToday" type="button" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm" @click="resetDate">Today</button>
+                <div>
+                    <label class="block text-xs cvr-text-muted mb-1" for="contract-dashboard-end">End Date</label>
+                    <input
+                        id="contract-dashboard-end"
+                        v-model="filterEnd"
+                        type="date"
+                        class="cvr-input px-2 py-1.5 rounded border text-sm"
+                        @keyup.enter="applyPeriod"
+                    />
+                </div>
+                <button type="button" class="cvr-btn-primary px-3 py-1.5 rounded border text-sm" @click="applyPeriod">Apply</button>
+                <button v-if="!isDefaultPeriod" type="button" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm" @click="resetPeriod">
+                    Last {{ defaultPeriodYears }} Years
+                </button>
 
                 <a :href="exportHref" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
                     Export Excel<span v-if="activeCurrency"> [{{ activeCurrency }}]</span>
@@ -231,8 +275,17 @@ function fmtPct(value) {
                 </Link>
             </div>
 
-            <p v-if="!isAsOfToday" class="text-sm cvr-num-amber mb-4">
-                Showing everything as of {{ asOfDateFormatted }} — invoices raised after that date are not counted.
+            <!--
+                The two halves mean different things on purpose: position
+                figures are as of the END date (narrowing them would make
+                "remaining to invoice" wrong, since invoices raised before
+                the period would reappear as unbilled), while the activity
+                figures cover the whole span.
+            -->
+            <p class="text-xs cvr-text-muted mb-4">
+                Period <strong>{{ startDateFormatted }} → {{ endDateFormatted }}</strong>.
+                Contract value, invoiced-to-date, remaining and receivables are <strong>as of {{ endDateFormatted }}</strong>;
+                “In This Period” and the monthly trend cover the whole span.
             </p>
 
             <!-- Status counts (company-wide) -->
@@ -509,38 +562,79 @@ function fmtPct(value) {
                         </div>
                     </div>
                 </div>
+                <!--
+                    Withholding tax is money the customer paid to the tax
+                    authority instead of to us: not collected, but it does
+                    clear the receivable. Leaving it out of this identity
+                    is what made 10 perfectly good invoices look broken.
+                -->
                 <p class="text-xs cvr-text-muted mb-6">
-                    Billed − Collected − Deductions ({{ fmt(currencyKpis.deductions) }}) = Uncollected.
+                    Billed − Collected − Withheld ({{ fmt(currencyKpis.withheld) }}) − Deductions ({{ fmt(currencyKpis.deductions) }}) = Uncollected.
                     <span v-if="Math.abs(Number(currencyKpis.reconciliation_gap || 0)) > 0.01" class="cvr-num-amber">
                         ⚠ Off by {{ fmt(currencyKpis.reconciliation_gap) }} — the invoice rows themselves do not add up; see Data Quality below.
                     </span>
                 </p>
 
+                <!-- What happened during the period, not where things stand -->
+                <div class="cvr-section-heading">
+                    <h2>In This Period [{{ activeCurrency }}] — {{ startDateFormatted }} → {{ endDateFormatted }}</h2>
+                </div>
+                <div class="cvr-kpi-row-4 mb-6">
+                    <div class="cvr-kpi-card">
+                        <div class="cvr-kpi-icon cvr-kpi-icon-blue">🧾</div>
+                        <div>
+                            <p class="cvr-kpi-label">Invoices Raised</p>
+                            <p class="cvr-kpi-value cvr-num-blue">{{ periodKpis.invoice_count }}</p>
+                        </div>
+                    </div>
+                    <div class="cvr-kpi-card">
+                        <div class="cvr-kpi-icon cvr-kpi-icon-blue">⬆</div>
+                        <div>
+                            <p class="cvr-kpi-label">Invoiced (excl. tax)</p>
+                            <p class="cvr-kpi-value cvr-num-blue">{{ fmt(periodKpis.invoiced) }}</p>
+                        </div>
+                    </div>
+                    <div class="cvr-kpi-card">
+                        <div class="cvr-kpi-icon cvr-kpi-icon-green">✅</div>
+                        <div>
+                            <p class="cvr-kpi-label">Collected</p>
+                            <p class="cvr-kpi-value cvr-num-green">{{ fmt(periodKpis.collected) }}</p>
+                        </div>
+                    </div>
+                    <div class="cvr-kpi-card">
+                        <div class="cvr-kpi-icon cvr-kpi-icon-copper">🏛</div>
+                        <div>
+                            <p class="cvr-kpi-label">Withheld At Source</p>
+                            <p class="cvr-kpi-value cvr-num-amber">{{ fmt(periodKpis.withheld) }}</p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Alerts -->
                 <div class="cvr-section-heading"><h2>Alerts</h2></div>
                 <div class="cvr-kpi-row-4 mb-6">
-                    <div class="cvr-kpi-card cursor-pointer" @click="toggleDetail('past_end_date')">
+                    <div class="cvr-kpi-card cursor-pointer" @click="toggleAlert('past_end_date')">
                         <div class="cvr-kpi-icon cvr-kpi-icon-copper">⚠</div>
                         <div>
                             <p class="cvr-kpi-label">Past End Date (Still Open)</p>
                             <p class="cvr-kpi-value cvr-num-amber">{{ alerts?.past_end_date_count ?? 0 }}</p>
                         </div>
                     </div>
-                    <div class="cvr-kpi-card cursor-pointer" @click="toggleDetail('ending_soon')">
+                    <div class="cvr-kpi-card cursor-pointer" @click="toggleAlert('ending_soon')">
                         <div class="cvr-kpi-icon cvr-kpi-icon-blue">📅</div>
                         <div>
                             <p class="cvr-kpi-label">Ending Within {{ nearExpiryDays }} Days</p>
                             <p class="cvr-kpi-value cvr-num-blue">{{ alerts?.ending_soon_count ?? 0 }}</p>
                         </div>
                     </div>
-                    <div class="cvr-kpi-card cursor-pointer" @click="toggleDetail('not_invoiced')">
+                    <div class="cvr-kpi-card cursor-pointer" @click="toggleAlert('not_invoiced')">
                         <div class="cvr-kpi-icon cvr-kpi-icon-blue">◌</div>
                         <div>
                             <p class="cvr-kpi-label">No Invoices Raised</p>
                             <p class="cvr-kpi-value cvr-num">{{ alerts?.not_invoiced_count ?? 0 }}</p>
                         </div>
                     </div>
-                    <div class="cvr-kpi-card cursor-pointer" @click="toggleDetail('over_billed')">
+                    <div class="cvr-kpi-card cursor-pointer" @click="toggleAlert('over_billed')">
                         <div class="cvr-kpi-icon cvr-kpi-icon-copper">⚠</div>
                         <div>
                             <p class="cvr-kpi-label">Over-Billed</p>
@@ -549,13 +643,19 @@ function fmtPct(value) {
                     </div>
                 </div>
 
+                <!--
+                    Bound to openAlert, and rendered directly under the
+                    cards that drive it: clicking an alert used to open a
+                    table further up the page, which read as the page
+                    jumping to the top.
+                -->
                 <div
-                    v-if="['past_end_date', 'ending_soon'].includes(openDetail)"
+                    v-if="openAlert"
                     class="cvr-card-bg cvr-border border rounded-lg overflow-hidden mb-6"
                 >
                     <div class="px-4 py-3 border-b cvr-border flex items-center justify-between">
-                        <h3 class="text-sm font-semibold cvr-text-primary">{{ detailTitle }}</h3>
-                        <button type="button" class="text-xs cvr-text-muted" @click="openDetail = null">Close</button>
+                        <h3 class="text-sm font-semibold cvr-text-primary">{{ alertTitle }}</h3>
+                        <button type="button" class="text-xs cvr-text-muted" @click="openAlert = null">Close</button>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="min-w-full text-sm">
@@ -566,22 +666,24 @@ function fmtPct(value) {
                                     <th class="px-3 py-2 text-center">Currency</th>
                                     <th class="px-3 py-2 text-right">Value</th>
                                     <th class="px-3 py-2 text-right">Remaining</th>
+                                    <th class="px-3 py-2 text-center">Invoices</th>
                                     <th class="px-3 py-2 text-center">End Date</th>
                                     <th class="px-3 py-2 text-center">Status</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="row in detailRows" :key="'alert-' + row.id" class="cvr-table-row">
+                                <tr v-for="row in alertRows" :key="'alert-' + row.id" class="cvr-table-row">
                                     <td class="px-3 py-2 cvr-text-primary">{{ row.customer_name }}</td>
                                     <td class="px-3 py-2 cvr-text-secondary">{{ row.code }}</td>
                                     <td class="px-3 py-2 text-center cvr-text-secondary">{{ row.currency }}</td>
                                     <td class="px-3 py-2 text-right cvr-num">{{ fmt(row.amount) }}</td>
                                     <td class="px-3 py-2 text-right cvr-num">{{ fmt(row.remaining) }}</td>
+                                    <td class="px-3 py-2 text-center cvr-num">{{ row.invoice_count }}</td>
                                     <td class="px-3 py-2 text-center cvr-text-secondary">{{ row.end_date_formatted || '—' }}</td>
                                     <td class="px-3 py-2 text-center cvr-text-secondary">{{ row.status_label }}</td>
                                 </tr>
-                                <tr v-if="!detailRows.length">
-                                    <td colspan="7" class="px-4 py-8 text-center cvr-text-muted">No contracts in this alert.</td>
+                                <tr v-if="!alertRows.length">
+                                    <td colspan="8" class="px-4 py-8 text-center cvr-text-muted">No contracts in this alert.</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -658,7 +760,7 @@ function fmtPct(value) {
                     add up to Uncollected exactly.
                 -->
                 <div class="cvr-section-heading">
-                    <h2>Receivables Aging [{{ activeCurrency }}] — as of {{ asOfDateFormatted }}</h2>
+                    <h2>Receivables Aging [{{ activeCurrency }}] — as of {{ endDateFormatted }}</h2>
                 </div>
                 <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden mb-2">
                     <div class="overflow-x-auto">
@@ -712,7 +814,7 @@ function fmtPct(value) {
                     not the same as a zero.
                 -->
                 <div class="cvr-section-heading">
-                    <h2>Last {{ trendMonths }} Months [{{ activeCurrency }}]</h2>
+                    <h2>Monthly Trend [{{ activeCurrency }}] — {{ startDateFormatted }} → {{ endDateFormatted }}</h2>
                 </div>
                 <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden mb-6">
                     <div class="overflow-x-auto">

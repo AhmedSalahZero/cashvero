@@ -12,7 +12,7 @@ use Inertia\Inertia;
  * ContractDashboardController
  * ------------------------------------------------------------------
  * Customer Contract Dashboard (Dashboard sidebar section, under Cash
- * Status). Thin controller: all aggregates live in
+ * Forecast). Thin controller: all aggregates live in
  * ContractDashboardService::build(). Renders Dashboard/ContractStatus.
  *
  * The `date` filter is an AS-OF date, not a range: it re-asks every
@@ -24,7 +24,8 @@ class ContractDashboardController
 {
     public function index(Company $company, Request $request)
     {
-        $data = app(ContractDashboardService::class)->build($company, $request->get('date'));
+        $data = app(ContractDashboardService::class)
+            ->build($company, $request->get('start_date'), $request->get('end_date'));
 
         $canViewContracts = (bool) auth()->user()?->hasPermissionKey('customer_contract.view');
 
@@ -44,8 +45,8 @@ class ContractDashboardController
     }
 
     /**
-     * The same contract rows the page is built from, at the same as-of
-     * date — so a number questioned on screen can be traced line by
+     * The same contract rows the page is built from, over the same
+     * period — so a number questioned on screen can be traced line by
      * line in the sheet.
      *
      * Re-runs the service rather than reading anything the page
@@ -55,7 +56,8 @@ class ContractDashboardController
      */
     public function export(Company $company, Request $request)
     {
-        $data = app(ContractDashboardService::class)->build($company, $request->get('date'));
+        $data = app(ContractDashboardService::class)
+            ->build($company, $request->get('start_date'), $request->get('end_date'));
 
         $currency = $request->get('currency');
         $rows = collect($data['details']['all']);
@@ -98,7 +100,7 @@ class ContractDashboardController
             ];
         });
 
-        $fileNameParts = array_filter(['Contract-Dashboard', $currency, $data['asOfDate']]);
+        $fileNameParts = array_filter(['Contract-Dashboard', $currency, $data['startDate'], $data['endDate']]);
         $fileName = preg_replace('/[^A-Za-z0-9\-]+/', '-', implode('-', $fileNameParts)).'.xlsx';
 
         return (new ContractDashboardExport($headings, $sheetRows))->download($fileName);

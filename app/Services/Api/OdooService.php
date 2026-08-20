@@ -240,6 +240,55 @@ class OdooService
 		
 	}
 		
+	/**
+	 * * كاش لأسعار الصرف اللي اتقريت من اودو في الرن الواحد
+	 *
+	 * @var array<int, float|null>
+	 */
+	protected array $currencyRateCache = [];
+
+	/**
+	 * * سعر الصرف بالعملة الاساسية للشركة مقابل وحدة واحدة من العملة دي
+	 *
+	 * * اودو بتخزن res.currency.rate بالعكس : كام وحدة من العملة دي مقابل
+	 * * وحدة واحدة من عملة الشركة .. فعملة الشركة نفسها بتقرا 1 و الدولار
+	 * * مثلا بيقرا 0.0207 مقابل الجنيه .. احنا بنخزن العكس (كام جنيه للدولار)
+	 * * وده نفس التحويل اللي getInvoices() بتعمله بالظبط (1 / invoice_currency_rate)
+	 *
+	 * * لو القراءة فشلت بنرجع null و الكولوم ما بيتلمسش خالص — احسن من اننا
+	 * * نكتب 1 و نبوظ قيمة صح متسجلة عندنا
+	 */
+	protected function getExchangeRateForCurrency(?int $currencyId): ?float
+	{
+		if (! $currencyId) {
+			return null;
+		}
+
+		if (array_key_exists($currencyId, $this->currencyRateCache)) {
+			return $this->currencyRateCache[$currencyId];
+		}
+
+		$rate = null;
+
+		try {
+			$records = $this->models->execute_kw($this->db, $this->uid, $this->password, 'res.currency', 'read', array(array($currencyId)), [
+				'fields' => ['rate'],
+			]);
+			$odooRate = $records[0]['rate'] ?? null;
+
+			if (is_numeric($odooRate) && (float) $odooRate > 0) {
+				$rate = round(1 / (float) $odooRate, 5);
+			}
+		} catch (\Throwable $e) {
+			Log::warning('Odoo currency rate lookup failed', [
+				'currency_id' => $currencyId,
+				'error' => $e->getMessage(),
+			]);
+		}
+
+		return $this->currencyRateCache[$currencyId] = $rate;
+	}
+
 	public function getContracts(string $startDate ,string $endDate,int $companyId)
 	{
 		$contractFilters = array(array(
@@ -268,7 +317,6 @@ class OdooService
 			$currentProjectEndDate = isset($projectArr['date']) && $projectArr['date'] ? $projectArr['date'] : now()->format('Y-m-d') ;
 			$currentOdooProjectId = $projectArr['id'];
 			$currentOdooCustomerId = $projectArr['partner_id'][0]??null ;
-			
 			if(is_null($currentOdooCustomerId)){
 				continue;
 			}
@@ -336,6 +384,18 @@ class OdooService
 				$salesOrderNames = [];
 				foreach($salesOrders as $orderIndex => $salesOrderArr){
 					$projectFormatted['currency']=$salesOrderArr['currency_id'][1];
+					/**
+					 * * العملة كانت بتتقري من اودو من غير سعر الصرف .. فالعقد
+					 * * بيتخزن بـ exchange_rate = 1 مهما كانت عملته ، و اي تقرير
+					 * * بيحول للعملة الاساسية بيطلع غلط
+					 *
+					 * * لو الجلب فشل ما بنحطش المفتاح اصلا — storeBasicForm
+					 * * بتكتب المفاتيح اللي موجودة بس ، فالقيمة القديمة بتفضل
+					 */
+					$currentExchangeRate = $this->getExchangeRateForCurrency($salesOrderArr['currency_id'][0] ?? null);
+					if ($currentExchangeRate !== null) {
+						$projectFormatted['exchange_rate'] = $currentExchangeRate;
+					}
 					$currentOrderIndex =$orderIndex+1;
 					$currentSalesOrderId = $salesOrderArr['id'];
 					$currentSalesOrderAmount = $salesOrderArr['amount_total'];
@@ -350,7 +410,6 @@ class OdooService
 						'so_number'=>$salesOrderArr['display_name'],
 						// 'id'=>$currentSalesOrderId,
 						'amount'=>$currentSalesOrderAmount,
-						'execution_percentage_'.$currentOrderIndex=>100,
 						'start_date_'.$currentOrderIndex=>$currentProjectStartDate,
 						'end_date_'.$currentOrderIndex=>$currentProjectEndDate,
 			//			'execution_days_'.$currentOrderIndex=>Carbon::make($currentProjectEndDate)->diffInMonths($currentProjectStartDate, true), // Carbon 3 sign-bug fix applied here too, in case this line is ever re-enabled
@@ -361,6 +420,18 @@ class OdooService
 					$oldSalesOrder = SalesOrder::where('odoo_id',$currentSalesOrderId)->first();
 					if($oldSalesOrder){
 						$currentSalesOrderArr['id'] = $oldSalesOrder->id;
+					}
+					/**
+					 * * اودو مالهاش نسبة تنفيذ اصلا ، فالـ 100 دي قيمة افتراضية
+					 * * لأمر بيع جديد مش بيانات جاية من اودو .. كانت بتتكتب في
+					 * * كل مزامنة و بتمسح اي نسبة المستخدم ظبطها بايده
+					 *
+					 * * لو فيه قيمة متسجلة عندنا (حتي لو صفر — الصفر قرار برضه)
+					 * * ما بنبعتش المفتاح ، فالعمود ما بيتلمسش
+					 */
+					$executionPercentageKey = 'execution_percentage_'.$currentOrderIndex;
+					if (! $oldSalesOrder || $oldSalesOrder->{$executionPercentageKey} === null) {
+						$currentSalesOrderArr[$executionPercentageKey] = 100;
 					}
 					$salesOrderFormatted[]=$currentSalesOrderArr;
 				}
@@ -603,7 +674,6 @@ class OdooService
 				'odoo_id'=>$odooPurchaseOrderId,
 				'po_number'=>$purchaseOrderNumber,
 				'amount'=>$amount,
-				'execution_percentage_1'=>100,
 				'start_date_1'=>$startDate,
 				'end_date_1'=>$endDate,
 				'collection_days_1'=>0,
@@ -616,6 +686,13 @@ class OdooService
 			 */
 			if ($oldPurchaseOrder) {
 				$purchaseOrderFormatted['id'] = $oldPurchaseOrder->id;
+			}
+			/**
+			 * * نفس قاعدة أمر البيع : اودو مالهاش نسبة تنفيذ ، فالـ 100 دي
+			 * * قيمة افتراضية لأمر شراء جديد بس .. لو المستخدم ظبطها ما بنلمسهاش
+			 */
+			if (! $oldPurchaseOrder || $oldPurchaseOrder->execution_percentage_1 === null) {
+				$purchaseOrderFormatted['execution_percentage_1'] = 100;
 			}
 
 			$supplierContractFormatted = [

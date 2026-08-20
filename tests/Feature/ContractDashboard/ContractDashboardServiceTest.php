@@ -80,6 +80,7 @@ class ContractDashboardServiceTest extends TestCase
             $table->string('net_invoice_amount')->nullable();
             $table->decimal('total_collected_amount', 18, 5)->default(0);
             $table->decimal('total_deductions', 18, 2)->default(0);
+            $table->decimal('total_withhold_amount', 18, 5)->default(0);
             $table->string('net_balance')->nullable();
             $table->string('invoice_amount_in_main_currency')->nullable();
             $table->decimal('total_collected_amount_in_main_currency', 18, 5)->default(0);
@@ -136,6 +137,7 @@ class ContractDashboardServiceTest extends TestCase
         $incVat = round($exVat * 1.1, 2);
         $collected = (float) ($overrides['total_collected_amount'] ?? 0);
         $deductions = (float) ($overrides['total_deductions'] ?? 0);
+        $withheld = (float) ($overrides['total_withhold_amount'] ?? 0);
 
         DB::table('customer_invoices')->insert($overrides + [
             'company_id' => self::COMPANY,
@@ -149,16 +151,25 @@ class ContractDashboardServiceTest extends TestCase
             'net_invoice_amount' => (string) $incVat,
             'total_collected_amount' => $collected,
             'total_deductions' => $deductions,
-            'net_balance' => (string) round($incVat - $collected - $deductions, 2),
+            'total_withhold_amount' => $withheld,
+            'net_balance' => (string) round($incVat - $collected - $withheld - $deductions, 2),
             'invoice_amount_in_main_currency' => (string) $exVat,
             'total_collected_amount_in_main_currency' => $collected,
-            'net_balance_in_main_currency' => (string) round($incVat - $collected - $deductions, 2),
+            'net_balance_in_main_currency' => (string) round($incVat - $collected - $withheld - $deductions, 2),
         ]);
     }
 
     private function build(?string $asOf = null): array
     {
-        return app(ContractDashboardService::class)->build(Company::findOrFail(self::COMPANY), $asOf);
+        // Most tests only care about the as-of end of the period.
+        return app(ContractDashboardService::class)
+            ->build(Company::findOrFail(self::COMPANY), null, $asOf);
+    }
+
+    private function buildPeriod(?string $from, ?string $to): array
+    {
+        return app(ContractDashboardService::class)
+            ->build(Company::findOrFail(self::COMPANY), $from, $to);
     }
 
     /** An invoice due $days ago, still fully outstanding. */
@@ -278,7 +289,7 @@ class ContractDashboardServiceTest extends TestCase
     // collections reconcile
     // ---------------------------------------------------------------
 
-    public function test_billed_minus_collected_minus_deductions_equals_uncollected(): void
+    public function test_billed_minus_collected_withheld_and_deductions_equals_uncollected(): void
     {
         $this->contract(['code' => 'C-1', 'amount' => 1000]);
         $this->invoice('C-1', 200, ['total_collected_amount' => 100, 'total_deductions' => 20]);
@@ -292,6 +303,35 @@ class ContractDashboardServiceTest extends TestCase
         $this->assertSame(380.0, $egp['uncollected'], '(220 − 100 − 20) + (330 − 50)');
         $this->assertSame(0.0, $egp['reconciliation_gap']);
         $this->assertEqualsWithDelta(27.27, $egp['collection_rate'], 0.01, '150 / 550');
+    }
+
+    /**
+     * Withholding tax is deducted by the customer and paid to the tax
+     * authority: not collected by us, but it does clear the receivable.
+     *
+     * Leaving it out of the identity is what made 10 of 197 live
+     * invoices look broken, with an "unexplained" 38,737.50 gap that
+     * was withholding tax to the piastre.
+     */
+    public function test_withholding_tax_clears_the_receivable_without_being_collected(): void
+    {
+        $this->contract(['code' => 'C-1', 'amount' => 10000]);
+        // 600,000 ex-VAT → 660,000 billed; customer pays 642,000 and
+        // withholds 18,000. Nothing is left outstanding.
+        $this->invoice('C-1', 600000, [
+            'total_collected_amount' => 642000,
+            'total_withhold_amount' => 18000,
+        ]);
+
+        $egp = $this->build()['byCurrency']['EGP'];
+
+        $this->assertSame(660000.0, $egp['billed']);
+        $this->assertSame(642000.0, $egp['collected']);
+        $this->assertSame(18000.0, $egp['withheld']);
+        $this->assertSame(0.0, $egp['uncollected'], 'the invoice is fully settled');
+        $this->assertSame(0.0, $egp['reconciliation_gap'], 'and it reconciles');
+        $this->assertSame(0, $this->build()['dataQuality']['unbalanced_invoice_count'],
+            'a withheld invoice is not a broken one');
     }
 
     /**
@@ -593,15 +633,14 @@ class ContractDashboardServiceTest extends TestCase
     {
         $this->contract(['code' => 'C-1', 'amount' => 10000]);
 
-        $data = $this->build();
-        $trend = $data['trend']['EGP'];
+        $from = Carbon::today()->subMonthsNoOverflow(3)->startOfMonth();
+        $to = Carbon::today();
+        $trend = $this->buildPeriod($from->format('Y-m-d'), $to->format('Y-m-d'))['trend']['EGP'];
 
-        $this->assertCount($data['trendMonths'], $trend);
-        $this->assertSame(Carbon::today()->format('Y-m'), end($trend)['month'], 'The window ends on the as-of month.');
-        $this->assertSame(
-            Carbon::today()->startOfMonth()->subMonthsNoOverflow($data['trendMonths'] - 1)->format('Y-m'),
-            $trend[0]['month']
-        );
+        $this->assertCount(4, $trend, 'four calendar months are spanned');
+        $this->assertSame($from->format('Y-m'), $trend[0]['month']);
+        $this->assertSame($to->format('Y-m'), end($trend)['month']);
+        $this->assertSame([0, 0, 0, 0], array_column($trend, 'invoice_count'), 'empty months are still listed');
     }
 
     public function test_the_trend_puts_each_invoice_in_its_own_month(): void
@@ -677,25 +716,100 @@ class ContractDashboardServiceTest extends TestCase
         $this->assertSame(1, $this->build($asOf)['aging']['EGP']['d1_30']['invoice_count']);
     }
 
-    public function test_the_as_of_date_accepts_the_date_picker_format(): void
+    public function test_the_dates_accept_the_date_picker_format(): void
     {
         $this->contract(['code' => 'C-1', 'amount' => 100]);
-        $target = Carbon::today()->subDays(3);
+        $from = Carbon::today()->subMonthsNoOverflow(2);
+        $to = Carbon::today()->subDays(3);
 
-        $this->assertSame(
-            $target->format('Y-m-d'),
-            $this->build($target->format('d/m/Y'))['asOfDate']
-        );
+        $data = $this->buildPeriod($from->format('d/m/Y'), $to->format('d/m/Y'));
+
+        $this->assertSame($from->format('Y-m-d'), $data['startDate']);
+        $this->assertSame($to->format('Y-m-d'), $data['endDate']);
     }
 
-    public function test_a_nonsense_as_of_date_falls_back_to_today_instead_of_failing(): void
+    public function test_nonsense_dates_fall_back_to_the_default_period_instead_of_failing(): void
     {
         $this->contract(['code' => 'C-1', 'amount' => 100]);
 
-        $this->assertSame($this->today, $this->build('not-a-date')['asOfDate']);
-        $this->assertSame($this->today, $this->build('')['asOfDate']);
-        $this->assertSame($this->today, $this->build(null)['asOfDate']);
-        $this->assertTrue($this->build(null)['isAsOfToday']);
+        foreach (['not-a-date', '', null] as $bad) {
+            $data = $this->buildPeriod($bad, $bad);
+
+            $this->assertSame($this->today, $data['endDate']);
+            $this->assertSame(
+                Carbon::today()->subYearsNoOverflow($data['defaultPeriodYears'])->format('Y-m-d'),
+                $data['startDate']
+            );
+            $this->assertTrue($data['isDefaultPeriod']);
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // the period
+    // ---------------------------------------------------------------
+
+    public function test_the_period_defaults_to_the_last_two_years_ending_today(): void
+    {
+        $this->contract(['code' => 'C-1', 'amount' => 100]);
+
+        $data = $this->build();
+
+        $this->assertSame(2, $data['defaultPeriodYears']);
+        $this->assertSame($this->today, $data['endDate']);
+        $this->assertSame(Carbon::today()->subYearsNoOverflow(2)->format('Y-m-d'), $data['startDate']);
+        $this->assertTrue($data['isDefaultPeriod']);
+    }
+
+    /**
+     * Position figures must stay cumulative. Narrowing "invoiced" to the
+     * period would make "remaining to invoice" wrong, because invoices
+     * raised before the period would silently reappear as unbilled.
+     */
+    public function test_the_start_date_narrows_activity_but_never_the_cumulative_position(): void
+    {
+        $this->contract(['code' => 'C-1', 'amount' => 1000]);
+        $this->invoice('C-1', 200, ['invoice_date' => Carbon::today()->subMonthsNoOverflow(10)->format('Y-m-d')]);
+        $this->invoice('C-1', 300, ['invoice_date' => Carbon::today()->format('Y-m-d')]);
+
+        $from = Carbon::today()->subMonthsNoOverflow(1)->format('Y-m-d');
+        $data = $this->buildPeriod($from, $this->today);
+
+        $this->assertSame(500.0, $data['byCurrency']['EGP']['invoiced'], 'cumulative: both invoices');
+        $this->assertSame(500.0, $data['byCurrency']['EGP']['value'] - $data['byCurrency']['EGP']['remaining']);
+        $this->assertSame(300.0, $data['period']['EGP']['invoiced'], 'in period: only the recent one');
+        $this->assertSame(1, $data['period']['EGP']['invoice_count']);
+    }
+
+    public function test_the_period_totals_collected_and_withheld_too(): void
+    {
+        $this->contract(['code' => 'C-1', 'amount' => 100000]);
+        $this->invoice('C-1', 1000, [
+            'invoice_date' => Carbon::today()->format('Y-m-d'),
+            'total_collected_amount' => 700,
+            'total_withhold_amount' => 30,
+        ]);
+
+        $period = $this->build()['period']['EGP'];
+
+        $this->assertSame(1000.0, $period['invoiced']);
+        $this->assertSame(700.0, $period['collected']);
+        $this->assertSame(30.0, $period['withheld']);
+    }
+
+    /**
+     * Someone typing the dates the wrong way round wants a report, not
+     * an empty page.
+     */
+    public function test_a_start_after_the_end_is_swapped_rather_than_returning_nothing(): void
+    {
+        $this->contract(['code' => 'C-1', 'amount' => 100]);
+        $early = Carbon::today()->subMonthsNoOverflow(3)->format('Y-m-d');
+        $late = $this->today;
+
+        $data = $this->buildPeriod($late, $early);
+
+        $this->assertSame($early, $data['startDate']);
+        $this->assertSame($late, $data['endDate']);
     }
 
     /**

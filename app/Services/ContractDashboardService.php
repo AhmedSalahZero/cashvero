@@ -53,7 +53,11 @@ class ContractDashboardService
 
     private const TOP_CUSTOMERS = 10;
 
-    private const TREND_MONTHS = 12;
+    /**
+     * How far back the period defaults to when nobody picks a start
+     * date.
+     */
+    private const DEFAULT_PERIOD_YEARS = 2;
 
     /**
      * Overdue buckets, in days past the due date. The last one is
@@ -68,14 +72,35 @@ class ContractDashboardService
     ];
 
     /**
-     * Every figure is "as of" a date, defaulting to today. Moving it
-     * back re-asks the same questions at that point in time: which
-     * contracts had expired, what had been invoiced, and how overdue
-     * the receivables were then.
+     * The report covers a period: everything is judged AS OF its end
+     * date, and the activity sections cover the whole span.
+     *
+     * The two halves mean different things, on purpose:
+     *
+     *   Cumulative — contract value, invoiced-to-date, remaining,
+     *     receivables and their aging. These are a position, so they
+     *     count everything up to the END date. Narrowing them to the
+     *     period would make "remaining to invoice" wrong, because
+     *     invoices raised before the period would silently reappear as
+     *     unbilled.
+     *
+     *   Period — what actually happened between the two dates:
+     *     invoiced, collected, and the month-by-month trend.
+     *
+     * End defaults to today, start to two years before it.
      */
-    public function build(Company $company, ?string $asOfDate = null): array
+    public function build(Company $company, ?string $startDate = null, ?string $endDate = null): array
     {
-        $today = $this->normaliseDate($asOfDate) ?? Carbon::today()->format('Y-m-d');
+        $today = $this->normaliseDate($endDate) ?? Carbon::today()->format('Y-m-d');
+        $periodStart = $this->normaliseDate($startDate)
+            ?? Carbon::make($today)->subYearsNoOverflow(self::DEFAULT_PERIOD_YEARS)->format('Y-m-d');
+
+        // A start after the end is someone typing, not a request — swap
+        // them rather than returning an empty report.
+        if ($periodStart > $today) {
+            [$periodStart, $today] = [$today, $periodStart];
+        }
+
         $mainCurrency = strtoupper((string) $company->getMainFunctionalCurrency());
 
         $rows = $this->contractRows($company, $today);
@@ -85,8 +110,8 @@ class ContractDashboardService
         return [
             'aging' => $this->aging($company, $currencies, $today),
             'agingBuckets' => $this->agingBucketLabels(),
-            'trend' => $this->trend($company, $currencies, $today),
-            'trendMonths' => self::TREND_MONTHS,
+            'period' => $this->period($company, $currencies, $periodStart, $today),
+            'trend' => $this->trend($company, $currencies, $periodStart, $today),
             'counts' => $this->counts($rows),
             'currencies' => $currencies,
             'byCurrency' => $this->byCurrency($rows, $currencies),
@@ -99,11 +124,81 @@ class ContractDashboardService
             'topByUncollected' => $this->topPerCurrency($rows, $currencies, 'uncollected'),
             'dataQuality' => $this->dataQuality($company, $rows, $mainCurrency),
             'details' => $this->details($rows, $currencies, $today),
-            'asOfDate' => $today,
-            'asOfDateFormatted' => Carbon::make($today)->format('d/m/Y'),
-            'isAsOfToday' => $today === Carbon::today()->format('Y-m-d'),
+            'startDate' => $periodStart,
+            'endDate' => $today,
+            'startDateFormatted' => Carbon::make($periodStart)->format('d/m/Y'),
+            'endDateFormatted' => Carbon::make($today)->format('d/m/Y'),
+            'isDefaultPeriod' => $this->isDefaultPeriod($periodStart, $today),
+            'defaultPeriodYears' => self::DEFAULT_PERIOD_YEARS,
             'nearExpiryDays' => self::NEAR_EXPIRY_DAYS,
         ];
+    }
+
+    private function isDefaultPeriod(string $start, string $end): bool
+    {
+        $today = Carbon::today()->format('Y-m-d');
+
+        return $end === $today
+            && $start === Carbon::today()->subYearsNoOverflow(self::DEFAULT_PERIOD_YEARS)->format('Y-m-d');
+    }
+
+    /**
+     * What actually happened between the two dates, as opposed to where
+     * things stand at the end of them.
+     *
+     * @param  list<string>  $currencies
+     */
+    private function period(Company $company, array $currencies, string $from, string $to): array
+    {
+        if ($currencies === []) {
+            return [];
+        }
+
+        $rows = $this->invoiceActivityQuery($company)
+            ->whereDate('i.invoice_date', '>=', $from)
+            ->whereDate('i.invoice_date', '<=', $to)
+            ->selectRaw('UPPER(c.currency) as currency')
+            ->selectRaw('COUNT(*) as invoice_count')
+            ->selectRaw('COALESCE(SUM(CAST(i.invoice_amount AS DECIMAL(18,5))), 0) as invoiced')
+            ->selectRaw('COALESCE(SUM(i.total_collected_amount), 0) as collected')
+            ->selectRaw('COALESCE(SUM(i.total_withhold_amount), 0) as withheld')
+            ->groupBy('currency')
+            ->get()
+            ->keyBy('currency');
+
+        $period = [];
+        foreach ($currencies as $currency) {
+            $row = $rows->get($currency);
+
+            $period[$currency] = [
+                'invoice_count' => (int) ($row->invoice_count ?? 0),
+                'invoiced' => (float) ($row->invoiced ?? 0),
+                'collected' => (float) ($row->collected ?? 0),
+                'withheld' => (float) ($row->withheld ?? 0),
+            ];
+        }
+
+        return $period;
+    }
+
+    /**
+     * The join every activity figure is measured over: this company's
+     * Customer contracts, their own non-cancelled invoices, matched on
+     * currency.
+     */
+    private function invoiceActivityQuery(Company $company)
+    {
+        return DB::table('customer_invoices as i')
+            ->join('contracts as c', function ($join) {
+                $join->on('c.code', '=', 'i.contract_code')
+                    ->on('c.company_id', '=', 'i.company_id')
+                    ->on(DB::raw('UPPER(i.currency)'), '=', DB::raw('UPPER(c.currency)'));
+            })
+            ->where('i.company_id', $company->id)
+            ->where('c.model_type', 'Customer')
+            ->where(function ($query) {
+                $query->where('i.is_canceled', 0)->orWhereNull('i.is_canceled');
+            });
     }
 
     /**
@@ -150,6 +245,7 @@ class ContractDashboardService
             ->selectRaw('COALESCE(SUM(CAST(net_invoice_amount AS DECIMAL(18,5))), 0) as billed_amount')
             ->selectRaw('COALESCE(SUM(total_collected_amount), 0) as collected_amount')
             ->selectRaw('COALESCE(SUM(total_deductions), 0) as deductions_amount')
+            ->selectRaw('COALESCE(SUM(total_withhold_amount), 0) as withheld_amount')
             ->selectRaw('COALESCE(SUM(CAST(net_balance AS DECIMAL(18,5))), 0) as uncollected_amount')
             ->selectRaw('COALESCE(SUM(CAST(invoice_amount_in_main_currency AS DECIMAL(18,5))), 0) as invoiced_main')
             ->selectRaw('COALESCE(SUM(total_collected_amount_in_main_currency), 0) as collected_main')
@@ -179,6 +275,7 @@ class ContractDashboardService
                 'invoice_agg.billed_amount',
                 'invoice_agg.collected_amount',
                 'invoice_agg.deductions_amount',
+                'invoice_agg.withheld_amount',
                 'invoice_agg.uncollected_amount',
                 'invoice_agg.invoiced_main',
                 'invoice_agg.collected_main',
@@ -216,6 +313,7 @@ class ContractDashboardService
             // receivables — VAT-inclusive, reconcile among themselves
             'billed' => (float) ($contract->billed_amount ?? 0),
             'collected' => (float) ($contract->collected_amount ?? 0),
+            'withheld' => (float) ($contract->withheld_amount ?? 0),
             'deductions' => (float) ($contract->deductions_amount ?? 0),
             'uncollected' => (float) ($contract->uncollected_amount ?? 0),
 
@@ -277,18 +375,31 @@ class ContractDashboardService
                 'utilization' => $value > 0 ? round(($invoiced / $value) * 100, 2) : 0.0,
                 'billed' => $billed,
                 'collected' => $collected,
+                'withheld' => (float) $currencyRows->sum('withheld'),
                 'deductions' => (float) $currencyRows->sum('deductions'),
                 'uncollected' => (float) $currencyRows->sum('uncollected'),
                 'collection_rate' => $billed > 0 ? round(($collected / $billed) * 100, 2) : 0.0,
                 /*
-                 * billed − collected − deductions should equal
-                 * uncollected. When it does not, the gap comes from the
-                 * invoice rows themselves, not from anything this
-                 * service does — so it is published rather than
-                 * quietly absorbed into a total that does not add up.
+                 * ⚠️ REAL BUG FIXED HERE: withholding tax was missing
+                 * from this identity, so every invoice the customer had
+                 * withheld tax on looked like it did not add up — 10 of
+                 * 197 invoices, and a 38,737.50 "unexplained" gap that
+                 * was withholding tax to the last piastre. The customer
+                 * pays it to the tax authority rather than to us: it is
+                 * not collected, but it does clear the receivable.
+                 *
+                 *   billed − collected − withheld − deductions = uncollected
+                 *
+                 * A gap that survives THIS identity really is an invoice
+                 * whose own columns disagree, and is published rather
+                 * than absorbed into a total that does not balance.
                  */
                 'reconciliation_gap' => round(
-                    $billed - $collected - (float) $currencyRows->sum('deductions') - (float) $currencyRows->sum('uncollected'),
+                    $billed
+                        - $collected
+                        - (float) $currencyRows->sum('withheld')
+                        - (float) $currencyRows->sum('deductions')
+                        - (float) $currencyRows->sum('uncollected'),
                     2
                 ),
             ];
@@ -435,7 +546,7 @@ class ContractDashboardService
 
         /*
          * Invoices whose own columns do not add up:
-         * net_invoice_amount − collected − deductions ≠ net_balance.
+         * net_invoice_amount − collected − withheld − deductions ≠ net_balance.
          * Their gap is what makes a currency's Collections row fail to
          * reconcile, so it is named here instead of left as a mystery.
          */
@@ -450,13 +561,14 @@ class ContractDashboardService
             ->where(function ($query) {
                 $query->where('i.is_canceled', 0)->orWhereNull('i.is_canceled');
             })
-            ->whereRaw('ABS(CAST(i.net_invoice_amount AS DECIMAL(18,5)) - i.total_collected_amount - i.total_deductions - CAST(i.net_balance AS DECIMAL(18,5))) > 0.01')
+            ->whereRaw('ABS(CAST(i.net_invoice_amount AS DECIMAL(18,5)) - i.total_collected_amount - i.total_withhold_amount - i.total_deductions - CAST(i.net_balance AS DECIMAL(18,5))) > 0.01')
             ->select([
                 'i.id',
                 'i.invoice_number',
                 'i.currency',
                 'i.net_invoice_amount',
                 'i.total_collected_amount',
+                'i.total_withhold_amount',
                 'i.total_deductions',
                 'i.net_balance',
                 'c.code as contract_code',
@@ -651,8 +763,9 @@ class ContractDashboardService
     }
 
     /**
-     * Invoicing and collection month by month, so the page shows the
-     * rate of work rather than only the standing balance.
+     * Invoicing and collection month by month across the chosen
+     * period, so the page shows the rate of work rather than only the
+     * standing balance.
      *
      * Every month in the window is present even when nothing happened
      * in it — a gap in a trend line is not the same as a zero, and the
@@ -660,28 +773,18 @@ class ContractDashboardService
      *
      * @param  list<string>  $currencies
      */
-    private function trend(Company $company, array $currencies, string $asOf): array
+    private function trend(Company $company, array $currencies, string $from, string $to): array
     {
         if ($currencies === []) {
             return [];
         }
 
-        $end = Carbon::make($asOf)->endOfMonth();
-        $start = Carbon::make($asOf)->startOfMonth()->subMonthsNoOverflow(self::TREND_MONTHS - 1);
+        $end = Carbon::make($to)->endOfMonth();
+        $start = Carbon::make($from)->startOfMonth();
 
-        $rows = DB::table('customer_invoices as i')
-            ->join('contracts as c', function ($join) {
-                $join->on('c.code', '=', 'i.contract_code')
-                    ->on('c.company_id', '=', 'i.company_id')
-                    ->on(DB::raw('UPPER(i.currency)'), '=', DB::raw('UPPER(c.currency)'));
-            })
-            ->where('i.company_id', $company->id)
-            ->where('c.model_type', 'Customer')
-            ->where(function ($query) {
-                $query->where('i.is_canceled', 0)->orWhereNull('i.is_canceled');
-            })
-            ->whereDate('i.invoice_date', '>=', $start->format('Y-m-d'))
-            ->whereDate('i.invoice_date', '<=', $asOf)
+        $rows = $this->invoiceActivityQuery($company)
+            ->whereDate('i.invoice_date', '>=', $from)
+            ->whereDate('i.invoice_date', '<=', $to)
             ->selectRaw('UPPER(c.currency) as currency')
             ->selectRaw("DATE_FORMAT(i.invoice_date, '%Y-%m') as month")
             ->selectRaw('COUNT(*) as invoice_count')

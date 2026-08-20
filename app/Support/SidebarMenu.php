@@ -63,9 +63,9 @@ class SidebarMenu
             // per the "flip one flag, no sidebar restructuring" convention.
             'dashboard' => self::section(__('Dashboard'), 'layout-dashboard', [
                 self::item(__('Cash Status'), $user->hasPermissionKey('dashboard_cash.view'), route('view.customer.invoice.dashboard.cash', ['company' => $companyId]), inertia: true, icon: 'banknote'),
-                self::item(__('Contract Dashboard'), $user->hasPermissionKey('dashboard_contracts.view'), route('view.contracts.dashboard', ['company' => $companyId]), inertia: true, icon: 'file-text'),
                 self::item(__('LG & LC Status'), $user->hasPermissionKey('dashboard_lg_lc.view'), route('view.lglc.dashboard', ['company' => $companyId]), inertia: true, icon: 'scroll-text'),
                 self::item(__('Cash Forecast'), $user->hasPermissionKey('dashboard_forecast.view'), route('view.customer.invoice.dashboard.forecast', ['company' => $companyId]), inertia: true, icon: 'sparkles'),
+                self::item(__('Contract Dashboard'), $user->hasPermissionKey('dashboard_contracts.view'), route('view.contracts.dashboard', ['company' => $companyId]), inertia: true, icon: 'file-text'),
             ]),
 
             'statements' => self::section(__('Statements'), 'file-text', [

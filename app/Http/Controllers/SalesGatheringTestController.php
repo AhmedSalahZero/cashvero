@@ -399,14 +399,43 @@ class SalesGatheringTestController extends Controller
 				new NotifyUserOfCompletedImport(request()->user(), $active_job->id, $company->id,$modelName),
 				new RemoveCachingCompaniesData($company->id,$modelName),
 			])->dispatch($company->id,$modelName,$loanId);
-	
-		// ⚠️ Confirmed bug fix: this was redirect()->back(), which sends
-		// the user back to the Import page itself (the "choose a file"
-		// screen) instead of forward to the actual schedule table where
-		// their just-saved rows live — forcing an extra manual click on
-		// "Back to Contract Loan Schedule Table" every time. Same
-		// destination-building helper already used by storeModel() /
-		// updateModel() below for the equivalent single-row save flow.
+
+		return $this->redirectAfterInsertToMainTable($company, $modelName, $loanId);
+	}
+
+	/**
+	 * Customer/Supplier invoice saves should land on Balances once the
+	 * job is done — that is the page the upload exists to feed. Loan
+	 * schedules still go to their filtered table.
+	 *
+	 * On an async queue the save job is still running when this
+	 * returns, so invoices bounce back to the Import page: Import.vue
+	 * already polls percentage and visits redirectUrlAfterSave
+	 * (Balances) at 100%. On a sync queue the chain has already
+	 * finished, so we skip that hop and go to Balances immediately.
+	 */
+	protected function redirectAfterInsertToMainTable(Company $company, string $modelName, $loanId)
+	{
+		if (in_array($modelName, ['CustomerInvoice', 'SupplierInvoice'], true)) {
+			$stillSaving = ActiveJob::where('company_id', $company->id)
+				->where('model', $modelName)
+				->where('status', 'save_to_table')
+				->where('model_name', 'SalesGatheringTest')
+				->exists();
+
+			if ($stillSaving) {
+				return redirect()->route('salesGatheringImport', [
+					'company' => $company->id,
+					'model' => $modelName,
+				]);
+			}
+
+			return redirect()->route('view.balances', [
+				'company' => $company->id,
+				'modelType' => $modelName,
+			]);
+		}
+
 		return redirect()->route('view.uploading', getUploadingRouteParams($company->id, $modelName, $loanId));
 	}
 
