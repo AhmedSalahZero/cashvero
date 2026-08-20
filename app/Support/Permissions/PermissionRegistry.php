@@ -120,6 +120,14 @@ class PermissionRegistry
             'group' => 'dashboards',
             'actions' => ['view' => ['view lg & lc dashboard']],
         ],
+        'dashboard_contracts' => [
+            'label' => 'Contract Dashboard',
+            'group' => 'dashboards',
+            'actions' => [
+                'view' => ['view contract dashboard'],
+                'export' => ['export contract dashboard'],
+            ],
+        ],
         'invoice_report' => [
             'label' => 'Invoice Report',
             'group' => 'dashboards',

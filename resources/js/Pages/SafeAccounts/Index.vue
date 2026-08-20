@@ -52,7 +52,6 @@ function destroyRow() {
                             <th class="px-3 py-3 text-left">#</th>
                             <th class="px-3 py-3 text-left">Name</th>
                             <th class="px-3 py-3 text-left">Currency</th>
-                            <th class="px-3 py-3 text-left">Created At</th>
                             <th v-if="canUpdate || canDelete" class="px-3 py-3 text-left">Control</th>
                         </tr>
                     </thead>
@@ -61,7 +60,6 @@ function destroyRow() {
                             <td class="px-3 py-3 cvr-text-secondary">{{ index + 1 }}</td>
                             <td class="px-3 py-3 cvr-text-primary whitespace-nowrap">{{ row.name }}</td>
                             <td class="px-3 py-3 cvr-text-secondary whitespace-nowrap">{{ row.currency }}</td>
-                            <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.created_at_formatted }}</td>
                             <td v-if="canUpdate || canDelete" class="px-3 py-3">
                                 <div class="flex items-center gap-1.5">
                                     <RecordLogButton subject="Branch" :id="row.id" :company-id="company.id" />
@@ -71,7 +69,7 @@ function destroyRow() {
                             </td>
                         </tr>
                         <tr v-if="filteredRows.length === 0">
-                            <td :colspan="canUpdate || canDelete ? 5 : 4" class="px-4 py-8 text-center cvr-text-muted">
+                            <td :colspan="canUpdate || canDelete ? 4 : 3" class="px-4 py-8 text-center cvr-text-muted">
                                 No Safe Account records found.
                             </td>
                         </tr>

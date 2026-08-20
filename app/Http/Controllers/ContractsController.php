@@ -39,7 +39,7 @@ use Illuminate\Http\Request;
  *      buildFormProps() for how getCommonVars()'s existing,
  *      UNCHANGED output is turned into Inertia props.
  *   store() / update() / destroy() / markAsFinished() /
- *   markAsRunningAndAgainst() / storePoAllocations() → UNCHANGED,
+ *   markAsRunning() / markAsRunningAndAgainst() / storePoAllocations() → UNCHANGED,
  *   deliberately. All of them already respond with a redirect, so no
  *   change was needed for Inertia to work with them.
  *   getContractsForCustomerOrSupplier() / generateRandomCode() /
@@ -95,7 +95,7 @@ class ContractsController
 				->where('model_type',$type)
 				->join('partners','partners.id','=','contracts.partner_id')
 				->selectRaw('contracts.*,partners.name as partner_name')
-				->orderByRaw('start_date desc , partner_name asc')
+				->orderByRaw('contracts.start_date is null asc, contracts.start_date desc, contracts.id desc')
 				->with($this->relationsToEagerLoad($type))
 				->paginate(GeneralFunctions::getPaginationLimit(),['*'],$pageName)
 				/**
@@ -242,7 +242,15 @@ class ContractsController
 		$contractsForTabs = [];
 		foreach ($contractStatues as $contractStatus) {
 			$rows = [];
-			foreach (($items[$contractStatus] ?? []) as $mainItemId => $parentAndSubData) {
+			// Walk the paginator collection (already start_date desc), not the
+			// id-keyed $items map — integer keys can confuse later consumers
+			// about display order.
+			foreach ($contracts[$contractStatus] as $contract) {
+				$mainItemId = $contract->id;
+				$parentAndSubData = $items[$contractStatus][$mainItemId] ?? null;
+				if (! $parentAndSubData) {
+					continue;
+				}
 				$parent = $parentAndSubData['parent'];
 				$subItems = $parentAndSubData['sub_items'] ?? [];
 				/**
@@ -264,7 +272,12 @@ class ContractsController
 					'edit_url' => route('contracts.edit', ['company' => $company->id, 'contract' => $mainItemId, 'type' => $type]),
 					'delete_url' => route('contracts.destroy', ['company' => $company->id, 'contract' => $mainItemId, 'type' => $type]),
 					'mark_finished_url' => route('contract.mark.as.finished', ['company' => $company->id, 'contract' => $mainItemId, 'type' => $type]),
+					'mark_running_url' => route('contract.mark.as.running', ['company' => $company->id, 'contract' => $mainItemId, 'type' => $type]),
 					'mark_running_and_against_url' => route('contract.mark.as.running.and.against', ['company' => $company->id, 'contract' => $mainItemId, 'type' => $type]),
+					// Column on contracts — no extra query. The action itself
+					// re-checks active limit rows in case this FK was cleared
+					// while a collateral limit was left behind.
+					'is_assigned_as_collateral' => (bool) $contract->overdraft_against_assignment_of_contract_id,
 					'invoices' => collect($parent['invoices'])->map($mapInvoice)->values(),
 					'related_contracts' => $relatedContracts,
 					'related_contracts_totals' => $totalsPerCurrency($relatedContracts),
@@ -401,7 +414,10 @@ class ContractsController
 			'type' => $type,
 			'mode' => $model ? 'edit' : 'create',
 			'formTitle' => $commonVars['formTitle'],
-			'clients' => collect($commonVars['clients'])->map(fn ($c) => ['id' => $c->id, 'name' => $c->getName()])->values(),
+			'clients' => collect($commonVars['clients'])
+				->map(fn ($c) => ['id' => $c->id, 'name' => $c->getName()])
+				->sortBy(fn ($c) => mb_strtolower((string) $c['name']), SORT_NATURAL)
+				->values(),
 			'currencies' => getCurrencies(),
 			'salesOrderOrPurchaseOrderInformationText' => $commonVars['salesOrderOrPurchaseOrderInformationText'],
 			'salesOrderOrPurchaseNumberText' => $commonVars['salesOrderOrPurchaseNumberText'],
@@ -424,7 +440,6 @@ class ContractsController
 				: route('contracts.store', ['company' => $company->id, 'type' => $type]),
 			'backUrl' => route('contracts.index', ['company' => $company->id, 'type' => $type]),
 			'generateCodeUrl' => route('generate.unique.rondom.contract.code', ['company' => $company->id, 'type' => $type]),
-			'addNewPartnerUrl' => route('add.new.partner', ['company' => $company->id, 'type' => $type]),
 		];
 	}
 	public function getCommonVars(Company $company,string $type,$model = null):array 
@@ -448,7 +463,8 @@ class ContractsController
 			$clients =$clients->onlyCustomers();
 			$reverseTypeText = __('Suppliers');
 		}
-		$clients = $clients->get();
+		// A before B (and أ before ب) in the partner dropdown on create/edit.
+		$clients = $clients->orderBy('name')->get();
 		return [
 			'reverseTypeText'=>$reverseTypeText,
 			'contractsRelationName'=>$contractsRelationName,
@@ -525,6 +541,20 @@ class ContractsController
 				}
 			}
 		}
+		/**
+		 * * ما ينفعش نحذفه طول ما فيه حركات معلقة عليه
+		 *
+		 * * جزء من الأبناء متوصلين بـ ON DELETE CASCADE فالحذف هنا كان بيخلي MySQL
+		 * * تمسحهم بنفسها من غير ما Eloquent يشوف الحذف .. فالهوكس اللي بتنضف
+		 * * كشوفهم ما بتشتغلش و بتفضل صفوف يتيمة بتظهر في الداشبورد
+		 * * و الباقي مفيهوش FK اصلا فبيفضل مأشر على id مش موجود
+		 *
+		 * @see \App\Support\Deletion\ReferencedRecordGuard
+		 */
+		if ($message = $contract->deletionBlockedMessage()) {
+			return redirect()->back()->with('fail', $message);
+		}
+
 		$contract->delete();
 		return redirect()->route('contracts.index',['company'=>$company->id,'type'=>$type]);  
 	}	
@@ -533,6 +563,25 @@ class ContractsController
 			'status'=>Contract::FINISHED ,
 		]);
 		return redirect()->route('contracts.index',['company'=>$company->id,'type'=>$type]);  
+	}
+	/**
+	 * Undo "mark as finished" for a contract that was never pledged as
+	 * overdraft collateral. The matching undo for a pledged contract is
+	 * markAsRunningAndAgainst() — Contract's updated() hook deletes
+	 * every overdraft limit when status becomes RUNNING, which would
+	 * desync the facility from its lending-information row.
+	 */
+	public function markAsRunning(Company $company , Request $request , Contract $contract,string $type){
+		if (! $contract->isFinished()) {
+			return redirect()->back()->with('fail', __('Only a finished contract can be moved back to running.'));
+		}
+		if ($contract->isAssignedAsOverdraftCollateral()) {
+			return redirect()->back()->with('fail', __('This contract is assigned as overdraft collateral. Restore it to Running And Against instead of plain Running, so the facility limits stay in sync.'));
+		}
+		$contract->update([
+			'status'=>Contract::RUNNING ,
+		]);
+		return redirect()->route('contracts.index',['company'=>$company->id,'type'=>$type,'active'=>Contract::RUNNING]);
 	}
 	public function markAsRunningAndAgainst(Company $company , Request $request , Contract $contract,string $type){
 		$contract->update([

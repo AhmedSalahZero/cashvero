@@ -130,12 +130,13 @@ class OverdraftAgainstAssignmentOfContractController
 		$customers = Partner::where('is_customer',1)->onlyThatHaveCustomerContracts()->where('company_id',$company->id)->get();
 		$contracts = [];
 		foreach ($customers as $customer) {
-			foreach ($customer->contracts->where('model_type', 'Customer') as $contract) {
+			foreach ($customer->contracts->where('model_type', 'Customer')->where('status', '!=', Contract::FINISHED) as $contract) {
 				$contracts[] = [
 					'id' => $contract->id,
 					'customer_id' => $customer->id,
 					'name' => $contract->getName(),
 					'currency' => $contract->getCurrency(),
+					'status' => $contract->status,
 					'amount_formatted' => $contract->getAmountFormatted(),
 					'amount' => $contract->getAmount(),
 					'start_date' => $contract->getStartDate(),
@@ -481,6 +482,11 @@ class OverdraftAgainstAssignmentOfContractController
 		$contractId = $request->get('contract_id_create') ;
 		$assignmentDate = Carbon::make($request->get('assignment_date_create'))->format('Y-m-d') ;
 		$contract = Contract::find($contractId);
+		if ($contract && $contract->isFinished()) {
+			return redirect()->back()->withErrors([
+				'contract_id_create' => __('A finished contract cannot be assigned as collateral.'),
+			]);
+		}
 		/**
 		 * ⚠️ REAL BUG FIXED HERE (client-confirmed, 2026-08-11): there
 		 * was no check at all preventing an already-expired contract
@@ -561,6 +567,11 @@ class OverdraftAgainstAssignmentOfContractController
 		$assignmentDate = $request->get('assignment_date_edit') ;
 		$assignmentDate = Carbon::make($assignmentDate)->format('Y-m-d');
 		$contract = Contract::find($contractId);
+		if ($contract && $contract->isFinished() && (int) $contractId !== (int) $lendingInformation->contract_id) {
+			return redirect()->back()->withErrors([
+				'contract_id_edit' => __('A finished contract cannot be assigned as collateral.'),
+			]);
+		}
 		/**
 		 * Same guard as applyLendingInformation() — this action can also
 		 * change which contract is assigned or the assignment date, so

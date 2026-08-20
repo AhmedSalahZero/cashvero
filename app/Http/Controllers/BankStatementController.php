@@ -17,6 +17,7 @@ use App\Models\OverdraftAgainstCommercialPaper;
 use App\Models\TimeOfDeposit;
 use App\Services\Api\CashExpenseOdooService;
 use App\Services\Api\LetterOfGuaranteeService;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use App\Traits\GeneralFunctions;
 use App\Traits\PaginatesStatementQueries;
 use Carbon\Carbon;
@@ -187,10 +188,12 @@ class BankStatementController
         $statementModelName = null;
         $statementTable = null;
         $freshQuery = null;
+        $shareholderName = null;
         if ($isCurrentAccount) {
             $statementModelName = 'CurrentAccountBankStatement';
             $statementTable = 'current_account_bank_statements';
             $financialInstitutionAccount = FinancialInstitutionAccount::findByAccountNumber($accountNumber, $company->id, $financialInstitutionId);
+            $shareholderName = $financialInstitutionAccount?->getShareholderName();
             $freshQuery = fn () => DB::table('current_account_bank_statements')
             ->where('date', '>=', $startDate)
             ->where('date', '<=', $endDate)
@@ -368,6 +371,7 @@ class BankStatementController
             $statementModelName = 'MediumTermLoanBankStatement';
             $statementTable = 'medium_term_loan_bank_statements';
             $mediumTermLoan = MediumTermLoan::findByAccountNumber($accountNumber, $company->id, $financialInstitutionId);
+            $shareholderName = $mediumTermLoan?->getShareholderName();
 
             $freshQuery = fn () => DB::table('medium_term_loan_bank_statements')
                 ->where('medium_term_loan_bank_statements.company_id', $company->id)
@@ -410,6 +414,7 @@ class BankStatementController
             'isMediumTermLoan' => $accountType->isMediumTermLoanAccount(),
             'financialInstitutionName' => $financialInstitutionName,
             'accountNumber' => $accountNumber,
+            'accountNumberLabel' => AccountNumberLabel::format($accountNumber, $shareholderName),
             'currencyName' => $currencyName,
         ];
     }
@@ -445,7 +450,10 @@ class BankStatementController
              */
             'principle' => $isMediumTermLoan ? (float) ($row->debit ?? 0) : null,
             'reviewedText' => getReviewedText($reviewedArr),
-            'comment' => (isset($row->{'comment_'.$lang}) ? $row->{'comment_'.$lang} : null) ?: getBankStatementComment($row),
+            'comment' => AccountNumberLabel::decorateText(
+                (int) ($row->company_id ?? 0),
+                (isset($row->{'comment_'.$lang}) ? $row->{'comment_'.$lang} : null) ?: getBankStatementComment($row)
+            ),
             'userComment' => \App\Helpers\HVero::getUserCommentFromModel($row),
             'isCommissionFees' => (bool) ($row->is_commission_fees ?? false),
             'interestType' => $row->interest_type ?? null,
@@ -496,7 +504,7 @@ class BankStatementController
             'isCurrentAccount' => $isCurrentAccount,
             'financialInstitutionName' => $data['financialInstitutionName'],
             'accountTypeName' => $data['accountTypeName'],
-            'accountNumber' => $data['accountNumber'],
+            'accountNumber' => $data['accountNumberLabel'] ?? $data['accountNumber'],
             'isAgainstCommercialPaper' => $isAgainstCommercialPaper,
             'isAgainstAssignmentOfContract' => $isAgainstAssignmentOfContract,
             'isMediumTermLoan' => $isMediumTermLoan,
@@ -603,7 +611,7 @@ class BankStatementController
         $fileNameParts = [
             'Bank-Statement',
             $data['financialInstitutionName'],
-            $data['accountNumber'],
+            $data['accountNumberLabel'] ?? $data['accountNumber'],
             strtoupper((string) $data['currencyName']),
         ];
         $fileName = preg_replace('/[^A-Za-z0-9\-]+/', '-', implode('-', $fileNameParts)).'.xlsx';

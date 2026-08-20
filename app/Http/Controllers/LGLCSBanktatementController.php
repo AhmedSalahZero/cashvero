@@ -11,6 +11,7 @@ use App\Models\LcOverdraftBankStatement;
 use App\Models\LetterOfCreditFacility;
 use App\Models\LetterOfCreditIssuance;
 use App\Models\LetterOfGuaranteeIssuance;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use App\Traits\GeneralFunctions;
 use App\Traits\PaginatesStatementQueries;
 use Carbon\Carbon;
@@ -255,7 +256,10 @@ class LGLCSBanktatementController
             'credit' => (float) ($row->credit ?? 0),
             'endBalance' => (float) ($row->end_balance ?? 0),
             'room' => $isLcOverdraftBankStatement ? (float) ($row->room ?? 0) : null,
-            'comment' => isset($row->{'comment_'.$lang}) ? $row->{'comment_'.$lang} : '-',
+            'comment' => AccountNumberLabel::decorateText(
+                (int) ($row->company_id ?? 0),
+                isset($row->{'comment_'.$lang}) ? $row->{'comment_'.$lang} : '-'
+            ),
         ];
     }
 

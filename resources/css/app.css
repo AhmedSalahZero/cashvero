@@ -340,6 +340,16 @@ body {
 .cvr-num-amber  { color: var(--cvr-num-amber); font-variant-numeric: tabular-nums; }
 .cvr-num-red    { color: var(--cvr-num-red); font-variant-numeric: tabular-nums; }
 
+/* ── Inline bars ──────────────────────────────────────────────────
+   A proportion drawn next to the number it belongs to (aging shares,
+   month-on-month trend). Same colour meanings as the .cvr-num-*
+   family, so a bar and the figure beside it never disagree about
+   whether something is fine, pending, or wrong. */
+.cvr-bar-blue   { background: var(--cvr-num-blue); }
+.cvr-bar-green  { background: var(--cvr-num-green); }
+.cvr-bar-amber  { background: var(--cvr-num-amber); }
+.cvr-bar-red    { background: var(--cvr-num-red); }
+
 /* ── Inputs & Selects ─────────────────────────────────────────── */
 .cvr-input,
 .cvr-select {

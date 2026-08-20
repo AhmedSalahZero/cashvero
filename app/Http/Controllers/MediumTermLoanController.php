@@ -11,6 +11,7 @@ use App\Models\LoanSchedule;
 use App\Models\LoanScheduleSettlement;
 use App\Models\MediumTermLoan;
 use App\Rules\DateMustBeLessThanOrEqualDate;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use App\Traits\GeneralFunctions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -131,7 +132,7 @@ class MediumTermLoanController
                     'end_date_formatted' => $loan->getEndDateFormatted(),
                     'currency_formatted' => $loan->getCurrencyFormatted(),
                     'limit_formatted' => $loan->getLimitFormatted(),
-                    'account_number' => $loan->getAccountNumber(),
+                    'account_number' => AccountNumberLabel::forOwnedInstrument($loan),
                     'borrowing_rate_formatted' => $loan->getBorrowingRateFormatted(),
                     'margin_rate_formatted' => $loan->getMarginRateFormatted(),
                     'duration_formatted' => $loan->getDurationFormatted(),
@@ -195,7 +196,7 @@ class MediumTermLoanController
                 'name' => $mediumTermLoan->getName(),
                 'currency_formatted' => $mediumTermLoan->getCurrencyFormatted(),
                 'limit' => (float) $mediumTermLoan->getLimit(),
-                'account_number' => $mediumTermLoan->getAccountNumber(),
+                'account_number' => AccountNumberLabel::forOwnedInstrument($mediumTermLoan),
                 'start_date_formatted' => $mediumTermLoan->getStartDateFormatted(),
                 'end_date_formatted' => $mediumTermLoan->getEndDateFormatted(),
                 'interest_rate_formatted' => number_format($mediumTermLoan->getInterestRate(), 2).' %',
@@ -210,7 +211,7 @@ class MediumTermLoanController
             ],
             'breakdown' => $breakdown['rows'],
             'totals' => $breakdown['totals'],
-            'ledger' => $ledger->map(function (\App\Models\MediumTermLoanBankStatement $row) {
+            'ledger' => $ledger->map(function (\App\Models\MediumTermLoanBankStatement $row) use ($company) {
                 return [
                     'id' => $row->id,
                     'date_formatted' => $row->date ? \Carbon\Carbon::make($row->date)->format('d-m-Y') : __('N/A'),
@@ -222,7 +223,10 @@ class MediumTermLoanController
                     'interest_amount' => (float) $row->interest_amount,
                     'end_balance' => (float) $row->end_balance,
                     'room' => (float) $row->room,
-                    'comment' => $row->{'comment_'.app()->getLocale()} ?: $row->comment_en,
+                    'comment' => AccountNumberLabel::decorateText(
+                        (int) $company->id,
+                        $row->{'comment_'.app()->getLocale()} ?: $row->comment_en
+                    ),
                 ];
             })->values(),
             'backUrl' => route('loans.index', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id]),
@@ -598,7 +602,7 @@ class MediumTermLoanController
                 return [
                     'id' => $s->id,
                     'date_formatted' => $s->getDateFormatted(),
-                    'account_number' => $s->getAccountNumber(),
+                    'account_number' => AccountNumberLabel::forCurrentAccount($company->id, $loanSchedule->getFinancialInstitutionId(), $s->getAccountNumber()),
                     'amount_formatted' => $s->getAmountFormatted(),
                     'edit_url' => route('edit.loan.schedule.settlements', ['company' => $company->id, 'loanScheduleSettlement' => $s->id]),
                     'delete_url' => route('delete.loan.schedule.settlements', ['company' => $company->id, 'loanScheduleSettlement' => $s->id]),

@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\FactoringCompany;
 use App\Models\FactoringContract;
 use App\Models\FactoringStatement;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use App\Traits\GeneralFunctions;
 use App\Traits\PaginatesRawCollections;
 use Carbon\Carbon;
@@ -192,7 +193,10 @@ class FactoringStatementController
                 'debit' => $debit,
                 'credit' => $credit,
                 'endBalance' => $runningBalance,
-                'comment' => $statement->getComment(),
+                'comment' => AccountNumberLabel::decorateText(
+                    (int) $company->id,
+                    $statement->getComment()
+                ),
             ];
         }
 

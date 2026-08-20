@@ -151,6 +151,7 @@ class CustomerInvoiceDashboardController extends Controller
             'accountNumbersUrl' => route('bank.statement.account.numbers', ['company' => $company->id]),
             'dashboardTabUrls' => [
                 'cash' => route('view.customer.invoice.dashboard.cash', ['company' => $company->id]),
+                'contracts' => route('view.contracts.dashboard', ['company' => $company->id]),
                 'lglc' => route('view.lglc.dashboard', ['company' => $company->id]),
                 'forecast' => route('view.customer.invoice.dashboard.forecast', ['company' => $company->id]),
             ],
@@ -580,6 +581,7 @@ class CustomerInvoiceDashboardController extends Controller
 			'filterUrl'=>route('view.customer.invoice.dashboard.forecast', ['company' => $company->id]),
 			'dashboardTabUrls' => [
 				'cash' => route('view.customer.invoice.dashboard.cash', ['company' => $company->id]),
+				'contracts' => route('view.contracts.dashboard', ['company' => $company->id]),
 				'lglc' => route('view.lglc.dashboard', ['company' => $company->id]),
 				'forecast' => route('view.customer.invoice.dashboard.forecast', ['company' => $company->id]),
 			],
@@ -1190,6 +1192,7 @@ class CustomerInvoiceDashboardController extends Controller
 			'filterUrl'=>route('view.lglc.dashboard', ['company' => $company->id]),
 			'dashboardTabUrls' => [
 				'cash' => route('view.customer.invoice.dashboard.cash', ['company' => $company->id]),
+				'contracts' => route('view.contracts.dashboard', ['company' => $company->id]),
 				'lglc' => route('view.lglc.dashboard', ['company' => $company->id]),
 				'forecast' => route('view.customer.invoice.dashboard.forecast', ['company' => $company->id]),
 			],

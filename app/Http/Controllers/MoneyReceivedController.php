@@ -23,6 +23,7 @@ use App\Models\Partner;
 use App\Models\SalesOrder;
 use App\Services\Api\OdooPayment;
 use App\Services\Api\OdooSync;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use App\Traits\GeneralFunctions;
 use App\Traits\Models\HasBasicFilter;
 use Carbon\Carbon;
@@ -359,6 +360,7 @@ class MoneyReceivedController
                 'account_type' => $moneyReceived->cheque?->account_type,
                 'account_type_name' => $moneyReceived->cheque?->getAccountTypeName(),
                 'account_number' => $moneyReceived->cheque?->getAccountNumber(),
+                'account_number_label' => AccountNumberLabel::forCurrentAccount($company->id, $moneyReceived->cheque?->drawl_bank_id, $moneyReceived->cheque?->getAccountNumber()),
                 'due_date_formatted' => $moneyReceived->cheque?->getDueDateFormatted(),
                 'clearance_days' => $moneyReceived->cheque?->getClearanceDays(),
                 'expected_collection_date_formatted' => $moneyReceived->cheque?->chequeExpectedCollectionDateFormatted(),
@@ -375,6 +377,7 @@ class MoneyReceivedController
                 'drawl_bank_name' => $moneyReceived->cheque?->getDrawlBankName(),
                 'account_type_name' => $moneyReceived->cheque?->getAccountTypeName(),
                 'account_number' => $moneyReceived->cheque?->getAccountNumber(),
+                'account_number_label' => AccountNumberLabel::forCurrentAccount($company->id, $moneyReceived->cheque?->drawl_bank_id, $moneyReceived->cheque?->getAccountNumber()),
                 'actual_collection_date_formatted' => $moneyReceived->cheque?->chequeActualCollectionDateFormatted(),
                 'send_to_under_collection_url' => route('cheque.send.to.under.collection', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
             ]),
@@ -382,6 +385,7 @@ class MoneyReceivedController
                 'receiving_bank_name' => $moneyReceived->getIncomingTransferReceivingBankName(),
                 'account_type_name' => $moneyReceived->getIncomingTransferAccountTypeName(),
                 'account_number' => $moneyReceived->getIncomingTransferAccountNumber(),
+                'account_number_label' => AccountNumberLabel::forCurrentAccount($company->id, $moneyReceived->getIncomingTransferReceivingBankId(), $moneyReceived->getIncomingTransferAccountNumber()),
             ]),
             MoneyReceived::CASH_IN_SAFE => array_merge($common, [
                 'branch_name' => $moneyReceived->getCashInSafeBranchName(),
@@ -391,6 +395,7 @@ class MoneyReceivedController
                 'receiving_bank_name' => $moneyReceived->getCashInBankReceivingBankName(),
                 'account_type_name' => $moneyReceived->getCashInBankAccountTypeName(),
                 'account_number' => $moneyReceived->getCashInBankAccountNumber(),
+                'account_number_label' => AccountNumberLabel::forCurrentAccount($company->id, $moneyReceived->getCashInBankReceivingBankId(), $moneyReceived->getCashInBankAccountNumber()),
             ]),
             default => $common,
         };

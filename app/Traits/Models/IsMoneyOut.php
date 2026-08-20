@@ -10,9 +10,11 @@ use App\Models\ForeignExchangeRate;
 use App\Models\MoneyPayment;
 use App\Models\MoneyReceived;
 use App\Models\Partner;
+use App\Models\PayableCheque;
 use App\Services\Api\CashExpenseOdooService;
 use App\Services\Api\OdooPayment;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * * ال تريت دا مشترك بين
@@ -87,11 +89,84 @@ trait IsMoneyOut
 				]);
 					
 			}
-			
-       
-                
     }
-    
-    
+
+	/**
+	 * Return a paid payable cheque to pending: restore actual_payment_date
+	 * and the bank-statement date to the due date (the values used at
+	 * create), and unlink the Odoo payment line that mark-as-paid posted.
+	 * The original cheque odoo_id is left alone.
+	 */
+	public function revertPayableChequeToUnpaid(): void
+	{
+		$this->loadMissing('payableCheque');
+
+		$cheque = $this->payableCheque;
+		if (! $cheque || ! $cheque->isPaid()) {
+			throw new \RuntimeException('Payable cheque is not paid.');
+		}
+
+		$dueDate = Carbon::make($cheque->getDueDate())->format('Y-m-d');
+		$currentStatement = $this->getCurrentStatement();
+
+		$cheque->update([
+			'status' => PayableCheque::PENDING,
+			'actual_payment_date' => $dueDate,
+		]);
+
+		$this->unlinkPayableChequePaidOdooLines();
+
+		if ($currentStatement) {
+			$currentStatement->handleFullDateAfterDateEdit(
+				$dueDate,
+				$currentStatement->debit,
+				$currentStatement->credit
+			);
+		}
+	}
+
+	/**
+	 * Unlink the Odoo bank-statement line written at mark-as-paid.
+	 * Opening-balance cheques also store journal_entry_id from
+	 * markOpeningPayableChequeAsPaidInOdoo — unlink that too.
+	 * Skip the Odoo call entirely when the company has no credentials,
+	 * including leftover ids from a disconnected integration.
+	 */
+	protected function unlinkPayableChequePaidOdooLines(): void
+	{
+		$company = $this->company;
+		if (! $company || ! $company->hasOdooIntegrationCredentials()) {
+			return;
+		}
+
+		$hasSettlements = $this instanceof MoneyPayment && $this->settlements->count();
+		/** @var Collection $items */
+		$items = $hasSettlements ? $this->settlements : collect([$this]);
+		if ($this instanceof MoneyPayment && $this->isInvoiceSettlementWithDownPayment()) {
+			$items->push($this);
+		}
+
+		$odooPaymentService = new OdooPayment($company);
+		$isOpening = method_exists($this, 'isOpenBalance') && $this->isOpenBalance();
+
+		foreach ($items as $settlementOrMoneyModel) {
+			$odooFields = [];
+
+			if ($settlementOrMoneyModel->account_bank_statement_line_id) {
+				$odooPaymentService->unlinkBankCollection((int) $settlementOrMoneyModel->account_bank_statement_line_id);
+				$odooFields['account_bank_statement_line_id'] = null;
+				$odooFields['odoo_reference'] = null;
+			}
+
+			if ($isOpening && $settlementOrMoneyModel->journal_entry_id) {
+				(new CashExpenseOdooService($company))->unlink((int) $settlementOrMoneyModel->journal_entry_id);
+				$odooFields['journal_entry_id'] = null;
+			}
+
+			if ($odooFields !== []) {
+				$settlementOrMoneyModel->update($odooFields);
+			}
+		}
+	}
 
 }

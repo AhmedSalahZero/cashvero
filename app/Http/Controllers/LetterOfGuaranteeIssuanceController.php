@@ -980,7 +980,9 @@ class LetterOfGuaranteeIssuanceController
          */
         return \App\Support\Activity\ActivityLogger::asUpdate($letterOfGuaranteeIssuance, function () use ($company, $request, $letterOfGuaranteeIssuance, $source) {
             return OdooSync::transaction(function () use ($company, $request, $letterOfGuaranteeIssuance, $source) {
-                $letterOfGuaranteeIssuance->deleteAllRelations();
+                // deleteAllRelations() is no longer called here: it now runs
+                // from LetterOfGuaranteeIssuance::deleting(). Calling it here
+                // too would defer every Odoo unlink twice.
                 $letterOfGuaranteeIssuance->delete();
 
                 return $this->storeWithinTransaction($company, $request, $source);
@@ -1335,7 +1337,9 @@ class LetterOfGuaranteeIssuanceController
         }
         $lgType = $letterOfGuaranteeIssuance->getLgType();
         OdooSync::transaction(function () use ($letterOfGuaranteeIssuance) {
-            $letterOfGuaranteeIssuance->deleteAllRelations();
+            // deleteAllRelations() is no longer called here: it now runs
+            // from LetterOfGuaranteeIssuance::deleting(). Calling it here
+            // too would defer every Odoo unlink twice.
             $letterOfGuaranteeIssuance->delete();
         });
         return redirect()->route('view.letter.of.guarantee.issuance',['company'=>$company->id,'active'=>$lgType]);

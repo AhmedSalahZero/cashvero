@@ -5,6 +5,7 @@ use App\Helpers\HArr;
 use App\Http\Requests\DeleteMoneyPaymentRequest;
 use App\Http\Requests\MarkChequeAsPaidRequest;
 use App\Http\Requests\StoreMoneyPaymentRequest;
+use App\Http\Requests\UnmarkChequeAsPaidRequest;
 use App\Models\AccountType;
 use App\Models\Bank;
 use App\Models\Branch;
@@ -25,6 +26,7 @@ use App\Models\PurchaseOrder;
 use App\Models\SupplierInvoice;
 use App\Services\Api\OdooPayment;
 use App\Services\Api\OdooSync;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -348,6 +350,7 @@ class MoneyPaymentController
                 'createMoneyPayment' => route('create.money.payment', ['company' => $company->id]),
                 'createDownPayment' => route('create.money.payment', ['company' => $company->id, 'type' => 'down-payment']),
                 'markChequesAsPaid' => route('payable.cheque.mark.as.paid', ['company' => $company->id]),
+                'unmarkChequesAsPaid' => route('payable.cheque.unmark.as.paid', ['company' => $company->id]),
                 'balanceForAccountNumber' => route('update.balance.and.net.balance.based.on.account.number', ['company' => $company->id]),
             ],
         ]);
@@ -394,7 +397,7 @@ class MoneyPaymentController
                 'cheque_number' => $moneyPayment->payableCheque?->getChequeNumber(),
                 'payment_bank_name' => $moneyPayment->payableCheque?->getDeliveryBankName(),
                 'account_type_name' => $moneyPayment->payableCheque?->getAccountTypeName(),
-                'account_number' => $moneyPayment->payableCheque?->getAccountNumber(),
+                'account_number' => AccountNumberLabel::forCurrentAccount($company->id, $moneyPayment->getPayableChequePaymentBankId(), $moneyPayment->payableCheque?->getAccountNumber()),
                 'due_date' => $moneyPayment->payableCheque?->getDueDate(),
                 'due_date_formatted' => $moneyPayment->payableCheque?->getDueDateFormatted(),
                 'due_after_days' => $moneyPayment->payableCheque?->getDueAfterDays(),
@@ -404,7 +407,7 @@ class MoneyPaymentController
             MoneyPayment::OUTGOING_TRANSFER => array_merge($common, [
                 'payment_bank_name' => $moneyPayment->getOutgoingTransferDeliveryBankName(),
                 'account_type_name' => $moneyPayment->getOutgoingTransferAccountTypeName(),
-                'account_number' => $moneyPayment->getOutgoingTransferAccountNumber(),
+                'account_number' => AccountNumberLabel::forCurrentAccount($company->id, $moneyPayment->getOutgoingTransferDeliveryBankId(), $moneyPayment->getOutgoingTransferAccountNumber()),
             ]),
             MoneyPayment::CASH_PAYMENT => array_merge($common, [
                 'branch_name' => $moneyPayment->getCashPaymentBranchName(),
@@ -1225,6 +1228,28 @@ class MoneyPaymentController
         return redirect()->route('view.money.payment', ['company'=>$company->id,'active'=>MoneyPayment::PAYABLE_CHEQUE])
             ->with('success', __('Cheques Marked As Paid Successfully'));
 
+    }
+
+    public function unmarkChequesAsPaid(Company $company, UnmarkChequeAsPaidRequest $request)
+    {
+        foreach ($request->chequeIds() as $moneyPaymentId) {
+            /** @var MoneyPayment $moneyPayment */
+            $moneyPayment = MoneyPayment::find($moneyPaymentId);
+
+            try {
+                DB::transaction(function () use ($moneyPayment) {
+                    $moneyPayment->revertPayableChequeToUnpaid();
+                });
+            } catch (\Throwable $e) {
+                $message = __('Error While Connecting With Odoo').' : '.$e->getMessage();
+
+                return redirect()->route('view.money.payment', ['company' => $company->id, 'active' => MoneyPayment::PAYABLE_CHEQUE])
+                    ->with('fail', $message);
+            }
+        }
+
+        return redirect()->route('view.money.payment', ['company' => $company->id, 'active' => MoneyPayment::PAYABLE_CHEQUE])
+            ->with('success', __('Cheque Returned To Unpaid Successfully'));
     }
 
     public function getAccountNumbersForAccountType(Company $company, Request $request, string $accountType, ?string $selectedCurrency=null, ?int $financialInstitutionId = 0)

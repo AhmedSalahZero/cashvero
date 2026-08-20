@@ -13,6 +13,7 @@ use App\Models\LeasingContract;
 use App\Support\CashDashboard\DepositCashDashboardHelper;
 use App\Support\CashDashboard\LatestStatementQuery;
 use App\Support\CashDashboard\OverdraftCashDashboardHelper;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use App\Support\ShareholderAccounts\ShareholderAccountAccess;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -345,7 +346,7 @@ class CashDashboardService
                     $amount = (float) ($accountRow->end_balance ?? 0);
                     $details[$currencyName]['current_account'][] = [
                         'amount' => $amount,
-                        'account_number' => $accountRow->account_number,
+                        'account_number' => AccountNumberLabel::format($accountRow->account_number, $accountRow->shareholder_name ?? null),
                         'financial_institution_name' => $institutionName,
                     ];
                     $currentAccountInBanks += $amount;

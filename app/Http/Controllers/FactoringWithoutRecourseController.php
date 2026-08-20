@@ -14,6 +14,7 @@ use App\Models\Partner;
 use App\Models\Settlement;
 use App\Traits\FiltersFactoringTransactions;
 use App\Traits\GeneralFunctions;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -121,6 +122,7 @@ class FactoringWithoutRecourseController
                 'financial_institution_id' => $t->financial_institution_id,
                 'account_type_id' => $t->account_type_id,
                 'account_number' => $t->account_number,
+                'account_number_label' => AccountNumberLabel::forCurrentAccount($company->id, $t->financial_institution_id, $t->account_number),
                 'edit_url' => route('factoring.without-recourse.edit', ['company' => $company->id, 'factoringTransaction' => $t->id]),
                 'mark_as_settled_url' => route('factoring.without-recourse.mark-as-settled', ['company' => $company->id, 'factoringTransaction' => $t->id]),
                 'revert_settlement_url' => route('factoring.without-recourse.revert-settlement', ['company' => $company->id, 'factoringTransaction' => $t->id]),

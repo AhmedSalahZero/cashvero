@@ -35,7 +35,6 @@ const props = defineProps({
     submitUrl: String,
     backUrl: String,
     generateCodeUrl: String,
-    addNewPartnerUrl: String,
 });
 
 const page = usePage();
@@ -89,34 +88,13 @@ const totalsMismatch = computed(() =>
     Math.round(ordersTotal.value * 100) !== Math.round((Number(form.value.amount) || 0) * 100)
 );
 
-/* ── Add New Customer/Supplier modal ─────────────────────────────
-   Matches the old page's inline "Add New" button + modal, posting to
-   the same existing AddNewCustomerController endpoint. */
-const localClients = ref([...props.clients]);
-const showAddPartnerModal = ref(false);
-const newPartnerName = ref('');
-const addingPartner = ref(false);
-async function submitNewPartner() {
-    if (!newPartnerName.value.trim()) return;
-    addingPartner.value = true;
-    try {
-        const { data } = await window.axios.post(props.addNewPartnerUrl, {
-            customerName: newPartnerName.value,
-            type: props.type,
-        });
-        if (data.status) {
-            localClients.value.push({ id: data.customer.id, name: newPartnerName.value });
-            form.value.partner_id = data.customer.id;
-            showAddPartnerModal.value = false;
-            newPartnerName.value = '';
-            router.flash({ success: 'Partner added successfully', token: String(Date.now()) });
-        } else {
-            router.flash({ error: data.message || 'Could not add partner.', token: String(Date.now()) });
-        }
-    } finally {
-        addingPartner.value = false;
-    }
-}
+/* Partner options stay alphabetical (A before B). New partners are
+   created from Partners settings, not from this form. */
+const localClients = computed(() =>
+    [...(props.clients || [])].sort((a, b) =>
+        String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' })
+    )
+);
 
 /* ── Auto-generate Contract Code ──────────────────────────────────
    Mirrors the old .regenerate-code-ajax handler — fires when either
@@ -217,15 +195,10 @@ function submit() {
                         </div>
                         <div>
                             <label class="cvr-form-label">Partner Name *</label>
-                            <div class="flex gap-2">
-                                <select v-model="form.partner_id" class="cvr-input w-full px-3 py-2 rounded">
-                                    <option value="">Select...</option>
-                                    <option v-for="c in localClients" :key="c.id" :value="c.id">{{ c.name }}</option>
-                                </select>
-                                <button type="button" @click="showAddPartnerModal = true" class="cvr-btn-secondary px-3 py-2 rounded border text-sm whitespace-nowrap">
-                                    + Add New
-                                </button>
-                            </div>
+                            <select v-model="form.partner_id" class="cvr-input w-full px-3 py-2 rounded">
+                                <option value="">Select...</option>
+                                <option v-for="c in localClients" :key="c.id" :value="c.id">{{ c.name }}</option>
+                            </select>
                             <p v-if="errorFor('partner_id')" class="text-xs mt-1 cvr-num-red">{{ errorFor('partner_id') }}</p>
                         </div>
 
@@ -308,20 +281,6 @@ function submit() {
                     </button>
                 </div>
             </form>
-
-            <!-- Add New Customer/Supplier modal -->
-            <div v-if="showAddPartnerModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Add New {{ type }}</h2>
-                    <input v-model="newPartnerName" type="text" placeholder="Enter new partner name" class="cvr-input w-full px-3 py-2 rounded mb-4" @keyup.enter="submitNewPartner" />
-                    <div class="flex justify-end gap-2">
-                        <button @click="showAddPartnerModal = false" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button :disabled="addingPartner" @click="submitNewPartner" class="cvr-btn-primary px-3 py-1.5 rounded">
-                            {{ addingPartner ? 'Saving...' : 'Save' }}
-                        </button>
-                    </div>
-                </div>
-            </div>
 
             <!-- Execution Details modal (per order row) -->
             <div v-if="executionModalIndex !== null" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">

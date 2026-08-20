@@ -15,6 +15,7 @@
 import { ref, computed, watch } from 'vue'
 import { router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import SearchableSelect from '@/Components/SearchableSelect.vue'
 import { todayDate, clampDateToToday } from '@/composables/today'
 import { mapAccountNumberOptions, hasAccountNumber } from '@/composables/useAccountNumberOptions'
 
@@ -41,6 +42,13 @@ const endDate = ref(todayDate())
 
 const accountNumberOptions = ref([])
 const loadingAccountNumbers = ref(false)
+
+const bankOptions = computed(() =>
+	[...(props.financialInstitutionBanks || [])]
+		.slice()
+		.sort((a, b) => String(a.name).localeCompare(String(b.name)))
+		.map((bank) => ({ value: bank.id, label: bank.name }))
+)
 
 /* ── Account Number cascade — reloaded whenever Bank, Account Type,
    or Currency changes. Same JSON contract every other cascading
@@ -124,11 +132,11 @@ function submit() {
 				<div class="cvr-form-grid-6-4-2">
 					<div>
 						<label class="cvr-form-label">Bank *</label>
-						<select v-model="financialInstitutionId" class="cvr-input w-full px-3 py-2 rounded">
-							<option value="" disabled>Select bank</option>
-							<option v-for="bank in financialInstitutionBanks" :key="bank.id" :value="bank.id">
-								{{ bank.name }}</option>
-						</select>
+						<SearchableSelect
+							v-model="financialInstitutionId"
+							:options="bankOptions"
+							placeholder="Select bank"
+						/>
 					</div>
 					<div>
 						<label class="cvr-form-label">Account Type *</label>

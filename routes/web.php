@@ -473,6 +473,7 @@ Route::middleware([])->group(function () {
                     Route::get('financial-institutions/{financialInstitution}/overdraft-against-assignment-of-contract/delete-lending-information/{lendingInformation}', 'OverdraftAgainstAssignmentOfContractController@deleteLendingInformation')->name('lending.information.delete.for.against.assignment.of.contract');
                     Route::get('financial-institutions/{financialInstitution}/overdraft-against-assignment-of-contract/apply-against-lending/{lendingInformation}', 'OverdraftAgainstAssignmentOfContractController@applyAgainstLending')->name('apply.against.lending');
                     Route::put('contract/{contract}/{type}/mark-as-finished', 'ContractsController@markAsFinished')->name('contract.mark.as.finished');
+                    Route::put('contract/{contract}/{type}/mark-as-running', 'ContractsController@markAsRunning')->name('contract.mark.as.running');
                     Route::put('contract/{contract}/{type}/mark-as-running-and-against', 'ContractsController@markAsRunningAndAgainst')->name('contract.mark.as.running.and.against');
                  
                  
@@ -697,6 +698,8 @@ Route::middleware([])->group(function () {
 
                     Route::get('customer-balances/{modelType}', 'BalancesController@index')->name('view.balances');
                     Route::get('/cashvero-dashboard/cash', 'CustomerInvoiceDashboardController@viewCashDashboard')->name('view.customer.invoice.dashboard.cash');
+                    Route::get('/cashvero-dashboard/contracts', 'ContractDashboardController@index')->name('view.contracts.dashboard');
+                    Route::get('/cashvero-dashboard/contracts/export', 'ContractDashboardController@export')->name('export.contracts.dashboard');
 
                     Route::get('/cashvero-dashboard/forecast', 'CustomerInvoiceDashboardController@viewForecastDashboard')->name('view.customer.invoice.dashboard.forecast');
                     Route::get('/cashvero-dashboard/lglc', 'CustomerInvoiceDashboardController@viewLGLCDashboard')->name('view.lglc.dashboard');
@@ -806,6 +809,7 @@ Route::middleware([])->group(function () {
                     Route::get('money-payment/get-invoice-numbers/{supplier_name}/{currency?}', 'MoneyPaymentController@getInvoiceNumber'); // ajax request
                     Route::get('money-payment/get-account-numbers-based-on-account-type/{accountType}/{currency}/{financialInstitutionId}', 'MoneyPaymentController@getAccountNumbersForAccountType'); // ajax request
                     Route::post('mark-payable-cheques-as-paid', 'MoneyPaymentController@markChequesAsPaid')->name('payable.cheque.mark.as.paid');
+                    Route::post('unmark-payable-cheques-as-paid', 'MoneyPaymentController@unmarkChequesAsPaid')->name('payable.cheque.unmark.as.paid');
                     Route::post('mark-outgoing-transfer-as-paid', 'MoneyPaymentController@markOutgoingTransfersAsPaid')->name('outgoing.transfer.mark.as.paid');
                     Route::get('get-supplier-invoices', 'SupplierInvoicesController@getSupplierInvoicesForSupplier')->name('get.supplier.invoices');
                     Route::get('get-suppliers-based-on-currency/{currencyName}', 'MoneyPaymentController@getSuppliersBasedOnCurrency');
@@ -823,6 +827,7 @@ Route::middleware([])->group(function () {
                     Route::delete('cash-expense/delete/{cashExpense}', 'CashExpenseController@destroy')->name('delete.cash.expense');
                     Route::get('cash-expense/get-account-numbers-based-on-account-type/{accountType}/{currency}/{financialInstitutionId}', 'CashExpenseController@getAccountNumbersForAccountType'); // ajax request
                     Route::post('cash-expense-mark-payable-cheques-as-paid', 'CashExpenseController@markChequesAsPaid')->name('cash.expense.payable.cheque.mark.as.paid');
+                    Route::post('cash-expense-unmark-payable-cheques-as-paid', 'CashExpenseController@unmarkChequesAsPaid')->name('cash.expense.payable.cheque.unmark.as.paid');
                     Route::post('cash-expense-mark-outgoing-transfer-as-paid', 'CashExpenseController@markOutgoingTransfersAsPaid')->name('cash.expense.outgoing.transfer.mark.as.paid');
 
                     

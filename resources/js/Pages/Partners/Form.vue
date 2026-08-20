@@ -126,7 +126,9 @@ function submit() {
                 <!-- Section: Partner Type -->
                 <div class="flex items-center gap-2 mb-1">
                     <span class="text-base">🏷️</span>
-                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">Partner Type</h2>
+                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">
+                        Partner Type <span class="text-red-500">*</span>
+                    </h2>
                 </div>
                 <p class="text-xs cvr-text-muted mb-4">Select every role that applies — a partner can hold more than one.</p>
 
@@ -145,6 +147,9 @@ function submit() {
                         <span v-if="form[opt.key]" class="text-xs">✓</span>
                     </button>
                 </div>
+                <p v-if="page.props.errors?.partner_type" class="text-xs mt-2" style="color: var(--cvr-danger-text);">
+                    {{ page.props.errors.partner_type }}
+                </p>
 
                 <hr class="cvr-divider my-6" />
 

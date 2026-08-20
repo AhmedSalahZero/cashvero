@@ -101,6 +101,7 @@ class LatestStatementQuery
                 $join->on('statements.id', '=', 'latest_rows.latest_id');
             })
             ->join('financial_institution_accounts as accounts', 'accounts.id', '=', 'statements.financial_institution_account_id')
+            ->leftJoin('partners as shareholder_partners', 'shareholder_partners.id', '=', 'accounts.shareholder_partner_id')
             ->where('accounts.company_id', $companyId)
             ->whereIn('accounts.financial_institution_id', $bankIds)
             ->whereIn('accounts.currency', $currencies)
@@ -116,6 +117,7 @@ class LatestStatementQuery
                 'accounts.account_number',
                 'accounts.currency',
                 'accounts.financial_institution_id',
+                DB::raw('CASE WHEN accounts.is_shareholder_account = 1 THEN shareholder_partners.name ELSE NULL END as shareholder_name'),
             ])
             ->get()
             ->groupBy('currency')

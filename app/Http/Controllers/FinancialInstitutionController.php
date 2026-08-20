@@ -319,6 +319,8 @@ class FinancialInstitutionController
 			'hasOdooIntegration' => $company->hasOdooIntegrationCredentials(),
 			'listUrl' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
 			'submitUrl' => route('store.financial.institutions', ['company' => $company->id]),
+			// Same ownership control as add-account — docs/shareholder-accounts.md
+			...\App\Support\ShareholderAccounts\ShareholderAccountAccess::formProps($company->id),
 			'navUrls' => [
 				'home' => route('home', ['company' => $company->id]),
 				'bank_accounts' => route('view.financial.institutions', ['company' => $company->id, 'active' => 'bank']),
@@ -455,6 +457,20 @@ class FinancialInstitutionController
 	 */
 	public function destroy(Company $company , FinancialInstitution $financialInstitution)
 	{
+		/**
+		 * * ما ينفعش نحذفه طول ما فيه حركات معلقة عليه
+		 *
+		 * * جزء من الأبناء متوصلين بـ ON DELETE CASCADE فالحذف هنا كان بيخلي MySQL
+		 * * تمسحهم بنفسها من غير ما Eloquent يشوف الحذف .. فالهوكس اللي بتنضف
+		 * * كشوفهم ما بتشتغلش و بتفضل صفوف يتيمة بتظهر في الداشبورد
+		 * * و الباقي مفيهوش FK اصلا فبيفضل مأشر على id مش موجود
+		 *
+		 * @see \App\Support\Deletion\ReferencedRecordGuard
+		 */
+		if ($message = $financialInstitution->deletionBlockedMessage()) {
+			return redirect()->back()->with('fail', $message);
+		}
+
 		$financialInstitution->accounts->each(function($account){
 			$account->delete();
 		});

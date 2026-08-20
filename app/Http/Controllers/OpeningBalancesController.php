@@ -18,6 +18,7 @@ use App\Models\MoneyReceived;
 use App\Models\OpeningBalance;
 use App\Models\Partner;
 use App\Models\PayableCheque;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -138,7 +139,7 @@ class OpeningBalancesController
             'due_date' => $row->cheque?->getDueDateFormatted(),
             'deposit_date' => $row->cheque?->deposit_date,
             'account_type' => $row->cheque?->getAccountTypeName(),
-            'account_number' => $row->cheque?->getAccountNumber(),
+            'account_number' => AccountNumberLabel::forCurrentAccount($company->id, $row->cheque?->drawl_bank_id, $row->cheque?->getAccountNumber()),
         ])->values();
 
         $payableCheques = $openingBalance->payableCheques->map(fn (MoneyPayment $row) => [
@@ -150,7 +151,7 @@ class OpeningBalancesController
             'amount' => (float) $row->getPaidAmount(),
             'due_date' => $row->payableCheque?->getDueDateFormatted(),
             'account_type' => $row->payableCheque?->getAccountTypeName(),
-            'account_number' => $row->payableCheque?->getAccountNumber(),
+            'account_number' => AccountNumberLabel::forCurrentAccount($company->id, $row->getPayableChequePaymentBankId(), $row->payableCheque?->getAccountNumber()),
         ])->values();
 
         return \Inertia\Inertia::render('OpeningBalance/Index', [

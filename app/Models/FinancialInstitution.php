@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Deletion\ReferencedRecordGuard;
 use App\Models\Bank;
 use App\Models\CertificatesOfDeposit;
 use App\Models\CleanOverdraft;
@@ -463,4 +464,30 @@ class FinancialInstitution extends Model
 		$accountModel = $this->getAccountFromTypeAndNumber($accountTypeId,$accountNumber);
 		return  $accountModel->getJournalId();
 	}
+
+    /**
+     * * ما ينفعش يتحذف طول ما لسه فيه حاجة معلقة عليه
+     *
+     * * نفس القاعدة اللي شغالة بالفعل في CleanOverdraft و LetterOfGuaranteeFacility
+     * * و باقي التسهيلات .. بس هنا القايمة كبيرة فمتعرفة في مكان واحد
+     *
+     * * مش مجرد ترتيب : بعض الأبناء متوصلين بـ ON DELETE CASCADE يعني MySQL
+     * * بتحذفهم بنفسها من غير ما Eloquent يشوف الحذف .. فالهوكس اللي المفروض
+     * * تنضف كشوفهم ما بتشتغلش و بتفضل صفوف يتيمة بتظهر في الداشبورد
+     * * و الباقي مفيهوش FK اصلا فبيفضل مأشر على id مش موجود
+     *
+     * @see \App\Support\Deletion\ReferencedRecordGuard
+     */
+    public function hasAnyTransactions(): bool
+    {
+        return ReferencedRecordGuard::blocks($this->getTable(), (int) $this->id);
+    }
+
+    /**
+     * The reason the delete is refused, or null when it is safe.
+     */
+    public function deletionBlockedMessage(): ?string
+    {
+        return ReferencedRecordGuard::blockMessage($this->getTable(), (int) $this->id, $this->getName());
+    }
 }

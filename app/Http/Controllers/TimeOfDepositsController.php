@@ -10,6 +10,7 @@ use App\Models\CurrentAccountBankStatement;
 use App\Models\FinancialInstitution;
 use App\Models\TimeOfDeposit;
 use App\Services\Api\OdooService;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -250,7 +251,7 @@ class TimeOfDepositsController
 					'start_date_formatted' => $td->getStartDateFormatted(),
 					'end_date' => $td->getEndDate(),
 					'end_date_formatted' => $td->getEndDateFormatted(),
-					'account_number' => $td->getAccountNumber(),
+					'account_number' => AccountNumberLabel::forOwnedInstrument($td),
 					'amount' => $td->getAmount(),
 					'amount_formatted' => $td->getAmountFormatted(),
 					'currency' => $td->getCurrency(),
@@ -328,7 +329,7 @@ class TimeOfDepositsController
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
 			'accounts' => $accounts->map(fn ($a) => [
 				'id' => $a->getId(),
-				'account_number' => $a->getAccountNumber(),
+				'account_number' => AccountNumberLabel::forOwnedInstrument($a),
 				'currency' => $a->getCurrency(),
 				'is_active' => (bool) $a->is_active,
 			])->values(),
@@ -408,7 +409,7 @@ class TimeOfDepositsController
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
 			'accounts' => $accounts->map(fn ($a) => [
 				'id' => $a->getId(),
-				'account_number' => $a->getAccountNumber(),
+				'account_number' => AccountNumberLabel::forOwnedInstrument($a),
 				'currency' => $a->getCurrency(),
 				'is_active' => (bool) $a->is_active,
 			])->values(),

@@ -8,6 +8,7 @@ use App\Models\BuyOrSellCurrency;
 use App\Models\Company;
 use App\Models\FinancialInstitution;
 use App\Services\Api\OdooSync;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -135,12 +136,12 @@ class BuyOrSellCurrenciesController
                 'from_bank_name_ar' => optional(optional($model->fromBank)->bank)->name_ar,
                 'from_bank_name' => $model->getFromBankName(),
                 'from_account_type_name' => $model->getFromAccountTypeName(),
-                'from_account_number' => $model->getFromAccountNumber(),
+                'from_account_number' => AccountNumberLabel::forCurrentAccount($company->id, $model->getFromBankId(), $model->getFromAccountNumber()),
                 'to_bank_name_en' => optional(optional($model->toBank)->bank)->name_en,
                 'to_bank_name_ar' => optional(optional($model->toBank)->bank)->name_ar,
                 'to_bank_name' => $model->getToBankName(),
                 'to_account_type_name' => $model->getToAccountTypeName(),
-                'to_account_number' => $model->getToAccountNumber(),
+                'to_account_number' => AccountNumberLabel::forCurrentAccount($company->id, $model->getToBankId(), $model->getToAccountNumber()),
                 'from_branch_name' => $model->getFromBranchName(),
                 'to_branch_name' => $model->getToBranchName(),
                 'user_comment' => $model->hasComment() ? $model->getUserComment() : null,

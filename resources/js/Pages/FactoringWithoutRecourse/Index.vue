@@ -205,7 +205,7 @@ function destroyRow() {
                                 </div>
                             </td>
                             <td class="px-4 py-3">{{ row.financial_institution_name }}</td>
-                            <td class="px-4 py-3">{{ row.account_number }}</td>
+                            <td class="px-4 py-3">{{ row.account_number_label || row.account_number }}</td>
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-1">
                                     <RecordLogButton subject="FactoringTransaction" :id="row.id" :company-id="company.id" />

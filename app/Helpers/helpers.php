@@ -1902,7 +1902,13 @@ function getBankStatementComment($stdClass)
         return __('N/A', [], $lang);
     }
     $raw = DB::table($tableName)->find($id);
-    return $raw ? $raw->{$columnNameWithoutLang.$lang} : __('N/A', [], $lang);
+    $comment = $raw ? $raw->{$columnNameWithoutLang.$lang} : __('N/A', [], $lang);
+    $companyId = (int) ($stdClass->company_id ?? $raw->company_id ?? 0);
+    if ($companyId && is_string($comment) && $comment !== __('N/A', [], $lang)) {
+        return \App\Support\ShareholderAccounts\AccountNumberLabel::decorateText($companyId, $comment);
+    }
+
+    return $comment;
 }
 function getKeysWithSettlementAmount(array $items, string $keyName):string
 {

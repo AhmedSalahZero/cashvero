@@ -564,10 +564,18 @@ class AuthorizationEnforcementTest extends TestCase
             ->post($this->url('payable.cheque.mark.as.paid'))
             ->assertForbidden();
 
+        $this->actingAs($this->actor)
+            ->post($this->url('payable.cheque.unmark.as.paid'))
+            ->assertForbidden();
+
         $this->grant(['cash_expense.view', 'cash_expense.update']);
 
         $this->actingAs($this->actor)
             ->post($this->url('cash.expense.payable.cheque.mark.as.paid'))
+            ->assertForbidden();
+
+        $this->actingAs($this->actor)
+            ->post($this->url('cash.expense.payable.cheque.unmark.as.paid'))
             ->assertForbidden();
     }
 

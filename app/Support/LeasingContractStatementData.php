@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\LeasingContract;
 use App\Models\LeasingContractBankStatement;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use Carbon\Carbon;
 
 /**
@@ -114,7 +115,10 @@ class LeasingContractStatementData
                 'interest_amount' => (float) $row->interest_amount,
                 'end_balance' => (float) $row->end_balance,
                 'room' => (float) $row->room,
-                'comment' => $row->{'comment_'.app()->getLocale()} ?: $row->comment_en,
+                'comment' => AccountNumberLabel::decorateText(
+                    (int) ($row->company_id ?? $contract->company_id ?? 0),
+                    $row->{'comment_'.app()->getLocale()} ?: $row->comment_en
+                ),
             ])->values(),
         ];
     }

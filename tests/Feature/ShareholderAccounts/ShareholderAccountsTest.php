@@ -660,6 +660,293 @@ class ShareholderAccountsTest extends TestCase
         );
     }
 
+    /* ───────── Display: FI create owner + labeled account numbers ─ */
+
+    public function test_financial_institution_create_exposes_shareholder_owner_fields_when_permitted(): void
+    {
+        $this->userWithPermission->givePermissionTo('financial_institution.create');
+
+        $response = $this->actingAs($this->userWithPermission)
+            ->get(route('create.financial.institutions', ['company' => $this->company->id]));
+
+        $response->assertOk();
+        $response->assertSee('canManageShareholderAccounts', false);
+        $response->assertSee($this->shareholder->name, false);
+    }
+
+    public function test_financial_institution_create_hides_shareholders_without_the_permission(): void
+    {
+        $this->userWithoutPermission->givePermissionTo('financial_institution.create');
+
+        $response = $this->actingAs($this->userWithoutPermission)
+            ->get(route('create.financial.institutions', ['company' => $this->company->id]));
+
+        $response->assertOk();
+        $response->assertDontSee($this->shareholder->name, false);
+    }
+
+    public function test_internal_money_transfer_index_shows_the_shareholder_name_beside_the_account_number(): void
+    {
+        $this->userWithPermission->givePermissionTo('internal_money_transfer.view');
+
+        $this->actingAs($this->userWithPermission)
+            ->post(route('internal-money-transfers.store', [
+                'company' => $this->company->id,
+                'type' => \App\Models\InternalMoneyTransfer::BANK_TO_BANK,
+            ]), [
+                'company_id' => $this->company->id,
+                'transfer_date' => now()->format('Y-m-d'),
+                'transfer_days' => 0,
+                'amount' => 100,
+                'currency' => $this->currency,
+                'from_bank_id' => $this->bank->id,
+                'from_account_type_id' => $this->currentAccountTypeId(),
+                'from_account_number' => $this->companyAccount->account_number,
+                'to_bank_id' => $this->bank->id,
+                'to_account_type_id' => $this->currentAccountTypeId(),
+                'to_account_number' => $this->shareholderAccount->account_number,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('internal_money_transfers', [
+            'company_id' => $this->company->id,
+            'from_account_number' => $this->companyAccount->account_number,
+            'to_account_number' => $this->shareholderAccount->account_number,
+        ]);
+
+        $expected = \App\Support\ShareholderAccounts\AccountNumberLabel::format(
+            $this->shareholderAccount->account_number,
+            $this->shareholder->name
+        );
+
+        $response = $this->actingAs($this->userWithPermission)
+            ->get(route('internal-money-transfers.index', [
+                'company' => $this->company->id,
+                'active' => \App\Models\InternalMoneyTransfer::BANK_TO_BANK,
+                'value' => $this->shareholderAccount->account_number,
+            ]));
+
+        $response->assertOk();
+        $toNumbers = collect($response->inertiaProps('bankToBankTab.rows.data'))
+            ->pluck('to_account_number');
+        $fromNumbers = collect($response->inertiaProps('bankToBankTab.rows.data'))
+            ->pluck('from_account_number');
+
+        $this->assertTrue(
+            $toNumbers->contains($expected),
+            'The internal transfer index must show the shareholder name beside the account number.'
+        );
+        $this->assertTrue($fromNumbers->contains($this->companyAccount->account_number));
+        $this->assertFalse(
+            $fromNumbers->contains($this->companyAccount->account_number.' — '.$this->shareholder->name)
+        );
+    }
+
+    public function test_bank_statement_result_shows_the_shareholder_name_beside_the_account_number(): void
+    {
+        $this->userWithPermission->givePermissionTo('report_bank_statement.view');
+
+        $expected = \App\Support\ShareholderAccounts\AccountNumberLabel::format(
+            $this->shareholderAccount->account_number,
+            $this->shareholder->name
+        );
+
+        $response = $this->actingAs($this->userWithPermission)
+            ->get(route('result.bank.statement', [
+                'company' => $this->company->id,
+                'start_date' => now()->subYear()->format('Y-m-d'),
+                'end_date' => now()->format('Y-m-d'),
+                'financial_institution_id' => $this->bank->id,
+                'account_type' => $this->currentAccountTypeId(),
+                'account_number' => $this->shareholderAccount->account_number,
+                'currency' => $this->currency,
+            ]));
+
+        $response->assertOk();
+        $this->assertSame($expected, $response->inertiaProps('accountNumber'));
+    }
+
+    public function test_bank_statement_comments_name_the_shareholder_when_the_counterparty_is_their_account(): void
+    {
+        $this->userWithPermission->givePermissionTo('report_bank_statement.view');
+
+        $this->actingAs($this->userWithPermission)
+            ->post(route('internal-money-transfers.store', [
+                'company' => $this->company->id,
+                'type' => \App\Models\InternalMoneyTransfer::BANK_TO_BANK,
+            ]), [
+                'company_id' => $this->company->id,
+                'transfer_date' => now()->format('Y-m-d'),
+                'transfer_days' => 0,
+                'amount' => 100,
+                'currency' => $this->currency,
+                'from_bank_id' => $this->bank->id,
+                'from_account_type_id' => $this->currentAccountTypeId(),
+                'from_account_number' => $this->shareholderAccount->account_number,
+                'to_bank_id' => $this->bank->id,
+                'to_account_type_id' => $this->currentAccountTypeId(),
+                'to_account_number' => $this->companyAccount->account_number,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $expected = \App\Support\ShareholderAccounts\AccountNumberLabel::format(
+            $this->shareholderAccount->account_number,
+            $this->shareholder->name
+        );
+
+        $response = $this->actingAs($this->userWithPermission)
+            ->get(route('result.bank.statement', [
+                'company' => $this->company->id,
+                'start_date' => now()->subYear()->format('Y-m-d'),
+                'end_date' => now()->format('Y-m-d'),
+                'financial_institution_id' => $this->bank->id,
+                'account_type' => $this->currentAccountTypeId(),
+                'account_number' => $this->companyAccount->account_number,
+                'currency' => $this->currency,
+            ]));
+
+        $response->assertOk();
+        $this->assertSame($this->companyAccount->account_number, $response->inertiaProps('accountNumber'));
+
+        $comments = collect($response->inertiaProps('paginator.data'))->pluck('comment');
+        $this->assertTrue(
+            $comments->contains(fn ($comment) => is_string($comment) && str_contains($comment, $expected)),
+            'A statement comment that mentions a shareholder account must include the shareholder name.'
+        );
+    }
+
+    public function test_safe_statement_comments_name_the_shareholder_when_the_counterparty_is_their_account(): void
+    {
+        $this->userWithPermission->givePermissionTo('report_safe_statement.view');
+
+        $branch = \App\Models\Branch::query()
+            ->where('company_id', $this->company->id)
+            ->first();
+
+        if (! $branch) {
+            $branch = \App\Models\Branch::create([
+                'company_id' => $this->company->id,
+                'name' => 'Safe Statement Test Branch '.uniqid(),
+            ]);
+        }
+
+        $rawComment = 'From '.$this->bank->getName().' Account No '.$this->shareholderAccount->account_number;
+        $imtId = DB::table('internal_money_transfers')->insertGetId([
+            'company_id' => $this->company->id,
+            'type' => \App\Models\InternalMoneyTransfer::BANK_TO_SAFE,
+            'transfer_date' => now()->format('Y-m-d'),
+            'transfer_days' => 0,
+            'amount' => 50,
+            'currency' => $this->currency,
+            'from_bank_id' => $this->bank->id,
+            'from_account_type_id' => $this->currentAccountTypeId(),
+            'from_account_number' => $this->shareholderAccount->account_number,
+            'to_branch_id' => $branch->id,
+            'from_comment_en' => $rawComment,
+            'from_comment_ar' => $rawComment,
+            'to_comment_en' => $rawComment,
+            'to_comment_ar' => $rawComment,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('cash_in_safe_statements')->insert([
+            'company_id' => $this->company->id,
+            'branch_id' => $branch->id,
+            'currency' => $this->currency,
+            'exchange_rate' => 1,
+            'is_debit' => 1,
+            'is_credit' => 0,
+            'internal_money_transfer_id' => $imtId,
+            'date' => now()->format('Y-m-d'),
+            'full_date' => now()->format('Y-m-d H:i:s'),
+            'beginning_balance' => 0,
+            'debit' => 50,
+            'credit' => 0,
+            'end_balance' => 50,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $expected = \App\Support\ShareholderAccounts\AccountNumberLabel::format(
+            $this->shareholderAccount->account_number,
+            $this->shareholder->name
+        );
+
+        $response = $this->actingAs($this->userWithPermission)
+            ->get(route('result.safe.statement', [
+                'company' => $this->company->id,
+                'start_date' => now()->subYear()->format('Y-m-d'),
+                'end_date' => now()->format('Y-m-d'),
+                'branch_id' => $branch->id,
+                'currency' => $this->currency,
+            ]));
+
+        $response->assertOk();
+        $this->assertSame($branch->name, $response->inertiaProps('branchName'));
+
+        $comments = collect($response->inertiaProps('paginator.data'))->pluck('comment');
+        $this->assertTrue(
+            $comments->contains(fn ($comment) => is_string($comment) && str_contains($comment, $expected)),
+            'A safe-statement comment that mentions a shareholder account must include the shareholder name.'
+        );
+    }
+
+    public function test_partners_statement_comments_name_the_shareholder_when_the_account_is_theirs(): void
+    {
+        $this->userWithPermission->givePermissionTo('report_partners_statement.view');
+
+        $rawNumber = $this->shareholderAccount->account_number;
+        $rawComment = 'Received In [ '.$this->bank->getName().' ] [ Current Account ] [ '.$rawNumber.' ]';
+
+        DB::table('shareholder_statements')->insert([
+            'company_id' => $this->company->id,
+            'partner_id' => $this->shareholder->id,
+            'currency_name' => $this->currency,
+            'is_debit' => 0,
+            'is_credit' => 1,
+            'date' => now()->format('Y-m-d'),
+            'full_date' => now()->format('Y-m-d H:i:s'),
+            'beginning_balance' => 0,
+            'debit' => 0,
+            'credit' => 100,
+            'end_balance' => 100,
+            'comment_en' => $rawComment,
+            'comment_ar' => $rawComment,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $expected = \App\Support\ShareholderAccounts\AccountNumberLabel::format(
+            $rawNumber,
+            $this->shareholder->name
+        );
+
+        $response = $this->actingAs($this->userWithPermission)
+            ->get(route('result.partners.statement', [
+                'company' => $this->company->id,
+                'start_date' => now()->subYear()->format('Y-m-d'),
+                'end_date' => now()->format('Y-m-d'),
+                'partner_type' => 'is_shareholder',
+                'partner_id' => [$this->shareholder->id],
+                'currency' => $this->currency,
+            ]));
+
+        $response->assertOk();
+
+        $comments = collect($response->inertiaProps('paginator.data'))
+            ->flatMap(fn ($group) => collect($group['rows'] ?? [])->pluck('comment'));
+
+        $this->assertTrue(
+            $comments->contains(fn ($comment) => is_string($comment) && str_contains($comment, $expected)),
+            'A partner-statement comment that mentions a shareholder account must include the shareholder name.'
+        );
+        $this->assertFalse(
+            $comments->contains(fn ($comment) => is_string($comment) && preg_match('/\[\s*'.preg_quote($rawNumber, '/').'\s*\]/', $comment) === 1 && ! str_contains($comment, $expected)),
+            'The raw shareholder account number must not appear unlabeled in the partner-statement comment.'
+        );
+    }
+
     /** @return array<string, object> */
     private function latestRowsFor(AccountOwnerFilter $filter): array
     {

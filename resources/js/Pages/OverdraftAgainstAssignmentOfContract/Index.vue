@@ -131,10 +131,15 @@ function destroyRate() {
    this facility as collateral. Contracts are filtered by BOTH the
    selected customer AND this facility's currency (matches the
    original: Contract::getForParentAndCurrency($customerId, $currency)).
-   All contracts were already fetched up front server-side (same
-   pattern as CD/TD accounts on Fully Secured Overdraft), since the
-   original relied on a client-side AJAX endpoint with no traceable
-   server route in this codebase. ────────────────────────────────── */
+   Finished contracts are excluded — a bank will not take a closed
+   contract as collateral. ──────────────────────────────────────── */
+function assignableContractsFor(customerId, currency) {
+    return props.contracts.filter(c =>
+        c.customer_id === Number(customerId) &&
+        c.currency === currency &&
+        c.status !== 'finished'
+    );
+}
 const lendingTarget = ref(null);
 const newLendingForm = ref({ customer_id_create: '', contract_id_create: '', assignment_date_create: '', lending_rate_create: 0 });
 function openLendingInformation(row) {
@@ -142,10 +147,7 @@ function openLendingInformation(row) {
     newLendingForm.value = { customer_id_create: '', contract_id_create: '', assignment_date_create: '', lending_rate_create: 0 };
 }
 const contractsForNewCustomer = computed(() =>
-    props.contracts.filter(c =>
-        c.customer_id === Number(newLendingForm.value.customer_id_create) &&
-        c.currency === lendingTarget.value?.currency_raw
-    )
+    assignableContractsFor(newLendingForm.value.customer_id_create, lendingTarget.value?.currency_raw)
 );
 const selectedNewContract = computed(() =>
     props.contracts.find(c => c.id === Number(newLendingForm.value.contract_id_create))
@@ -167,12 +169,18 @@ function openEditLending(info) {
         lending_rate_edit: info.lending_rate,
     };
 }
-const contractsForEditCustomer = computed(() =>
-    props.contracts.filter(c =>
-        c.customer_id === Number(editLendingForm.value.customer_id_edit) &&
-        c.currency === lendingTarget.value?.currency_raw
-    )
-);
+const contractsForEditCustomer = computed(() => {
+    const list = assignableContractsFor(editLendingForm.value.customer_id_edit, lendingTarget.value?.currency_raw);
+    const currentId = Number(editLendingForm.value.contract_id_edit);
+    if (currentId && editLendingTarget.value && !list.some(c => c.id === currentId)) {
+        return [{
+            id: editLendingTarget.value.contract_id,
+            name: editLendingTarget.value.contract_name,
+            customer_id: editLendingTarget.value.customer_id,
+        }, ...list];
+    }
+    return list;
+});
 function submitEditLending() {
     router.post(editLendingTarget.value.edit_url, editLendingForm.value, {
         onFinish: () => { editLendingTarget.value = null; },

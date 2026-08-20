@@ -40,6 +40,7 @@ const props = defineProps({
     indexUrl: String,
     createUrl: String,
     markChequesAsPaidUrl: String,
+    unmarkChequesAsPaidUrl: String,
     markOutgoingTransfersAsPaidUrl: String,
 });
 
@@ -163,6 +164,15 @@ function confirmMarkPaid() {
     });
 }
 
+const unmarkTarget = ref(null);
+function confirmUnmarkPaid() {
+    router.post(props.unmarkChequesAsPaidUrl, {
+        cheques: [unmarkTarget.value.id],
+    }, {
+        onFinish: () => { unmarkTarget.value = null; },
+    });
+}
+
 /* ── Delete confirmation ─────────────────────────────────────────── */
 const deleteTarget = ref(null);
 function confirmDelete(row) { deleteTarget.value = row; }
@@ -275,7 +285,7 @@ const odooErrorTarget = ref(null);
                                     </template>
                                     <td class="px-3 py-3 cvr-num">{{ row.paid_amount_formatted }}</td>
                                     <td class="px-3 py-3 cvr-text-primary">{{ row.currency }}</td>
-                                    <td v-if="canUpdate || canDelete" class="px-3 py-3">
+                                    <td v-if="canUpdate || canDelete || canMarkAsPaid" class="px-3 py-3">
                                         <div class="flex items-center gap-2">
                                             <RecordLogButton subject="CashExpense" :id="row.id" :company-id="company.id" />
                                             <button v-if="row.user_comment" @click="commentTarget = row" class="cvr-action-btn" title="User Comment">💬</button>
@@ -288,6 +298,12 @@ const odooErrorTarget = ref(null);
                                                 class="cvr-action-btn"
                                                 title="Mark As Paid"
                                             >💵</button>
+                                            <button
+                                                v-if="canMarkAsPaid && type === TYPES.PAYABLE_CHEQUE && row.can_unmark_paid"
+                                                @click="unmarkTarget = row"
+                                                class="cvr-action-btn"
+                                                title="Mark As Unpaid"
+                                            >↩️</button>
                                             <button v-if="canDelete && row.delete_url" @click="confirmDelete(row)" class="cvr-action-btn" title="Delete">🗑️</button>
                                         </div>
                                     </td>
@@ -332,6 +348,20 @@ const odooErrorTarget = ref(null);
                     <div class="flex justify-end gap-2">
                         <button @click="markPaidTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
                         <button @click="confirmMarkPaid" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Return paid cheque to unpaid -->
+            <div v-if="unmarkTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
+                    <h2 class="text-lg font-medium cvr-text-primary mb-2">Return this cheque to unpaid?</h2>
+                    <p class="text-sm cvr-text-secondary mb-4">
+                        The bank statement date will move back to the cheque due date, reversing the paid-date movement.
+                    </p>
+                    <div class="flex justify-end gap-2">
+                        <button @click="unmarkTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                        <button @click="confirmUnmarkPaid" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
                     </div>
                 </div>
             </div>

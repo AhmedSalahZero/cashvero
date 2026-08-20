@@ -91,6 +91,8 @@ class RoutePermissionMap
         'view.customer.invoice.dashboard.cash' => 'dashboard_cash.view',
         'view.customer.invoice.dashboard.forecast' => 'dashboard_forecast.view',
         'view.lglc.dashboard' => 'dashboard_lg_lc.view',
+        'view.contracts.dashboard' => 'dashboard_contracts.view',
+        'export.contracts.dashboard' => 'dashboard_contracts.export',
         'refresh.chart.limits.data' => 'dashboard_cash.view',
         'view.invoice.report' => 'invoice_report.view',
         'view.invoice.statement.report' => 'invoice_report.view',
@@ -126,6 +128,7 @@ class RoutePermissionMap
         'update.money.payment' => 'money_payment.update',
         'delete.money.payment' => 'money_payment.delete',
         'payable.cheque.mark.as.paid' => 'money_payment.mark_as_paid',
+        'payable.cheque.unmark.as.paid' => 'money_payment.mark_as_paid',
         'outgoing.transfer.mark.as.paid' => 'money_payment.mark_as_paid',
         'update.opening.payable.cheque' => 'money_payment.update',
         'get.contracts.for.supplier' => 'money_payment.view',
@@ -141,6 +144,7 @@ class RoutePermissionMap
         'update.cash.expense' => 'cash_expense.update',
         'delete.cash.expense' => 'cash_expense.delete',
         'cash.expense.payable.cheque.mark.as.paid' => 'cash_expense.mark_as_paid',
+        'cash.expense.payable.cheque.unmark.as.paid' => 'cash_expense.mark_as_paid',
         'cash.expense.outgoing.transfer.mark.as.paid' => 'cash_expense.mark_as_paid',
 
         /* ───────────────── Internal / LC settlement transfers ───── */
@@ -235,6 +239,7 @@ class RoutePermissionMap
         'contracts.update' => ['customer_contract.update', 'supplier_contract.update'],
         'contracts.destroy' => ['customer_contract.delete', 'supplier_contract.delete'],
         'contract.mark.as.finished' => ['customer_contract.approve', 'supplier_contract.approve'],
+        'contract.mark.as.running' => ['customer_contract.approve', 'supplier_contract.approve'],
         'contract.mark.as.running.and.against' => ['customer_contract.approve', 'supplier_contract.approve'],
         'store.po.allocations' => ['customer_contract.update', 'supplier_contract.update'],
         'generate.unique.rondom.contract.code' => ['customer_contract.create', 'supplier_contract.create'],

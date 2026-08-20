@@ -8,6 +8,7 @@ use App\Models\ContractLoanSchedule;
 use App\Models\ContractLoanScheduleSettlement;
 use App\Models\FinancialInstitutionAccount;
 use App\Rules\DateMustBeLessThanOrEqualDate;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -129,7 +130,7 @@ class ContractLoanScheduleController extends Controller
                 return [
                     'id' => $s->id,
                     'date_formatted' => $s->getDateFormatted(),
-                    'account_number' => $s->getAccountNumber(),
+                    'account_number' => AccountNumberLabel::forCurrentAccount($company->id, $contractLoanSchedule->getFinancialInstitutionId(), $s->getAccountNumber()),
                     'amount_formatted' => $s->getAmountFormatted(),
                     'edit_url' => route('edit.contract.loan.schedule.settlements', ['company' => $company->id, 'contractLoanScheduleSettlement' => $s->id]),
                     'delete_url' => route('delete.contract.loan.schedule.settlements', ['company' => $company->id, 'contractLoanScheduleSettlement' => $s->id]),

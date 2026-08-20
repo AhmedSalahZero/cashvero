@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exports\Statements\SafeStatementExport;
 use App\Models\Branch;
 use App\Models\Company;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use App\Traits\GeneralFunctions;
 use App\Traits\PaginatesStatementQueries;
 use Illuminate\Http\Request;
@@ -152,7 +153,10 @@ class SafeStatementController
             'credit' => (float) ($row->credit ?? 0),
             'endBalance' => (float) ($row->end_balance ?? 0),
             'reviewedText' => getReviewedText($reviewedArr),
-            'comment' => $comment ?: getBankStatementComment($row),
+            'comment' => AccountNumberLabel::decorateText(
+                (int) ($row->company_id ?? 0),
+                $comment ?: getBankStatementComment($row)
+            ),
             'userComment' => \App\Helpers\HVero::getUserCommentFromModel($row),
         ];
     }

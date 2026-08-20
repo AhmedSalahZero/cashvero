@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exports\Statements\CashExpenseStatementExport;
 use App\Models\CashExpenseCategory;
 use App\Models\Company;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use App\Traits\GeneralFunctions;
 use App\Traits\PaginatesStatementQueries;
 use Carbon\Carbon;
@@ -163,7 +164,10 @@ class CashExpenseStatementController
             'paidAmount' => (float) ($row->paid_amount ?? 0),
             'exchangeRate' => (float) ($row->exchange_rate ?? 1),
             'equivalentInMainCurrency' => (float) ($row->paid_amount ?? 0) * (float) ($row->exchange_rate ?? 1),
-            'comment' => $row->{'comment_'.$lang} ?? null,
+            'comment' => AccountNumberLabel::decorateText(
+                (int) ($row->company_id ?? 0),
+                $row->{'comment_'.$lang} ?? null
+            ),
             'userComment' => $row->user_comment ?? null,
         ];
     }

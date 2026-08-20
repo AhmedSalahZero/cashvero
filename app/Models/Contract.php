@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Deletion\ReferencedRecordGuard;
 use App\Helpers\HHelpers;
 use App\Helpers\HStr;
 use App\Models\Partner;
@@ -206,6 +207,25 @@ class Contract extends Model
 	public function isFinished()
 	{
 		return $this->status == self::FINISHED;
+	}
+
+	/**
+	 * True when this contract is (or was) pledged as collateral on an
+	 * Overdraft Against Assignment of Contract facility. Finishing such
+	 * a contract writes a reversing limit row; the designed undo is
+	 * back to RUNNING_AND_AGAINST, which drops only that reversal.
+	 * Sending it to plain RUNNING instead would wipe every limit row
+	 * while leaving the lending-information link in place.
+	 */
+	public function isAssignedAsOverdraftCollateral(): bool
+	{
+		if ($this->overdraft_against_assignment_of_contract_id) {
+			return true;
+		}
+
+		return $this->overdraftAgainstAssignmentOfContractLimits()
+			->where('is_active', 1)
+			->exists();
 	}
 	public static function boot()
     {
@@ -449,7 +469,10 @@ class Contract extends Model
 	}
 	public static function getForParentAndCurrency(int $partnerId , string $currencyName):Collection
 	{
-		return self::where('partner_id',$partnerId)->where('currency',$currencyName)->get();
+		return self::where('partner_id',$partnerId)
+			->where('currency',$currencyName)
+			->where('status', '!=', self::FINISHED)
+			->get();
 	}	
 	public function lendingInformationForAgainstAssignmentContract():HasOne
 	{
@@ -614,4 +637,30 @@ class Contract extends Model
 	
 		
 	
+
+    /**
+     * * ما ينفعش يتحذف طول ما لسه فيه حاجة معلقة عليه
+     *
+     * * نفس القاعدة اللي شغالة بالفعل في CleanOverdraft و LetterOfGuaranteeFacility
+     * * و باقي التسهيلات .. بس هنا القايمة كبيرة فمتعرفة في مكان واحد
+     *
+     * * مش مجرد ترتيب : بعض الأبناء متوصلين بـ ON DELETE CASCADE يعني MySQL
+     * * بتحذفهم بنفسها من غير ما Eloquent يشوف الحذف .. فالهوكس اللي المفروض
+     * * تنضف كشوفهم ما بتشتغلش و بتفضل صفوف يتيمة بتظهر في الداشبورد
+     * * و الباقي مفيهوش FK اصلا فبيفضل مأشر على id مش موجود
+     *
+     * @see \App\Support\Deletion\ReferencedRecordGuard
+     */
+    public function hasAnyTransactions(): bool
+    {
+        return ReferencedRecordGuard::blocks($this->getTable(), (int) $this->id);
+    }
+
+    /**
+     * The reason the delete is refused, or null when it is safe.
+     */
+    public function deletionBlockedMessage(): ?string
+    {
+        return ReferencedRecordGuard::blockMessage($this->getTable(), (int) $this->id, $this->getName());
+    }
 }

@@ -4,6 +4,7 @@ namespace App\Rules;
 
 use Carbon\Carbon;
 use Illuminate\Contracts\Validation\ImplicitRule;
+use App\Support\BankStatements\GeneratedMonthEndInterestRows;
 use Illuminate\Support\Facades\DB;
 
 class DateCanNotBeAfterAnyStatementRule implements ImplicitRule
@@ -30,8 +31,20 @@ class DateCanNotBeAfterAnyStatementRule implements ImplicitRule
      */
     public function passes($attribute, $value)
     {
-		$row = DB::table('current_account_bank_statements')->where('is_beginning_balance',0)->where('financial_institution_account_id',$this->financial_institution_account_id)->where('date','<',$this->new_balance_date)->first();
-	
+		/**
+		 * * الصفوف اللي بيولدها النظام لفوائد اخر الشهر و لسه فاضية مش حركات
+		 * * المستخدم عمرة ما ادخلها و ال UI مش بيعرضها .. فا ما ينفعش تمنع تعديل تاريخ الرصيد الافتتاحي
+		 * * لكن لو الصف اتملي بمبلغ فعلي او اتسجل في اودو يبقي بقي حركة حقيقية و لازم يمنع
+		 * * التعريف نفسه متعرف في مكان واحد بس علشان يفضل متطابق مع الحذف اللي في الكونترولر
+		 * @see \App\Support\BankStatements\GeneratedMonthEndInterestRows
+		 */
+		$query = DB::table('current_account_bank_statements')
+			->where('is_beginning_balance',0)
+			->where('financial_institution_account_id',$this->financial_institution_account_id)
+			->where('date','<',$this->new_balance_date);
+
+		$row = GeneratedMonthEndInterestRows::excludeUntouchedFrom($query)->first();
+
 		return ! $row ; 
     }
 

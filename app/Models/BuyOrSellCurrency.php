@@ -7,6 +7,7 @@ use App\Traits\HasCompany;
 use App\Traits\Models\HasDeleteOdoo;
 use App\Traits\Models\HasOdooMoneyTransfer;
 use App\Traits\Models\HasUserComment;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -126,11 +127,16 @@ class BuyOrSellCurrency extends Model
 	}
 	public static function generateBuyAccountComment(self $buyOrSellCurrency,string $lang)
 	{
+		$fromAccountNumber = AccountNumberLabel::forCurrentAccount(
+			(int) $buyOrSellCurrency->company_id,
+			$buyOrSellCurrency->getFromBankId(),
+			$buyOrSellCurrency->getFromAccountNumber()
+		);
 		if($buyOrSellCurrency->isBankToBank() ){
-			return __('Sold :amount :currency From :from Account No :no',['from'=>$buyOrSellCurrency->getFromBankName(),'no'=>$buyOrSellCurrency->getFromAccountNumber(),'amount'=>$buyOrSellCurrency->getAmountToSellFormatted(),'currency'=>$buyOrSellCurrency->getCurrencyToSellFormatted()],$lang) ;
+			return __('Sold :amount :currency From :from Account No :no',['from'=>$buyOrSellCurrency->getFromBankName(),'no'=>$fromAccountNumber,'amount'=>$buyOrSellCurrency->getAmountToSellFormatted(),'currency'=>$buyOrSellCurrency->getCurrencyToSellFormatted()],$lang) ;
 		}
 		if($buyOrSellCurrency->isBankToSafe()){
-			return __('Sold :amount :currency From :from Account No :no To Safe',['from'=>$buyOrSellCurrency->getFromBankName(),'no'=>$buyOrSellCurrency->getFromAccountNumber(),'amount'=>$buyOrSellCurrency->getAmountToSellFormatted(),'currency'=>$buyOrSellCurrency->getCurrencyToSellFormatted()],$lang) ;
+			return __('Sold :amount :currency From :from Account No :no To Safe',['from'=>$buyOrSellCurrency->getFromBankName(),'no'=>$fromAccountNumber,'amount'=>$buyOrSellCurrency->getAmountToSellFormatted(),'currency'=>$buyOrSellCurrency->getCurrencyToSellFormatted()],$lang) ;
 		}
 		if($buyOrSellCurrency->isSafeToBank()){
 			return __('Sold :amount :currency From :branchName Safe',['branchName'=>$buyOrSellCurrency->getFromBranchName(),'amount'=>$buyOrSellCurrency->getAmountToSellFormatted(),'currency'=>$buyOrSellCurrency->getCurrencyToSellFormatted()],$lang) ;
@@ -141,14 +147,19 @@ class BuyOrSellCurrency extends Model
 	}	
 	public static function generateSellAccountComment(self $buyOrSellCurrency,string $lang)
 	{
+		$toAccountNumber = AccountNumberLabel::forCurrentAccount(
+			(int) $buyOrSellCurrency->company_id,
+			$buyOrSellCurrency->getToBankId(),
+			$buyOrSellCurrency->getToAccountNumber()
+		);
 		if($buyOrSellCurrency->isBankToBank()  ){
-			return __('Sold For :amount :currency To :to Account No :no',['to'=>$buyOrSellCurrency->getToBankName(),'no'=>$buyOrSellCurrency->getToAccountNumber(),'amount'=>$buyOrSellCurrency->getAmountToBuyFormatted(),'currency'=>$buyOrSellCurrency->getCurrencyToBuyFormatted() ],$lang) ;
+			return __('Sold For :amount :currency To :to Account No :no',['to'=>$buyOrSellCurrency->getToBankName(),'no'=>$toAccountNumber,'amount'=>$buyOrSellCurrency->getAmountToBuyFormatted(),'currency'=>$buyOrSellCurrency->getCurrencyToBuyFormatted() ],$lang) ;
 		}
 		if($buyOrSellCurrency->isBankToSafe()){
 			return __('Sold For :amount :currency To :branchName Safe',['branchName'=>$buyOrSellCurrency->getToBranchName(),'amount'=>$buyOrSellCurrency->getAmountToBuyFormatted(),'currency'=>$buyOrSellCurrency->getCurrencyToBuyFormatted()],$lang) ;
 		}
 		if($buyOrSellCurrency->isSafeToBank()){
-			return __('Sold For :amount :currency To :to Account No :no',['to'=>$buyOrSellCurrency->getToBankName(),'no'=>$buyOrSellCurrency->getToAccountNumber(),'amount'=>$buyOrSellCurrency->getAmountToBuyFormatted(),'currency'=>$buyOrSellCurrency->getCurrencyToBuyFormatted()],$lang) ;
+			return __('Sold For :amount :currency To :to Account No :no',['to'=>$buyOrSellCurrency->getToBankName(),'no'=>$toAccountNumber,'amount'=>$buyOrSellCurrency->getAmountToBuyFormatted(),'currency'=>$buyOrSellCurrency->getCurrencyToBuyFormatted()],$lang) ;
 		}
 		if($buyOrSellCurrency->isSafeToSafe()){
 			return __('Sold For :amount :currency To :branchName Safe',['branchName'=>$buyOrSellCurrency->getToBranchName(),'amount'=>$buyOrSellCurrency->getAmountToBuyFormatted(),'currency'=>$buyOrSellCurrency->getCurrencyToBuyFormatted()],$lang) ;

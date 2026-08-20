@@ -441,7 +441,7 @@ function submitApplyCollection() {
                                 <td class="px-4 py-3 whitespace-nowrap cvr-text-secondary">{{ row.deposit_date_formatted }}</td>
                                 <td class="px-4 py-3 cvr-text-secondary">{{ row.drawl_bank_name }}</td>
                                 <td class="px-4 py-3 cvr-text-secondary">{{ row.account_type_name }}</td>
-                                <td class="px-4 py-3 cvr-text-secondary">{{ row.account_number }}</td>
+                                <td class="px-4 py-3 cvr-text-secondary">{{ row.account_number_label || row.account_number }}</td>
                                 <td class="px-4 py-3 whitespace-nowrap cvr-text-secondary">{{ row.due_date_formatted }}</td>
                                 <td class="px-4 py-3 cvr-text-secondary">{{ row.clearance_days }}</td>
                                 <td class="px-4 py-3 whitespace-nowrap cvr-text-secondary">{{ row.expected_collection_date_formatted }}</td>
@@ -455,7 +455,7 @@ function submitApplyCollection() {
                                 <td class="px-4 py-3 whitespace-nowrap cvr-text-secondary">{{ row.deposit_date_formatted }}</td>
                                 <td class="px-4 py-3 cvr-text-secondary">{{ row.drawl_bank_name }}</td>
                                 <td class="px-4 py-3 cvr-text-secondary">{{ row.account_type_name }}</td>
-                                <td class="px-4 py-3 cvr-text-secondary">{{ row.account_number }}</td>
+                                <td class="px-4 py-3 cvr-text-secondary">{{ row.account_number_label || row.account_number }}</td>
                                 <td class="px-4 py-3 whitespace-nowrap cvr-text-secondary">{{ row.actual_collection_date_formatted }}</td>
                             </template>
 
@@ -465,7 +465,7 @@ function submitApplyCollection() {
                                 <td class="px-4 py-3 cvr-num">{{ row.received_amount_formatted }}</td>
                                 <td class="px-4 py-3 uppercase cvr-text-secondary">{{ row.currency_formatted }}</td>
                                 <td class="px-4 py-3 cvr-text-secondary">{{ row.account_type_name }}</td>
-                                <td class="px-4 py-3 cvr-text-secondary">{{ row.account_number }}</td>
+                                <td class="px-4 py-3 cvr-text-secondary">{{ row.account_number_label || row.account_number }}</td>
                             </template>
 
                             <template v-else-if="activeTab === 'cash-in-safe'">
@@ -482,7 +482,7 @@ function submitApplyCollection() {
                                 <td class="px-4 py-3 cvr-num">{{ row.received_amount_formatted }}</td>
                                 <td class="px-4 py-3 uppercase cvr-text-secondary">{{ row.currency_formatted }}</td>
                                 <td class="px-4 py-3 cvr-text-secondary">{{ row.account_type_name }}</td>
-                                <td class="px-4 py-3 cvr-text-secondary">{{ row.account_number }}</td>
+                                <td class="px-4 py-3 cvr-text-secondary">{{ row.account_number_label || row.account_number }}</td>
                             </template>
 
                             <!-- Control -->

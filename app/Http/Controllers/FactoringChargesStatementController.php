@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\FactoringCompany;
 use App\Models\FactoringContract;
 use App\Models\FactoringTransaction;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use App\Traits\GeneralFunctions;
 use App\Traits\PaginatesRawCollections;
 use Carbon\Carbon;
@@ -283,12 +284,15 @@ class FactoringChargesStatementController
             ? __('With Recourse')
             : __('Without Recourse');
 
-        return __('Invoice #:invoice | Customer: :customer | Contract: :contract | :recourse', [
-            'invoice' => $invoiceNumber,
-            'customer' => $customerName,
-            'contract' => $contractLabel,
-            'recourse' => $recourseLabel,
-        ]);
+        return (string) AccountNumberLabel::decorateText(
+            (int) ($transaction->company_id ?? 0),
+            __('Invoice #:invoice | Customer: :customer | Contract: :contract | :recourse', [
+                'invoice' => $invoiceNumber,
+                'customer' => $customerName,
+                'contract' => $contractLabel,
+                'recourse' => $recourseLabel,
+            ])
+        );
     }
 
     /** UNCHANGED — per the class docblock. */

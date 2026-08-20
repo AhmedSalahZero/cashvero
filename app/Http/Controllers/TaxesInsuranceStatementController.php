@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Company;
 use App\Models\Partner;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -94,7 +95,7 @@ class TaxesInsuranceStatementController extends Controller
         // fetched (chronological within each group).
         $accumulated = [];
         $lang = lang();
-        $result = $rows->map(function ($row) use (&$accumulated, $lang) {
+        $result = $rows->map(function ($row) use (&$accumulated, $lang, $company) {
             $key = $row->partner_id.'|'.$row->currency_name;
             $accumulated[$key] = ($accumulated[$key] ?? 0) + (float) $row->amount;
 
@@ -105,7 +106,10 @@ class TaxesInsuranceStatementController extends Controller
                 'paid_to' => $row->partner_name,
                 'amount' => (float) $row->amount,
                 'accumulated_amount' => $accumulated[$key],
-                'comment' => $lang === 'ar' ? ($row->comment_ar ?: $row->comment_en) : ($row->comment_en ?: $row->comment_ar),
+                'comment' => AccountNumberLabel::decorateText(
+                    (int) $company->id,
+                    $lang === 'ar' ? ($row->comment_ar ?: $row->comment_en) : ($row->comment_en ?: $row->comment_ar)
+                ),
             ];
         })->values();
 

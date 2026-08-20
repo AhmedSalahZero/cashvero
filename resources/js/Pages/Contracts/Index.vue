@@ -134,12 +134,14 @@ function destroyRow() {
     router.delete(deleteTarget.value.delete_url, { onFinish: () => { deleteTarget.value = null; } });
 }
 
-/* ── Mark As Finished / Mark As Running And Against confirmations ─
-   Same two actions the old Blade exposed, just triggered from one
-   shared confirm modal instead of two near-identical inline modals
-   per row. */
+/* ── Mark As Finished / Back to Running / Running And Against ────
+   Finished contracts that were never pledged as overdraft collateral
+   get "Back to Running". Pledged ones keep the existing restore to
+   Running And Against, which is the hook that undoes the reversing
+   limit row written when they were finished. */
 const statusChangeTarget = ref(null);
 function confirmMarkFinished(row) { statusChangeTarget.value = { row, url: row.mark_finished_url, label: 'Finished' }; }
+function confirmMarkRunning(row) { statusChangeTarget.value = { row, url: row.mark_running_url, label: 'Running' }; }
 function confirmMarkRunningAndAgainst(row) { statusChangeTarget.value = { row, url: row.mark_running_and_against_url, label: 'Running And Against' }; }
 function submitStatusChange() {
     router.put(statusChangeTarget.value.url, {}, { onFinish: () => { statusChangeTarget.value = null; } });
@@ -361,7 +363,17 @@ function submitAllocations() {
                                         >👍</button>
 
                                         <button
-                                            v-if="activeTab === 'finished' && canApprove"
+                                            v-if="activeTab === 'finished' && canApprove && !row.is_assigned_as_collateral"
+                                            @click="confirmMarkRunning(row)"
+                                            class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs"
+                                            title="Back to Running"
+                                        >Back to Running</button>
+
+                                        <!-- Pledged contracts must return to Running And Against,
+                                             not plain Running — that path is what reverses the
+                                             overdraft-limit row written when they were finished. -->
+                                        <button
+                                            v-if="activeTab === 'finished' && canApprove && row.is_assigned_as_collateral"
                                             @click="confirmMarkRunningAndAgainst(row)"
                                             class="cvr-action-btn"
                                             title="Mark As Running And Against"

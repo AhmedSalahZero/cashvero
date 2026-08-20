@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exports\Statements\PartnersStatementExport;
 use App\Models\Company;
 use App\Models\Partner;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -324,7 +325,10 @@ class PartnersStatementController
             'debit' => (float) ($row->debit ?? 0),
             'credit' => (float) ($row->credit ?? 0),
             'endBalance' => (float) ($row->end_balance ?? 0),
-            'comment' => (isset($row->{'comment_'.$lang}) ? $row->{'comment_'.$lang} : null) ?: getBankStatementComment($row),
+            'comment' => AccountNumberLabel::decorateText(
+                (int) ($row->company_id ?? 0),
+                (isset($row->{'comment_'.$lang}) ? $row->{'comment_'.$lang} : null) ?: getBankStatementComment($row)
+            ),
             'userComment' => \App\Helpers\HVero::getUserCommentFromModel($row), // fixed: was \App\Helpers\HNonBanking (class doesn't exist), see class docblock
         ];
     }

@@ -8,6 +8,7 @@ use App\Traits\HasCompany;
 use App\Traits\Models\HasDeleteOdoo;
 use App\Traits\Models\HasOdooMoneyTransfer;
 use App\Traits\Models\HasUserComment;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -124,11 +125,16 @@ class InternalMoneyTransfer extends Model
 	}
 	public static function generateFromAccountComment(self $internalMoneyTransfer,string $lang)
 	{
+		$fromAccountNumber = AccountNumberLabel::forCurrentAccount(
+			(int) $internalMoneyTransfer->company_id,
+			$internalMoneyTransfer->getFromBankId(),
+			$internalMoneyTransfer->getFromAccountNumber()
+		);
 		if($internalMoneyTransfer->isBankToBank() ){
-			return __('From :from Account No :no',['from'=>$internalMoneyTransfer->getFromBankName(),'no'=>$internalMoneyTransfer->getFromAccountNumber()],$lang) ;
+			return __('From :from Account No :no',['from'=>$internalMoneyTransfer->getFromBankName(),'no'=>$fromAccountNumber],$lang) ;
 		}
 		if($internalMoneyTransfer->isBankToSafe()){
-			return __('From :from Account No :no To Safe',['from'=>$internalMoneyTransfer->getFromBankName(),'no'=>$internalMoneyTransfer->getFromAccountNumber()],$lang) ;
+			return __('From :from Account No :no To Safe',['from'=>$internalMoneyTransfer->getFromBankName(),'no'=>$fromAccountNumber],$lang) ;
 		}
 		if($internalMoneyTransfer->isSafeToBank()){
 			return __('From :branchName Safe',['branchName'=>$internalMoneyTransfer->getFromBranchName()],$lang) ;
@@ -137,15 +143,20 @@ class InternalMoneyTransfer extends Model
 	}	
 	public static function generateToAccountComment(self $internalMoneyTransfer,string $lang)
 	{
+		$toAccountNumber = AccountNumberLabel::forCurrentAccount(
+			(int) $internalMoneyTransfer->company_id,
+			$internalMoneyTransfer->getToBankId(),
+			$internalMoneyTransfer->getToAccountNumber()
+		);
 
 		if($internalMoneyTransfer->isBankToBank()  ){
-			return __('To :to Account No :no',['to'=>$internalMoneyTransfer->getToBankName(),'no'=>$internalMoneyTransfer->getToAccountNumber()],$lang) ;
+			return __('To :to Account No :no',['to'=>$internalMoneyTransfer->getToBankName(),'no'=>$toAccountNumber],$lang) ;
 		}
 		if($internalMoneyTransfer->isBankToSafe()){
 			return __('To :branchName Safe',['branchName'=>$internalMoneyTransfer->getToBranchName()],$lang) ;
 		}
 		if($internalMoneyTransfer->isSafeToBank()){
-			return __('To :to Account No :no',['to'=>$internalMoneyTransfer->getToBankName(),'no'=>$internalMoneyTransfer->getToAccountNumber()],$lang) ;
+			return __('To :to Account No :no',['to'=>$internalMoneyTransfer->getToBankName(),'no'=>$toAccountNumber],$lang) ;
 			
 		}
 	}

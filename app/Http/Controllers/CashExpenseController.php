@@ -3,6 +3,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\MarkChequeAsPaidRequest;
 use App\Http\Requests\StoreCashExpenseRequest;
+use App\Http\Requests\UnmarkChequeAsPaidRequest;
 use App\Models\AccountType;
 use App\Models\Bank;
 use App\Models\Branch;
@@ -18,6 +19,7 @@ use App\Models\Partner;
 use App\Models\PayableCheque;
 use App\Services\Api\CashExpenseOdooService;
 use App\Services\Api\OdooSync;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -161,7 +163,7 @@ class CashExpenseController
 						'bank_name_ar' => optional(optional(optional($model->outgoingTransfer)->deliveryBank)->bank)->name_ar,
 						'bank_name' => $model->getOutgoingTransferDeliveryBankName(),
 						'account_type_name' => $model->getOutgoingTransferAccountTypeName(),
-						'account_number' => $model->getOutgoingTransferAccountNumber(),
+						'account_number' => AccountNumberLabel::forCurrentAccount($company->id, $model->getOutgoingTransferDeliveryBankId(), $model->getOutgoingTransferAccountNumber()),
 					]);
 				}
 				if ($type === CashExpense::CASH_PAYMENT) {
@@ -180,10 +182,11 @@ class CashExpenseController
 					'bank_name_ar' => optional(optional(optional($model->payableCheque)->deliveryBank)->bank)->name_ar,
 					'bank_name' => $model->payableCheque?->getPaymentBankName(),
 					'account_type_name' => $model->payableCheque?->getAccountTypeName(),
-					'account_number' => $model->payableCheque?->getAccountNumber(),
+					'account_number' => AccountNumberLabel::forCurrentAccount($company->id, $model->getPayableChequePaymentBankId(), $model->payableCheque?->getAccountNumber()),
 					'due_date_formatted' => $model->payableCheque?->getDueDateFormatted(),
 					'due_status' => $dueStatus,
 					'can_mark_paid' => !$model->isOpenBalance() && $model->payableCheque?->getStatus() !== 'paid',
+					'can_unmark_paid' => !$model->isOpenBalance() && $model->payableCheque?->getStatus() === 'paid',
 				]);
 			});
 
@@ -210,6 +213,7 @@ class CashExpenseController
 			'indexUrl' => route('view.cash.expense', ['company' => $company->id]),
 			'createUrl' => route('create.cash.expense', ['company' => $company->id]),
 			'markChequesAsPaidUrl' => route('cash.expense.payable.cheque.mark.as.paid', ['company' => $company->id]),
+			'unmarkChequesAsPaidUrl' => route('cash.expense.payable.cheque.unmark.as.paid', ['company' => $company->id]),
 			'markOutgoingTransfersAsPaidUrl' => route('cash.expense.outgoing.transfer.mark.as.paid', ['company' => $company->id]),
 		]);
     }
@@ -604,6 +608,42 @@ class CashExpenseController
 		return redirect()->route('view.cash.expense',['company'=>$company->id,'active'=>CashExpense::PAYABLE_CHEQUE])->with('success', __('Item Has Been Updated Successfully'));
 
 	}
+
+	public function unmarkChequesAsPaid(Company $company, UnmarkChequeAsPaidRequest $request)
+	{
+		foreach ($request->chequeIds() as $cashExpenseId) {
+			/** @var CashExpense $cashExpense */
+			$cashExpense = CashExpense::find($cashExpenseId);
+
+			try {
+				DB::transaction(function () use ($cashExpense) {
+					$cashExpense->revertPayableChequeToUnpaid();
+				});
+			} catch (\Throwable $e) {
+				$message = __('Error While Connecting With Odoo').' : '.$e->getMessage();
+				if ($request->ajax() && ! $request->header('X-Inertia')) {
+					return response()->json([
+						'status' => false,
+						'msg' => $message,
+					]);
+				}
+
+				return redirect()->route('view.cash.expense', ['company' => $company->id, 'active' => CashExpense::PAYABLE_CHEQUE])->with('fail', $message);
+			}
+		}
+
+		if ($request->ajax() && ! $request->header('X-Inertia')) {
+			return response()->json([
+				'status' => true,
+				'msg' => __('Good'),
+				'pageLink' => route('view.cash.expense', ['company' => $company->id, 'active' => CashExpense::PAYABLE_CHEQUE]),
+			]);
+		}
+
+		return redirect()->route('view.cash.expense', ['company' => $company->id, 'active' => CashExpense::PAYABLE_CHEQUE])
+			->with('success', __('Cheque Returned To Unpaid Successfully'));
+	}
+
 	public function markOutgoingTransfersAsPaid(Company $company,Request $request)
 	{
 		$cashExpenseIds = $request->get('cheques') ;

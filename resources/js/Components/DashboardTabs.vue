@@ -2,10 +2,11 @@
 /**
  * DashboardTabs.vue
  * ------------------------------------------------------------------
- * Shared top-level navigation between the Dashboard section's 3 real
- * Inertia pages (Cash Status / LG & LC Status / Cash Forecast — same
- * 3 labels as app/Support/SidebarMenu.php's Dashboard section, so the
- * sidebar and this in-page tab bar never drift out of sync).
+ * Shared top-level navigation between the Dashboard section's real
+ * Inertia pages (Cash Status / Contract Dashboard / LG & LC Status /
+ * Cash Forecast — same labels as app/Support/SidebarMenu.php's
+ * Dashboard section, so the sidebar and this in-page tab bar never
+ * drift out of sync).
  *
  * Each tab is a real page (its own route, its own heavy controller
  * logic), not a client-side content switch — so this uses <Link>
@@ -16,12 +17,13 @@
 import { Link } from '@inertiajs/vue3';
 
 const props = defineProps({
-    active: { type: String, required: true }, // 'cash' | 'lglc' | 'forecast'
-    urls: { type: Object, required: true }, // { cash, lglc, forecast }
+    active: { type: String, required: true }, // 'cash' | 'contracts' | 'lglc' | 'forecast'
+    urls: { type: Object, required: true }, // { cash, contracts, lglc, forecast }
 });
 
 const tabs = [
     { key: 'cash', label: 'Cash Status', icon: '💵' },
+    { key: 'contracts', label: 'Contract Dashboard', icon: '📋' },
     { key: 'lglc', label: 'LG & LC Status', icon: '📜' },
     { key: 'forecast', label: 'Cash Forecast', icon: '🔮' },
 ];

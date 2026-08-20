@@ -9,6 +9,8 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class StoreFinancialInstitutionRequest extends FormRequest
 {
+    use \App\Http\Requests\Concerns\ValidatesShareholderOwnership;
+
     /**
      * Determine if the user is authorized to make this request.
      *
@@ -24,7 +26,7 @@ class StoreFinancialInstitutionRequest extends FormRequest
     {
         $company = currentCompany();
 
-        return [
+        return $this->shareholderOwnershipRules('accounts.*.') + [
             'accounts'=>['sometimes','required',new AccountMustHaveAtLeastOneMainCurrencyRule($company)],
             // Business rule (confirmed with project owner, 2026-07-24): a
             // bank account's balance date can never be earlier than the
@@ -39,5 +41,10 @@ class StoreFinancialInstitutionRequest extends FormRequest
                 true
             )],
         ];
+    }
+
+    public function messages()
+    {
+        return $this->shareholderOwnershipMessages('accounts.*.');
     }
 }

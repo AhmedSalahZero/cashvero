@@ -151,6 +151,15 @@ function submitMarkAsPaid() {
         onFinish: () => { markPaidTarget.value = null; selectedIds.value = []; },
     });
 }
+
+const unmarkTarget = ref(null);
+function submitUnmarkAsPaid() {
+    router.post(props.urls.unmarkChequesAsPaid, {
+        cheques: [unmarkTarget.value.id],
+    }, {
+        onFinish: () => { unmarkTarget.value = null; },
+    });
+}
 </script>
 
 <template>
@@ -310,7 +319,7 @@ function submitMarkAsPaid() {
                     <tbody>
                         <tr v-for="row in rows" :key="row.id" class="cvr-table-row">
                             <td v-if="hasBatchMarkAsPaid" class="px-4 py-3">
-                                <input type="checkbox" :checked="selectedIds.includes(row.id)" @change="toggleSelect(row.id)" />
+                                <input type="checkbox" :checked="selectedIds.includes(row.id)" :disabled="row.is_paid" @change="toggleSelect(row.id)" />
                             </td>
                             <td class="px-4 py-3 cvr-text-secondary">{{ row.type_formatted }}</td>
                             <td v-if="activeTab === 'payable_cheque'" class="px-4 py-3" :class="row.is_paid ? 'font-semibold text-green-600' : 'cvr-text-secondary'">{{ row.status_formatted }}</td>
@@ -363,7 +372,8 @@ function submitMarkAsPaid() {
 
                                     <template v-if="activeTab === 'payable_cheque'">
                                         <Link v-if="!row.is_open_balance" :href="row.edit_url" class="cvr-action-btn" title="Edit Cheque">✏️</Link>
-                                        <button v-if="permissions.canMarkAsPaid && row.is_due" @click="openMarkAsPaid(row)" class="cvr-action-btn" title="Mark As Paid">🏦</button>
+                                        <button v-if="permissions.canMarkAsPaid && row.is_due && !row.is_paid" @click="openMarkAsPaid(row)" class="cvr-action-btn" title="Mark As Paid">🏦</button>
+                                        <button v-if="permissions.canMarkAsPaid && row.is_paid" @click="unmarkTarget = row" class="cvr-action-btn" title="Mark As Unpaid">↩️</button>
                                         <button v-if="!row.is_open_balance && permissions.canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Delete">🗑️</button>
                                     </template>
 
@@ -459,6 +469,20 @@ function submitMarkAsPaid() {
                     <div class="flex justify-end gap-2">
                         <button @click="markPaidTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
                         <button @click="submitMarkAsPaid" :disabled="!!paymentDateWarning" class="cvr-btn-primary px-3 py-1.5 rounded" :class="{ 'opacity-40 cursor-not-allowed': paymentDateWarning }">Confirm</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Return paid cheque to unpaid -->
+            <div v-if="unmarkTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
+                    <h2 class="text-lg font-medium cvr-text-primary mb-2">Return this cheque to unpaid?</h2>
+                    <p class="text-sm cvr-text-secondary mb-4">
+                        The bank statement date will move back to the cheque due date, reversing the paid-date movement.
+                    </p>
+                    <div class="flex justify-end gap-2">
+                        <button @click="unmarkTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                        <button @click="submitUnmarkAsPaid" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
                     </div>
                 </div>
             </div>

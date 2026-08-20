@@ -10,6 +10,7 @@ use App\Models\Company;
 use App\Models\CurrentAccountBankStatement;
 use App\Models\FinancialInstitution;
 use App\Services\Api\OdooService;
+use App\Support\ShareholderAccounts\AccountNumberLabel;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -201,7 +202,7 @@ class CertificatesOfDepositsController
 					'start_date_formatted' => $cd->getStartDateFormatted(),
 					'end_date' => $cd->getEndDate(),
 					'end_date_formatted' => $cd->getEndDateFormatted(),
-					'account_number' => $cd->getAccountNumber(),
+					'account_number' => AccountNumberLabel::forOwnedInstrument($cd),
 					'amount' => $cd->getAmount(),
 					'amount_formatted' => $cd->getAmountFormatted(),
 					'currency' => $cd->getCurrency(),
@@ -272,7 +273,7 @@ class CertificatesOfDepositsController
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
 			'accounts' => $accounts->map(fn ($a) => [
 				'id' => $a->getId(),
-				'account_number' => $a->getAccountNumber(),
+				'account_number' => AccountNumberLabel::forOwnedInstrument($a),
 				'currency' => $a->getCurrency(),
 				'is_active' => (bool) $a->is_active,
 			])->values(),
@@ -349,7 +350,7 @@ class CertificatesOfDepositsController
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
 			'accounts' => $accounts->map(fn ($a) => [
 				'id' => $a->getId(),
-				'account_number' => $a->getAccountNumber(),
+				'account_number' => AccountNumberLabel::forOwnedInstrument($a),
 				'currency' => $a->getCurrency(),
 				'is_active' => (bool) $a->is_active,
 			])->values(),

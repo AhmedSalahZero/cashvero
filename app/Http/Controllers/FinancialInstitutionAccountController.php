@@ -117,6 +117,38 @@ class FinancialInstitutionAccountController
 				'exchange_rate'=>$request->get('exchange_rate')
 			] + \App\Support\ShareholderAccounts\ShareholderAccountAccess::ownershipFromRequest($request));
 
+			/**
+			 * * لما تاريخ الرصيد الافتتاحي يتحرك لقدام بتفضل صفوف فوائد اخر الشهر
+			 * * المولدة اوتوماتيك واقعة قبل الرصيد الافتتاحي .. صفوف يتيمة مالهاش رصيد تستحق عليه
+			 * * ال generator نفسه بيتخطي التواريخ دي وقت الانشاء لكن محدش بيعيد تطبيق الشرط
+			 * * لما التاريخ يتغير .. فا بنعيد تطبيقه هنا
+			 *
+			 * * بنحذف الفاضي و غير المسجل في اودو بس .. و بنفس التعريف بالظبط اللي ال
+			 * * DateCanNotBeAfterAnyStatementRule بيتجاهله .. لو التعريفين اختلفوا هيبقي فيه
+			 * * صف بيمنع التعديل و في نفس الوقت لو عدي بأي طريقة هيفضل يتيم
+			 *
+			 * * لازم تتنفذ قبل لمسة updated_at اللي تحت علشان اعادة حساب الارصدة
+			 * * تمشي علي الصورة النهائية للكشف
+			 */
+			$orphanQuery = DB::table('current_account_bank_statements')
+				->where('financial_institution_account_id',$financialInstitutionAccount->id)
+				->where('is_beginning_balance',0)
+				->where('date','<=',$balanceDate);
+
+			$deletedOrphans = \App\Support\BankStatements\GeneratedMonthEndInterestRows::onlyUntouchedIn($orphanQuery)->delete();
+
+			if($deletedOrphans){
+				/**
+				 * * ال trigger بتاع before delete بيسيب اخر id متحذف في
+				 * * temp_deleted_statements علشان اول صف يتعمل بعد كدا ياخد نفس ال id
+				 * * ده مطلوب في سيناريو حذف و اعادة انشاء .. لكن هنا احنا بنحذف نهائي
+				 * * فا بنمسح الاثر ده علشان صف تاني ما ياخدش ال id بالغلط في ريكوست بعدين
+				 */
+				DB::table('temp_deleted_statements')
+					->where('company_id',$company->id)
+					->where('table_name','current_account_bank_statements')
+					->delete();
+			}
 
 			$currentAccountBeginningBalance = $financialInstitutionAccount->getOpeningBalanceFromCurrentAccountBankStatement() ;
 
@@ -265,6 +297,20 @@ class FinancialInstitutionAccountController
 	
 	public function destroy(Company $company , FinancialInstitutionAccount $financialInstitutionAccount,DeleteCurrentAccountRequest $request)
 	{
+		/**
+		 * * ما ينفعش نحذفه طول ما فيه حركات معلقة عليه
+		 *
+		 * * جزء من الأبناء متوصلين بـ ON DELETE CASCADE فالحذف هنا كان بيخلي MySQL
+		 * * تمسحهم بنفسها من غير ما Eloquent يشوف الحذف .. فالهوكس اللي بتنضف
+		 * * كشوفهم ما بتشتغلش و بتفضل صفوف يتيمة بتظهر في الداشبورد
+		 * * و الباقي مفيهوش FK اصلا فبيفضل مأشر على id مش موجود
+		 *
+		 * @see \App\Support\Deletion\ReferencedRecordGuard
+		 */
+		if ($message = $financialInstitutionAccount->deletionBlockedMessage()) {
+			return redirect()->back()->with('fail', $message);
+		}
+
 		$financialInstitutionAccount->delete();
 		return redirect()->back()->with('success',__('Item Has Been Delete Successfully'));
 	}

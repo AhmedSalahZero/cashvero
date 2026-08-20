@@ -611,6 +611,34 @@ class LetterOfGuaranteeIssuance extends Model
         return $this->cashCoverDeductedFromAccountType && $this->cashCoverDeductedFromAccountType->isCurrentAccount();
     }
     
+    /**
+     * * التنظيف بتاع الصفوف التابعة بقي مربوط بالحذف نفسه مش بالكونترولر
+     *
+     * * قبل كدا كان كل مسار حذف لازم يفتكر ينادي deleteAllRelations() بنفسه
+     * * وده اللي سمح بصفوف يتيمة تفضل في letter_of_guarantee_statements و
+     * * letter_of_guarantee_cash_cover_statements و current_account_bank_statements
+     * * الجدولين الوحيدين اللي طلعوا نضاف هما اللي عندهم FK CASCADE في الداتابيز
+     * * (lg_renewal_date_histories و lg_issuance_advanced_payment_histories)
+     * * يعني اللي كان محمي على مستوى الداتابيز نضيف و اللي محمي بالكود بس هو اللي سرب
+     *
+     * * ⚠️ deleteAllRelations() مش idempotent — بينادي OdooSync::defer() لكل
+     * * journal entry .. فا لو اتنادت مرتين هتتسجل مكالمة unlink مكررة لنفس القيد
+     * * علشان كدا مفيش ولا كونترولر بينادها بإيده تاني .. الهوك دي هي المكان الوحيد
+     *
+     * * ملحوظة: الهوك دي بتشتغل مع $model->delete() بس .. الحذف الجماعي
+     * * (Model::where(...)->delete()) مش بيشغل احداث الموديل اصلا في لارافل
+     * * ومفيش مسار كدا للاصدارات دلوقتي .. لو اتضاف واحد لازم ينادي
+     * * deleteAllRelations() بنفسه او يحذف صف صف
+     *
+     * @see \App\Console\Commands\FindOrphanLgRowsCommand لتنظيف اللي تسرب قبل كدا
+     */
+    protected static function booted(): void
+    {
+        static::deleting(function (LetterOfGuaranteeIssuance $letterOfGuaranteeIssuance) {
+            $letterOfGuaranteeIssuance->deleteAllRelations();
+        });
+    }
+
     public function deleteAllRelations():self
     {
         
