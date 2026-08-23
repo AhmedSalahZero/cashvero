@@ -3,7 +3,9 @@
 namespace Tests\Feature\LetterOfGuarantee;
 
 use App\Enums\LgTypes;
+use App\Http\Controllers\LetterOfGuaranteeIssuanceController;
 use App\Http\Requests\StoreLetterOfGuaranteeIssuanceRequest;
+use App\Models\LetterOfGuaranteeIssuance;
 use App\Support\LetterOfGuarantee\LgContractRequirement;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -394,5 +396,80 @@ class LgContractRequirementTest extends TestCase
             'Against CD' => ['AgainstCdForm'],
             '100% Cash Cover' => ['HundredPercentageCashCoverForm'],
         ];
+    }
+
+    /**
+     * Edit props must pass raw nullable FK columns — getContractId() and
+     * friends return 0 when empty, which breaks Vue select pre-selection.
+     */
+    public function test_edit_form_contract_fields_use_raw_nullable_columns(): void
+    {
+        $model = new LetterOfGuaranteeIssuance([
+            'partner_id' => self::OTHER_ONLY,
+            'contract_id' => null,
+            'purchase_order_id' => null,
+        ]);
+
+        $fields = $this->controllerUnderTest()->exposeContractFormFields($model);
+
+        $this->assertSame(self::OTHER_ONLY, $fields['partner_id']);
+        $this->assertNull($fields['contract_id']);
+        $this->assertNull($fields['purchase_order_id']);
+    }
+
+    public function test_edit_form_contract_fields_preserve_saved_contract_id(): void
+    {
+        $model = new LetterOfGuaranteeIssuance([
+            'partner_id' => self::BOTH,
+            'contract_id' => 99,
+            'purchase_order_id' => 55,
+        ]);
+
+        $fields = $this->controllerUnderTest()->exposeContractFormFields($model);
+
+        $this->assertSame(99, $fields['contract_id']);
+        $this->assertSame(55, $fields['purchase_order_id']);
+    }
+
+    public function test_edit_form_seeds_other_partner_in_optional_contract_list(): void
+    {
+        $model = new LetterOfGuaranteeIssuance(['partner_id' => self::OTHER_ONLY]);
+
+        $optional = $this->controllerUnderTest()->exposeCustomersWithoutContractRequirement($model);
+
+        $this->assertSame([self::OTHER_ONLY], $optional);
+    }
+
+    public function test_edit_form_seeds_customer_and_other_partner_in_optional_contract_list(): void
+    {
+        $model = new LetterOfGuaranteeIssuance(['partner_id' => self::BOTH]);
+
+        $optional = $this->controllerUnderTest()->exposeCustomersWithoutContractRequirement($model);
+
+        $this->assertSame([self::BOTH], $optional);
+    }
+
+    public function test_edit_form_does_not_mark_pure_customer_as_optional(): void
+    {
+        $model = new LetterOfGuaranteeIssuance(['partner_id' => self::CUSTOMER_ONLY]);
+
+        $optional = $this->controllerUnderTest()->exposeCustomersWithoutContractRequirement($model);
+
+        $this->assertSame([], $optional);
+    }
+
+    private function controllerUnderTest(): LetterOfGuaranteeIssuanceController
+    {
+        return new class extends LetterOfGuaranteeIssuanceController {
+            public function exposeContractFormFields(LetterOfGuaranteeIssuance $model): array
+            {
+                return $this->lgIssuanceContractFormFields($model);
+            }
+
+            public function exposeCustomersWithoutContractRequirement(?LetterOfGuaranteeIssuance $model): array
+            {
+                return $this->lgIssuanceCustomersWithoutContractRequirement($model);
+            }
+        };
     }
 }

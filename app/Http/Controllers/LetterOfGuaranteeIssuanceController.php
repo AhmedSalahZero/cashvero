@@ -22,6 +22,7 @@ use App\Models\SalesOrder;
 use App\Models\TimeOfDeposit;
 use App\Services\Api\LetterOfGuaranteeService;
 use App\Services\Api\OdooSync;
+use App\Support\LetterOfGuarantee\LgContractRequirement;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -357,6 +358,38 @@ class LetterOfGuaranteeIssuanceController
         ];
 
     }
+
+    /**
+     * Beneficiary / contract FKs for LG issuance edit forms — raw DB
+     * columns, not getBeneficiaryId()/getContractId() which return 0
+     * when empty and break Vue select pre-selection on edit.
+     *
+     * @return array{partner_id: int|null, contract_id: int|null, purchase_order_id: int|null}
+     */
+    protected function lgIssuanceContractFormFields(LetterOfGuaranteeIssuance $model): array
+    {
+        return [
+            'partner_id' => $model->partner_id,
+            'contract_id' => $model->contract_id,
+            'purchase_order_id' => $model->purchase_order_id,
+        ];
+    }
+
+    /**
+     * Partners the edit form may leave without a contract (is_other).
+     * Seeded on first paint so the asterisk matches before runLookup().
+     *
+     * @return list<int>
+     */
+    protected function lgIssuanceCustomersWithoutContractRequirement(?LetterOfGuaranteeIssuance $model): array
+    {
+        if (! $model || ! $model->partner_id) {
+            return [];
+        }
+
+        return LgContractRequirement::partnerIdsWithoutContractRequirement([(int) $model->partner_id]);
+    }
+
     /**
      * Builds every prop LgFacilityForm.vue needs, on top of
      * commonViewVars(). Financial institution accounts (for the cash
@@ -465,7 +498,8 @@ class LetterOfGuaranteeIssuanceController
                 'po_number' => $so->so_number,
                 'so_date' => $so->start_date_1,
             ])->values(),
-            'model' => $model ? [
+            'customersWithoutContractRequirement' => $this->lgIssuanceCustomersWithoutContractRequirement($model),
+            'model' => $model ? array_merge([
                 'id' => $model->id,
                 'category_name' => $model->getCategoryName(),
                 'transaction_name' => $model->getTransactionName(),
@@ -473,11 +507,9 @@ class LetterOfGuaranteeIssuanceController
                 'lg_facility_id' => $model->getLgFacilityId(),
                 'lg_type' => $model->getLgType(),
                 'lg_code' => $model->getLgCode(),
-                'partner_id' => $model->getBeneficiaryId(),
                 'transaction_reference' => $model->getTransactionReference(),
-                'contract_id' => $model->getContractId(),
-                'purchase_order_id' => $model->getPurchaseOrderId(),
                 'purchase_order_date' => $model->getPurchaseOrderDate(),
+            ], $this->lgIssuanceContractFormFields($model), [
                 'transaction_date' => $model->transaction_date,
                 'issuance_date' => $model->getIssuanceDate(),
                 'lg_duration_months' => $model->lg_duration_months,
@@ -495,7 +527,7 @@ class LetterOfGuaranteeIssuanceController
                 'lg_fees_and_commission_account_type' => $model->getFeesAndCommissionAccountTypeId(),
                 'lg_fees_and_commission_account_id' => $model->getFeesAndCommissionAccountId(),
                 'user_comment' => $model->getUserComment(),
-            ] : null,
+            ]) : null,
             'lookupUrl' => route('update.letter.of.guarantee.outstanding.balance.and.limit', ['company' => $company->id]),
             'submitUrl' => $model
                 ? route('update.letter.of.guarantee.issuance', ['company' => $company->id, 'letterOfGuaranteeIssuance' => $model->id, 'source' => LetterOfGuaranteeIssuance::LG_FACILITY])
@@ -559,7 +591,8 @@ class LetterOfGuaranteeIssuanceController
             'feesAccounts' => $currentAccounts,
             'contracts' => Contract::onlyForCompany($company->id)->get()->map(fn ($c) => ['id' => $c->id, 'partner_id' => $c->partner_id, 'name' => $c->getName()])->values(),
             'purchaseOrders' => SalesOrder::onlyForCompany($company->id)->get()->map(fn ($so) => ['id' => $so->id, 'contract_id' => $so->contract_id, 'po_number' => $so->so_number, 'so_date' => $so->start_date_1])->values(),
-            'model' => $model ? [
+            'customersWithoutContractRequirement' => $this->lgIssuanceCustomersWithoutContractRequirement($model),
+            'model' => $model ? array_merge([
                 'id' => $model->id,
                 'category_name' => $model->getCategoryName(),
                 'transaction_name' => $model->getTransactionName(),
@@ -567,11 +600,9 @@ class LetterOfGuaranteeIssuanceController
                 'cd_or_td_id' => $model->getCdOrTdId(),
                 'lg_type' => $model->getLgType(),
                 'lg_code' => $model->getLgCode(),
-                'partner_id' => $model->getBeneficiaryId(),
                 'transaction_reference' => $model->getTransactionReference(),
-                'contract_id' => $model->getContractId(),
-                'purchase_order_id' => $model->getPurchaseOrderId(),
                 'purchase_order_date' => $model->getPurchaseOrderDate(),
+            ], $this->lgIssuanceContractFormFields($model), [
                 'transaction_date' => $model->transaction_date,
                 'issuance_date' => $model->getIssuanceDate(),
                 'lg_duration_months' => $model->lg_duration_months,
@@ -584,7 +615,7 @@ class LetterOfGuaranteeIssuanceController
                 'lg_commission_interval' => $model->getLgCommissionInterval(),
                 'lg_fees_and_commission_account_id' => $model->getFeesAndCommissionAccountId(),
                 'user_comment' => $model->getUserComment(),
-            ] : null,
+            ]) : null,
             'lookupUrl' => route('update.letter.of.guarantee.outstanding.balance.and.limit', ['company' => $company->id]),
             'submitUrl' => $model
                 ? route('update.letter.of.guarantee.issuance', ['company' => $company->id, 'letterOfGuaranteeIssuance' => $model->id, 'source' => LetterOfGuaranteeIssuance::AGAINST_TD])
@@ -646,7 +677,8 @@ class LetterOfGuaranteeIssuanceController
             'feesAccounts' => $currentAccounts,
             'contracts' => Contract::onlyForCompany($company->id)->get()->map(fn ($c) => ['id' => $c->id, 'partner_id' => $c->partner_id, 'name' => $c->getName()])->values(),
             'purchaseOrders' => SalesOrder::onlyForCompany($company->id)->get()->map(fn ($so) => ['id' => $so->id, 'contract_id' => $so->contract_id, 'po_number' => $so->so_number, 'so_date' => $so->start_date_1])->values(),
-            'model' => $model ? [
+            'customersWithoutContractRequirement' => $this->lgIssuanceCustomersWithoutContractRequirement($model),
+            'model' => $model ? array_merge([
                 'id' => $model->id,
                 'category_name' => $model->getCategoryName(),
                 'transaction_name' => $model->getTransactionName(),
@@ -654,11 +686,9 @@ class LetterOfGuaranteeIssuanceController
                 'cd_or_td_id' => $model->getCdOrTdId(),
                 'lg_type' => $model->getLgType(),
                 'lg_code' => $model->getLgCode(),
-                'partner_id' => $model->getBeneficiaryId(),
                 'transaction_reference' => $model->getTransactionReference(),
-                'contract_id' => $model->getContractId(),
-                'purchase_order_id' => $model->getPurchaseOrderId(),
                 'purchase_order_date' => $model->getPurchaseOrderDate(),
+            ], $this->lgIssuanceContractFormFields($model), [
                 'transaction_date' => $model->transaction_date,
                 'issuance_date' => $model->getIssuanceDate(),
                 'lg_duration_months' => $model->lg_duration_months,
@@ -671,7 +701,7 @@ class LetterOfGuaranteeIssuanceController
                 'lg_commission_interval' => $model->getLgCommissionInterval(),
                 'lg_fees_and_commission_account_id' => $model->getFeesAndCommissionAccountId(),
                 'user_comment' => $model->getUserComment(),
-            ] : null,
+            ]) : null,
             'lookupUrl' => route('update.letter.of.guarantee.outstanding.balance.and.limit', ['company' => $company->id]),
             'submitUrl' => $model
                 ? route('update.letter.of.guarantee.issuance', ['company' => $company->id, 'letterOfGuaranteeIssuance' => $model->id, 'source' => LetterOfGuaranteeIssuance::AGAINST_CD])
@@ -719,7 +749,8 @@ class LetterOfGuaranteeIssuanceController
             'feesAccounts' => $currentAccounts,
             'contracts' => Contract::onlyForCompany($company->id)->get()->map(fn ($c) => ['id' => $c->id, 'partner_id' => $c->partner_id, 'name' => $c->getName()])->values(),
             'purchaseOrders' => SalesOrder::onlyForCompany($company->id)->get()->map(fn ($so) => ['id' => $so->id, 'contract_id' => $so->contract_id, 'po_number' => $so->so_number, 'so_date' => $so->start_date_1])->values(),
-            'model' => $model ? [
+            'customersWithoutContractRequirement' => $this->lgIssuanceCustomersWithoutContractRequirement($model),
+            'model' => $model ? array_merge([
                 'id' => $model->id,
                 'category_name' => $model->getCategoryName(),
                 'transaction_name' => $model->getTransactionName(),
@@ -727,11 +758,9 @@ class LetterOfGuaranteeIssuanceController
                 'lg_currency' => $model->getLgCurrency(),
                 'lg_type' => $model->getLgType(),
                 'lg_code' => $model->getLgCode(),
-                'partner_id' => $model->getBeneficiaryId(),
                 'transaction_reference' => $model->getTransactionReference(),
-                'contract_id' => $model->getContractId(),
-                'purchase_order_id' => $model->getPurchaseOrderId(),
                 'purchase_order_date' => $model->getPurchaseOrderDate(),
+            ], $this->lgIssuanceContractFormFields($model), [
                 'transaction_date' => $model->transaction_date,
                 'issuance_date' => $model->getIssuanceDate(),
                 'lg_duration_months' => $model->lg_duration_months,
@@ -746,7 +775,7 @@ class LetterOfGuaranteeIssuanceController
                 'lg_commission_interval' => $model->getLgCommissionInterval(),
                 'lg_fees_and_commission_account_id' => $model->getFeesAndCommissionAccountId(),
                 'user_comment' => $model->getUserComment(),
-            ] : null,
+            ]) : null,
             'lookupUrl' => route('update.letter.of.guarantee.outstanding.balance.and.limit', ['company' => $company->id]),
             'submitUrl' => $model
                 ? route('update.letter.of.guarantee.issuance', ['company' => $company->id, 'letterOfGuaranteeIssuance' => $model->id, 'source' => LetterOfGuaranteeIssuance::HUNDRED_PERCENTAGE_CASH_COVER])

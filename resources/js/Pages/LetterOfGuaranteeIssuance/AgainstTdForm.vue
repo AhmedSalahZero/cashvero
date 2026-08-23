@@ -4,6 +4,7 @@ import { router, Link, usePage } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import FormErrorSummary from '@/Components/FormErrorSummary.vue'
 import { todayDate } from '@/composables/today'
+import { buildContractsForCustomer, normalizeFkId } from './lgFormIds'
 /* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
    الحماية الحقيقية على السيرفر في الـ Form Request. */
 const maxDate = todayDate()
@@ -23,6 +24,7 @@ const props = defineProps({
   contracts: Array,
   purchaseOrders: Array,
   model: Object,
+  customersWithoutContractRequirement: Array,
   lookupUrl: String,
   submitUrl: String,
   backUrl: String,
@@ -44,10 +46,10 @@ const form = ref({
   total_lg_outstanding_balance: 0,
   against_cash_cover: 0,
   lg_code: props.model?.lg_code ?? '',
-  partner_id: props.model?.partner_id ?? '',
+  partner_id: normalizeFkId(props.model?.partner_id),
   transaction_reference: props.model?.transaction_reference ?? '1',
-  contract_id: props.model?.contract_id ?? '',
-  purchase_order_id: props.model?.purchase_order_id ?? '',
+  contract_id: normalizeFkId(props.model?.contract_id),
+  purchase_order_id: normalizeFkId(props.model?.purchase_order_id),
   purchase_order_date: props.model?.purchase_order_date ?? '',
   transaction_date: props.model?.transaction_date ?? '',
   issuance_date: props.model?.issuance_date ?? '',
@@ -91,7 +93,11 @@ watch(
 )
 
 const contractsForCustomer = computed(() =>
-  props.contracts.filter((c) => c.partner_id === Number(form.value.partner_id)),
+  buildContractsForCustomer(
+    props.contracts,
+    form.value.partner_id,
+    form.value.contract_id,
+  ),
 )
 const purchaseOrdersForContract = computed(() =>
   props.purchaseOrders.filter((po) => Number(po.contract_id) === Number(form.value.contract_id)),
@@ -156,7 +162,9 @@ const customerOptions = ref([])
  * the validation applies (LgContractRequirement), so the asterisk the
  * user sees and the rule that runs on save can never disagree.
  */
-const customersWithoutContractRequirement = ref([])
+const customersWithoutContractRequirement = ref(
+  (props.customersWithoutContractRequirement ?? []).map(Number),
+)
 
 const contractIsRequired = computed(() => {
   if (isBidBond.value) return false
