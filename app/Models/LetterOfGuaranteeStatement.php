@@ -390,26 +390,51 @@ class LetterOfGuaranteeStatement extends Model
 		}
 	public static function getTotalCashCoverForAllTypes(int $lgFacilityId, int $companyId , int $financialInstitutionId,string $currency , ?string $type = null , ?string $source = null):float 
 	{
+		/**
+		 * Same source filter as getTotalOutstandingBalanceForAllTypes():
+		 * facility KPIs / the Limit popup only count LG-Facility cover.
+		 * Callers that already pass a source (the per-source statement
+		 * table) keep that source.
+		 */
+		$source = $source ?: LetterOfGuaranteeIssuance::LG_FACILITY;
+
 		$totalLastCashCoverOfFourTypes = 0 ;
 		foreach(LgTypes::getAll() as $lgTypeId => $lgTypeNameFormatted){
+			if ($type && $lgTypeId !== $type) {
+				continue;
+			}
 			$letterOfGuaranteeCashCover = DB::table('letter_of_guarantee_cash_cover_statements')
 			->where('company_id',$companyId)
 			->where('currency',$currency)
 			->where('financial_institution_id',$financialInstitutionId)
 			->where('lg_facility_id',$lgFacilityId)
 			->where('lg_type',$lgTypeId)
-			->when($type , function(Builder $builder) use ($type){
-				$builder->where('lg_type',$type);
-			})
-			->when($source , function(Builder $builder) use ($source){
-				$builder->where('source',$source);
-			})
+			->where('source',$source)
 			->orderByRaw('date desc,id desc')
 			->first();
 			$letterOfGuaranteeCashCoverEndBalance = $letterOfGuaranteeCashCover ? $letterOfGuaranteeCashCover->end_balance : 0 ;
 			$totalLastCashCoverOfFourTypes += $letterOfGuaranteeCashCoverEndBalance;
 		}
-		return abs($totalLastCashCoverOfFourTypes) ; 
+		$fromStatements = abs($totalLastCashCoverOfFourTypes);
+		if ($fromStatements > 0) {
+			return $fromStatements;
+		}
+
+		/**
+		 * Opening-balance (and CD/TD cash-cover) issuances never write
+		 * a cash-cover statement row. The Limit popup / Cash Cover KPI
+		 * still have to show the facility's cover — the same
+		 * cash_cover_amount the LG table already sums per issuance.
+		 */
+		return (float) DB::table('letter_of_guarantee_issuances')
+			->where('company_id', $companyId)
+			->where('lg_currency', $currency)
+			->where('financial_institution_id', $financialInstitutionId)
+			->where('lg_facility_id', $lgFacilityId)
+			->where('source', $source)
+			->where('status', '!=', LetterOfGuaranteeIssuance::CANCELLED)
+			->when($type, fn ($query) => $query->where('lg_type', $type))
+			->sum('cash_cover_amount');
 	}
 	public function getForeignKeyNamesThatUsedInFilter():array 
 	{
