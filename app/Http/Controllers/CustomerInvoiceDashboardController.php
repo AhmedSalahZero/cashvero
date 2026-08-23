@@ -466,7 +466,15 @@ class CustomerInvoiceDashboardController extends Controller
 		$loanEndDate = $request->get('loan_end_date', Carbon::make($loanStartDate)->addMonths(WithdrawalsSettlementReportController::NUMBER_OF_INTERNAL_MONTHS)->format('Y-m-d'));
 		
 		$agingDate = $request->get('aging_date',now()->format('Y-m-d'))  ;
-        $selectedCurrencies = $request->get('currencies', $allCurrencies) ;
+		/**
+		 * ⚠️ REAL BUG FIXED HERE (per audit, 2026-08-18): same issue as
+		 * viewLGLCDashboard() below — this used to read
+		 * $request->get('currencies', $allCurrencies), so every
+		 * switchCurrency() visit that passed ?currencies[]=EURO collapsed
+		 * the pill row to that one currency. $selectedCurrencies must
+		 * always be the FULL list; only $currenciesToCompute narrows.
+		 */
+        $selectedCurrencies = $allCurrencies ;
 		/**
 		 * FIX (per audit, 2026-08-13): same reasoning as the cash-flow
 		 * chart loop above — $selectedCurrencies itself is left

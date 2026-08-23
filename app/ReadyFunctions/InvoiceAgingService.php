@@ -136,30 +136,10 @@ class InvoiceAgingService
 		$formattedForTable = $totalsArray ;
 		$formattedForChat = [];
 
-		foreach($totalsArray as $dueType => $dueIntervalAndDueTotal){
-			foreach($dueIntervalAndDueTotal as $dueInterval => $dueTotal){
-				$minus = '';
-				if($dueType == 'past_due' ){
-					$minus = '-';
-				}
-				if($modelType == 'CustomerInvoice'){
-					
-					$formattedForChat[] = [
-						'region'=>camelizeWithSpace($dueType,'_') ,
-						'state'=>$minus . $dueInterval . ' ' .  __('Days'),
-						'sales'=>$dueTotal
-					];
-				}
-				if($modelType == 'SupplierInvoice'){
-				
-					$formattedForChat[] = [
-						'region'=>camelizeWithSpace($dueType,'_') ,
-						'state'=>$minus . $dueInterval . ' ' .  __('Days'),
-						'sales'=>$dueTotal
-					];
-				}
-			}
-		}
+		// * الشكل ده اتنقل لـ IsAgingService عشان الشيكات تستخدمه كمان،
+		// * كان متكرر مرتين هنا لـ CustomerInvoice و SupplierInvoice بنفس الجسم بالظبط.
+		$formattedForChat = $this->formatAgingBucketsForChart($totalsArray);
+
 		return [
 				'table'=>$formattedForTable,
 				'chart'=>$formattedForChat

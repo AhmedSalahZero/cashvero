@@ -33,11 +33,26 @@ class ForecastChartLabelsTest extends TestCase
         );
     }
 
+    /**
+     * The cheque row moved from a coming-due-only donut to the same
+     * diverging bar chart the invoices use, so the heading dropped the
+     * "— Cheques Coming Due" suffix and now reads "... Aging" to match
+     * the row above it. The labels themselves are unchanged.
+     */
     public function test_the_cheque_row_reads_the_cheque_labels(): void
     {
         $this->assertStringContainsString(
-            '{{ chequeTypeLabels[modelType] || modelType }} — Cheques Coming Due',
+            '{{ chequeTypeLabels[modelType] || modelType }} Aging',
             $this->page()
+        );
+    }
+
+    public function test_the_cheque_heading_no_longer_claims_coming_due_only(): void
+    {
+        $this->assertStringNotContainsString(
+            'Cheques Coming Due',
+            $this->page(),
+            'The chart now shows past due as well, so that heading would be wrong.'
         );
     }
 

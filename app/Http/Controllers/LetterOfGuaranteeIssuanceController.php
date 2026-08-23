@@ -163,18 +163,52 @@ class LetterOfGuaranteeIssuanceController
         ];
     }
 
+    /**
+     * Whether the index tab request is an explicit search. When true,
+     * the default 60-month expiry window is skipped so matches can be
+     * found across the full history.
+     */
+    private function isTabSearchActive(Request $request): bool
+    {
+        $field = $request->get('field');
+        $value = $request->get('value');
+        $from = $request->get('from');
+        $to = $request->get('to');
+
+        if (in_array($field, ['transaction_name', 'lg_code'], true)) {
+            return is_string($value) && trim($value) !== '';
+        }
+
+        if (in_array($field, ['issuance_date', 'renewal_date', 'purchase_order_date'], true)) {
+            return filled($from) && filled($to);
+        }
+
+        return false;
+    }
+
     private function queryTab(Company $company, string $type, Request $request, string $startDate, string $endDate)
     {
-        $query = $company->letterOfGuaranteeIssuances()
-            ->whereBetween('issuance_date', [$startDate, $endDate])
-            ->where('lg_type', $type)->with('financialInstitutionBank', 'advancedPaymentHistories', 'beneficiary');
-
         $searchFieldName = $request->get('field');
         $value = $request->get('value');
         $from = $request->get('from');
         $to = $request->get('to');
+
+        $query = $company->letterOfGuaranteeIssuances()
+            ->where('lg_type', $type)
+            ->with('financialInstitutionBank', 'advancedPaymentHistories', 'beneficiary');
+
+        // Default list: LGs whose expiry (renewal_date) falls in the window.
+        // Explicit search skips this so Transaction Name / LG Code can hit
+        // any record regardless of age.
+        if (! $this->isTabSearchActive($request)) {
+            $query->whereBetween('renewal_date', [$startDate, $endDate]);
+        }
+
         $query = $query->when($searchFieldName == 'issuance_date', function ($q) use ($from, $to) {
             $q->whereBetween('issuance_date', [$from, $to]);
+        })
+        ->when($searchFieldName == 'renewal_date', function ($q) use ($from, $to) {
+            $q->whereBetween('renewal_date', [$from, $to]);
         })
         ->when($searchFieldName == 'transaction_name', function ($q) use ($value) {
             $q->where('transaction_name', 'like', '%'.$value.'%');
@@ -198,8 +232,9 @@ class LetterOfGuaranteeIssuanceController
         $filterDates = [];
         $tabs = [];
         foreach (getLgTypes() as $type => $typeNameFormatted) {
+            // Expiry window: renewal dates from 60 months ago through 60 months ahead.
             $startDate = $request->has('startDate') ? $request->input('startDate.'.$type) : now()->subMonths($numberOfMonthsBetweenEndDateAndStartDate)->format('Y-m-d');
-            $endDate = $request->has('endDate') ? $request->input('endDate.'.$type) : now()->format('Y-m-d');
+            $endDate = $request->has('endDate') ? $request->input('endDate.'.$type) : now()->addMonths($numberOfMonthsBetweenEndDateAndStartDate)->format('Y-m-d');
             $filterDates[$type] = ['startDate' => $startDate, 'endDate' => $endDate];
 
             if ($type === $activeLgType) {
@@ -261,7 +296,7 @@ class LetterOfGuaranteeIssuanceController
         $type = $request->get('type', LgTypes::BID_BOND);
         $numberOfMonthsBetweenEndDateAndStartDate = 60;
         $startDate = $request->get('startDate', now()->subMonths($numberOfMonthsBetweenEndDateAndStartDate)->format('Y-m-d'));
-        $endDate = $request->get('endDate', now()->format('Y-m-d'));
+        $endDate = $request->get('endDate', now()->addMonths($numberOfMonthsBetweenEndDateAndStartDate)->format('Y-m-d'));
 
         $paginator = $this->queryTab($company, $type, $request, $startDate, $endDate);
 

@@ -38,7 +38,6 @@ import { ref, computed } from 'vue';
 import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import DashboardTabs from '@/Components/DashboardTabs.vue';
-import DonutChart3D from '@/Components/Charts/DonutChart3D.vue';
 import AgingDivergingBarChart from '@/Components/Charts/AgingDivergingBarChart.vue';
 import MultiLineChart from '@/Components/Charts/MultiLineChart.vue';
 
@@ -62,7 +61,11 @@ const props = defineProps({
     dashboardTabUrls: Object,
 });
 
-const activeCurrency = ref(props.selectedCurrencies[0] || props.currencyName || (props.allCurrencies || [])[0]);
+const activeCurrency = ref(
+    props.dashboardResult?.currencies?.[0]
+    || props.currencyName
+    || (props.allCurrencies || [])[0]
+);
 const reportIntervalModel = ref(props.selectedReportInterval || 'weekly');
 const startDateModel = ref(props.cashFlowStartDate);
 const endDateModel = ref(props.cashFlowEndDate);
@@ -109,7 +112,13 @@ function switchCurrency(currency) {
         start_date: startDateModel.value,
         end_date: endDateModel.value,
         currencies: [currency],
-    }, { preserveScroll: true, preserveState: true });
+    }, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            activeCurrency.value = currency;
+        },
+    });
 }
 
 function fmt(value) {
@@ -161,9 +170,11 @@ function intervalStart(label) {
     const match = String(label).match(/(\d+)/);
     return match ? parseInt(match[1], 10) : 9999; // 'More Than 150' sorts last
 }
-function agingBarData(modelType) {
-    const rows = props.dashboardResult?.invoices_aging?.[modelType]?.[activeCurrency.value]?.chart || [];
-    const clean = rows.filter(r => typeof r.sales === 'number' && !/total|no_invoices/i.test(r.state));
+/* بيحوّل صفوف {region, state, sales} لأعمدة الرسم المتفرّع:
+   المتأخر شمال بالسالب، والحالي والجاي يمين بالموجب.
+   الفواتير والشيكات الاتنين بيعدّوا من هنا — نفس الشكل من الـ trait المشترك. */
+function agingBarRows(rows) {
+    const clean = (rows || []).filter(r => typeof r.sales === 'number' && !/total|no_invoices/i.test(r.state));
 
     const past = clean.filter(r => /past/i.test(r.region)).sort((a, b) => intervalStart(b.state) - intervalStart(a.state));
     const current = clean.filter(r => /current/i.test(r.region));
@@ -176,28 +187,17 @@ function agingBarData(modelType) {
     return [...pastRows, ...currentRows, ...comingRows];
 }
 
+function agingBarData(modelType) {
+    return agingBarRows(props.dashboardResult?.invoices_aging?.[modelType]?.[activeCurrency.value]?.chart);
+}
+
 /* ── Cheque Aging ───────────────────────────────────────────────────
-   ⚠️ REAL BUG FIXED HERE: this read the payload as a { due_date: amount }
-   map, which is what ChequeAgingService BUILDS — but its formatChart()
-   converts that map into a LIST of { date, value } before returning it.
-
-   Object.entries() over a list yields the array INDICES as keys and the
-   row objects as values, so every point came out as
-   { category: '0', value: NaN } and both cheque donuts rendered empty
-   even with data behind them. Company 148 had five supplier cheques
-   coming due and the chart showed nothing.
-
-   Reads the list it is actually given, and still understands the map
-   form so an older payload does not break it. */
-function chequeChartData(modelType) {
-    const rows = props.dashboardResult?.cheques_aging_for_chart?.[modelType]?.[activeCurrency.value] || [];
-    const list = Array.isArray(rows)
-        ? rows
-        : Object.entries(rows).map(([date, value]) => ({ date, value }));
-
-    return list
-        .map(r => ({ category: r.date, value: Math.abs(Number(r.value || 0)) }))
-        .filter(r => r.category && Number.isFinite(r.value));
+   كانت دونات بتقرا cheques_aging_for_chart (قايمة تاريخ/مبلغ مسطّحة،
+   الجاي بس). بقت نفس رسم أعمار الفواتير: ChequeAgingService بيحسب نفس
+   تقسيمة past/current/coming بالظبط، بس ماكانش بيطلّعها بالشكل ده —
+   دلوقتي بيطلّعها في aging_chart من نفس الدالة المشتركة. */
+function chequeBarData(modelType) {
+    return agingBarRows(props.dashboardResult?.cheques_aging_for_table?.[modelType]?.[activeCurrency.value]?.aging_chart);
 }
 </script>
 
@@ -237,7 +237,7 @@ function chequeChartData(modelType) {
 
             <div class="flex items-center gap-2 flex-wrap mb-6">
                 <button
-                    v-for="currency in (selectedCurrencies.length ? selectedCurrencies : allCurrencies)"
+                    v-for="currency in (allCurrencies?.length ? allCurrencies : selectedCurrencies)"
                     :key="currency"
                     class="cvr-filter-pill"
                     :class="{ 'cvr-filter-pill-active': activeCurrency === currency }"
@@ -271,8 +271,9 @@ function chequeChartData(modelType) {
             </div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
                 <div v-for="modelType in invoiceTypesModels" :key="'chq-'+modelType" class="cvr-chart-card" style="border-top-color: var(--cvr-copper-bright)">
-                    <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ chequeTypeLabels[modelType] || modelType }} — Cheques Coming Due</h4>
-                    <DonutChart3D :data="chequeChartData(modelType)" :show-total="true" :height="300" />
+                    <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ chequeTypeLabels[modelType] || modelType }} Aging</h4>
+                    <p class="text-xs cvr-text-muted mb-1">Past Due (left) · Current &amp; Coming Due (right)</p>
+                    <AgingDivergingBarChart :data="chequeBarData(modelType)" :height="300" />
                 </div>
             </div>
 

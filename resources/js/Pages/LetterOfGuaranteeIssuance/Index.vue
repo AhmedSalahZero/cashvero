@@ -59,9 +59,11 @@ watch(() => props.activeLgType, (type) => {
 /* ── Filter state ──────────────────────────────────────────────────
    Every tabData() request must carry the *whole* filter set, not just
    the one field that changed: the endpoint is stateless, so anything
-   omitted silently falls back to the 60-month default window and an
-   empty search. Paging used to send only `page` and searching only
-   `field`/`value`, which is why each action reset the other. ------- */
+   omitted silently falls back to the 60-month default expiry window
+   (renewal_date) and an empty search. Active search (Transaction Name /
+   LG Code) skips that window and scans all records. Paging used to
+   send only `page` and searching only `field`/`value`, which is why
+   each action reset the other. ------------------------------------- */
 const searchField = ref('transaction_name');
 const searchValue = ref('');
 

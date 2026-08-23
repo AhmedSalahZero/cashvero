@@ -67,5 +67,37 @@ trait IsAgingService
             return 'Total Coming Dues';
         }
     }
-	
+
+	/**
+	 * * بتحوّل جدول الإجماليات (due_type => interval => total) لشكل الرسم البياني
+	 * * اللي AgingDivergingBarChart بيفهمه: صف لكل فترة، والمتأخر بعلامة سالب.
+	 *
+	 * * كانت متكتوبة جوّه InvoiceAgingService بس، فالشيكات — رغم إنها بتحسب
+	 * * نفس التقسيمة بالظبط — ماكانش عندها الشكل ده وكانت مضطرة ترسم دونات.
+	 * * اتنقلت هنا عشان الاتنين يطلعوا نفس العقد من مصدر واحد.
+	 */
+	public function formatAgingBucketsForChart(array $totals): array
+	{
+		$formatted = [];
+		foreach ($totals as $dueType => $intervalTotals) {
+			if (!is_array($intervalTotals)) {
+				continue;
+			}
+			foreach ($intervalTotals as $interval => $total) {
+				// no_invoices عدّادات مش مبالغ، و total إجمالي الفترة كلها
+				if (!is_numeric($total) || in_array($interval, ['total', 'no_invoices'], true)) {
+					continue;
+				}
+				$minus = $dueType == 'past_due' ? '-' : '';
+				$formatted[] = [
+					'region' => camelizeWithSpace($dueType, '_'),
+					'state'  => $minus . $interval . ' ' . __('Days'),
+					'sales'  => $total + 0,
+				];
+			}
+		}
+
+		return $formatted;
+	}
+
 }

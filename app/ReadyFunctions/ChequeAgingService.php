@@ -181,10 +181,12 @@ class ChequeAgingService
 	
 		return [
 				'table'=>$formattedForTable,
-				'chart'=>$formattedForChat
+				'chart'=>$formattedForChat,
+				// * نفس شكل InvoiceAgingService بالظبط، عشان الشيكات تترسم
+				// * بـ AgingDivergingBarChart زي الفواتير بدل الدونات.
+				// * chart القديمة (قايمة تاريخ/مبلغ) سايباها زي ما هي.
+				'aging_chart'=>$this->formatAgingBucketsForChart($totalsArray),
 		];
-	
-		
 	}
 
    
