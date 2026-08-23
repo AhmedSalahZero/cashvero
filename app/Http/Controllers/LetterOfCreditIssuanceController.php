@@ -476,10 +476,13 @@ class LetterOfCreditIssuanceController
     protected function buildAccountsForBanks(Company $company, Collection $financialInstitutionIds): array
     {
         $currentAccountType = AccountType::onlyCurrentAccount()->first();
-        $latestBalances = CurrentAccountBankStatement::whereIn('financial_institution_account_id', FinancialInstitutionAccount::whereIn('financial_institution_id', $financialInstitutionIds)->where('company_id', $company->id)->pluck('id'))
-            ->orderByDesc('date')->orderByDesc('id')->get()
-            ->groupBy('financial_institution_account_id')
-            ->map(fn ($rows) => $rows->first()->getEndBalance());
+        /**
+         * * الرصيد كما هو النهاردة — نفس الاصلاح اللي في فورم خطابات الضمان
+         * @see \App\Support\BankStatements\AccountCurrentBalance
+         */
+        $latestBalances = \App\Support\BankStatements\AccountCurrentBalance::forAccounts(
+            FinancialInstitutionAccount::whereIn('financial_institution_id', $financialInstitutionIds)->where('company_id', $company->id)->pluck('id')
+        );
         $accounts = FinancialInstitutionAccount::whereIn('financial_institution_id', $financialInstitutionIds)
             ->where('company_id', $company->id)
             ->get()

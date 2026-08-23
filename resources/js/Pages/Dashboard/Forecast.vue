@@ -119,6 +119,14 @@ function fmt(value) {
 
 const invoiceTypeLabels = { CustomerInvoice: 'Customer Invoices', SupplierInvoice: 'Supplier Invoices' };
 
+/* The cheque charts are named after the instrument, not the invoice
+   behind it: a customer's cheque is a receivable, a supplier's is a
+   payable. Kept as its own map rather than renaming the one above,
+   because the Aging row next to it plots INVOICE aging
+   (InvoiceAgingService), not cheques — one map for both would put
+   "Cheques" on a chart of invoices. */
+const chequeTypeLabels = { CustomerInvoice: 'Customer Receivable Cheques', SupplierInvoice: 'Supplier Payable Cheques' };
+
 /* The cash flow chart is bucketed by the Report Interval, so the title
    has to say which one — it was hard-coded "Monthly Cash Flow" and read
    as a lie whenever the report ran weekly or daily. Driven by
@@ -168,10 +176,28 @@ function agingBarData(modelType) {
     return [...pastRows, ...currentRows, ...comingRows];
 }
 
-/* ── Cheque Aging — { due_date: amount } already clean ──────────── */
+/* ── Cheque Aging ───────────────────────────────────────────────────
+   ⚠️ REAL BUG FIXED HERE: this read the payload as a { due_date: amount }
+   map, which is what ChequeAgingService BUILDS — but its formatChart()
+   converts that map into a LIST of { date, value } before returning it.
+
+   Object.entries() over a list yields the array INDICES as keys and the
+   row objects as values, so every point came out as
+   { category: '0', value: NaN } and both cheque donuts rendered empty
+   even with data behind them. Company 148 had five supplier cheques
+   coming due and the chart showed nothing.
+
+   Reads the list it is actually given, and still understands the map
+   form so an older payload does not break it. */
 function chequeChartData(modelType) {
-    const rows = props.dashboardResult?.cheques_aging_for_chart?.[modelType]?.[activeCurrency.value] || {};
-    return Object.entries(rows).map(([date, amount]) => ({ category: date, value: Math.abs(Number(amount || 0)) }));
+    const rows = props.dashboardResult?.cheques_aging_for_chart?.[modelType]?.[activeCurrency.value] || [];
+    const list = Array.isArray(rows)
+        ? rows
+        : Object.entries(rows).map(([date, value]) => ({ date, value }));
+
+    return list
+        .map(r => ({ category: r.date, value: Math.abs(Number(r.value || 0)) }))
+        .filter(r => r.category && Number.isFinite(r.value));
 }
 </script>
 
@@ -245,7 +271,7 @@ function chequeChartData(modelType) {
             </div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
                 <div v-for="modelType in invoiceTypesModels" :key="'chq-'+modelType" class="cvr-chart-card" style="border-top-color: var(--cvr-copper-bright)">
-                    <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ invoiceTypeLabels[modelType] || modelType }} — Cheques Coming Due</h4>
+                    <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ chequeTypeLabels[modelType] || modelType }} — Cheques Coming Due</h4>
                     <DonutChart3D :data="chequeChartData(modelType)" :show-total="true" :height="300" />
                 </div>
             </div>

@@ -332,11 +332,23 @@ class FullySecuredOverdraft extends Model implements IHaveStatement
 		return $this->termsHistories()->count() > 1;
 	}
 
+	/**
+	 * * التسهيل ما ينفعش يتحذف طول ما فيه حركات فعلية عليه
+	 *
+	 * * الرصيد القائم الافتتاحي و فوايد اخر الشهر المشتقة منه مش حركات :
+	 * * الاول رقم بيتكتب وقت اعداد التسهيل ، و التاني بيتولد و يتحسب
+	 * * اوتوماتيك من ال trigger .. المستخدم عمره ما ادخل ولا واحد فيهم
+	 *
+	 * * نفس الخط اللي مرسوم بالفعل في ناحية الحساب البنكي : الرصيد
+	 * * الافتتاحي لوحده مش حركة
+	 *
+	 * @see \App\Support\BankStatements\FacilityMovementRows
+	 */
 	public function hasAnyTransactions():bool
 	{
-		return $this->fullySecuredOverdraftBankStatements()
-			->where(function($q){ $q->where('debit','>',0)->orWhere('credit','>',0); })
-			->exists();
+		return \App\Support\BankStatements\FacilityMovementRows::onlyRealMovementIn(
+			$this->fullySecuredOverdraftBankStatements()
+		)->exists();
 	}
 
 	public function createOriginalTermsHistory():FullySecuredOverdraftTermsHistory

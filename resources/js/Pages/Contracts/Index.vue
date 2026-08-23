@@ -295,14 +295,14 @@ function submitAllocations() {
 
             <!-- Search -->
             <div class="flex flex-wrap items-end gap-3 mb-4">
-                <div class="cvr-search-bar flex items-center gap-2 px-3 py-1.5 ml-auto w-72">
+                <div class="cvr-search-bar flex items-center gap-2 px-3 py-1.5 ml-auto w-full sm:w-72 max-w-full">
                     <span class="cvr-text-muted text-sm">🔍</span>
                     <input v-model="search" type="text" placeholder="Search partner, contract name, or code..." class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
                 </div>
             </div>
 
             <!-- Table -->
-            <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
+            <div class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto cvr-table-scroll">
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>

@@ -1028,3 +1028,87 @@ aside .cvr-nav-sub-item.cvr-nav-item-active .cvr-nav-icon-svg {
     text-transform: uppercase;
     letter-spacing: 0.03em;
 }
+
+/* ── Mobile shell ──────────────────────────────────────────────────
+   Off-canvas sidebar + tighter page padding + table overflow safety.
+   AppLayout toggles .cvr-sidebar-mobile-open below lg (1023px). */
+.cvr-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(0, 0, 0, 0.5);
+}
+.cvr-sidebar-mobile {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 50;
+    width: min(18rem, 85vw);
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: none;
+}
+.cvr-sidebar-mobile-open {
+    transform: translateX(0);
+    box-shadow: var(--cvr-shadow-lg, 0 10px 40px rgba(0, 0, 0, 0.35));
+}
+
+.cvr-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+}
+
+/* Any direct parent of a wide table scrolls instead of blowing the page. */
+@media (max-width: 1023px) {
+    main div:has(> table.min-w-full),
+    main div:has(> table) {
+        max-width: 100%;
+    }
+    main div:has(> table.min-w-full) {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Pages use Tailwind p-6 everywhere — tighten without editing 149 files. */
+    main > .p-6,
+    main > div.p-6 {
+        padding: 1rem !important;
+    }
+
+    .cvr-dash-tabs {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        gap: 0.5rem;
+        padding-bottom: 0.25rem;
+    }
+    .cvr-dash-tabs .cvr-dash-tab {
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+
+    .cvr-chart-card,
+    .cvr-chart-card > div {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+    }
+}
+
+@media (max-width: 720px) {
+    .cvr-modal {
+        max-width: calc(100vw - 2rem);
+    }
+
+    /* Bare Tailwind multi-column grids (no sm/md/lg override) stack on phones. */
+    main .grid.grid-cols-2,
+    main .grid.grid-cols-3,
+    main .grid.grid-cols-4,
+    main .grid.grid-cols-5,
+    main .grid.grid-cols-6 {
+        grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+    }
+}

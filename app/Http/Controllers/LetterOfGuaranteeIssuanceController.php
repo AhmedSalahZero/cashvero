@@ -291,6 +291,20 @@ class LetterOfGuaranteeIssuanceController
         }
         
         
+        /**
+         * * البنوك مترتبة بالاسم المعروض نفسه ، مش بترتيب الادخال
+         *
+         * * الاسم بييجي من علاقة (bank->getViewName()) مش من عمود في
+         * * financial_institutions ، فالترتيب بيتعمل على الكوليكشن بعد
+         * * الجلب — ده الوحيد اللي بيضمن ان الترتيب هو اللي المستخدم
+         * * شايفه فعلا في القايمة
+         *
+         * * SORT_NATURAL عشان "Bank 2" تيجي قبل "Bank 10"
+         */
+        $financialInstitutionBanks = $financialInstitutionBanks
+            ->sortBy(fn ($bank) => mb_strtolower((string) $bank->getName()), SORT_NATURAL)
+            ->values();
+
         return [
             'financialInstitutionBanks'=>$financialInstitutionBanks  ,
             'beneficiaries'=>[],
@@ -336,10 +350,19 @@ class LetterOfGuaranteeIssuanceController
          * traceable server route in this codebase.
          */
         $currentAccountType = AccountType::onlyCurrentAccount()->first();
-        $latestBalances = \App\Models\CurrentAccountBankStatement::whereIn('financial_institution_account_id', FinancialInstitutionAccount::whereIn('financial_institution_id', $financialInstitutionIds)->where('company_id', $company->id)->pluck('id'))
-            ->orderByDesc('date')->orderByDesc('id')->get()
-            ->groupBy('financial_institution_account_id')
-            ->map(fn ($rows) => $rows->first()->getEndBalance());
+        /**
+         * * الرصيد كما هو النهاردة — مش رصيد اخر صف في الكشف
+         *
+         * * كل حساب شايل صفوف فوايد اخر الشهر لحد اخر سنة النظام زامنها ،
+         * * فـ"اخر صف" ممكن يكون في المستقبل بسنين .. حساب حقيقي كان بيعرض
+         * * ‎-1,946,026.24 من صف بتاريخ 2028-12-31 و رصيده الحقيقي النهاردة
+         * * ‎+1,880,259.76
+         *
+         * @see \App\Support\BankStatements\AccountCurrentBalance
+         */
+        $latestBalances = \App\Support\BankStatements\AccountCurrentBalance::forAccounts(
+            FinancialInstitutionAccount::whereIn('financial_institution_id', $financialInstitutionIds)->where('company_id', $company->id)->pluck('id')
+        );
         $accounts = FinancialInstitutionAccount::whereIn('financial_institution_id', $financialInstitutionIds)
             ->where('company_id', $company->id)
             ->get()

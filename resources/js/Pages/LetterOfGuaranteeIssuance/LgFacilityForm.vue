@@ -93,6 +93,18 @@ const lgFacilitiesForBank = computed(() => selectedBank.value?.lg_facilities ?? 
  */
 const customerOptions = ref([]);
 
+/*
+ * Beneficiaries a contract is NOT required for — an authority, a
+ * landlord, anyone flagged "other partner". There is no customer
+ * contract behind such a beneficiary to point at.
+ *
+ * Comes from the same lookup call, and from the same server-side rule
+ * the validation applies (LgContractRequirement), so the asterisk the
+ * user sees and the rule that runs on save can never disagree.
+ */
+const customersWithoutContractRequirement = ref([]);
+
+
 const contractsForCustomer = computed(() =>
     props.contracts.filter(c => c.partner_id === Number(form.value.partner_id))
 );
@@ -103,6 +115,17 @@ const purchaseOrdersForContract = computed(() =>
 /* ── Bid Bond doesn't link to a Contract/SO — hide those fields and
    clear out any values so a stale selection never gets submitted. ── */
 const isBidBond = computed(() => form.value.lg_type === 'bid-bond');
+
+/*
+ * Declared after isBidBond, which it reads: a computed getter is lazy,
+ * but a forward reference is a trap waiting for whoever next evaluates
+ * one of these during setup.
+ */
+const contractIsRequired = computed(() => {
+    if (isBidBond.value) return false;
+    if (!form.value.partner_id) return true;
+    return !customersWithoutContractRequirement.value.includes(Number(form.value.partner_id));
+});
 watch(isBidBond, (bidBond) => {
     if (bidBond) {
         form.value.contract_id = '';
@@ -170,6 +193,7 @@ async function runLookup() {
         form.value.lg_type_outstanding_balance = data.current_lg_type_outstanding_balance ?? 0;
         form.value.lg_currency = data.currency_name ?? form.value.lg_currency;
         customerOptions.value = Object.entries(data.customers ?? {}).map(([name, id]) => ({ id: Number(id), name }));
+        customersWithoutContractRequirement.value = (data.customers_without_contract_requirement ?? []).map(Number);
         if (!isEdit) {
             form.value.min_lg_commission_fees = data.min_lg_commission_fees ?? 0;
             form.value.lg_commission_rate = data.lg_commission_rate || form.value.lg_commission_rate;
@@ -346,9 +370,9 @@ function submit() {
                         <div>
                             <div class="flex items-center justify-between">
                                 <label class="cvr-form-label">Customer / Beneficiary *</label>
-                                <button type="button" @click="addingNewCustomer = !addingNewCustomer" class="text-xs cvr-text-blue">
+                                <!-- <button type="button" @click="addingNewCustomer = !addingNewCustomer" class="text-xs cvr-text-blue">
                                     {{ addingNewCustomer ? 'Pick existing' : '+ New' }}
-                                </button>
+                                </button> -->
                             </div>
                             <select v-if="!addingNewCustomer" v-model="form.partner_id" class="cvr-input w-full px-3 py-2 rounded">
                                 <option value="" disabled>Select</option>
@@ -363,16 +387,26 @@ function submit() {
                             <label class="cvr-form-label">Transaction Reference *</label>
                             <input v-model="form.transaction_reference" type="text" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
+                        <!--
+                            The asterisk follows the beneficiary: an
+                            "other partner" has no customer contract to
+                            attach, so the field stays available but
+                            stops being required. Mirrors the server
+                            rule exactly (LgContractRequirement).
+                        -->
                         <div v-if="!isBidBond">
-                            <label class="cvr-form-label">Contract *</label>
+                            <label class="cvr-form-label">Contract <span v-if="contractIsRequired">*</span></label>
                             <select v-model="form.contract_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="" disabled>Select</option>
+                                <option value="" :disabled="contractIsRequired">{{ contractIsRequired ? 'Select' : 'None' }}</option>
                                 <option v-for="c in contractsForCustomer" :key="c.id" :value="c.id">{{ c.name }}</option>
                             </select>
+                            <p v-if="!contractIsRequired" class="text-xs mt-1 cvr-text-muted">
+                                Optional for this beneficiary — no customer contract is required.
+                            </p>
                             <p v-if="errorFor('contract_id')" class="text-xs mt-1 cvr-num-red">{{ errorFor('contract_id') }}</p>
                         </div>
                         <div v-if="!isBidBond">
-                            <label class="cvr-form-label">SO *</label>
+                            <label class="cvr-form-label">SO <span v-if="contractIsRequired">*</span></label>
                             <select v-model="form.purchase_order_id" class="cvr-input w-full px-3 py-2 rounded">
                                 <option value="" disabled>Select</option>
                                 <option value="all">All SOs</option>

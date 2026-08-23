@@ -115,7 +115,7 @@ function goToPage(url) {
                         <span class="cvr-text-muted text-xs">{{ isCollapsed(group.partnerId) ? '▸ Show' : '▾ Hide' }} ({{ group.rows.length }})</span>
                     </button>
 
-                    <div v-show="!isCollapsed(group.partnerId)" class="overflow-auto" style="max-height: 150vh;">
+                    <div v-show="!isCollapsed(group.partnerId)" class="overflow-auto cvr-table-scroll" style="max-height: 150vh;">
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head sticky top-0 z-10">
                                 <tr>

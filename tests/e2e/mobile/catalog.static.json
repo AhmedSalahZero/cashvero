@@ -1,0 +1,32 @@
+{
+  "generatedAt": "static-seed",
+  "companyId": 148,
+  "note": "Static fallback catalog. Prefer: php tests/e2e/mobile/page-catalog.php when MySQL is available.",
+  "count": 24,
+  "pages": [
+    { "id": "auth-login", "title": "Login", "url": "/en/login", "page": "Auth/Login", "optional": false },
+    { "id": "home", "title": "Home", "url": "/en", "page": "Home/CompanyPicker", "optional": true },
+    { "id": "cash-status", "title": "Cash Status", "url": "/en/148/view-cash-status", "optional": true },
+    { "id": "lg-lc-status", "title": "LG & LC Status", "url": "/en/148/view-lglc-dashboard", "optional": true },
+    { "id": "forecast", "title": "Cash Forecast", "url": "/en/148/view-cash-forecast", "optional": true },
+    { "id": "contracts-dash", "title": "Contract Dashboard", "url": "/en/148/view-contracts-dashboard", "optional": true },
+    { "id": "bank-statement", "title": "Bank Statement", "url": "/en/148/view-bank-statement", "optional": true },
+    { "id": "safe-statement", "title": "Safe Statement", "url": "/en/148/view-safe-statement", "optional": true },
+    { "id": "financial-institutions", "title": "Financial Institutions", "url": "/en/148/financial-institutions", "optional": true },
+    { "id": "bank-accounts-hub", "title": "Bank Accounts Hub", "url": "/en/148/financial-institution-facilities/bank-accounts", "optional": true },
+    { "id": "oda-mtl-hub", "title": "ODA & MTL Hub", "url": "/en/148/financial-institution-facilities/oda-mtl", "optional": true },
+    { "id": "customers-balances", "title": "Customers Balances", "url": "/en/148/customers-balances/CustomerInvoice", "optional": true },
+    { "id": "money-received", "title": "Money Received", "url": "/en/148/money-received", "optional": true },
+    { "id": "money-payment", "title": "Money Payment", "url": "/en/148/money-payment", "optional": true },
+    { "id": "opening-balance", "title": "Opening Balance", "url": "/en/148/opening-balance", "optional": true },
+    { "id": "opening-balance-manage", "title": "Opening Balance Manage", "url": "/en/148/opening-balance/manage", "optional": true },
+    { "id": "partners", "title": "Partners", "url": "/en/148/partners", "optional": true },
+    { "id": "cash-expenses", "title": "Cash Expenses Categories", "url": "/en/148/cash-expense-categories", "optional": true },
+    { "id": "companies", "title": "Companies", "url": "/en/companies", "optional": true },
+    { "id": "users", "title": "Users", "url": "/en/users", "optional": true },
+    { "id": "roles", "title": "Roles", "url": "/en/148/roles", "optional": true },
+    { "id": "profile", "title": "Profile", "url": "/en/profile", "optional": true },
+    { "id": "lg-issuance", "title": "LG Issuance", "url": "/en/148/letter-of-guarantee-issuance", "optional": true },
+    { "id": "lc-issuance", "title": "LC Issuance", "url": "/en/148/letter-of-credit-issuance", "optional": true }
+  ]
+}

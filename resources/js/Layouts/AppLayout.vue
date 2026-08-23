@@ -48,9 +48,29 @@ const sectionKeys = computed(() =>
 
 /* ── Sidebar collapse (whole sidebar width) ──────────────────────── */
 const sidebarExpanded = ref(true);
+/** Mobile (< lg): sidebar is an off-canvas overlay, closed by default. */
+const isMobileNav = ref(false);
+const mobileNavOpen = ref(false);
+
+function checkMobileNav() {
+    if (typeof window === 'undefined') return;
+    isMobileNav.value = window.matchMedia('(max-width: 1023px)').matches;
+    if (!isMobileNav.value) {
+        mobileNavOpen.value = false;
+    }
+}
+
 function toggleSidebar() {
+    if (isMobileNav.value) {
+        mobileNavOpen.value = !mobileNavOpen.value;
+        return;
+    }
     sidebarExpanded.value = !sidebarExpanded.value;
     localStorage.setItem('cvr_sidebar', sidebarExpanded.value ? 'expanded' : 'collapsed');
+}
+
+function closeMobileNav() {
+    mobileNavOpen.value = false;
 }
 
 /* ── Per-section collapse/expand — remembered across visits ─────── */
@@ -71,7 +91,21 @@ onMounted(() => {
     if (savedSections) {
         try { expandedSections.value = JSON.parse(savedSections); } catch { /* ignore */ }
     }
+
+    checkMobileNav();
+    window.addEventListener('resize', checkMobileNav);
 });
+
+onUnmounted(() => {
+    window.removeEventListener('resize', checkMobileNav);
+});
+
+/* Close the mobile drawer on every Inertia visit so the next page
+   opens with full-width content instead of an open overlay. */
+const removeNavListener = router.on('finish', () => {
+    closeMobileNav();
+});
+onUnmounted(() => removeNavListener());
 
 function isActiveLink(link) {
     if (!link || link === '#') return false;
@@ -212,35 +246,46 @@ if (page.flash?.success || page.flash?.error) {
 
 <template>
     <div class="min-h-screen cvr-bg flex">
-        <!-- Sidebar -->
+        <!-- Mobile backdrop — closes the off-canvas sidebar -->
+        <div
+            v-if="isMobileNav && mobileNavOpen"
+            class="cvr-sidebar-backdrop"
+            @click="closeMobileNav"
+        />
+
+        <!-- Sidebar: desktop = collapsible column; mobile = off-canvas overlay -->
         <aside
-            class="flex-shrink-0 flex flex-col transition-all duration-200"
-            :class="sidebarExpanded ? 'w-64' : 'w-16'"
+            class="cvr-sidebar flex flex-col transition-all duration-200"
+            :class="[
+                isMobileNav
+                    ? ['cvr-sidebar-mobile', mobileNavOpen ? 'cvr-sidebar-mobile-open' : '']
+                    : [sidebarExpanded ? 'w-64' : 'w-16', 'flex-shrink-0'],
+            ]"
             style="background-color: var(--cvr-nav-bg);"
         >
             <!-- Logo -->
             <div
                 class="h-14 flex items-center flex-shrink-0"
-                :class="sidebarExpanded ? 'px-5' : 'justify-center px-0'"
+                :class="(isMobileNav || sidebarExpanded) ? 'px-5' : 'justify-center px-0'"
                 style="border-bottom: 1px solid var(--cvr-nav-divider);"
             >
-                <span v-if="sidebarExpanded" class="font-bold text-xl tracking-tight whitespace-nowrap" style="color: var(--cvr-nav-text-active);">
+                <span v-if="isMobileNav || sidebarExpanded" class="font-bold text-xl tracking-tight whitespace-nowrap" style="color: var(--cvr-nav-text-active);">
                     Cash<span style="color: var(--cvr-amber-bright);">Vero</span>
                 </span>
                 <span v-else class="font-bold text-lg" style="color: var(--cvr-amber-bright);">CV</span>
             </div>
 
-            <nav class="flex-1 overflow-y-auto py-3 space-y-1" :class="sidebarExpanded ? 'px-2' : 'px-2'">
+            <nav class="flex-1 overflow-y-auto py-3 space-y-1 px-2">
                 <!-- HOME (Super Admin only) -->
                 <Link
                     v-if="menu.home?.show"
                     :href="menu.home.link"
-                    :title="!sidebarExpanded ? 'Home' : ''"
+                    :title="!(isMobileNav || sidebarExpanded) ? 'Home' : ''"
                     class="cvr-nav-item flex items-center gap-2 py-2 rounded text-sm mb-2"
-                    :class="[sidebarExpanded ? 'px-3' : 'px-0 justify-center', { 'cvr-nav-item-active': isActiveLink(menu.home.link) }]"
+                    :class="[(isMobileNav || sidebarExpanded) ? 'px-3' : 'px-0 justify-center', { 'cvr-nav-item-active': isActiveLink(menu.home.link) }]"
                 >
                     <NavIcon :name="menu.home.icon" :size="18" />
-                    <span v-if="sidebarExpanded" class="truncate">Home</span>
+                    <span v-if="isMobileNav || sidebarExpanded" class="truncate">Home</span>
                 </Link>
 
                 <!-- 12 collapsible sections -->
@@ -249,27 +294,27 @@ if (page.flash?.success || page.flash?.error) {
                         <button
                             @click="toggleSection(key)"
                             class="cvr-nav-section-title w-full flex items-center justify-between py-2 rounded text-sm font-bold"
-                            :class="sidebarExpanded ? 'px-3' : 'px-0 justify-center'"
-                            :title="!sidebarExpanded ? menu[key].title : ''"
+                            :class="(isMobileNav || sidebarExpanded) ? 'px-3' : 'px-0 justify-center'"
+                            :title="!(isMobileNav || sidebarExpanded) ? menu[key].title : ''"
                         >
                             <span class="flex items-center gap-2 truncate">
                                 <NavIcon :name="menu[key].icon" :size="18" />
-                                <span v-if="sidebarExpanded" class="truncate">{{ menu[key].title }}</span>
+                                <span v-if="isMobileNav || sidebarExpanded" class="truncate">{{ menu[key].title }}</span>
                             </span>
                             <NavIcon
-                                v-if="sidebarExpanded"
+                                v-if="isMobileNav || sidebarExpanded"
                                 :name="isSectionExpanded(key) ? 'chevron-down' : 'chevron-right'"
                                 :size="14"
                             />
                         </button>
 
-                        <div v-if="isSectionExpanded(key) && sidebarExpanded" class="pl-2 mt-0.5 space-y-0.5">
+                        <div v-if="isSectionExpanded(key) && (isMobileNav || sidebarExpanded)" class="pl-2 mt-0.5 space-y-0.5">
                             <template v-for="(sub, idx) in menu[key].items" :key="idx">
                                 <template v-if="sub.show">
                                     <!-- Action item (Odoo Read Partners/Invoices/Contracts) -->
                                     <button
                                         v-if="sub.type === 'action'"
-                                        @click="openAction(sub)"
+                                        @click="openAction(sub); closeMobileNav()"
                                         class="cvr-nav-sub-item w-full text-left flex items-center gap-2 py-1.5 px-3 rounded text-xs"
                                     >
                                         <NavIcon :name="sub.icon" :size="14" />
@@ -306,13 +351,14 @@ if (page.flash?.success || page.flash?.error) {
         <div class="flex-1 flex flex-col min-w-0">
             <!-- Top bar -->
             <header
-                class="h-14 flex items-center justify-between px-6 flex-shrink-0 relative"
+                class="h-14 flex items-center justify-between px-3 sm:px-6 flex-shrink-0 relative"
                 style="background-color: var(--cvr-bg-surface); border-bottom: 1px solid var(--cvr-border); height: var(--cvr-header-height);"
             >
                 <button
                     @click="toggleSidebar"
                     class="cvr-action-btn"
-                    title="Toggle sidebar"
+                    :title="isMobileNav ? 'Open menu' : 'Toggle sidebar'"
+                    aria-label="Toggle navigation"
                 >
                     <NavIcon name="menu" :size="18" />
                 </button>
@@ -457,15 +503,15 @@ if (page.flash?.success || page.flash?.error) {
         </div>
 
         <!-- Odoo action confirm modal (Read Partners / Invoices / Contracts) -->
-        <div v-if="actionTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
+        <div v-if="actionTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div class="cvr-modal rounded-lg p-6 w-full sm:max-w-sm max-w-[calc(100vw-2rem)]">
                 <h2 class="text-lg font-medium cvr-text-primary mb-4">
                     {{ actionTarget.title }}?
                 </h2>
                 <p class="text-sm cvr-text-muted mb-4">
                     This will sync now from Odoo. Continue?
                 </p>
-                <div class="grid grid-cols-2 gap-3 mb-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                     <div>
                         <label class="cvr-form-label">Start Date</label>
                         <input v-model="odooStartDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
@@ -484,13 +530,13 @@ if (page.flash?.success || page.flash?.error) {
 
         <!-- Notification detail table — real data, same source as the
              original notifications/popup.blade.php modal -->
-        <div v-if="notificationDetail" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div class="cvr-modal rounded-lg p-6 w-full max-w-7xl max-h-[92vh] flex flex-col">
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-lg font-medium cvr-text-primary">{{ notificationDetail.title }}</h2>
-                    <button @click="notificationDetail = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+        <div v-if="notificationDetail" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div class="cvr-modal rounded-lg p-4 sm:p-6 w-full sm:max-w-7xl max-w-[calc(100vw-2rem)] max-h-[92vh] flex flex-col">
+                <div class="flex items-center justify-between mb-4 gap-2">
+                    <h2 class="text-lg font-medium cvr-text-primary truncate">{{ notificationDetail.title }}</h2>
+                    <button @click="notificationDetail = null" class="cvr-btn-secondary px-3 py-1.5 rounded border flex-shrink-0">Close</button>
                 </div>
-                <div class="overflow-auto flex-1">
+                <div class="overflow-auto flex-1 cvr-table-scroll">
                     <div v-if="notificationDetailLoading" class="text-center py-8 cvr-text-muted text-sm">Loading...</div>
                     <table v-else class="min-w-full text-sm">
                         <thead class="cvr-table-head">

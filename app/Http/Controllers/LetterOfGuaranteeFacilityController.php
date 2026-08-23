@@ -538,6 +538,17 @@ class LetterOfGuaranteeFacilityController
             'min_lg_cash_cover_rate_for_current_lg_type'=>$minLgCashCoverRateForCurrentLgType ,
             'min_lg_issuance_fees_for_current_lg_type'=>$minLgIssuanceFeesForCurrentLgType,
 			'customers'=>$customerOrOtherPartnersArr,
+			/**
+			 * * المستفيدين اللي مش لازم يتربط بيهم عقد — جهة حكومية او
+			 * * مالك عقار مثلا .. الفورم بيشيل النجمة عن حقل العقد اول ما
+			 * * يتختار واحد منهم ، من غير نداء تاني للسيرفر
+			 *
+			 * * نفس القاعدة اللي التحقق بيطبقها ، متعرفة في مكان واحد
+			 * @see \App\Support\LetterOfGuarantee\LgContractRequirement
+			 */
+			'customers_without_contract_requirement'=>\App\Support\LetterOfGuarantee\LgContractRequirement::partnerIdsWithoutContractRequirement(
+				array_map('intval', array_values($customerOrOtherPartnersArr))
+			),
 			'total_cash_cover_statement_debit'=>$totalCashCoverStatementDebit
 		]);
 	}

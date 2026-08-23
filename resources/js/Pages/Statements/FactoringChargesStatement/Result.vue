@@ -94,7 +94,7 @@ function goToPage(url) {
 
             <!-- Heavy list table — sticky header, horizontal + vertical scroll -->
             <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
-                <div class="overflow-auto" style="max-height: 150vh;">
+                <div class="overflow-auto cvr-table-scroll" style="max-height: 150vh;">
                     <table class="min-w-full text-sm">
                         <thead class="cvr-table-head sticky top-0 z-10">
                             <tr>

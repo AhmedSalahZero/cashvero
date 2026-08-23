@@ -30,7 +30,7 @@ const tabs = [
 </script>
 
 <template>
-    <div class="flex items-center gap-2 flex-wrap mb-6">
+    <div class="cvr-dash-tabs flex items-center gap-2 flex-wrap mb-6">
         <Link
             v-for="tab in tabs"
             :key="tab.key"
