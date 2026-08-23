@@ -73,6 +73,10 @@ class MediumTermLoan extends Model implements \App\Interfaces\Models\ISyncsWithO
 	protected $casts = [
 		'is_shareholder_account' => 'boolean',
 	];
+
+	protected $attributes = [
+		'is_shareholder_account' => false,
+	];
 	const RUNNING = 'running';
 
 	/**

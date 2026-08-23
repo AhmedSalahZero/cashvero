@@ -15,7 +15,7 @@ trait HasBasicStoreRequest
 			if(is_object($value)){
 			//	static::addMediaFromRequest($name)->toMediaCollection($name);
 			}
-			elseif(!is_array($value)&& (Str::startsWith($value,'is_') || Str::startsWith($value,'can_')|| Str::startsWith($value,'has_')) ){
+			elseif(!is_array($value)&& (Str::startsWith($name,'is_') || Str::startsWith($name,'can_')|| Str::startsWith($name,'has_')) ){
 				if($columnExist){
 					$this->{$name} = $request->boolean($name);
 				}

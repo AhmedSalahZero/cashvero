@@ -446,6 +446,84 @@ class ShareholderAccountsTest extends TestCase
         $this->assertNotContains($loan->id, $loansUnder(['account_owner' => 'shareholders']));
     }
 
+    public function test_store_persists_shareholder_owned_mtl_when_flag_and_partner_are_set(): void
+    {
+        $this->userWithPermission->givePermissionTo('medium_term_loan.create');
+
+        $accountNumber = 'TEST-MTL-STORE-SH-'.uniqid();
+        $payload = $this->validMediumTermLoanStorePayload($accountNumber) + [
+            'is_shareholder_account' => true,
+            'shareholder_partner_id' => $this->shareholder->id,
+        ];
+
+        $response = $this->actingAs($this->userWithPermission)
+            ->post(route('loans.store', [
+                'company' => $this->company->id,
+                'financialInstitution' => $this->bank->id,
+            ]), $payload);
+
+        $response->assertSessionHasNoErrors();
+        $this->assertTrue(
+            $response->isRedirect(),
+            'The MTL store POST was rejected with status '.$response->getStatusCode()
+                .' '.optional($response->exception)->getMessage()
+        );
+
+        $this->assertDatabaseHas('medium_term_loans', [
+            'company_id' => $this->company->id,
+            'financial_institution_id' => $this->bank->id,
+            'account_number' => $accountNumber,
+            'is_shareholder_account' => 1,
+            'shareholder_partner_id' => $this->shareholder->id,
+        ]);
+    }
+
+    public function test_store_rejects_stale_shareholder_partner_id_without_flag(): void
+    {
+        $this->userWithPermission->givePermissionTo('medium_term_loan.create');
+
+        $payload = $this->validMediumTermLoanStorePayload('TEST-MTL-STORE-STALE-'.uniqid()) + [
+            'is_shareholder_account' => false,
+            'shareholder_partner_id' => $this->shareholder->id,
+        ];
+
+        $response = $this->actingAs($this->userWithPermission)
+            ->from(route('loans.create', [
+                'company' => $this->company->id,
+                'financialInstitution' => $this->bank->id,
+            ]))
+            ->post(route('loans.store', [
+                'company' => $this->company->id,
+                'financialInstitution' => $this->bank->id,
+            ]), $payload);
+
+        $response->assertSessionHasErrors('shareholder_partner_id');
+    }
+
+    /** @return array<string, mixed> */
+    private function validMediumTermLoanStorePayload(string $accountNumber): array
+    {
+        return [
+            'company_id' => $this->company->id,
+            'financial_institution_id' => $this->bank->id,
+            'name' => 'Regression MTL '.uniqid(),
+            'start_date' => now()->subYear()->format('Y-m-d'),
+            'end_date' => now()->addYear()->format('Y-m-d'),
+            'currency' => $this->currency,
+            'limit' => 100000,
+            'account_number' => $accountNumber,
+            'borrowing_rate' => 10,
+            'margin_rate' => 2,
+            'duration' => 12,
+            'installment_payment_interval' => 'monthly',
+            'consumption_status' => MediumTermLoan::CONSUMPTION_EXISTING,
+            'already_paid_amount' => 0,
+            'remaining_installment_count' => '',
+            'first_installment_date' => '',
+            'odoo_code' => '',
+        ];
+    }
+
     /* ───────── D4 — transfers do not touch the owner ledger ───────── */
 
     public function test_an_internal_transfer_to_a_shareholder_account_writes_no_ledger_row(): void

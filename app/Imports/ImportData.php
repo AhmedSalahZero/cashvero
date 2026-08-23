@@ -52,6 +52,20 @@ class ImportData implements
 
 	public $modelFields;
 
+	/**
+	 * Whether the uploaded file has a header row this import can read.
+	 * Worked out from the first row and reused for the rest — it is a
+	 * property of the file, not of any one row.
+	 */
+	protected ?bool $fileHasHeaders = null;
+
+	/**
+	 * column name => the table's default, read once per import.
+	 *
+	 * @var array<string, string|null>|null
+	 */
+	protected ?array $columnDefaults = null;
+
 	public $format;
 
 	public $model;
@@ -244,6 +258,34 @@ class ImportData implements
 			] ;
 		}
 
+		/**
+		 * ⚠️ REAL BUG FIXED HERE (company 148, Supplier Invoices,
+		 * 2026-08-23): guessing a missing field by COLUMN POSITION is
+		 * only ever defensible for a file that has no usable header row
+		 * at all. On a file that does have headers, a field with no
+		 * matching column is genuinely absent — and guessing pulled the
+		 * neighbouring column's number into it.
+		 *
+		 * That upload had no "Supplier Code" and no "Discount Amount"
+		 * column, so every model field after them lined up one column
+		 * short of where it belonged:
+		 *
+		 *   discount_amount  ← "Total Invoice Amount"   (90,000.00)
+		 *   withhold_amount  ← "Contracted Payment Days" (90)
+		 *
+		 * The BEFORE INSERT trigger then did exactly what it was told —
+		 * net_invoice_amount = amount + vat − discount — and 14
+		 * invoices worth 6,143,242.77 landed with a net of 0.00 and a
+		 * balance of −1,260.00.
+		 *
+		 * The same trap was already documented for the contract columns
+		 * in fieldsExcludedFromPositionalFallback() below; it was never
+		 * a contract-specific problem. A field with no column now keeps
+		 * its own default instead of borrowing a value that was never
+		 * meant for it.
+		 */
+		$fileHasHeaders = $this->fileHasRecognisableHeaders($row_with_no_spaces);
+
 		foreach ($this->modelFields as $field_name => $row_name) {
 			if (is_int($row_name)) {
 				$data[$field_name] = $row_name;
@@ -253,6 +295,7 @@ class ImportData implements
 				if (
 					($cellValue === null || $cellValue === '')
 					&& ! is_int($row_name)
+					&& ! $fileHasHeaders
 					&& ! in_array($field_name, $this->fieldsExcludedFromPositionalFallback(), true)
 				) {
 					$cellValue = $this->resolveImportFieldValueByPosition($row_with_no_spaces, $field_name);
@@ -272,7 +315,14 @@ class ImportData implements
 						}
 					}
 				} else {
-					$data[$field_name] = null;
+					/**
+					 * A column the file does not have keeps whatever the
+					 * table says it should be when nobody supplies one —
+					 * so an absent "Discount Amount" is 0.00, not null
+					 * and certainly not the number from the next column
+					 * along.
+					 */
+					$data[$field_name] = $this->columnDefaultFor($field_name);
 				}
 			}
 		}
@@ -342,20 +392,7 @@ class ImportData implements
 
 	protected function resolveImportFieldValue(array $row, string $fieldName, string $rowName): ?string
 	{
-		$candidates = array_unique(array_filter([
-			$rowName,
-			$fieldName,
-			str_replace('_', ' ', $fieldName),
-			ucwords(str_replace('_', ' ', $fieldName)),
-		]));
-
-		$modelClass = '\\App\\Models\\' . $this->uploadModelName;
-		if (class_exists($modelClass) && method_exists($modelClass, 'getImportHeaderAliases')) {
-			$aliases = $modelClass::getImportHeaderAliases();
-			if (isset($aliases[$fieldName])) {
-				$candidates = array_merge($candidates, $aliases[$fieldName]);
-			}
-		}
+		$candidates = $this->importHeaderCandidates($fieldName, $rowName);
 
 		foreach ($candidates as $candidate) {
 			$normalizedCandidate = mb_strtolower(trim((string) $candidate));
@@ -401,6 +438,119 @@ class ImportData implements
 			'purchases_order_number', 'purchases_order_date',
 			'sales_order_number', 'sales_order_date',
 		];
+	}
+
+	/**
+	 * The table's own default for a column, used when the uploaded file
+	 * has no column for it.
+	 *
+	 * Read from the schema rather than hard-coded, so it cannot drift
+	 * away from what the table actually does. A column with no default
+	 * (and a file with nothing to put in it) stays null, which is what
+	 * it was before.
+	 *
+	 * @return string|null
+	 */
+	protected function columnDefaultFor(string $fieldName)
+	{
+		if ($this->columnDefaults === null) {
+			$this->columnDefaults = [];
+
+			$table = $this->importTableName();
+
+			if ($table !== null) {
+				foreach (DB::select(
+                    'select column_name, column_default from information_schema.columns where table_schema = database() and table_name = ?',
+                    [$table]
+                ) as $column) {
+					$name = $column->column_name ?? $column->COLUMN_NAME ?? null;
+
+					if ($name !== null) {
+						$this->columnDefaults[$name] = $column->column_default ?? $column->COLUMN_DEFAULT ?? null;
+					}
+				}
+			}
+		}
+
+		return $this->columnDefaults[$fieldName] ?? null;
+	}
+
+	protected function importTableName(): ?string
+	{
+		$modelClass = '\\App\\Models\\' . $this->uploadModelName;
+
+		if (! class_exists($modelClass)) {
+			return null;
+		}
+
+		return (new $modelClass)->getTable();
+	}
+
+	/**
+	 * Does this file carry a header row this import can actually read?
+	 *
+	 * Decided from the row's KEYS (which are the uploaded headers), not
+	 * its values — an all-blank data row must not be mistaken for a
+	 * file without headers.
+	 *
+	 * One recognised header is enough: a file cannot be half
+	 * header-driven and half positional. Either the columns are named,
+	 * in which case an unnamed field is absent, or they are not, in
+	 * which case position is all there is.
+	 *
+	 * @param  array<string, mixed>  $row
+	 */
+	protected function fileHasRecognisableHeaders(array $row): bool
+	{
+		if ($this->fileHasHeaders !== null) {
+			return $this->fileHasHeaders;
+		}
+
+		$headers = array_map(
+			fn ($key) => mb_strtolower(trim((string) $key)),
+			array_keys($row)
+		);
+
+		foreach ($this->modelFields as $fieldName => $rowName) {
+			if (is_int($rowName)) {
+				continue;
+			}
+
+			foreach ($this->importHeaderCandidates($fieldName, $rowName) as $candidate) {
+				if (in_array(mb_strtolower(trim((string) $candidate)), $headers, true)) {
+					return $this->fileHasHeaders = true;
+				}
+			}
+		}
+
+		return $this->fileHasHeaders = false;
+	}
+
+	/**
+	 * Every header text that means $fieldName.
+	 *
+	 * @return list<string>
+	 */
+	protected function importHeaderCandidates(string $fieldName, string $rowName): array
+	{
+		$candidates = array_unique(array_filter([
+			$rowName,
+			$fieldName,
+			str_replace('_', ' ', $fieldName),
+			ucwords(str_replace('_', ' ', $fieldName)),
+		]));
+
+		$modelClass = '\\App\\Models\\' . $this->uploadModelName;
+
+		if (class_exists($modelClass) && method_exists($modelClass, 'getImportHeaderAliases')) {
+			$aliases = $modelClass::getImportHeaderAliases();
+
+			if (isset($aliases[$fieldName])) {
+				$candidates = array_merge($candidates, $aliases[$fieldName]);
+			}
+		}
+
+		return array_values($candidates);
 	}
 
 	protected function resolveImportFieldValueByPosition(array $row, string $fieldName): ?string

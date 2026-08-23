@@ -287,19 +287,16 @@ class MediumTermLoanController
         $type = MediumTermLoan::RUNNING;
         $mediumTermLoan = new MediumTermLoan;
         $mediumTermLoan->status = MediumTermLoan::RUNNING;
-        $mediumTermLoan->storeBasicForm($request);
 
-        /**
-         * storeBasicForm() copies any request field that matches a column,
-         * which would happily persist a leftover shareholder id on a loan
-         * the user just unticked. Re-writing the pair through the normaliser
-         * keeps the two columns consistent, and it returns [] for a user
-         * without the permission so their request cannot flag anything.
-         */
         $ownership = \App\Support\ShareholderAccounts\ShareholderAccountAccess::ownershipFromRequest($request);
-        if ($ownership !== []) {
-            $mediumTermLoan->forceFill($ownership)->save();
+        if ($ownership === []) {
+            $ownership = [
+                'is_shareholder_account' => false,
+                'shareholder_partner_id' => null,
+            ];
         }
+        $mediumTermLoan->forceFill($ownership);
+        $mediumTermLoan->storeBasicForm($request, ['_token', 'save', '_method', 'is_shareholder_account', 'shareholder_partner_id']);
         $activeTab = $type;
 
         $odooSyncFailureMessage = $this->syncLoanWithOdoo($company, $mediumTermLoan);

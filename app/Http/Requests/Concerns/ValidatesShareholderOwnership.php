@@ -39,8 +39,9 @@ trait ValidatesShareholderOwnership
             ],
             $prefix.'shareholder_partner_id' => [
                 'nullable',
-                'required_if:'.$prefix.'is_shareholder_account,1,true',
                 'integer',
+                'required_if:'.$prefix.'is_shareholder_account,1,true',
+                'prohibited_unless:'.$prefix.'is_shareholder_account,1,true',
                 Rule::prohibitedIf(! $canFlag),
                 Rule::exists(Partner::class, 'id')
                     ->where(function ($query) use ($companyId) {
