@@ -24,7 +24,7 @@ return new class extends Migration
         'time_of_deposits',
         'certificates_of_deposits',
         'medium_term_loans',
-    ];
+    ];																										
 
     public function up(): void
     {

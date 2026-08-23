@@ -8,7 +8,7 @@
  * Every row keeps its `id` (0 = new row) so the server's diff-by-id
  * update logic works unmodified.
  */
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { router, usePage, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
@@ -32,6 +32,16 @@ const page = usePage();
 
 const currencyOptions = Object.entries(props.currencies || {});
 
+const branchById = computed(() =>
+    Object.fromEntries((props.branches || []).map(b => [String(b.id), b]))
+);
+function currencyForBranch(branchId) {
+    return branchById.value[String(branchId)]?.currency ?? '';
+}
+function syncCashInSafeCurrency(row) {
+    row.currency = currencyForBranch(row.received_branch_id);
+}
+
 /* ── Date ─────────────────────────────────────────────────────────── *
  * Read-only — always the company's own Opening Balance Date, set by
  * the super admin when the company was created. Not independently
@@ -45,11 +55,22 @@ let nextRowKey = 1;
 
 /* ── Cash In Safe ─────────────────────────────────────────────────── */
 function blankCashInSafe() {
-    return { _key: nextRowKey++, id: 0, received_branch_id: props.branches[0]?.id ?? '', received_amount: '', currency: 'EGP', exchange_rate: 1 };
+    const branchId = props.branches[0]?.id ?? '';
+    return {
+        _key: nextRowKey++,
+        id: 0,
+        received_branch_id: branchId,
+        received_amount: '',
+        currency: currencyForBranch(branchId),
+        exchange_rate: 1,
+    };
 }
 const cashInSafe = ref(
     (props.model?.cashInSafe ?? []).map(r => ({ _key: nextRowKey++, ...r }))
 );
+onMounted(() => {
+    cashInSafe.value.forEach(syncCashInSafeCurrency);
+});
 function addCashInSafe() { cashInSafe.value.push(blankCashInSafe()); }
 function removeCashInSafe(key) {
     cashInSafe.value = cashInSafe.value.filter(r => r._key !== key);
@@ -202,7 +223,7 @@ function fieldError(group, index, field) {
                             </tr>
                             <tr v-for="(row, i) in cashInSafe" :key="row._key" class="cvr-table-row">
                                 <td class="px-3 py-2">
-                                    <select v-model="row.received_branch_id" class="cvr-input px-2 py-1.5 rounded text-sm w-48">
+                                    <select v-model="row.received_branch_id" class="cvr-input px-2 py-1.5 rounded text-sm w-48" @change="syncCashInSafeCurrency(row)">
                                         <option v-for="b in branches" :key="b.id" :value="b.id">{{ b.name }}</option>
                                     </select>
                                 </td>
@@ -211,9 +232,11 @@ function fieldError(group, index, field) {
                                     <p v-if="fieldError('cash-in-safe', i, 'received_amount')" class="text-xs mt-0.5" style="color: var(--cvr-danger-text);">{{ fieldError('cash-in-safe', i, 'received_amount') }}</p>
                                 </td>
                                 <td class="px-3 py-2">
-                                    <select v-model="row.currency" class="cvr-input px-2 py-1.5 rounded text-sm w-24">
-                                        <option v-for="[code, label] in currencyOptions" :key="code" :value="code">{{ label }}</option>
-                                    </select>
+                                    <input
+                                        :value="currencies[row.currency] || row.currency"
+                                        disabled
+                                        class="cvr-input px-2 py-1.5 rounded text-sm w-24 cvr-text-muted cursor-not-allowed"
+                                    />
                                 </td>
                                 <td class="px-3 py-2">
                                     <input v-model="row.exchange_rate" type="number" step="0.0001" class="cvr-input px-2 py-1.5 rounded text-sm w-24" />

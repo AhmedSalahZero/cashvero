@@ -331,6 +331,28 @@ public static function getCashDashboardDataForYear(array &$overdraftAgainstAssig
 		$interestText = 'interest';
 		$interestTypeText = 'end_of_month';
 		$fullBankStatement::where('company_id',$companyId)->where('type',$interestText)->where($foreignKeyColumnName,$this->id)->where('interest_type',$interestTypeText)->where('date','>',$contractEndDate)->delete();
+		/**
+		 * ⚠️ REAL BUG FIXED HERE: النص التاني من نفس القاعدة كان ناقص.
+		 * * السطر اللي فوق بيشيل الشهور اللي بقت بعد نهاية التعاقد ، لكن
+		 * * لما تاريخ البداية يتأخر لقدام (يناير ← اغسطس مثلا) الشهور اللي
+		 * * بقت قبل البداية كانت بتفضل قاعدة في كشف الحساب للابد
+		 *
+		 * * بنشيل الفاضي بس — اي صف اتملي بفايدة فعلية بيفضل ، لان ده فلوس
+		 * * حقيقية اتحسبت مش placeholder
+		 *
+		 * * الحذف جماعي زي السطر اللي فوق : الصفوف دي كلها debit/credit = 0
+		 * * فمفيش رصيد بيتغير و مفيش داعي لسلسلة اعادة الحساب
+		 *
+		 * @see \App\Support\BankStatements\GeneratedMonthEndInterestRows
+		 */
+		$staleBeforeStart = $fullBankStatement::where('company_id',$companyId)
+			->where('type',$interestText)
+			->where($foreignKeyColumnName,$this->id)
+			->where('date','<',$contractStartDate);
+		\App\Support\BankStatements\GeneratedMonthEndInterestRows::onlyUntouchedIn(
+			$staleBeforeStart,
+			(new $fullBankStatement)->getTable()
+		)->delete();
 		foreach($dates as $index => $dateAsString){
 			if($index == 0 && $isLastDayOfMonth){
 				continue;

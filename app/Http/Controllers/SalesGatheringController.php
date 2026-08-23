@@ -235,6 +235,13 @@ class SalesGatheringController extends Controller
 			'currentFrom' => $request->get('from'),
 			'currentTo' => $request->get('to'),
 			'indexUrl' => route('view.uploading', ['company' => $company->id, 'model' => $modelName]),
+			'deleteAllUrl' => route('uploading.destroy.all', ['company' => $company->id, 'modelName' => $modelName]),
+			/**
+			 * The paginator's grand total, not the current page's count:
+			 * the Delete All confirmation names how many rows are about
+			 * to go, and the page only ever holds one page of them.
+			 */
+			'totalRows' => $salesGatherings->total(),
         ]);
     }
     
@@ -293,17 +300,109 @@ class SalesGatheringController extends Controller
 		 * as the UI: any recorded payment blocks it.
 		 */
 		if ($modelType === 'ContractLoanSchedule' && (float) $model->getRemaining() < (float) $model->getChequeAmount()) {
-			toastr()->error(__('This installment has a payment recorded against it and can no longer be deleted.'));
-			return redirect()->back();
+			// Inertia page: session flash, not a flasher envelope. See destroy() below.
+			return redirect()->back()->with('fail', __('This installment has a payment recorded against it and can no longer be deleted.'));
 		}
 		if ($modelType === 'LoanSchedule' && (float) $model->getRemaining() < (float) $model->getSchedulePayment()) {
-			toastr()->error(__('This installment has a payment recorded against it and can no longer be deleted.'));
-			return redirect()->back();
+			// Inertia page: session flash, not a flasher envelope. See destroy() below.
+			return redirect()->back()->with('fail', __('This installment has a payment recorded against it and can no longer be deleted.'));
 		}
 
-		toastr()->error('Deleted Successfully');
         $model->delete();
-        return redirect()->back();
+
+        /**
+         * ⚠️ REAL BUG FIXED HERE (two of them, on one line):
+         *
+         * 1. It said toastr()->ERROR for a successful delete, so the
+         *    confirmation came up red.
+         * 2. toastr() writes a php-flasher envelope, and flasher's
+         *    flash_bag bridge is disabled (see config/flasher.php), so
+         *    nothing carries it into an Inertia response. This page is
+         *    Inertia — the message only ever appeared on the next FULL
+         *    page load, which is exactly the "it shows after I reload"
+         *    report.
+         *
+         * session flash is what HandleInertiaRequests reads and what
+         * AppLayout toasts.
+         */
+        return redirect()->back()->with('success', __('Deleted Successfully'));
+    }
+
+    /**
+     * Deletes every row of this upload type for the company, EXCEPT the
+     * invoices that already have money recorded against them.
+     *
+     * An invoice with a collection or a payment behind it is not a
+     * spreadsheet row any more: removing it would leave the settlement
+     * pointing at nothing. Rather than refusing the whole operation or
+     * quietly taking those too, it deletes what it can and says exactly
+     * what it kept and why.
+     *
+     * Deletes through the model, one row at a time — the statement and
+     * balance cascades hang off the model's own delete hooks, and a
+     * mass query-builder delete would skip every one of them.
+     *
+     * @see \App\Support\Invoices\InvoiceMoneyLinks
+     */
+    public function destroyAll(Company $company, Request $request, string $modelName)
+    {
+        $uploadingArr = getUploadParamsFromType($modelName);
+
+        if (! $request->user()->can($uploadingArr['deletePermissionName'])) {
+            abort(403, __('You do not have permission to perform this action.'));
+        }
+
+        $modelClass = 'App\\Models\\'.$modelName;
+
+        if (! class_exists($modelClass)) {
+            return redirect()->back()->with('fail', __('No Data Found'));
+        }
+
+        $ids = $modelClass::where('company_id', $company->id)->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+        if ($ids === []) {
+            return redirect()->back()->with('fail', __('No Data Found'));
+        }
+
+        $blockedIds = \App\Support\Invoices\InvoiceMoneyLinks::idsWithMoney($modelName, $ids);
+        $deletableIds = array_values(array_diff($ids, $blockedIds));
+
+        $deleted = 0;
+
+        foreach (array_chunk($deletableIds, 200) as $chunk) {
+            foreach ($modelClass::whereIn('id', $chunk)->get() as $row) {
+                $row->delete();
+                $deleted++;
+            }
+        }
+
+        return redirect()->back()->with(
+            $blockedIds === [] ? 'success' : 'fail',
+            $this->deleteAllMessage($deleted, $blockedIds, $modelName)
+        );
+    }
+
+    /**
+     * @param  list<int>  $blockedIds
+     */
+    private function deleteAllMessage(int $deleted, array $blockedIds, string $modelName): string
+    {
+        if ($blockedIds === []) {
+            return __(':count row(s) deleted.', ['count' => $deleted]);
+        }
+
+        $reasons = \App\Support\Invoices\InvoiceMoneyLinks::reasons($modelName, $blockedIds);
+
+        $details = [];
+        foreach ($reasons as $label => $count) {
+            $details[] = $count.' '.__($label);
+        }
+
+        return __(':deleted row(s) deleted. :kept could not be deleted because they have money transactions recorded against them (:details). Delete those transactions first.', [
+            'deleted' => $deleted,
+            'kept' => count($blockedIds),
+            'details' => implode(', ', $details),
+        ]);
     }
     public function export(Company $company, string $modelName)
     {
@@ -311,8 +410,8 @@ class SalesGatheringController extends Controller
         $exportableFields = exportableFields($company->id, $modelName);
         // If there are no exportable fields were found return with a warning msg
         if ($exportableFields === null) {
-            toastr()->warning('Please choose exportable fields first');
-            return redirect()->back() ;
+            // Same flash-channel fix as destroy() above: this page is Inertia.
+            return redirect()->back()->with('fail', __('Please choose exportable fields first'));
         }
         // Get The Selected exportable fields returns a pair of ['field_name' => 'viewing name']
         $selected_fields = (new ExportTable)->customizedTableField($company, $modelName, 'selected_fields');

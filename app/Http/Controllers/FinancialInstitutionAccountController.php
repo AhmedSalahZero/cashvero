@@ -171,6 +171,21 @@ class FinancialInstitutionAccountController
 				 * * لان لو التاريخ اترجع لورا فا الحركات اللي ما بين التاريخين لازم تتحدث هي كمان
 				 * * و وارد ما نلاقيش اي حركة خالص فا لازم نتاكد قبل ما نعدل
 				 */
+				/**
+				 * * التاريخ اترجع لورا ⇒ الشهور اللي ما بين التاريخ الجديد
+				 * * و القديم بقي ليها رصيد تستحق عليه و مالهاش صفوف
+				 *
+				 * * قبل كدا كانت بتفضل ناقصة للابد لان synced_end_of_month_years
+				 * * بيمنع اي اعادة تشغيل .. دلوقتي المولد بقي idempotent
+				 * * (بيفحص end_of_month_period) فاعادة التشغيل امنة
+				 *
+				 * * التاريخ لقدام مش محتاج ده — الشهور الزيادة اتحذفت فوق ،
+				 * * و اعادة التشغيل هنا ما بتضيفش حاجة لان كل شهر <= تاريخ
+				 * * الرصيد بيتخطي اصلا .. بننادها في الحالتين عشان النتيجة
+				 * * تبقي واحدة مهما كان اتجاه التعديل
+				 */
+				$currentAccountBeginningBalance->resyncEndOfMonthInterestForAllYears($company->id);
+
 				$statementToRefresh = CurrentAccountBankStatement::where('date','>=',min($currentDate,$balanceDate))
 				->where('financial_institution_account_id',$currentAccountBeginningBalance->financial_institution_account_id)
 				->orderByRaw('date asc , id asc')

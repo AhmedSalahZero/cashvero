@@ -402,7 +402,25 @@ class CurrentAccountBankStatement extends Model  implements IHaveStatement
 		/**
 	 * * دا مش محدود بتواريخ بدايه ونهايه زي اللي فوق
 	 */
-	public  function handleEndOfMonthInterestForCurrentAccountStatement(string $statementDate , int $companyId)
+	/**
+	 * * بتولد صف فايدة اخر شهر لكل شهر في سنة $statementDate
+	 *
+	 * * $force = true معناها : اعمل الشهور الناقصة حتي لو السنة متسجلة
+	 * * كـ synced .. بتتستخدم لما تاريخ الرصيد الافتتاحي يترجع لورا
+	 *
+	 * ⚠️ REAL BUG FIXED HERE: تحريك تاريخ الرصيد لورا كان بيسيب الشهور
+	 * ما بين التاريخ الجديد و القديم من غير صفوف — للابد. السبب ان
+	 * synced_end_of_month_years كان الحارس الوحيد ضد التكرار ، فكان لازم
+	 * يمنع اي اعادة تشغيل .. و فحص الوجود المسبق كان متعلق عليه لان
+	 * التاريخ لوحده مش بيقول الصف بتاع انهي شهر (المستخدم بيقدر يعدله ،
+	 * و 7 صفوف في الداتا فعلا مش في اخر الشهر)
+	 *
+	 * * دلوقتي end_of_month_period بيثبت الشهر المقصود ، فالفحص بقي
+	 * * موثوق و الدالة بقت idempotent — و اعادة التشغيل بقت امنة
+	 *
+	 * @see database/migrations/2026_08_23_140000_add_end_of_month_period_to_current_account_bank_statements.php
+	 */
+	public  function handleEndOfMonthInterestForCurrentAccountStatement(string $statementDate , int $companyId, bool $force = false)
 	{
 	
 		$foreignKeyColumnName = 'financial_institution_account_id'; // clean_overdraft_id for clean_overdrafts for example
@@ -414,10 +432,7 @@ class CurrentAccountBankStatement extends Model  implements IHaveStatement
 		$statementEndDateAsCarbon= $statementStartDateAsCarbon->copy()->endOfYear();
 		
 		$dates = generateDatesBetweenTwoDatesWithoutOverflow($statementStartDateAsCarbon,$statementEndDateAsCarbon) ;
-	//	$countDates = count($dates);
 		$interestText = 'interest';
-	//	$interestTypeText = 'end_of_month';
-	//	$fullBankStatement::where('company_id',$companyId)->where('type',$interestText)->where($foreignKeyColumnName,$this->id)->where('interest_type',$interestTypeText)->where('date','>',$contractEndDate)->delete();
 		$beginningBalanceRow = $fullBankStatement::where('company_id',$companyId)->where('is_beginning_balance',1)->where('financial_institution_account_id',$this->financial_institution_account_id)->first();
 		$financialInstitutionAccount = FinancialInstitutionAccount::find($this->financial_institution_account_id);
 		$balanceDate = $financialInstitutionAccount->balance_date;
@@ -425,53 +440,114 @@ class CurrentAccountBankStatement extends Model  implements IHaveStatement
 		$syncedYears = (array)$syncedYears;
 			
 		$currentYear = Carbon::make($statementDate)->format('Y');
-		if(in_array($currentYear,$syncedYears) || !$beginningBalanceRow){
+		if(!$beginningBalanceRow){
 			return ;
 		}
+		/**
+		 * * الحارس ده بقي مجرد مسار سريع : بيوفر لوب 12 شهر و 12 استعلام
+		 * * علي كل انشاء/تعديل صف .. مش بقي حارس صحة بيانات ، لان فحص
+		 * * الوجود تحت هو اللي بيمنع التكرار دلوقتي
+		 */
+		if(!$force && in_array($currentYear,$syncedYears)){
+			return ;
+		}
+
+		/**
+		 * * الشهور اللي ليها صف بالفعل في السنة دي — استعلام واحد بدل
+		 * * استعلام لكل شهر
+		 */
+		$existingPeriods = $fullBankStatement::where('company_id',$companyId)
+			->where($foreignKeyColumnName,$this->financial_institution_account_id)
+			->whereIn('interest_type',['end_of_month','end_of_month_final'])
+			->whereNotNull('end_of_month_period')
+			->where('end_of_month_period','like',$currentYear.'-%')
+			->pluck('end_of_month_period')
+			->all();
+		$existingPeriods = array_flip($existingPeriods);
 		
 		foreach($dates as $index => $dateAsString){
 			$currentEndOfMonthDate =  Carbon::make($dateAsString)->endOfMonth()->format('Y-m-d');
+			$currentPeriod = Carbon::make($dateAsString)->format('Y-m');
 			if(Carbon::make($currentEndOfMonthDate)->lessThanOrEqualTo(Carbon::make($beginningBalanceRow->date))){
 				continue ; 
 			}
 			if( Carbon::make($currentEndOfMonthDate)->equalTo(Carbon::make($balanceDate))){
 				continue;
 			}
-			// if($index == 0 && $isLastDayOfMonth){
-			// 	continue;
-			// }
-	//		$isLastLoop = $index == $countDates -1;
-	
-			
-			// $isExist = $fullBankStatement::where('company_id',$companyId)->where($foreignKeyColumnName,$this->id)->where('type',$interestText)->where('interest_type',$interestTypeText)->where('date',$currentEndOfMonthDate)->first();
-			// if(!$isExist){
-				$data = [
+			/**
+			 * * الشهر ده ليه صف خلاص — حتي لو الصف اتعدل تاريخه و بقي في
+			 * * نص الشهر ، لسه بيخص نفس الشهر
+			 */
+			if(isset($existingPeriods[$currentPeriod])){
+				continue;
+			}
+			$data = [
 				'company_id'=>$companyId,
 				$foreignKeyColumnName=>$this->financial_institution_account_id ,
 				'priority'=>1 ,
 				'type'=>$interestText,
 				'date'=>$currentEndOfMonthDate,
-			//	'limit'=>$this->limit ,
 				'debit'=>0,
 				'beginning_balance'=>0,
 				'credit'=>0 ,
 				'interest_type'=>'end_of_month',
+				'end_of_month_period'=>$currentPeriod,
 				'comment_en'=>__('End Of Month Interest'),
 				'comment_ar'=>__('End Of Month Interest'),
 			] ; 
 	
-				unset($data['priority']);
+			unset($data['priority']);
 			
-			 $fullBankStatement::create($data);
-			// }
+			$fullBankStatement::create($data);
+			$existingPeriods[$currentPeriod] = true;
 			
 		}
-		$syncedYears[] = $currentYear;
-		$financialInstitutionAccount->update([
-			'synced_end_of_month_years'=>$syncedYears
-		]);
+		if(!in_array($currentYear,$syncedYears)){
+			$syncedYears[] = $currentYear;
+			$financialInstitutionAccount->update([
+				'synced_end_of_month_years'=>$syncedYears
+			]);
+		}
 		
 		
+	}
+
+	/**
+	 * * بتعيد توليد الشهور الناقصة لكل السنين اللي الحساب ده اشتغل فيها
+	 *
+	 * * بتتنادي لما تاريخ الرصيد الافتتاحي يتغير : الشهور اللي بقت قبل
+	 * * التاريخ الجديد بتتحذف في الكونترولر ، و اللي بقت بعده بتتضاف هنا
+	 *
+	 * * امنة لانها بتعدي علي نفس فحص end_of_month_period
+	 */
+	public function resyncEndOfMonthInterestForAllYears(int $companyId): int
+	{
+		$financialInstitutionAccount = FinancialInstitutionAccount::find($this->financial_institution_account_id);
+
+		if (! $financialInstitutionAccount) {
+			return 0;
+		}
+
+		$years = (array) $financialInstitutionAccount->synced_end_of_month_years;
+		$years[] = Carbon::make($financialInstitutionAccount->balance_date)->format('Y');
+		$years = array_values(array_unique(array_filter($years)));
+		sort($years);
+
+		$before = (int) DB::table('current_account_bank_statements')
+			->where('financial_institution_account_id', $this->financial_institution_account_id)
+			->whereIn('interest_type', ['end_of_month', 'end_of_month_final'])
+			->count();
+
+		foreach ($years as $year) {
+			$this->handleEndOfMonthInterestForCurrentAccountStatement($year.'-01-01', $companyId, true);
+		}
+
+		$after = (int) DB::table('current_account_bank_statements')
+			->where('financial_institution_account_id', $this->financial_institution_account_id)
+			->whereIn('interest_type', ['end_of_month', 'end_of_month_final'])
+			->count();
+
+		return $after - $before;
 	}
 		public function fullyIntegratedWithOdoo()
 	{

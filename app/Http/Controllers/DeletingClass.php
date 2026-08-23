@@ -53,9 +53,14 @@ class DeletingClass
             $all_model_data->each->delete();
         }
 
-        toastr()->success('All Rows Were Deleted  Successfully');
-
-        return redirect()->back();
+        /**
+         * ⚠️ Same flash-channel bug as SalesGatheringController::destroy():
+         * toastr() writes a php-flasher envelope and flasher's flash_bag
+         * bridge is off (config/flasher.php), so nothing carries it into
+         * an Inertia response — the confirmation only appeared on the
+         * next full page load.
+         */
+        return redirect()->back()->with('success', __('All Rows Were Deleted Successfully'));
     }
 
     public function multipleRowsDeleting(Request $request, Company $company, $model)

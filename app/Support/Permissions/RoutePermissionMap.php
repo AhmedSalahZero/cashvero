@@ -632,6 +632,13 @@ class RoutePermissionMap
         // admits anyone holding an upload right for ANY dataset, then
         // SalesGatheringController narrows it per model.
         'view.uploading' => ['customer_invoice_data.view', 'supplier_invoice_data.view', 'loan_schedule_data.view'],
+        /**
+         * Deleting every row of a dataset. The per-model bulk-delete
+         * right is checked again inside destroyAll() against the
+         * dataset actually named in the URL — this only gets the
+         * request past the route gate.
+         */
+        'uploading.destroy.all' => ['customer_invoice_data.bulk_delete', 'supplier_invoice_data.bulk_delete', 'loan_schedule_data.bulk_delete'],
         'salesGathering.index' => ['customer_invoice_data.view', 'supplier_invoice_data.view', 'loan_schedule_data.view'],
         'salesGathering.show' => ['customer_invoice_data.view', 'supplier_invoice_data.view', 'loan_schedule_data.view'],
         'salesGathering.create' => ['customer_invoice_data.import', 'supplier_invoice_data.import', 'loan_schedule_data.import'],

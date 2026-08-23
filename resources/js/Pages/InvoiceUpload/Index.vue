@@ -63,6 +63,8 @@ const props = defineProps({
     currentFrom: String,
     currentTo: String,
     indexUrl: String,
+    deleteAllUrl: String,
+    totalRows: Number,
 });
 
 /* ── Search/filter — since this page is itself already migrated,
@@ -166,6 +168,27 @@ function destroyRow() {
         onFinish: () => { deleteTarget.value = null; },
     });
 }
+
+/* ── Delete all ─────────────────────────────────────────────────────
+   Rows with money already recorded against them (a collection, a
+   payment, an allocation) are kept back by the server, which then says
+   how many and why. The count is deliberately NOT worked out here:
+   the page only ever holds the current page of rows, so anything the
+   frontend computed would be wrong for every dataset bigger than one
+   page. */
+const confirmingDeleteAll = ref(false);
+const deletingAll = ref(false);
+
+function destroyAll() {
+    deletingAll.value = true;
+    router.delete(props.deleteAllUrl, {
+        preserveScroll: true,
+        onFinish: () => {
+            deletingAll.value = false;
+            confirmingDeleteAll.value = false;
+        },
+    });
+}
 </script>
 
 <template>
@@ -178,6 +201,14 @@ function destroyRow() {
                     <Link v-if="canUpload" :href="importUrl" class="cvr-btn-primary px-3 py-1.5 rounded text-sm whitespace-nowrap">Upload Data</Link>
                     <a v-if="canExport" :href="exportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap">Export All Data</a>
                     <a v-if="canUpload" :href="templateFieldsUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap">Select Template Fields</a>
+                    <button
+                        v-if="canDelete && !companyHasOdoo && totalRows > 0"
+                        type="button"
+                        class="cvr-btn-danger px-3 py-1.5 rounded border text-sm whitespace-nowrap"
+                        @click="confirmingDeleteAll = true"
+                    >
+                        Delete All
+                    </button>
                 </div>
             </div>
             <p class="text-sm cvr-text-muted mb-6">{{ pagination.total }} record(s)</p>
@@ -292,6 +323,38 @@ function destroyRow() {
                     <div class="flex justify-end gap-2">
                         <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
                         <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">Delete</button>
+                    </div>
+                </div>
+            </div>
+
+            <!--
+                Delete all. The warning is stated up front rather than
+                only in the result: a user about to wipe a dataset
+                should know before pressing it that rows with money
+                against them will be kept, not discover it afterwards.
+            -->
+            <div v-if="confirmingDeleteAll" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-md">
+                    <h2 class="text-lg font-medium cvr-text-primary mb-3">
+                        Delete all {{ totalRows }} {{ modelDisplayName }} record(s)?
+                    </h2>
+                    <p class="text-sm cvr-text-muted mb-2">This action cannot be undone.</p>
+                    <p class="text-sm cvr-num-amber mb-4">
+                        Any record that already has money recorded against it — a collection, a payment,
+                        an allocation — will be kept, and you will be told how many.
+                    </p>
+                    <div class="flex justify-end gap-2">
+                        <button
+                            :disabled="deletingAll"
+                            @click="confirmingDeleteAll = false"
+                            class="cvr-btn-secondary px-3 py-1.5 rounded border"
+                        >Close</button>
+                        <button
+                            :disabled="deletingAll"
+                            @click="destroyAll"
+                            class="cvr-btn-danger px-3 py-1.5 rounded border"
+                            :class="{ 'opacity-60 cursor-not-allowed': deletingAll }"
+                        >{{ deletingAll ? 'Deleting…' : 'Delete All' }}</button>
                     </div>
                 </div>
             </div>

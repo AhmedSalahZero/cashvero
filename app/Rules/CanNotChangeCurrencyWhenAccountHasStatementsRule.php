@@ -4,6 +4,7 @@ namespace App\Rules;
 
 use App\Models\FinancialInstitutionAccount;
 use Illuminate\Contracts\Validation\Rule;
+use App\Support\BankStatements\GeneratedMonthEndInterestRows;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -39,10 +40,20 @@ class CanNotChangeCurrencyWhenAccountHasStatementsRule implements Rule
 			return true ;
 		}
 
-		$hasStatements = DB::table('current_account_bank_statements')
-		->where('financial_institution_account_id',$this->financial_institution_account->id)
-		->where('is_beginning_balance',0)
-		->exists();
+		/**
+		 * * نفس علة DateCanNotBeAfterAnyStatementRule بالظبط : الصفوف اللي
+		 * * بيولدها النظام لفوائد اخر الشهر و لسه فاضية مش حركات ، و كانت
+		 * * بتمنع تغيير العملة برسالة "فيه حركات على الحساب" على حساب
+		 * * مفيهوش ولا حركة واحدة
+		 *
+		 * * التعريف متعرف في مكان واحد بس علشان القاعدتين ما يفترقوش
+		 * @see \App\Support\BankStatements\GeneratedMonthEndInterestRows
+		 */
+		$query = DB::table('current_account_bank_statements')
+			->where('financial_institution_account_id',$this->financial_institution_account->id)
+			->where('is_beginning_balance',0);
+
+		$hasStatements = GeneratedMonthEndInterestRows::excludeUntouchedFrom($query)->exists();
 
 		return ! $hasStatements ;
     }

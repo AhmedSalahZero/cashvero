@@ -2,6 +2,8 @@
 
 namespace App\Support\BankStatements;
 
+use Illuminate\Support\Facades\Schema;
+
 /**
  * The one definition of "an untouched generated month-end interest row".
  *
@@ -31,19 +33,50 @@ class GeneratedMonthEndInterestRows
     public const INTEREST_TYPES = ['end_of_month', 'end_of_month_final'];
 
     /**
+     * Where this started. Every caller that works on a facility's own
+     * statements passes its table instead.
+     */
+    public const DEFAULT_TABLE = 'current_account_bank_statements';
+
+    /**
+     * The Odoo links that turn a placeholder into a posted record.
+     * Only the current-account statements table carries them; the
+     * overdraft statement tables have no Odoo columns at all.
+     */
+    private const ODOO_LINK_COLUMNS = [
+        'interest_journal_entry_id',
+        'interest_odoo_reference',
+        'interest_account_bank_statement_odoo_id',
+    ];
+
+    /**
      * Narrow a (sub)query down to untouched generated placeholders.
+     *
+     * $table names the statement table being queried. It defaults to
+     * the current-account statements, which is where this started, but
+     * every facility keeps its own statements in its own table and the
+     * same rows appear there too — see
+     * FullySecuredOverdraft::handleEndOfMonthInterestForContractStatements()
+     * and its three siblings.
+     *
+     * Guards for columns a given table does not have are skipped rather
+     * than crashing: the overdraft tables have no Odoo columns, so
+     * "not posted to Odoo" is trivially true for them.
      *
      * @param  \Illuminate\Database\Query\Builder|\Illuminate\Database\Eloquent\Builder  $query
      */
-    public static function constrain($query): void
+    public static function constrain($query, string $table = self::DEFAULT_TABLE): void
     {
         $query->whereNotNull('interest_type')
             ->whereIn('interest_type', self::INTEREST_TYPES)
             ->where('debit', 0)
-            ->where('credit', 0)
-            ->whereNull('interest_journal_entry_id')
-            ->whereNull('interest_odoo_reference')
-            ->whereNull('interest_account_bank_statement_odoo_id');
+            ->where('credit', 0);
+
+        foreach (self::ODOO_LINK_COLUMNS as $column) {
+            if (Schema::hasColumn($table, $column)) {
+                $query->whereNull($column);
+            }
+        }
     }
 
     /**
@@ -52,9 +85,9 @@ class GeneratedMonthEndInterestRows
      *
      * @param  \Illuminate\Database\Query\Builder|\Illuminate\Database\Eloquent\Builder  $query
      */
-    public static function excludeUntouchedFrom($query)
+    public static function excludeUntouchedFrom($query, string $table = self::DEFAULT_TABLE)
     {
-        return $query->whereNot(fn ($sub) => self::constrain($sub));
+        return $query->whereNot(fn ($sub) => self::constrain($sub, $table));
     }
 
     /**
@@ -62,8 +95,8 @@ class GeneratedMonthEndInterestRows
      *
      * @param  \Illuminate\Database\Query\Builder|\Illuminate\Database\Eloquent\Builder  $query
      */
-    public static function onlyUntouchedIn($query)
+    public static function onlyUntouchedIn($query, string $table = self::DEFAULT_TABLE)
     {
-        return $query->where(fn ($sub) => self::constrain($sub));
+        return $query->where(fn ($sub) => self::constrain($sub, $table));
     }
 }

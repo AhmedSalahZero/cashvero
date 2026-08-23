@@ -131,6 +131,7 @@ Route::middleware([])->group(function () {
                 Route::resource('salesGathering', 'SalesGatheringController');
 
                 Route::get('uploading/{model}/{loanId?}', 'SalesGatheringController@index')->name('view.uploading');
+                Route::delete('uploading/{modelName}/delete-all', 'SalesGatheringController@destroyAll')->name('uploading.destroy.all');
 
                 /**
                  * ⚠️ Was `Route::get(...)` — a GET request that

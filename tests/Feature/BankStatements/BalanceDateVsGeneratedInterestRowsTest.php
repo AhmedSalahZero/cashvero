@@ -261,6 +261,80 @@ class BalanceDateVsGeneratedInterestRowsTest extends TestCase
     }
 
     // ---------------------------------------------------------------
+    // the same rows must not block a currency change either
+    // ---------------------------------------------------------------
+
+    /**
+     * CanNotChangeCurrencyWhenAccountHasStatementsRule asked the same
+     * question the same wrong way: an account carrying nothing but its
+     * opening balance and the system's own empty month-end rows was
+     * refused a currency change with "There Are Transactions On This
+     * Account" — on an account with no transactions at all.
+     *
+     * Both rules now read the one definition, so they cannot drift.
+     *
+     * @see \App\Rules\CanNotChangeCurrencyWhenAccountHasStatementsRule
+     */
+    public function test_an_empty_generated_month_end_row_does_not_block_a_currency_change(): void
+    {
+        $this->row(['is_beginning_balance' => 1, 'date' => '2026-06-30', 'debit' => 64450.61]);
+        $this->placeholder('2026-07-31');
+        $this->placeholder('2026-08-31');
+
+        $this->assertTrue($this->currencyChangeAllowed());
+    }
+
+    public function test_a_real_transaction_still_blocks_a_currency_change(): void
+    {
+        $this->transaction('2026-07-20');
+
+        $this->assertFalse($this->currencyChangeAllowed());
+    }
+
+    /**
+     * A month-end row the trigger has filled in, or one already posted
+     * to Odoo, is real money and must still block.
+     *
+     * @dataProvider touchedMonthEndRowProvider
+     */
+    public function test_a_touched_month_end_row_still_blocks_a_currency_change(array $overrides): void
+    {
+        $this->placeholder('2026-07-31', $overrides);
+
+        $this->assertFalse($this->currencyChangeAllowed());
+    }
+
+    public static function touchedMonthEndRowProvider(): array
+    {
+        return [
+            'carries interest' => [['debit' => 164781.28]],
+            'posted to odoo' => [['interest_journal_entry_id' => 15432]],
+        ];
+    }
+
+    /**
+     * Changing nothing is always allowed — the rule short-circuits
+     * before it ever looks at the statements.
+     */
+    public function test_keeping_the_same_currency_is_always_allowed(): void
+    {
+        $this->transaction('2026-07-20');
+
+        $this->assertTrue($this->currencyChangeAllowed('EGP'));
+    }
+
+    private function currencyChangeAllowed(string $newCurrency = 'USD'): bool
+    {
+        // Never saved — the rule only reads its id and current currency.
+        $account = new \App\Models\FinancialInstitutionAccount;
+        $account->id = self::ACCOUNT;
+        $account->currency = 'EGP';
+
+        return (new \App\Rules\CanNotChangeCurrencyWhenAccountHasStatementsRule($account))
+            ->passes('currency', $newCurrency);
+    }
+
+    // ---------------------------------------------------------------
     // the cleanup
     // ---------------------------------------------------------------
 
