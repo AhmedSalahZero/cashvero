@@ -190,7 +190,7 @@ function submit() {
                         </div>
                         <div v-if="!isFullySecured">
                             <label class="cvr-form-label">Limit *</label>
-                            <input v-model="form.limit" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="form.limit" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Select Currency *</label>
@@ -271,8 +271,8 @@ function submit() {
                                         />
                                     </td>
                                     <td class="px-3 py-2"><input v-model="row.commission_rate" type="number" step="any" class="cvr-input px-2 py-1.5 rounded w-24" /></td>
-                                    <td class="px-3 py-2"><input v-model="row.min_commission_fees" type="number" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
-                                    <td class="px-3 py-2"><input v-model="row.issuance_fees" type="number" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
+                                    <td class="px-3 py-2"><input v-model="row.min_commission_fees" type="number" step="any" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
+                                    <td class="px-3 py-2"><input v-model="row.issuance_fees" type="number" step="any" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
                                 </tr>
                             </tbody>
                         </table>

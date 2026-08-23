@@ -250,7 +250,10 @@ trait HasForecastedProjectCollection
             $orderNetBalance = 0;
         }
 
-        $exchangeRate = ForeignExchangeRate::getExchangeRateAtOrOne($contract->getCurrency(), $mainFunctionalCurrency, $currentCollectionDateFormatted, $companyId, $foreignExchangeRates);
+        // * $currency هي عملة التبويب المعروض. لو العقد بنفس العملة يبقى
+        // * الرقم لازم يفضل زي ما هو — التحويل للعملة الرئيسية بيحصل بس على
+        // * تبويب العملة الرئيسية اللي بيجمّع كل العملات مع بعض.
+        $exchangeRate = ForeignExchangeRate::getExchangeRateForDisplayCurrency($contract->getCurrency(), $currency, $mainFunctionalCurrency, $currentCollectionDateFormatted, $companyId, $foreignExchangeRates);
         $orderNetBalance = $orderNetBalance * $exchangeRate * $weightMultiplier;
 
         $rowLabel = $customerName.'-'.$contractName;

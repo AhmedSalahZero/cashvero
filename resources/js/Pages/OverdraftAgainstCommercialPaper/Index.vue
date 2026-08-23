@@ -571,12 +571,12 @@ function submitRenew() {
                         </div>
                         <div>
                             <label class="block text-xs cvr-text-secondary mb-1">New Overall Limit</label>
-                            <input type="number" v-model="renewForm.limit" class="cvr-input w-full" placeholder="Unchanged" />
+                            <input type="number" step="any" v-model="renewForm.limit" class="cvr-input w-full" placeholder="Unchanged" />
                             <p v-if="renewErrors.limit" class="text-xs text-red-600 mt-1">{{ renewErrors.limit }}</p>
                         </div>
                         <div>
                             <label class="block text-xs cvr-text-secondary mb-1">New Max Lending Limit Per Customer</label>
-                            <input type="number" v-model="renewForm.max_lending_limit_per_customer" class="cvr-input w-full" placeholder="Unchanged" />
+                            <input type="number" step="any" v-model="renewForm.max_lending_limit_per_customer" class="cvr-input w-full" placeholder="Unchanged" />
                             <p v-if="renewErrors.max_lending_limit_per_customer" class="text-xs text-red-600 mt-1">{{ renewErrors.max_lending_limit_per_customer }}</p>
                         </div>
                         <div>
@@ -585,11 +585,11 @@ function submitRenew() {
                         </div>
                         <div>
                             <label class="block text-xs cvr-text-secondary mb-1">New Highest-Debt-Balance Rate %</label>
-                            <input type="number" v-model="renewForm.highest_debt_balance_rate" class="cvr-input w-full" placeholder="Unchanged" />
+                            <input type="number" step="any" v-model="renewForm.highest_debt_balance_rate" class="cvr-input w-full" placeholder="Unchanged" />
                         </div>
                         <div>
                             <label class="block text-xs cvr-text-secondary mb-1">New Admin Fees Rate %</label>
-                            <input type="number" v-model="renewForm.admin_fees_rate" class="cvr-input w-full" placeholder="Unchanged" />
+                            <input type="number" step="any" v-model="renewForm.admin_fees_rate" class="cvr-input w-full" placeholder="Unchanged" />
                         </div>
                         <div class="col-span-2">
                             <label class="block text-xs cvr-text-secondary mb-1">Notes</label>

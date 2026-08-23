@@ -352,7 +352,7 @@ function submitRenew() {
                         </div>
                         <div v-else>
                             <label class="block text-xs cvr-text-secondary mb-1">New Limit</label>
-                            <input type="number" v-model="renewForm.limit" class="cvr-input w-full" placeholder="Unchanged" />
+                            <input type="number" step="any" v-model="renewForm.limit" class="cvr-input w-full" placeholder="Unchanged" />
                             <p v-if="renewErrors.limit" class="text-xs text-red-600 mt-1">{{ renewErrors.limit }}</p>
                         </div>
                         <div>
@@ -404,8 +404,8 @@ function submitRenew() {
                                     <td class="px-3 py-2 whitespace-nowrap cvr-text-primary font-medium">{{ lcTypes[row.lc_type] }}</td>
                                     <td class="px-3 py-2"><input v-model="row.cash_cover_rate" type="number" step="any" class="cvr-input px-2 py-1.5 rounded w-24" /></td>
                                     <td class="px-3 py-2"><input v-model="row.commission_rate" type="number" step="any" class="cvr-input px-2 py-1.5 rounded w-24" /></td>
-                                    <td class="px-3 py-2"><input v-model="row.min_commission_fees" type="number" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
-                                    <td class="px-3 py-2"><input v-model="row.issuance_fees" type="number" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
+                                    <td class="px-3 py-2"><input v-model="row.min_commission_fees" type="number" step="any" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
+                                    <td class="px-3 py-2"><input v-model="row.issuance_fees" type="number" step="any" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
                                 </tr>
                             </tbody>
                         </table>

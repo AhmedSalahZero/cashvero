@@ -184,12 +184,12 @@ function submit() {
                     <div class="cvr-form-grid-3">
                         <div>
                             <label class="cvr-form-label">Limit *</label>
-                            <input v-model="form.limit" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="form.limit" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('limit')" class="text-xs mt-1 cvr-num-red">{{ errorFor('limit') }}</p>
                         </div>
                         <div>
                             <label class="cvr-form-label">Outstanding Balance *</label>
-                            <input v-model="form.outstanding_balance" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="form.outstanding_balance" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Balance Date *</label>
@@ -242,7 +242,7 @@ function submit() {
                     <div v-for="(row, index) in breakdowns" :key="row.key" class="flex items-end gap-3 mb-3">
                         <div class="w-40">
                             <label class="cvr-form-label">Amount</label>
-                            <input v-model="row.amount" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="row.amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div class="w-48">
                             <label class="cvr-form-label">Settlement Date</label>

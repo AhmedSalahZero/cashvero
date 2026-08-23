@@ -467,7 +467,7 @@ function submit() {
                         </div>
                         <div>
                             <label class="cvr-form-label">LC Amount *</label>
-                            <input v-model="form.lc_amount" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="form.lc_amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('lc_amount')" class="text-xs mt-1 cvr-num-red">{{ errorFor('lc_amount') }}</p>
                         </div>
                         <div>

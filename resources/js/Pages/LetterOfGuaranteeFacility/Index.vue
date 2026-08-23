@@ -319,7 +319,7 @@ function submitRenew() {
                         </div>
                         <div>
                             <label class="block text-xs cvr-text-secondary mb-1">New Limit</label>
-                            <input type="number" v-model="renewForm.limit" class="cvr-input w-full" placeholder="Unchanged" />
+                            <input type="number" step="any" v-model="renewForm.limit" class="cvr-input w-full" placeholder="Unchanged" />
                             <p v-if="renewErrors.limit" class="text-xs text-red-600 mt-1">{{ renewErrors.limit }}</p>
                         </div>
                         <div class="col-span-2">
@@ -351,8 +351,8 @@ function submitRenew() {
                                             <option v-for="(label, code) in commissionIntervals" :key="code" :value="code">{{ label }}</option>
                                         </select>
                                     </td>
-                                    <td class="px-3 py-2"><input v-model="row.min_commission_fees" type="number" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
-                                    <td class="px-3 py-2"><input v-model="row.issuance_fees" type="number" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
+                                    <td class="px-3 py-2"><input v-model="row.min_commission_fees" type="number" step="any" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
+                                    <td class="px-3 py-2"><input v-model="row.issuance_fees" type="number" step="any" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
                                 </tr>
                             </tbody>
                         </table>

@@ -201,12 +201,12 @@ function submit() {
                         </div>
                         <div>
                             <label class="cvr-form-label">Limit *</label>
-                            <input v-model="form.limit" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="form.limit" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <template v-if="!isLockedByRenewal">
                             <div>
                                 <label class="cvr-form-label">Outstanding Balance *</label>
-                                <input v-model="form.outstanding_balance" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                                <input v-model="form.outstanding_balance" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                             <div>
                                 <label class="cvr-form-label">Balance Date *</label>
@@ -251,7 +251,7 @@ function submit() {
                         </div>
                         <div>
                             <label class="cvr-form-label">Max Lending Limit Per Customer *</label>
-                            <input v-model="form.max_lending_limit_per_customer" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="form.max_lending_limit_per_customer" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('max_lending_limit_per_customer')" class="text-xs mt-1 cvr-num-red">{{ errorFor('max_lending_limit_per_customer') }}</p>
                         </div>
                     </div>
@@ -309,7 +309,7 @@ function submit() {
                         </div>
                         <div>
                             <label class="cvr-form-label">Amount</label>
-                            <input v-model="row.amount" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="row.amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <button
                             type="button"

@@ -447,7 +447,7 @@ const commentTarget = ref(null);
                             </div>
                             <div>
                                 <label class="cvr-form-label">LC Remaining Amount</label>
-                                <input v-model="payForm.lc_remaining_amount" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                                <input v-model="payForm.lc_remaining_amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                             <div>
                                 <label class="cvr-form-label">Account Type</label>
@@ -496,7 +496,7 @@ const commentTarget = ref(null);
                                     </td>
                                     <td class="px-3 py-2"><input disabled :value="contractDetails(row)?.code ?? ''" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
                                     <td class="px-3 py-2"><input disabled :value="(contractDetails(row)?.amount ?? 0).toLocaleString()" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
-                                    <td class="px-3 py-2"><input v-model="row.allocation_amount" type="number" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
+                                    <td class="px-3 py-2"><input v-model="row.allocation_amount" type="number" step="any" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
                                     <td class="px-3 py-2">
                                         <button type="button" @click="removeAllocationRow(row._rowId)" class="cvr-btn-remove-row w-auto">🗑</button>
                                     </td>
@@ -549,7 +549,7 @@ const commentTarget = ref(null);
                         </div>
                         <div>
                             <label class="cvr-form-label">Amount</label>
-                            <input v-model="newExpenseForm.amount" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="newExpenseForm.amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Currency *</label>
@@ -614,7 +614,7 @@ const commentTarget = ref(null);
                         </div>
                         <div>
                             <label class="cvr-form-label">Amount</label>
-                            <input v-model="editExpenseForm.amount" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="editExpenseForm.amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Currency *</label>

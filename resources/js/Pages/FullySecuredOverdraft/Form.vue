@@ -292,7 +292,7 @@ function submit() {
                         <template v-if="!isLockedByRenewal">
                             <div>
                                 <label class="cvr-form-label">Outstanding Balance *</label>
-                                <input v-model="form.outstanding_balance" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                                <input v-model="form.outstanding_balance" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                             <div>
                                 <label class="cvr-form-label">Balance Date *</label>
@@ -354,7 +354,7 @@ function submit() {
                         </div>
                         <div>
                             <label class="cvr-form-label">Amount</label>
-                            <input v-model="row.amount" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="row.amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <button
                             type="button"

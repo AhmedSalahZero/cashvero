@@ -608,7 +608,8 @@ class SupplierInvoice extends Model implements IInvoice
 				}else{
 					$salesOrderNetBalance = $salesOrderAmount - $currentInvoiceAmount;
 				}
-				$exchangeRate = ForeignExchangeRate::getExchangeRateAtOrOne($contract->getCurrency(),$mainFunctionalCurrency,$currentSoCollectionDaysFormatted,$companyId,$foreignExchangeRates);
+				// * زي HasForecastedProjectCollection: التحويل بس لما عملة العقد تختلف عن عملة التبويب.
+				$exchangeRate = ForeignExchangeRate::getExchangeRateForDisplayCurrency($contract->getCurrency(),$currency,$mainFunctionalCurrency,$currentSoCollectionDaysFormatted,$companyId,$foreignExchangeRates);
 				$salesOrderNetBalance = $salesOrderNetBalance * $exchangeRate;
 				$invoiceNumber =   $customerName . '-' . $contractName  ;
 				$result['suppliers'][$key][$invoiceNumber]['weeks'][$currentWeekYear] = isset($result['suppliers'][$key][$invoiceNumber]['weeks'][$currentWeekYear]) ? $result['suppliers'][$key][$invoiceNumber]['weeks'][$currentWeekYear]+  $salesOrderNetBalance :$salesOrderNetBalance;

@@ -203,4 +203,70 @@ class ChequeAgingChartTest extends TestCase
             'Drop this key and the cheque chart loses its data source entirely.'
         );
     }
+
+    // ---------------------------------------------------------------
+    // past-due cheques reach the chart
+    // ---------------------------------------------------------------
+
+    /**
+     * A cheque sitting in the safe whose due date has passed is the one
+     * you most need to see, and it was the one guaranteed to be hidden:
+     * the query carried where('due_date','>=',$agingDate), so nothing
+     * overdue ever reached the buckets.
+     *
+     * Company 148 has a EUR 3,300 opening cheque due 2026-07-03, still
+     * marked in-safe. It appeared on the opening balance page and
+     * nowhere in the aging chart.
+     */
+    public function test_overdue_cheques_are_not_filtered_out_of_the_query(): void
+    {
+        $service = file_get_contents(app_path('ReadyFunctions/ChequeAgingService.php'));
+
+        $this->assertStringNotContainsString(
+            "->where('due_date', '>=', \$this->aging_date)",
+            $service,
+            'This drops every overdue cheque before it can be bucketed.'
+        );
+    }
+
+    /**
+     * The invoice service never had that filter. The two aging services
+     * feed the same chart component and must select on the same terms.
+     */
+    public function test_cheques_and_invoices_agree_on_which_dates_count(): void
+    {
+        foreach (['ChequeAgingService', 'InvoiceAgingService'] as $name) {
+            $this->assertStringNotContainsString(
+                "where('due_date', '>=',",
+                file_get_contents(app_path("ReadyFunctions/{$name}.php")),
+                "{$name} restricts the aging window; the other one does not."
+            );
+        }
+    }
+
+    /**
+     * The service builds a past_due bucket and a
+     * 'Total Past Dues Aging Analysis Chart' for cheques. Those were
+     * dead code for as long as the query excluded overdue rows — which
+     * is the evidence the filter was a mistake rather than a choice.
+     */
+    public function test_the_past_due_bucket_is_reachable(): void
+    {
+        $service = file_get_contents(app_path('ReadyFunctions/ChequeAgingService.php'));
+
+        $this->assertStringContainsString('Total Past Dues Aging Analysis Chart', $service);
+        $this->assertStringContainsString("'past_due'", $service);
+    }
+
+    public function test_an_overdue_cheque_lands_on_the_past_due_side(): void
+    {
+        $rows = $this->service()->formatAgingBucketsForChart([
+            'past_due' => ['46-60' => 3300],
+        ]);
+
+        $this->assertCount(1, $rows);
+        $this->assertSame('Past Due', $rows[0]['region']);
+        $this->assertSame('-46-60 Days', $rows[0]['state']);
+        $this->assertEqualsWithDelta(3300.0, $rows[0]['sales'], 0.001);
+    }
 }

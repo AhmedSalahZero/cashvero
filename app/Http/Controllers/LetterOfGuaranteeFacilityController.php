@@ -1,7 +1,6 @@
 <?php
 namespace App\Http\Controllers;
 use App\Enums\LgTypes;
-use App\Helpers\HArr;
 use App\Models\AccountType;
 use App\Models\CertificatesOfDeposit;
 use App\Models\Company;
@@ -414,20 +413,20 @@ class LetterOfGuaranteeFacilityController
 		$isBidBond = $selectedLgType == 'bid-bond'  ;
 		$totalCashCoverStatementDebit = 0 ;
 		$currencyName = null ;
-		$customersArr =   Partner::onlyCustomers()->onlyForCompany($company->id)
-		->when(!$isBidBond,function(Builder $builder){
-			$builder->onlyThatHaveCustomerContracts();
-		})
-		->orderBy('name','asc')
-		->pluck('id','name')
-		->toArray();
-
-	
-		$otherPartnerArr = Partner::onlyOtherPartners()->onlyForCompany($company->id)
-		->orderBy('name','asc')
-		->pluck('id','name')
-		->toArray();
-		$customerOrOtherPartnersArr = HArr::mergeTwoAssocArr($customersArr,$otherPartnerArr);
+		$customerOrOtherPartnersArr = Partner::onlyForCompany($company->id)
+			->where(function (Builder $query) use ($isBidBond) {
+				$query->where('is_other_partner', 1)
+					->orWhere(function (Builder $customerQuery) use ($isBidBond) {
+						$customerQuery->where('is_customer', 1);
+						if (!$isBidBond) {
+							$customerQuery->onlyThatHaveCustomerContracts();
+						}
+					});
+			})
+			->get(['id', 'name'])
+			->sortBy(fn (Partner $partner) => mb_strtolower((string) $partner->name), SORT_NATURAL)
+			->pluck('id', 'name')
+			->all();
 	
 		$accountTypeId = $request->get('accountTypeId');
 		$currentSource = $request->get('source');

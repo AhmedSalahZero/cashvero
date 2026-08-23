@@ -604,7 +604,7 @@ function submit() {
               <label class="cvr-form-label">LG Amount *</label>
               <input
                 v-model="form.lg_amount"
-                type="number"
+                type="number" step="any"
                 class="cvr-input w-full px-3 py-2 rounded" />
               <p
                 v-if="errorFor('lg_amount')"
@@ -640,14 +640,14 @@ function submit() {
               <label class="cvr-form-label">Min LG Commission Fees</label>
               <input
                 v-model="form.min_lg_commission_fees"
-                type="number"
+                type="number" step="any"
                 class="cvr-input w-full px-3 py-2 rounded" />
             </div>
             <div>
               <label class="cvr-form-label">Issuance Fees *</label>
               <input
                 v-model="form.issuance_fees"
-                type="number"
+                type="number" step="any"
                 class="cvr-input w-full px-3 py-2 rounded" />
             </div>
             <div>

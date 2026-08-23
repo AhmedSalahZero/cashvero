@@ -343,7 +343,7 @@ function submitRenew() {
                         </div>
                         <div>
                             <label class="block text-xs cvr-text-secondary mb-1">New Limit</label>
-                            <input type="number" v-model="renewForm.limit" class="cvr-input w-full" placeholder="Unchanged" />
+                            <input type="number" step="any" v-model="renewForm.limit" class="cvr-input w-full" placeholder="Unchanged" />
                             <p v-if="renewErrors.limit" class="text-xs text-red-600 mt-1">{{ renewErrors.limit }}</p>
                         </div>
                         <div>

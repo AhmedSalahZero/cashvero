@@ -136,7 +136,7 @@ function deleteSchedule() {
                         </div>
                         <div>
                             <label class="cvr-form-label">Limit *</label>
-                            <input v-model="form.limit" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="form.limit" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Borrowing Rate (%) *</label>

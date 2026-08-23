@@ -151,6 +151,29 @@ class ForeignExchangeRate extends Model
 		return self::getExchangeRateAt($receivingCurrency,$mainFunctionalCurrency,$receivingDate,$companyId,$foreignExchangeRates);
 	}
 
+	/**
+	 * * سعر الصرف اللازم عشان مبلغ بعملة $fromCurrency يظهر بعملة التبويب المعروض.
+	 *
+	 * * تقارير التدفق النقدي بتتعرض تبويب لكل عملة. تبويب العملة الرئيسية
+	 * * بيلم كل العملات محوّلة، وأي تبويب عملة أجنبية بيفلتر على العملة دي
+	 * * لوحدها ولازم يعرض أرقامها زي ما هي.
+	 *
+	 * * التوقّعات كانت بتنادي getExchangeRateAtOrOne() على طول من غير الشرط ده،
+	 * * فتبويب اليورو كان بيعرض المكافئ بالمصري جنب أرقام يورو حقيقية في نفس
+	 * * العمود — عملتين مجموعين مع بعض.
+	 *
+	 * * لما عملة المبلغ = عملة التبويب مفيش تحويل أصلاً. الحالة الوحيدة اللي
+	 * * بيختلفوا فيها هي تبويب العملة الرئيسية اللي بيجمّع كل العملات.
+	 */
+	public static function getExchangeRateForDisplayCurrency($fromCurrency, $displayCurrency, $mainFunctionalCurrency, $date, $companyId, $foreignExchangeRates)
+	{
+		if (! empty($displayCurrency) && $fromCurrency === $displayCurrency) {
+			return 1;
+		}
+
+		return self::getExchangeRateAtOrOne($fromCurrency, $mainFunctionalCurrency, $date, $companyId, $foreignExchangeRates);
+	}
+
 	public static function importOdooExchangeRates(Company $company)
 	{
 		

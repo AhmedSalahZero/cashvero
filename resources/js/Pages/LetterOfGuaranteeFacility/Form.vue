@@ -148,7 +148,7 @@ function submit() {
                         </div>
                         <div>
                             <label class="cvr-form-label">Limit *</label>
-                            <input v-model="form.limit" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="form.limit" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('limit')" class="text-xs mt-1 cvr-num-red">{{ errorFor('limit') }}</p>
                         </div>
                         <div>
@@ -187,8 +187,8 @@ function submit() {
                                             <span class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs cvr-text-muted">▾</span>
                                         </div>
                                     </td>
-                                    <td class="px-3 py-2"><input v-model="row.min_commission_fees" type="number" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
-                                    <td class="px-3 py-2"><input v-model="row.issuance_fees" type="number" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
+                                    <td class="px-3 py-2"><input v-model="row.min_commission_fees" type="number" step="any" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
+                                    <td class="px-3 py-2"><input v-model="row.issuance_fees" type="number" step="any" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
                                 </tr>
                             </tbody>
                         </table>

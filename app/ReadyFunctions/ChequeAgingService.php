@@ -45,12 +45,19 @@ class ChequeAgingService
         $result = [];
 		$chequesResultForChart = [];
 		/**
-		 * * هنا شرط الديو ديت اكبر من او يساوي
+		 * * الشيكات اللي لسه في الخزنة أو تحت التحصيل — الجاي والمتأخر.
+		 *
+		 * * كان هنا شرط due_date >= aging_date بيرمي كل شيك فات ميعاده، رغم إن
+		 * * الكود تحت بيجهّز دلو past_due وبيبني له
+		 * * 'Total Past Dues Aging Analysis Chart' — يعني الدلو ده كان ميت دايماً.
+		 * * ونفس الخدمة للفواتير (InvoiceAgingService) مفيهاش الشرط ده أصلاً.
+		 *
+		 * * النتيجة إن شيك في الخزنة فات ميعاده — وهو أهم شيك تشوفه — كان
+		 * * بيختفي تماماً من أعمار الشيكات. اتشال عشان الشيكات تتعامل زي الفواتير.
 		 */
 		
         $invoices = ('\App\Models\\'.$chequeModelName)
 		::whereIn('status',$chequeTypesForSafe)
-		->where('due_date', '>=', $this->aging_date)
 		->where('currency',$this->currency)
 		->join($moneyReceivedOrPaymentTableName,$moneyReceivedOrPaymentTableName.'.id','=',$chequesTableName.'.'.$moneyReceivedOrPaymentTableForeignName)
 		->has($modelModelName)

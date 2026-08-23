@@ -414,7 +414,7 @@ const odooErrorTarget = ref(null);
                         </div>
                         <div>
                             <label class="cvr-form-label">Amount To Be Decreased *</label>
-                            <input v-model="newAdvancedPaymentForm.amount" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="newAdvancedPaymentForm.amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
 
@@ -463,7 +463,7 @@ const odooErrorTarget = ref(null);
                         </div>
                         <div>
                             <label class="cvr-form-label">Amount To Be Decreased *</label>
-                            <input v-model="editAdvancedPaymentForm.amount_to_be_decreased" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="editAdvancedPaymentForm.amount_to_be_decreased" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
                     <div class="flex justify-end gap-2">

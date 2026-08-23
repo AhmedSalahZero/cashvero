@@ -360,7 +360,7 @@ function submitReverse() {
                         </div>
                         <div>
                             <label class="cvr-form-label">Actual Interest Amount</label>
-                            <input v-model="depositForm.actual_interest_amount" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="depositForm.actual_interest_amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div class="col-span-2">
                             <label class="cvr-form-label">Deposit Date *</label>
@@ -383,15 +383,15 @@ function submitReverse() {
                     <div class="cvr-form-grid-2 mb-4">
                         <div>
                             <label class="cvr-form-label">Amount</label>
-                            <input v-model="breakForm.amount" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="breakForm.amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Break Interest Amount</label>
-                            <input v-model="breakForm.break_interest_amount" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="breakForm.break_interest_amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Break Charge Amount</label>
-                            <input v-model="breakForm.break_charge_amount" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="breakForm.break_charge_amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Break Date *</label>
@@ -414,7 +414,7 @@ function submitReverse() {
                     <div class="cvr-form-grid-2 mb-4">
                         <div>
                             <label class="cvr-form-label">Interest Amount</label>
-                            <input v-model="periodInterestForm.periodic_interest_amount" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="periodInterestForm.periodic_interest_amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">Deposit Date *</label>

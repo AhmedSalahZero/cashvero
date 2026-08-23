@@ -153,7 +153,7 @@ function submit() {
                         </div>
                         <div>
                             <label class="cvr-form-label">Amount *</label>
-                            <input v-model="form.amount" type="number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="form.amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
 
                         <div>
