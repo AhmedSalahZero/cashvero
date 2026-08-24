@@ -5,6 +5,7 @@ namespace App\Traits\Models;
 use App\Helpers\HArr;
 use App\Models\Contract;
 use App\Models\ForeignExchangeRate;
+use App\Support\Contracts\MonthlyExecutionSchedule;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -107,8 +108,21 @@ trait HasForecastedProjectCollection
         // keeps the original same-currency-only filter.
         $showAllCurrenciesConverted = ! $contractId && $mainFunctionalCurrency !== null && $currency === $mainFunctionalCurrency;
 
+        // * العقد العادي بينزل دفعة واحدة في تاريخ تحصيل أمره، فبيتشرط
+        // * ينتهي جوّه فترة التقرير. العقد بتنفيذ شهري بينزل شرائح على
+        // * مدار مدّته، فبيدخل طول ما مدّته بتتقاطع مع الفترة — لو اتشرط
+        // * بنفس شرط الانتهاء، عقد سنة معروض عليه تقرير 3 شهور كان
+        // * هيختفي بالكامل.
         $contracts = Contract::where('company_id', $companyId)
-            ->where('end_date', '<=', $endDate)
+            ->where(function ($window) use ($startDate, $endDate) {
+                $window->where(function ($oneOff) use ($endDate) {
+                    $oneOff->where('is_monthly_executed', 0)->where('end_date', '<=', $endDate);
+                })->orWhere(function ($monthly) use ($startDate, $endDate) {
+                    $monthly->where('is_monthly_executed', 1)
+                        ->where('start_date', '<=', $endDate)
+                        ->where('end_date', '>=', $startDate);
+                });
+            })
             ->when(! $showAllCurrenciesConverted, function ($query) use ($currency) {
                 $query->where('currency', $currency);
             })
@@ -122,6 +136,18 @@ trait HasForecastedProjectCollection
         // supplier side only when $contractId happens to be that
         // Supplier's own contract — see class docblock). ─────────────
         foreach ($contracts as $contract) {
+            // * العقد بتنفيذ شهري ماعندهوش أوامر أصلاً (الجزئية دي مخفية
+            // * في الفورم) — المتبقي منه بيتوزّع على شهوره الجايّة.
+            if ($contract->isMonthlyExecuted()) {
+                self::applyMonthlyExecutedContractBalance(
+                    $result, $contract, $startDate, $endDate, $currency, $companyId,
+                    $datesWithWeekNumber, $foreignExchangeRates, $mainFunctionalCurrency,
+                    $mainResultType, $resultKey, $invoiceTable, $downPaymentTable,
+                    $addToCashInflowTotal, $paidOrCollectedStatus
+                );
+                continue;
+            }
+
             foreach ($contract->{$orderRelation} as $order) {
                 $orderArr = HArr::getLatestNonZeroExecutionKeys($order->toArray());
                 if (empty($orderArr['end_date'])) {
@@ -269,5 +295,94 @@ trait HasForecastedProjectCollection
                 ($result['customers'][$totalCashInFlowKey]['total'][$currentWeekYear] ?? 0) + $orderNetBalance;
         }
     }
-}
 
+    /**
+     * * مساهمة عقد بتنفيذ شهري في صف التوقّعات.
+     *
+     * * نفس صيغة المتبقي بتاعة الأوامر بالظبط، بس على مستوى العقد:
+     * *   المتبقي = قيمة العقد − الدفعات المقدّمة غير المستخدمة
+     * *             − Σ(صافي رصيد كل فاتورة عليه لسه ما اتحصّلتش)
+     *
+     * * الفرق الوحيد في **التوزيع**: بدل ما المتبقي كله ينزل في يوم واحد،
+     * * بيتقسّم بالتساوي على شهور العقد اللي لسه ما بدأتش.
+     *
+     * * الشرائح اللي بره فترة التقرير بتتحسب في المقسوم عليه بس ما بتتعرضش —
+     * * عشان عقد سنة معروض عليه تقرير 3 شهور يفضل يعرض القسط الشهري
+     * * الصح، مش المتبقي كله متقسّم على 3.
+     */
+    private static function applyMonthlyExecutedContractBalance(
+        array &$result,
+        Contract $contract,
+        string $startDate,
+        string $endDate,
+        $currency,
+        $companyId,
+        array $datesWithWeekNumber,
+        $foreignExchangeRates,
+        ?string $mainFunctionalCurrency,
+        string $mainResultType,
+        string $resultKey,
+        string $invoiceTable,
+        string $downPaymentTable,
+        bool $addToCashInflowTotal,
+        string $paidOrCollectedStatus
+    ): void {
+        $contractStart = $contract->getStartDate();
+        $contractEnd = $contract->getEndDate();
+        if (empty($contractStart) || empty($contractEnd)) {
+            return;
+        }
+
+        // * الفواتير بترتبط بالعقد بالكود مش بالـ id (زي باقي التقرير)
+        $invoicesNetBalance = (float) DB::table($invoiceTable)
+            ->where('company_id', $companyId)
+            ->where('currency', $contract->getCurrency())
+            ->where('contract_code', $contract->getCode())
+            ->where('invoice_status', '!=', $paidOrCollectedStatus)
+            ->sum('net_balance');
+
+        $unusedDownPaymentBalance = (float) DB::table($downPaymentTable)
+            ->where('company_id', $companyId)
+            ->where('contract_id', $contract->id)
+            ->sum('down_payment_balance');
+
+        $remaining = (float) $contract->getAmount() - $unusedDownPaymentBalance - $invoicesNetBalance;
+        if ($remaining <= 0) {
+            return;
+        }
+
+        $slices = MonthlyExecutionSchedule::forContract($remaining, $contractStart, $contractEnd);
+        if (! $slices) {
+            return;
+        }
+
+        $totalCashInFlowKey = __('Total Cash Inflow');
+        $rowLabel = $contract->getClientName().'-'.$contract->getName();
+
+        foreach ($slices as $sliceDate => $sliceAmount) {
+            // * الشهور اللي بره الفترة المعروضة اتحسبت في المقسوم عليه
+            // * وبس — datesWithWeekNumber فيها تواريخ الفترة لوحدها.
+            if (! isset($datesWithWeekNumber[$sliceDate])) {
+                continue;
+            }
+
+            $currentWeekYear = $datesWithWeekNumber[$sliceDate];
+            $exchangeRate = ForeignExchangeRate::getExchangeRateForDisplayCurrency(
+                $contract->getCurrency(), $currency, $mainFunctionalCurrency, $sliceDate, $companyId, $foreignExchangeRates
+            );
+            $amount = $sliceAmount * $exchangeRate;
+
+            $result[$mainResultType][$resultKey][$rowLabel]['weeks'][$currentWeekYear] =
+                ($result[$mainResultType][$resultKey][$rowLabel]['weeks'][$currentWeekYear] ?? 0) + $amount;
+            $result[$mainResultType][$resultKey][$rowLabel]['total'] =
+                ($result[$mainResultType][$resultKey][$rowLabel]['total'] ?? 0) + $amount;
+            $result[$mainResultType][$resultKey]['total'][$currentWeekYear] =
+                ($result[$mainResultType][$resultKey]['total'][$currentWeekYear] ?? 0) + $amount;
+
+            if ($addToCashInflowTotal) {
+                $result['customers'][$totalCashInFlowKey]['total'][$currentWeekYear] =
+                    ($result['customers'][$totalCashInFlowKey]['total'][$currentWeekYear] ?? 0) + $amount;
+            }
+        }
+    }
+}

@@ -54,6 +54,7 @@ const form = ref({
     start_date: props.model?.start_date ?? '',
     end_date: props.model?.end_date ?? '',
     amount: props.model?.amount ?? 0,
+    is_monthly_executed: Boolean(props.model?.is_monthly_executed ?? false),
     currency: props.model?.currency ?? 'EGP',
     exchange_rate: props.model?.exchange_rate ?? 1,
 });
@@ -85,8 +86,37 @@ const ordersTotal = computed(() =>
     orders.value.reduce((sum, o) => sum + (Number(o.amount) || 0), 0)
 );
 const totalsMismatch = computed(() =>
+    !form.value.is_monthly_executed &&
     Math.round(ordersTotal.value * 100) !== Math.round((Number(form.value.amount) || 0) * 100)
 );
+
+/* ── Monthly-executed contracts ───────────────────────────────────
+   The contract value is spread evenly across the months of its own
+   period instead of hanging off Sales/Purchase Orders, so the whole
+   Orders section is meaningless here and is hidden. The cash flow
+   report reads the same flag and pays out one slice per month rather
+   than the entire remainder on a single collection date.
+   See App\Support\Contracts\MonthlyExecutionSchedule. */
+const isMonthlyExecuted = computed(() => Boolean(form.value.is_monthly_executed));
+
+/* Inclusive month count over the contract period — 2026-01-01 to
+   2026-12-31 is 12 months, not 11. Mirrors the PHP schedule so the
+   figure previewed here is the one the report will use. */
+const contractMonths = computed(() => {
+    const from = form.value.start_date;
+    const to = form.value.end_date;
+    if (!from || !to) return 0;
+    const start = new Date(from);
+    const end = new Date(to);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return 0;
+    return (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1;
+});
+
+const monthlyAmount = computed(() => {
+    const months = contractMonths.value;
+    if (!months) return 0;
+    return (Number(form.value.amount) || 0) / months;
+});
 
 /* Partner options stay alphabetical (A before B). New partners are
    created from Partners settings, not from this form. */
@@ -154,8 +184,15 @@ function submit() {
         ...form.value,
         company_id: props.company.id,
         model_type: props.type,
-        [props.salesOrderOrPurchaseOrderRelationName]: ordersPayload,
     };
+
+    /* A monthly-executed contract has no orders. Omitting the key
+       entirely (rather than sending an empty array) leaves any orders
+       an existing contract already had untouched in the database, so
+       unticking the box restores them instead of losing them. */
+    if (!isMonthlyExecuted.value) {
+        payload[props.salesOrderOrPurchaseOrderRelationName] = ordersPayload;
+    }
 
     if (isEdit) {
         router.put(props.submitUrl, payload, { onFinish: () => { submitting.value = false; } });
@@ -229,10 +266,33 @@ function submit() {
                             <input v-model="form.exchange_rate" type="number" step="0.0001" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
+
+                    <!-- Monthly execution -->
+                    <div class="mt-4 pt-4 border-t cvr-border">
+                        <label class="flex items-start gap-2 cursor-pointer">
+                            <input v-model="form.is_monthly_executed" type="checkbox" class="mt-0.5" />
+                            <span>
+                                <span class="text-sm cvr-text-primary">Monthly Executed</span>
+                                <span class="block text-xs cvr-text-muted mt-0.5">
+                                    The contract value is executed evenly across its own period instead of through
+                                    {{ salesOrderOrPurchaseNumberText }}s. The cash flow report pays out one slice per
+                                    remaining month rather than the whole remainder on a single collection date.
+                                </span>
+                            </span>
+                        </label>
+
+                        <p v-if="isMonthlyExecuted && contractMonths" class="text-xs cvr-num-green mt-2 ms-6">
+                            {{ contractMonths }} month<span v-if="contractMonths !== 1">s</span> ·
+                            {{ monthlyAmount.toFixed(2) }} {{ form.currency }} per month
+                        </p>
+                        <p v-else-if="isMonthlyExecuted" class="text-xs cvr-num-amber mt-2 ms-6">
+                            Set a Start Date and an End Date to see the monthly amount.
+                        </p>
+                    </div>
                 </div>
 
-                <!-- Sales/Purchase Orders -->
-                <div class="cvr-card">
+                <!-- Sales/Purchase Orders — not applicable to a monthly-executed contract -->
+                <div v-if="!isMonthlyExecuted" class="cvr-card">
                     <div class="flex items-center justify-between mb-4">
                         <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide">{{ salesOrderOrPurchaseOrderInformationText }}</h2>
                         <p class="text-xs" :class="totalsMismatch ? 'cvr-num-red' : 'cvr-num-green'">

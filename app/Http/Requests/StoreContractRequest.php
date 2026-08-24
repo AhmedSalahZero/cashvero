@@ -60,7 +60,14 @@ class StoreContractRequest extends FormRequest
 					->where(fn ($query) => $query->where('company_id', $this->companyIdForRule()))
 					->ignore($this->contractIdForRule()),
 			],
-			'amount'=>['required',new TwoNumericsAreEqual(collect($this->input($columnName.'.*'))->sum('amount'),$this->get('amount'),$message)],
+			/**
+			 * * العقد بتنفيذ شهري ماعندهوش أوامر — جزئية الأوامر مخفية في
+			 * * الفورم — فقاعدة "مجموع الأوامر = قيمة العقد" ما تنطبقش عليه
+			 * * (مجموعها صفر وكانت هتمنع الحفظ من الأساس).
+			 */
+			'amount'=>$this->boolean('is_monthly_executed')
+				? ['required','numeric','gt:0']
+				: ['required',new TwoNumericsAreEqual(collect($this->input($columnName.'.*'))->sum('amount'),$this->get('amount'),$message)],
 			$columnName.'.*.so_number'=>[new UniqueArrayRule($this->input($columnName.'.*.so_number',[]),__('Sales Order Number Can Not Be Repeated'))]
         ];
     }

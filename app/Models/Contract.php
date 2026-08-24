@@ -426,6 +426,18 @@ class Contract extends Model
 	{
 		return $this->currency;
 	}
+	/**
+	 * * العقد بتنفيذ شهري: قيمته بتتوزّع على شهور مدّته بدل ما تتعلّق
+	 * * بأوامر بيع/شراء. جزئية الأوامر بتتخفي في الفورم، وتقرير التدفق
+	 * * النقدي بينزّل المتبقي شرائح شهرية بدل دفعة واحدة.
+	 *
+	 * @see \App\Support\Contracts\MonthlyExecutionSchedule
+	 */
+	public function isMonthlyExecuted():bool
+	{
+		return (bool) $this->is_monthly_executed;
+	}
+
 	public function salesOrders():HasMany
 	{
 		return $this->hasMany(SalesOrder::class,'contract_id','id');

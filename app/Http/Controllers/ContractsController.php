@@ -431,6 +431,7 @@ class ContractsController
 				'start_date' => $model->getStartDate(),
 				'end_date' => $model->getEndDate(),
 				'amount' => $model->getAmount(),
+				'is_monthly_executed' => $model->isMonthlyExecuted(),
 				'currency' => $model->getCurrency(),
 				'exchange_rate' => $model->getExchangeRate(),
 				'orders' => $model->{$orderRelationName}->map($mapOrder)->values(),
