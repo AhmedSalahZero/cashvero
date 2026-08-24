@@ -18,3 +18,15 @@ _ide_helper_models.php
 /storage
 *.log
 AppData
+
+# Mobile Playwright audit outputs
+/tests/e2e/mobile/.auth/
+/tests/e2e/mobile/artifacts/
+/tests/e2e/mobile/playwright-report/
+/tests/e2e/mobile/report.json
+/tests/e2e/mobile/summary.json
+/tests/e2e/mobile/summary.html
+/tests/e2e/mobile/catalog.json
+/tests/e2e/mobile/.venv/
+/test-results/
+/playwright-report/
