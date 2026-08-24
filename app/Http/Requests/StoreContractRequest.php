@@ -27,10 +27,17 @@ class StoreContractRequest extends FormRequest
 		if($modelType == 'Supplier'){
 			$columnName = 'purchasesOrders';
 		}
-		$this->merge([
-			'amount'=>number_unformat($this->amount),
-			$columnName=>$this->unformatNumericKeysFromArray($this->{$columnName},['amount'])
-		]);
+		$merged = ['amount'=>number_unformat($this->amount)];
+		/**
+		 * * العقد بتنفيذ شهري ماعندهوش أوامر، فالمفتاح ده بييجي ناقص من
+		 * * الفورم أصلاً — ساعتها ما نضيفوش للـ merge عشان ما نخلقش
+		 * * مصفوفة فاضية مكان قيمة مش موجودة
+		 */
+		$orders = $this->input($columnName);
+		if(is_array($orders)){
+			$merged[$columnName] = $this->unformatNumericKeysFromArray($orders,['amount']);
+		}
+		$this->merge($merged);
 		return [];
 	}
 
