@@ -333,6 +333,24 @@ class ContractDashboardService
     }
 
     /**
+     * Contracts with no invoice raised against them, EXCLUDING finished
+     * ones.
+     *
+     * The one place the rule lives, so the KPI card, the alert card and
+     * the drill-down list they both open can never disagree about which
+     * contracts they mean.
+     *
+     * @param  Collection<int, array>  $rows
+     * @return Collection<int, array>
+     */
+    private function notInvoiced(Collection $rows): Collection
+    {
+        return $rows
+            ->where('invoice_count', 0)
+            ->where('status', '!=', Contract::FINISHED);
+    }
+
+    /**
      * @param  Collection<int, array>  $rows
      */
     private function counts(Collection $rows): array
@@ -346,7 +364,20 @@ class ContractDashboardService
             'running_and_against' => $rows->where('status', Contract::RUNNING_AND_AGAINST)->where('is_expired', false)->count(),
             'expired' => $rows->where('is_expired', true)->count(),
             'finished' => $rows->where('status', Contract::FINISHED)->count(),
-            'not_invoiced' => $rows->where('invoice_count', 0)->count(),
+            /**
+             * Contracts with nothing invoiced against them, counting
+             * ONLY the ones still worth chasing — running and expired.
+             *
+             * A finished contract with no invoice is closed business:
+             * nobody is going to raise an invoice on it now, so leaving
+             * it in this number made the figure read as a backlog when
+             * part of it was history. Requested by the project owner
+             * after the count on screen (58) turned out to include
+             * finished contracts.
+             *
+             * @see notInvoiced()
+             */
+            'not_invoiced' => $this->notInvoiced($rows)->count(),
             'over_billed' => $rows->filter(fn (array $row) => $row['remaining'] < 0)->count(),
         ];
     }
@@ -480,7 +511,7 @@ class ContractDashboardService
         return [
             'past_end_date_count' => $rows->where('is_expired', true)->count(),
             'ending_soon_count' => $this->endingSoon($rows, $asOf)->count(),
-            'not_invoiced_count' => $rows->where('invoice_count', 0)->count(),
+            'not_invoiced_count' => $this->notInvoiced($rows)->count(),
             'over_billed_count' => $rows->filter(fn (array $row) => $row['remaining'] < 0)->count(),
         ];
     }
@@ -656,7 +687,7 @@ class ContractDashboardService
             'finished' => $rows->where('status', Contract::FINISHED)->values()->all(),
             'past_end_date' => $rows->where('is_expired', true)->values()->all(),
             'ending_soon' => $this->endingSoon($rows, $asOf)->all(),
-            'not_invoiced' => $rows->where('invoice_count', 0)->values()->all(),
+            'not_invoiced' => $this->notInvoiced($rows)->values()->all(),
             'over_billed' => $rows->filter(fn (array $row) => $row['remaining'] < 0)->values()->all(),
             'by_currency' => [],
         ];

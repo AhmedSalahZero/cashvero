@@ -406,6 +406,55 @@ class ContractDashboardServiceTest extends TestCase
         $this->assertSame(1, $data['alerts']['ending_soon_count']);
     }
 
+    /**
+     * "Not Invoiced Yet" is a backlog, not a history: a FINISHED
+     * contract nobody ever invoiced is closed business and no invoice
+     * is coming, so counting it made the number on screen read as work
+     * still to do. Only running (incl. running & against) and expired
+     * contracts belong in it.
+     *
+     * The card, the alert and the drill-down list must all agree.
+     */
+    public function test_not_invoiced_counts_running_and_expired_only_never_finished(): void
+    {
+        $this->contract(['code' => 'R-1', 'amount' => 10]);                                              // running, no invoice   ✓
+        $this->contract(['code' => 'A-1', 'amount' => 10, 'status' => Contract::RUNNING_AND_AGAINST]);   // running & against     ✓
+        $this->contract(['code' => 'X-1', 'amount' => 10, 'end_date' => Carbon::today()->subDay()->format('Y-m-d')]); // expired ✓
+        $this->contract(['code' => 'F-1', 'amount' => 10, 'status' => Contract::FINISHED]);              // finished, no invoice  ✗
+        $this->contract(['code' => 'R-2', 'amount' => 10]);                                              // running, invoiced     ✗
+        $this->invoice('R-2', 4);
+
+        $data = $this->build();
+
+        $this->assertSame(5, $data['counts']['total']);
+        $this->assertSame(1, $data['counts']['finished']);
+        $this->assertSame(3, $data['counts']['not_invoiced'], 'R-1 + A-1 + X-1 — F-1 is finished, R-2 has an invoice.');
+        $this->assertSame(3, $data['alerts']['not_invoiced_count'], 'The alert card must use the same rule as the KPI card.');
+
+        $this->assertSame(
+            ['A-1', 'R-1', 'X-1'],
+            collect($data['details']['not_invoiced'])->pluck('code')->sort()->values()->all()
+        );
+    }
+
+    /**
+     * The same finished contract still shows up everywhere it belongs —
+     * narrowing "not invoiced" must not narrow anything else.
+     */
+    public function test_excluding_finished_from_not_invoiced_leaves_the_other_cards_alone(): void
+    {
+        $this->contract(['code' => 'F-1', 'amount' => 10, 'status' => Contract::FINISHED]);
+
+        $data = $this->build();
+
+        $this->assertSame(1, $data['counts']['total']);
+        $this->assertSame(1, $data['counts']['finished']);
+        $this->assertSame(0, $data['counts']['not_invoiced']);
+        $this->assertSame(0, $data['alerts']['not_invoiced_count']);
+        $this->assertSame('F-1', $data['details']['finished'][0]['code']);
+        $this->assertCount(1, $data['details']['all']);
+    }
+
     public function test_over_billing_is_flagged(): void
     {
         $this->contract(['code' => 'C-1', 'amount' => 100]);

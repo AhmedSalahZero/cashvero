@@ -92,7 +92,7 @@ const detailTitle = computed(() => {
         expired: 'Expired (Past End Date, Still Open)',
         past_end_date: 'Past End Date (Still Open)',
         ending_soon: `Ending Within ${props.nearExpiryDays} Days`,
-        not_invoiced: 'Contracts With No Invoices Yet',
+        not_invoiced: 'Contracts With No Invoices Yet (Running & Expired)',
         over_billed: 'Over-Billed (Invoiced Above Contract Value)',
     };
     return map[openDetail.value] || 'Contracts';
@@ -199,7 +199,7 @@ function toggleAlert(key) {
 const alertTitle = computed(() => ({
     past_end_date: 'Past End Date (Still Open)',
     ending_soon: `Ending Within ${props.nearExpiryDays} Days`,
-    not_invoiced: 'Contracts With No Invoices Yet',
+    not_invoiced: 'Contracts With No Invoices Yet (Running & Expired)',
     over_billed: 'Over-Billed (Invoiced Above Contract Value)',
 }[openAlert.value] || 'Contracts'));
 
@@ -329,7 +329,7 @@ function fmtPct(value) {
                 <div class="cvr-kpi-card cursor-pointer" @click="toggleDetail('not_invoiced')">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">◌</div>
                     <div>
-                        <p class="cvr-kpi-label">Not Invoiced Yet</p>
+                        <p class="cvr-kpi-label">Not Invoiced Yet (Running &amp; Expired)</p>
                         <p class="cvr-kpi-value cvr-num">{{ counts?.not_invoiced ?? 0 }}</p>
                     </div>
                 </div>
@@ -342,7 +342,8 @@ function fmtPct(value) {
             -->
             <p class="text-xs cvr-text-muted mb-4">
                 Running + Running &amp; Against + Expired + Finished = Total.
-                “Not Invoiced Yet” overlaps the others — it counts contracts with no invoice raised against them.
+                “Not Invoiced Yet” overlaps the others — it counts contracts with no invoice raised against them,
+                excluding Finished ones: a closed contract nobody will invoice now is history, not a backlog.
             </p>
 
             <div
@@ -630,7 +631,7 @@ function fmtPct(value) {
                     <div class="cvr-kpi-card cursor-pointer" @click="toggleAlert('not_invoiced')">
                         <div class="cvr-kpi-icon cvr-kpi-icon-blue">◌</div>
                         <div>
-                            <p class="cvr-kpi-label">No Invoices Raised</p>
+                            <p class="cvr-kpi-label">No Invoices Raised (Running &amp; Expired)</p>
                             <p class="cvr-kpi-value cvr-num">{{ alerts?.not_invoiced_count ?? 0 }}</p>
                         </div>
                     </div>

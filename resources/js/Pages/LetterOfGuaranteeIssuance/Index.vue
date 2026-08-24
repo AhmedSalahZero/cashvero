@@ -61,7 +61,7 @@ watch(() => props.activeLgType, (type) => {
    the one field that changed: the endpoint is stateless, so anything
    omitted silently falls back to the 60-month default expiry window
    (renewal_date) and an empty search. Active search (Transaction Name /
-   LG Code) skips that window and scans all records. Paging used to
+   LG Code / Customer Name) skips that window and scans all records. Paging used to
    send only `page` and searching only `field`/`value`, which is why
    each action reset the other. ------------------------------------- */
 const searchField = ref('transaction_name');
@@ -240,6 +240,9 @@ const odooErrorTarget = ref(null);
                     <select v-model="searchField" class="cvr-input px-3 py-2 rounded">
                         <option value="transaction_name">Transaction Name</option>
                         <option value="lg_code">LG Code</option>
+                        <!-- The list's own "Beneficiary" column — searched by the
+                             name the user is reading on screen. -->
+                        <option value="customer_name">Customer Name</option>
                     </select>
                 </div>
                 <div class="cvr-search-bar flex items-center gap-2 px-3 py-1.5 w-64">

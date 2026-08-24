@@ -47,7 +47,41 @@ class HandleInertiaRequests extends Middleware
 
         return array_merge(parent::share($request), [
             'auth' => [
-                'user' => $request->user(),
+                /**
+                 * ⚠️ REAL PERFORMANCE + DISCLOSURE BUG FIXED HERE
+                 * (found while investigating "the LG Issuance page is
+                 * heavy", 2026-08-24).
+                 *
+                 * This was `$request->user()` — the whole Eloquent
+                 * model, serialized with every relation that happened
+                 * to be loaded on it by the time Inertia rendered.
+                 * PermissionResolver::grantedKeys() (resolved a few
+                 * lines below, on every response) loads the user's
+                 * Spatie `roles` and `permissions` relations, so both
+                 * rode along into the page payload:
+                 *
+                 *   auth  119,685 bytes  of a 132,517-byte page
+                 *     └ roles        65,055
+                 *     └ permissions  45,386
+                 *
+                 * That is ~90% of EVERY Inertia response in the app —
+                 * paid on every single navigation — to send data the
+                 * frontend never reads: the only things any component
+                 * touches are `user.name`, `user.id` and the
+                 * `isSuperAdmin` / `permissions` keys below.
+                 *
+                 * It also shipped the user's `odoo_username` and
+                 * PLAINTEXT `odoo_db_password` columns to the browser
+                 * on every page, in a payload any viewer can read.
+                 *
+                 * Explicit fields, so a column added to `users` later
+                 * cannot silently start being published again.
+                 */
+                'user' => $request->user() ? [
+                    'id' => $request->user()->id,
+                    'name' => $request->user()->name,
+                    'email' => $request->user()->email,
+                ] : null,
                 /**
                  * isSuperAdmin() is a plain method, not an Eloquent
                  * attribute/accessor — it never reaches the frontend on

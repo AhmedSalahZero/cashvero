@@ -176,7 +176,7 @@ class LetterOfGuaranteeIssuanceController
         $from = $request->get('from');
         $to = $request->get('to');
 
-        if (in_array($field, ['transaction_name', 'lg_code'], true)) {
+        if (in_array($field, ['transaction_name', 'lg_code', 'customer_name'], true)) {
             return is_string($value) && trim($value) !== '';
         }
 
@@ -216,6 +216,21 @@ class LetterOfGuaranteeIssuanceController
         })
         ->when($searchFieldName == 'lg_code', function ($q) use ($value) {
             $q->where('lg_code', 'like', '%'.$value.'%');
+        })
+        /**
+         * Search By → Customer Name. The customer is the LG's
+         * beneficiary (`partner_id` → Partner), which is exactly what
+         * the list's own "Beneficiary" column already shows, so a term
+         * typed here matches the name the user is reading on screen.
+         *
+         * whereHas rather than a join: a join would duplicate LG rows
+         * if the relation ever widened, and would make the paginator's
+         * COUNT(*) disagree with the number of rows actually listed.
+         */
+        ->when($searchFieldName == 'customer_name', function ($q) use ($value) {
+            $q->whereHas('beneficiary', function ($beneficiary) use ($value) {
+                $beneficiary->where('name', 'like', '%'.$value.'%');
+            });
         })
         ->when($searchFieldName == 'purchase_order_date', function ($q) use ($from, $to) {
             $q->whereBetween('purchase_order_date', [$from, $to]);
