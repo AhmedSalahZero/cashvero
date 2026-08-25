@@ -148,11 +148,11 @@ function submit() {
         <div class="p-6">
             <div class="flex items-center gap-3 mb-1">
                 <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                    ← Back to LC Facility
+                    {{ $t('← Back to LC Facility') }}
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">
-                {{ isEdit ? 'Edit' : 'Add' }} LC Facility
+                {{ isEdit ? $t('Edit') : $t('Add') }} LC Facility
             </h1>
             <p class="text-sm cvr-text-muted mb-6">{{ financialInstitution.name }}</p>
 
@@ -161,39 +161,39 @@ function submit() {
             <form @submit.prevent="submit" class="space-y-6">
                 <!-- Contract Main Information -->
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Contract Main Information</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Contract Main Information') }}</h2>
                     <div class="cvr-form-grid-8-4 mb-3">
                         <div>
-                            <label class="cvr-form-label">Bank Name</label>
+                            <label class="cvr-form-label">{{ $t('Bank Name') }}</label>
                             <input disabled :value="financialInstitution.name" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Name *</label>
+                            <label class="cvr-form-label">{{ $t('Name') }} *</label>
                             <input v-model="form.name" type="text" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('name')" class="text-xs mt-1 cvr-num-red">{{ errorFor('name') }}</p>
                         </div>
                     </div>
                     <div class="cvr-form-grid-4">
                         <div>
-                            <label class="cvr-form-label">Contract Start Date *</label>
+                            <label class="cvr-form-label">{{ $t('Contract Start Date') }} *</label>
                             <input v-model="form.contract_start_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Contract End Date *</label>
+                            <label class="cvr-form-label">{{ $t('Contract End Date') }} *</label>
                             <input v-model="form.contract_end_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Type *</label>
+                            <label class="cvr-form-label">{{ $t('Type') }} *</label>
                             <select v-model="form.type" class="cvr-input w-full px-3 py-2 rounded">
                                 <option v-for="(label, code) in facilityTypes" :key="code" :value="code">{{ label }}</option>
                             </select>
                         </div>
                         <div v-if="!isFullySecured">
-                            <label class="cvr-form-label">Limit *</label>
+                            <label class="cvr-form-label">{{ $t('Limit') }} *</label>
                             <input v-model="form.limit" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Select Currency *</label>
+                            <label class="cvr-form-label">{{ $t('Select Currency') }} *</label>
                             <select v-model="form.currency" class="cvr-input w-full px-3 py-2 rounded">
                                 <option v-for="(label, code) in currencies" :key="code" :value="code">{{ label }}</option>
                             </select>
@@ -203,59 +203,59 @@ function submit() {
 
                 <!-- CD Or TD Information — only when Fully Secured -->
                 <div v-if="isFullySecured" class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">CD Or TD Information</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('CD Or TD Information') }}</h2>
                     <div class="cvr-form-grid-4">
                         <div>
-                            <label class="cvr-form-label">Select Currency *</label>
+                            <label class="cvr-form-label">{{ $t('Select Currency') }} *</label>
                             <select v-model="form.cd_or_td_currency" class="cvr-input w-full px-3 py-2 rounded">
                                 <option v-for="(label, code) in currencies" :key="code" :value="code">{{ label }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Account Type</label>
+                            <label class="cvr-form-label">{{ $t('Account Type') }}</label>
                             <select v-model="form.cd_or_td_account_type_id" class="cvr-input w-full px-3 py-2 rounded">
                                 <option v-for="t in cdOrTdAccountTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Account Number</label>
+                            <label class="cvr-form-label">{{ $t('Account Number') }}</label>
                             <select v-model="form.cd_or_td_id" @change="onAccountSelected" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="" disabled>Select</option>
+                                <option value="" disabled>{{ $t('Select') }}</option>
                                 <option v-for="a in accountsForType" :key="a.id" :value="a.id">{{ a.account_number }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Amount</label>
+                            <label class="cvr-form-label">{{ $t('Amount') }}</label>
                             <input disabled :value="form.cd_or_td_amount" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">CD Or TD Interest Rate</label>
+                            <label class="cvr-form-label">{{ $t('CD Or TD Interest Rate') }}</label>
                             <input disabled :value="form.cd_or_td_interest" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">CD Or TD Lending Percentage (%) *</label>
+                            <label class="cvr-form-label">{{ $t('CD Or TD Lending Percentage (%)') }} *</label>
                             <input v-model="form.cd_or_td_lending_percentage" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Limit</label>
+                            <label class="cvr-form-label">{{ $t('Limit') }}</label>
                             <input disabled :value="form.limit" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
-                            <p class="text-xs cvr-text-muted mt-1">CD/TD amount × lending percentage</p>
+                            <p class="text-xs cvr-text-muted mt-1">{{ $t('CD/TD amount × lending percentage') }}</p>
                         </div>
                     </div>
                 </div>
 
                 <!-- Term & Conditions -->
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Term &amp; Conditions — by LC Type</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Term & Conditions — by LC Type') }}</h2>
                     <div class="overflow-x-auto">
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-3 py-2 text-left">LC Type</th>
-                                    <th class="px-3 py-2 text-left">Cash Cover Rate (%)</th>
-                                    <th class="px-3 py-2 text-left">Commission Rate (%)</th>
-                                    <th class="px-3 py-2 text-left">Min Commission Fees</th>
-                                    <th class="px-3 py-2 text-left">Issuance Fees</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('LC Type') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Cash Cover Rate (%)') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Commission Rate (%)') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Min Commission Fees') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Issuance Fees') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -281,35 +281,35 @@ function submit() {
 
                 <!-- Financing Terms & Conditions -->
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Financing Terms &amp; Conditions</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Financing Terms & Conditions') }}</h2>
                     <div class="cvr-form-grid-4">
                         <div>
-                            <label class="cvr-form-label">Borrowing Rate (%) *</label>
+                            <label class="cvr-form-label">{{ $t('Borrowing Rate (%)') }} *</label>
                             <input v-model="form.borrowing_rate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Bank Margin Rate (%) *</label>
+                            <label class="cvr-form-label">{{ $t('Bank Margin Rate (%)') }} *</label>
                             <input v-model="form.bank_margin_rate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Interest Rate (%) *</label>
+                            <label class="cvr-form-label">{{ $t('Interest Rate (%)') }} *</label>
                             <input disabled :value="form.interest_rate" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Min Interest Rate (%) *</label>
+                            <label class="cvr-form-label">{{ $t('Min Interest Rate (%)') }} *</label>
                             <input v-model="form.min_interest_rate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Highest Debt Balance Rate (%) *</label>
+                            <label class="cvr-form-label">{{ $t('Highest Debt Balance Rate (%)') }} *</label>
                             <input v-model="form.highest_debt_balance_rate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
                 </div>
 
                 <div class="flex justify-end gap-2">
-                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">Cancel</Link>
+                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">{{ $t('Cancel') }}</Link>
                     <button type="submit" :disabled="submitting" class="cvr-btn-primary px-4 py-2 rounded">
-                        {{ submitting ? 'Saving...' : 'Save' }}
+                        {{ submitting ? $t('Saving...') : $t('Save') }}
                     </button>
                 </div>
             </form>

@@ -25,13 +25,13 @@ const filteredRows = computed(() => {
 <template>
     <AppLayout>
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Bank Accounts</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Bank Accounts') }}</h1>
             <p class="text-sm cvr-text-blue mb-6">Every current account across every bank for {{ company.name }}</p>
 
             <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
                 <div class="cvr-search-bar flex items-center gap-2 px-3 py-1.5 w-72">
                     <span class="cvr-text-muted text-sm">🔍</span>
-                    <input v-model="search" type="text" placeholder="Search by bank or account number..." class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
+                    <input v-model="search" type="text" :placeholder="$t('Search by bank or account number...')" class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
                 </div>
             </div>
 
@@ -39,12 +39,12 @@ const filteredRows = computed(() => {
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-3 py-3 text-left">#</th>
-                            <th class="px-3 py-3 text-left">Bank Name</th>
-                            <th class="px-3 py-3 text-left">Account Type</th>
-                            <th class="px-3 py-3 text-left">Account Number</th>
-                            <th v-if="canViewShareholderAccounts" class="px-3 py-3 text-left">Owner</th>
-                            <th class="px-3 py-3 text-left">Currency</th>
+                            <th class="px-3 py-3 text-start">#</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Bank Name') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Account Type') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Account Number') }}</th>
+                            <th v-if="canViewShareholderAccounts" class="px-3 py-3 text-start">{{ $t('Owner') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Currency') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -58,7 +58,7 @@ const filteredRows = computed(() => {
                         </tr>
                         <tr v-if="filteredRows.length === 0">
                             <td :colspan="canViewShareholderAccounts ? 6 : 5" class="px-4 py-8 text-center cvr-text-muted">
-                                No bank accounts found.
+                                {{ $t('No bank accounts found.') }}
                             </td>
                         </tr>
                     </tbody>

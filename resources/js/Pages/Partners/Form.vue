@@ -66,7 +66,7 @@ function submit() {
     <AppLayout>
         <div class="p-6 max-w-3xl mx-auto">
             <Link :href="backUrl" class="cvr-back-link inline-flex items-center gap-1 text-xs cvr-text-muted mb-4">
-                ← Back to Partners
+                {{ $t('← Back to Partners') }}
             </Link>
 
             <!-- Header -->
@@ -74,10 +74,10 @@ function submit() {
                 <div class="cvr-avatar" style="width: 3rem; height: 3rem; font-size: 1rem;">{{ initials }}</div>
                 <div>
                     <h1 class="text-xl font-semibold cvr-text-primary">
-                        {{ mode === 'edit' ? 'Edit Partner' : 'Add Partner' }}
+                        {{ mode === 'edit' ? $t('Edit Partner') : $t('Add Partner') }}
                     </h1>
                     <p class="text-sm cvr-text-muted">
-                        {{ mode === 'edit' ? 'Update this partner\'s name and roles' : 'Create a new customer, supplier, or other partner record' }}
+                        {{ mode === 'edit' ? $t('Update this partner\'s name and roles') : $t('Create a new customer, supplier, or other partner record') }}
                     </p>
                 </div>
             </div>
@@ -98,23 +98,23 @@ function submit() {
                 <!-- Section: Basic Information -->
                 <div class="flex items-center gap-2 mb-4">
                     <span class="text-base">👤</span>
-                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">Basic Information</h2>
+                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">{{ $t('Basic Information') }}</h2>
                 </div>
 
                 <div class="mb-2">
                     <label class="cvr-form-label">
-                        Partner Name <span class="text-red-500">*</span>
+                        {{ $t('Partner Name') }} <span class="text-red-500">*</span>
                     </label>
                     <input
                         v-model="form.name"
                         type="text"
                         :readonly="companyHasOdoo"
-                        placeholder="e.g. Acme Trading Co."
+                        :placeholder="$t('e.g. Acme Trading Co.')"
                         class="cvr-input w-full px-3 py-2.5 rounded-lg text-sm"
                         :class="{ 'opacity-70 cursor-not-allowed': companyHasOdoo }"
                     />
                     <p v-if="companyHasOdoo" class="text-xs cvr-text-muted mt-1.5 flex items-center gap-1">
-                        <span>🔗</span> Synced from Odoo — the name can't be edited here.
+                        <span>🔗</span> {{ $t('Synced from Odoo — the name can\'t be edited here.') }}
                     </p>
                     <p v-if="page.props.errors?.name" class="text-xs mt-1.5" style="color: var(--cvr-danger-text);">
                         {{ page.props.errors.name }}
@@ -127,10 +127,10 @@ function submit() {
                 <div class="flex items-center gap-2 mb-1">
                     <span class="text-base">🏷️</span>
                     <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">
-                        Partner Type <span class="text-red-500">*</span>
+                        {{ $t('Partner Type') }} <span class="text-red-500">*</span>
                     </h2>
                 </div>
-                <p class="text-xs cvr-text-muted mb-4">Select every role that applies — a partner can hold more than one.</p>
+                <p class="text-xs cvr-text-muted mb-4">{{ $t('Select every role that applies — a partner can hold more than one.') }}</p>
 
                 <div class="flex flex-wrap gap-2">
                     <button
@@ -154,9 +154,9 @@ function submit() {
                 <hr class="cvr-divider my-6" />
 
                 <div class="flex justify-end gap-2">
-                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded-lg border text-sm">Cancel</Link>
+                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded-lg border text-sm">{{ $t('Cancel') }}</Link>
                     <button type="submit" :disabled="submitting" class="cvr-btn-copper px-5 py-2 rounded-lg text-sm font-medium disabled:opacity-60">
-                        {{ submitting ? 'Saving…' : (mode === 'edit' ? 'Save Changes' : 'Create Partner') }}
+                        {{ submitting ? $t('Saving…') : (mode === 'edit' ? $t('Save Changes') : $t('Create Partner')) }}
                     </button>
                 </div>
             </form>

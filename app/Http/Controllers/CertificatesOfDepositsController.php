@@ -193,8 +193,13 @@ class CertificatesOfDepositsController
 		 * Flatten a CD collection into plain arrays for Inertia, with
 		 * every action URL this row's row-menu could need pre-resolved.
 		 */
-		$mapCertificates = function (Collection $certificates) use ($company, $financialInstitution) {
-			return $certificates->map(function (CertificatesOfDeposit $cd) use ($company, $financialInstitution) {
+		/**
+		 * حسابات البنك الجارية بتتقرا مرة واحدة هنا وبتتمرر لكل صف علشان
+		 * مايبقاش فيه استعلام لكل شهادة.
+		 */
+		$settlementAccounts = $financialInstitution->accounts ;
+		$mapCertificates = function (Collection $certificates) use ($company, $financialInstitution, $settlementAccounts) {
+			return $certificates->map(function (CertificatesOfDeposit $cd) use ($company, $financialInstitution, $settlementAccounts) {
 				return [
 					'id' => $cd->id,
 					'status' => $cd->getStatus(),
@@ -213,6 +218,16 @@ class CertificatesOfDepositsController
 					'break_interest_amount_formatted' => $cd->getBreakInterestAmountFormatted(),
 					'blocked_against_formatted' => $cd->getBlockedAgainstFormatted(),
 					'is_due_today_or_greater' => $cd->isDueTodayOrGreater(),
+					/**
+					 * حساب التسوية اللي بوب اب الاستحقاق / الكسر بيسأل عنه — القيمة
+					 * الافتراضية هي حساب الخصم الاصلي ، وبتبقى فاضية لو الوديعة
+					 * اتسجلت opening balance.
+					 */
+					'settlement_account_id' => $cd->getSettlementOrDeductedFromAccountId(),
+					'settlement_account_options' => $cd->getSettlementAccountOptions($settlementAccounts)->map(fn ($a) => [
+						'id' => (int) $a->getId(),
+						'account_number' => AccountNumberLabel::forOwnedInstrument($a),
+					])->values(),
 					'edit_url' => route('edit.certificates.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'certificatesOfDeposit' => $cd->id]),
 					'delete_url' => route('delete.certificates.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'certificatesOfDeposit' => $cd->id]),
 					'apply_deposit_url' => route('apply.deposit.to.certificate.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'certificatesOfDeposit' => $cd->id]),
@@ -504,13 +519,25 @@ class CertificatesOfDepositsController
 		}
 		$actualDepositDate = $actualDepositDate->format('Y-m-d') ;
 		$actualInterestAmount  = number_unformat($request->get('actual_interest_amount')) ;
+		/**
+		 * * حساب التسوية اللي اصل الوديعة هيترد عليه — اليوزر بيختاره من البوب اب
+		 * * وقيمته الافتراضية هي حساب الخصم الاصلي لو كان موجود ، ولو الوديعة
+		 * * opening balance
+		 * * فا لازم يختاره هنا لان مافيش
+		 * * deducted_from_account_id
+		 */
+		$settlementAccountId = $request->get('settlement_account_id') ;
+		if(!$certificatesOfDeposit->isEligibleSettlementAccount($settlementAccountId,$financialInstitution->accounts)){
+			return redirect()->back()->with('fail',__('Please Select A Valid Settlement Account'));
+		}
 		$certificateType = CertificatesOfDeposit::MATURED ;
 		$certificatesOfDeposit->update([
+			'settlement_account_id'=>$settlementAccountId,
 			'deposit_date'=>$actualDepositDate,
 			'actual_interest_amount'=>$actualInterestAmount,
 			'status'=>$certificateType
 		]);
-		$certificatesOfDeposit->handleTdOrCdStoreDepositForOdoo(true);
+		$certificatesOfDeposit->handleTdOrCdStoreDepositForOdoo(true,$actualDepositDate);
 		$accountType = AccountType::where('slug',AccountType::CURRENT_ACCOUNT)->first() ;
 		if($actualInterestAmount > 0){
 			$currentAccount = $certificatesOfDeposit->handleDebitStatement($financialInstitution->id , $accountType , $certificatesOfDeposit->getMaturityAmountAddedToAccountNumber() , null , $actualDepositDate,$actualInterestAmount,null,null,1,null,null,false,true);
@@ -536,8 +563,18 @@ class CertificatesOfDepositsController
 	{
 		$certificateType = CertificatesOfDeposit::RUNNING ;
 			$breakInterestStatement = $certificatesOfDeposit->currentAccountBankStatements->where('is_break_interest',1)->first();
-		$certificatesOfDeposit->reverseOdooDeposit($breakInterestStatement);
+		/**
+		 * * الشهادة اللي مانزلش عليها فايدة مالهاش
+		 * * break interest statement
+		 * * ، وreverseOdooDeposit بتاخد الاستيتمنت مش nullable — فا من غير
+		 * * الشرط ده عكس الاستحقاق كان بيرمي TypeError. نفس الحماية اللي في
+		 * * TimeOfDepositsController::reverseDeposit()
+		 */
+		if($breakInterestStatement){
+			$certificatesOfDeposit->reverseOdooDeposit($breakInterestStatement);
+		}
 		$certificatesOfDeposit->update([
+			'settlement_account_id'=>null,
 			'deposit_date'=>null,
 			'actual_interest_amount'=>null,
 			'status'=>CertificatesOfDeposit::RUNNING
@@ -567,14 +604,26 @@ class CertificatesOfDepositsController
 		$breakInterestAmount  = $request->get('break_interest_amount') ;
 		$breakChargeAmount  = $request->get('break_charge_amount',0) ;
 		$amount  = $request->get('amount') ;
+		/**
+		 * * حساب التسوية اللي اصل الوديعة هيترد عليه — اليوزر بيختاره من البوب اب
+		 * * وقيمته الافتراضية هي حساب الخصم الاصلي لو كان موجود ، ولو الوديعة
+		 * * opening balance
+		 * * فا لازم يختاره هنا لان مافيش
+		 * * deducted_from_account_id
+		 */
+		$settlementAccountId = $request->get('settlement_account_id') ;
+		if(!$certificatesOfDeposit->isEligibleSettlementAccount($settlementAccountId,$financialInstitution->accounts)){
+			return redirect()->back()->with('fail',__('Please Select A Valid Settlement Account'));
+		}
 		$certificateType = CertificatesOfDeposit::BROKEN ;
 		$certificatesOfDeposit->update([
+			'settlement_account_id'=>$settlementAccountId,
 			'break_date'=>$breakDate,
 			'break_interest_amount'=>$breakInterestAmount,
 			'status'=>$certificateType,
 			'break_charge_amount'=>$breakChargeAmount
 		]);
-			$certificatesOfDeposit->handleTdOrCdStoreDepositForOdoo(true);
+			$certificatesOfDeposit->handleTdOrCdStoreDepositForOdoo(true,$breakDate);
 		// $certificatesOfDeposit->storeOdooBreak(false);
 		$accountType = AccountType::where('slug',AccountType::CURRENT_ACCOUNT)->first() ;
 		/**
@@ -622,6 +671,7 @@ class CertificatesOfDepositsController
 	{
 		$certificateType = CertificatesOfDeposit::RUNNING ;
 		$certificatesOfDeposit->update([
+			'settlement_account_id'=>null,
 			'break_date'=>null,
 			'break_interest_amount'=>null,
 	//		'status'=>$certificateType,

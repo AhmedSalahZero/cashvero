@@ -21,7 +21,7 @@ const props = defineProps({
 });
 
 function fmt(amount) {
-    return Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return Number(amount || 0).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 </script>
 
@@ -30,23 +30,23 @@ function fmt(amount) {
         <div class="p-6">
             <div class="flex items-center justify-between mb-1 flex-wrap gap-3">
                 <div>
-                    <h1 class="text-xl font-semibold cvr-text-primary mb-1">Cash in Safe &amp; Cheque Balance</h1>
-                    <p class="text-sm cvr-text-muted">Opening balance snapshot for this company</p>
+                    <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Cash in Safe & Cheque Balance') }}</h1>
+                    <p class="text-sm cvr-text-muted">{{ $t('Opening balance snapshot for this company') }}</p>
                 </div>
                 <!-- Plain link, not an Inertia <Link> — the destination is
                      still a Blade page, not an Inertia one. -->
                 <a :href="manageUrl" class="cvr-btn-copper inline-flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium">
-                    {{ exists ? '✎ Manage Opening Balance' : '+ Set Up Opening Balance' }}
+                    {{ exists ? $t('✎ Manage Opening Balance') : $t('+ Set Up Opening Balance') }}
                 </a>
             </div>
 
             <!-- Empty state -->
             <div v-if="!exists" class="cvr-card mt-8 text-center py-12">
                 <p class="text-4xl mb-3">🗄️</p>
-                <h2 class="text-lg font-medium cvr-text-primary mb-1">No opening balance set up yet</h2>
-                <p class="text-sm cvr-text-muted mb-5">Set the starting cash, cheques, and payables for this company.</p>
+                <h2 class="text-lg font-medium cvr-text-primary mb-1">{{ $t('No opening balance set up yet') }}</h2>
+                <p class="text-sm cvr-text-muted mb-5">{{ $t('Set the starting cash, cheques, and payables for this company.') }}</p>
                 <a :href="manageUrl" class="cvr-btn-copper inline-flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium">
-                    + Set Up Opening Balance
+                    {{ $t('+ Set Up Opening Balance') }}
                 </a>
             </div>
 
@@ -94,8 +94,8 @@ function fmt(amount) {
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-4 py-3 text-left">Branch</th>
-                                    <th class="px-4 py-3 text-left">Currency</th>
+                                    <th class="px-4 py-3 text-start">Branch</th>
+                                    <th class="px-4 py-3 text-start">Currency</th>
                                     <th class="px-4 py-3 text-right">Amount</th>
                                     <th class="px-4 py-3 text-right">Exchange Rate</th>
                                 </tr>
@@ -122,12 +122,12 @@ function fmt(amount) {
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-4 py-3 text-left">Customer</th>
-                                    <th class="px-4 py-3 text-left">Cheque #</th>
-                                    <th class="px-4 py-3 text-left">Drawee Bank</th>
-                                    <th class="px-4 py-3 text-left">Currency</th>
+                                    <th class="px-4 py-3 text-start">Customer</th>
+                                    <th class="px-4 py-3 text-start">Cheque #</th>
+                                    <th class="px-4 py-3 text-start">Drawee Bank</th>
+                                    <th class="px-4 py-3 text-start">Currency</th>
                                     <th class="px-4 py-3 text-right">Amount</th>
-                                    <th class="px-4 py-3 text-left">Due Date</th>
+                                    <th class="px-4 py-3 text-start">Due Date</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -154,15 +154,15 @@ function fmt(amount) {
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-4 py-3 text-left">Customer</th>
-                                    <th class="px-4 py-3 text-left">Cheque #</th>
-                                    <th class="px-4 py-3 text-left">Drawee Bank</th>
-                                    <th class="px-4 py-3 text-left">Currency</th>
+                                    <th class="px-4 py-3 text-start">Customer</th>
+                                    <th class="px-4 py-3 text-start">Cheque #</th>
+                                    <th class="px-4 py-3 text-start">Drawee Bank</th>
+                                    <th class="px-4 py-3 text-start">Currency</th>
                                     <th class="px-4 py-3 text-right">Amount</th>
-                                    <th class="px-4 py-3 text-left">Due Date</th>
-                                    <th class="px-4 py-3 text-left">Deposit Date</th>
-                                    <th class="px-4 py-3 text-left">Account Type</th>
-                                    <th class="px-4 py-3 text-left">Account Number</th>
+                                    <th class="px-4 py-3 text-start">Due Date</th>
+                                    <th class="px-4 py-3 text-start">Deposit Date</th>
+                                    <th class="px-4 py-3 text-start">Account Type</th>
+                                    <th class="px-4 py-3 text-start">Account Number</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -192,14 +192,14 @@ function fmt(amount) {
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-4 py-3 text-left">Supplier</th>
-                                    <th class="px-4 py-3 text-left">Cheque #</th>
-                                    <th class="px-4 py-3 text-left">Delivery Bank</th>
-                                    <th class="px-4 py-3 text-left">Currency</th>
+                                    <th class="px-4 py-3 text-start">Supplier</th>
+                                    <th class="px-4 py-3 text-start">Cheque #</th>
+                                    <th class="px-4 py-3 text-start">Delivery Bank</th>
+                                    <th class="px-4 py-3 text-start">Currency</th>
                                     <th class="px-4 py-3 text-right">Amount</th>
-                                    <th class="px-4 py-3 text-left">Due Date</th>
-                                    <th class="px-4 py-3 text-left">Account Type</th>
-                                    <th class="px-4 py-3 text-left">Account Number</th>
+                                    <th class="px-4 py-3 text-start">Due Date</th>
+                                    <th class="px-4 py-3 text-start">Account Type</th>
+                                    <th class="px-4 py-3 text-start">Account Number</th>
                                 </tr>
                             </thead>
                             <tbody>

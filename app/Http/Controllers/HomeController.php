@@ -31,12 +31,10 @@ use Illuminate\Http\Request;
  *                     just reached one click later. Consistent by
  *                     design now, not an asymmetry.
  *
- * ⚠️ Confirmed genuinely dead code, NOT touched: welcomePage() — the
- * method that dispatches sync jobs (ReactiveCurrentAccountStatement,
- * CheckDueAndPastedInvoicesJob, ImportForeignExchangeRates) — has NO
- * route pointing to it anywhere in this app. It is never reachable.
- * The single-company path in index() does not call it and never has.
- * Left completely untouched, unrouted, exactly as in the original.
+ * ⚠️ welcomePage() remains unrouted dead code. The sync jobs
+ * (ReactiveCurrentAccountStatement, CheckDueAndPastedInvoicesJob,
+ * ImportForeignExchangeRates) now run from redirectFun(), which both
+ * the company-picker path and the single-company branch of index() use.
  *
  * ⚠️ resources/js/Pages/Home/Dashboard.vue (the old per-company
  * "Where You Want To Go" panel — Upload Customer/Supplier Invoices +
@@ -48,12 +46,12 @@ use Illuminate\Http\Request;
  * ── Frontend migration status (as of this file's last update) ──────
  *   ✅ index() → MIGRATED to Vue + Inertia for the 2+ companies branch
  *      (renders resources/js/Pages/Home/CompanyPicker.vue). The
- *      1-company branch is now a plain redirect (see above), and the
- *      0-companies branch is unchanged (logout + redirect, not a page).
- *   ✅ redirectFun() → UNCHANGED, deliberately — a plain redirect, not
- *      a page.
- *   ⚪ welcomePage() → untouched, confirmed dead/unrouted. Now redirects
- *      to Cash Status (Blade homePage removed with dashboard layout).
+ *      1-company branch now goes through redirectFun() (same jobs +
+ *      Cash Status destination), and the 0-companies branch is
+ *      unchanged (logout + redirect, not a page).
+ *   ✅ redirectFun() → runs welcomePage's former sync jobs, then
+ *      redirects to Cash Status.
+ *   ⚪ welcomePage() → untouched shell, confirmed dead/unrouted.
  */
 class HomeController extends Controller
 {
@@ -101,23 +99,18 @@ class HomeController extends Controller
 				return redirect()->route('login');
 			}
 			$company = $companies[0];
-			return redirect()->route('view.customer.invoice.dashboard.cash', ['company' => $company->id]);
+			// Same entry path as the company picker — refresh statements /
+			// notifications / FX before landing on Cash Status.
+			return $this->redirectFun($company);
 		}
 	}
 
 	/**
-	 * UNCHANGED, deliberately — a plain redirect, not a page.
+	 * Company entry → Cash Status. Runs the sync jobs that used to live
+	 * on welcomePage (now dead/unrouted) so overdue notifications and
+	 * inactive current-account rows refresh on every company open.
 	 */
 	public function redirectFun(Company $company)
-	{
-		return redirect()->route('view.customer.invoice.dashboard.cash', [$company]);
-	}
-
-	/**
-	 * ⚪ Confirmed genuinely dead code — no route anywhere points to
-	 * this method. Blade homePage removed; redirects to Cash Status.
-	 */
-	public function welcomePage(Request $request, Company $company)
 	{
 		if($company->hasCashVero()){
 			dispatch_sync(new ReactiveCurrentAccountStatement($company->id));
@@ -128,6 +121,15 @@ class HomeController extends Controller
 		if($company->hasOdooIntegrationCredentials()){
 			dispatch_sync(new ImportForeignExchangeRates($company->id));
 		}
+		return redirect()->route('view.customer.invoice.dashboard.cash', [$company]);
+	}
+
+	/**
+	 * ⚪ Confirmed genuinely dead code — no route anywhere points to
+	 * this method. Blade homePage removed; redirects to Cash Status.
+	 */
+	public function welcomePage(Request $request, Company $company)
+	{
 		
 		return redirect()->route('view.customer.invoice.dashboard.cash', [$company]);
 	}

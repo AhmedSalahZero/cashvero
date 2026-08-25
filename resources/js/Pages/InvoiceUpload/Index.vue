@@ -197,17 +197,17 @@ function destroyAll() {
             <div class="flex items-center justify-between flex-wrap gap-3 mb-1">
                 <h1 class="text-xl font-semibold cvr-text-primary">{{ modelDisplayName }} Table</h1>
                 <div class="flex items-center gap-2 flex-wrap">
-                    <Link v-if="canUpload && !companyHasOdoo" :href="createUrl" class="cvr-btn-primary px-3 py-1.5 rounded text-sm whitespace-nowrap">+ Create</Link>
-                    <Link v-if="canUpload" :href="importUrl" class="cvr-btn-primary px-3 py-1.5 rounded text-sm whitespace-nowrap">Upload Data</Link>
-                    <a v-if="canExport" :href="exportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap">Export All Data</a>
-                    <a v-if="canUpload" :href="templateFieldsUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap">Select Template Fields</a>
+                    <Link v-if="canUpload && !companyHasOdoo" :href="createUrl" class="cvr-btn-primary px-3 py-1.5 rounded text-sm whitespace-nowrap">{{ $t('+ Create') }}</Link>
+                    <Link v-if="canUpload" :href="importUrl" class="cvr-btn-primary px-3 py-1.5 rounded text-sm whitespace-nowrap">{{ $t('Upload Data') }}</Link>
+                    <a v-if="canExport" :href="exportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap">{{ $t('Export All Data') }}</a>
+                    <a v-if="canUpload" :href="templateFieldsUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap">{{ $t('Select Template Fields') }}</a>
                     <button
                         v-if="canDelete && !companyHasOdoo && totalRows > 0"
                         type="button"
                         class="cvr-btn-danger px-3 py-1.5 rounded border text-sm whitespace-nowrap"
                         @click="confirmingDeleteAll = true"
                     >
-                        Delete All
+                        {{ $t('Delete All') }}
                     </button>
                 </div>
             </div>
@@ -215,38 +215,38 @@ function destroyAll() {
 
             <div v-if="isProcessing && !pollGaveUp" class="mb-4 px-4 py-3 rounded cvr-card-bg cvr-border border text-sm flex items-center gap-2">
                 <span class="animate-spin inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full"></span>
-                <span>Your upload is still being saved — this page will update automatically in a few seconds.</span>
+                <span>{{ $t('Your upload is still being saved — this page will update automatically in a few seconds.') }}</span>
             </div>
             <div v-else-if="isProcessing && pollGaveUp" class="mb-4 px-4 py-3 rounded cvr-badge-overdue text-sm flex items-center justify-between gap-3 flex-wrap">
-                <span>This is taking longer than expected. Your upload may still be processing in the background.</span>
-                <button type="button" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap" @click="checkAgain">Check Again</button>
+                <span>{{ $t('This is taking longer than expected. Your upload may still be processing in the background.') }}</span>
+                <button type="button" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap" @click="checkAgain">{{ $t('Check Again') }}</button>
             </div>
 
             <!-- Filters -->
             <div class="cvr-card-bg cvr-border border rounded-lg p-4 mb-6">
                 <div class="cvr-form-grid-4">
                     <div>
-                        <label class="cvr-form-label">Search In</label>
+                        <label class="cvr-form-label">{{ $t('Search In') }}</label>
                         <select v-model="searchField" class="cvr-input w-full px-3 py-2 rounded">
                             <option v-for="col in columns" :key="col.field" :value="col.field">{{ col.label }}</option>
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Value</label>
-                        <input v-model="searchValue" type="text" class="cvr-input w-full px-3 py-2 rounded" placeholder="Search text..." />
+                        <label class="cvr-form-label">{{ $t('Value') }}</label>
+                        <input v-model="searchValue" type="text" class="cvr-input w-full px-3 py-2 rounded" :placeholder="$t('Search text...')" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">From Date</label>
+                        <label class="cvr-form-label">{{ $t('From Date') }}</label>
                         <input v-model="fromDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">To Date</label>
+                        <label class="cvr-form-label">{{ $t('To Date') }}</label>
                         <input v-model="toDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                 </div>
                 <div class="flex gap-2 mt-4">
-                    <button @click="applyFilters" class="cvr-btn-primary px-4 py-1.5 rounded text-sm">Search</button>
-                    <button @click="clearFilters" class="cvr-btn-secondary px-4 py-1.5 rounded border text-sm">Clear</button>
+                    <button @click="applyFilters" class="cvr-btn-primary px-4 py-1.5 rounded text-sm">{{ $t('Search') }}</button>
+                    <button @click="clearFilters" class="cvr-btn-secondary px-4 py-1.5 rounded border text-sm">{{ $t('Clear') }}</button>
                 </div>
             </div>
 
@@ -257,9 +257,9 @@ function destroyAll() {
                         <tr>
                             <th class="px-4 py-3 text-center">#</th>
                             <th v-for="col in columns" :key="col.field" class="px-3 py-3 text-center">{{ col.label }}</th>
-                            <th v-if="isScheduleModel" class="px-3 py-3 text-center">Status</th>
-                            <th v-if="isScheduleModel" class="px-3 py-3 text-center">Remaining</th>
-                            <th class="px-4 py-3 text-center">Actions</th>
+                            <th v-if="isScheduleModel" class="px-3 py-3 text-center">{{ $t('Status') }}</th>
+                            <th v-if="isScheduleModel" class="px-3 py-3 text-center">{{ $t('Remaining') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -272,7 +272,7 @@ function destroyAll() {
                             <td v-if="isScheduleModel" class="px-3 py-2 text-center cvr-num">{{ row.remaining }}</td>
                             <td class="px-4 py-2 text-center">
                                 <div class="flex items-center justify-center gap-2">
-                                    <a v-if="row.settlementUrl" :href="row.settlementUrl" class="cvr-action-btn" title="Settlement">💲</a>
+                                    <a v-if="row.settlementUrl" :href="row.settlementUrl" class="cvr-action-btn" :title="$t('Settlement')">💲</a>
                                     <!--
                                         Bug fix (client-flagged, confirmed 2026-08-15): an installment
                                         that's paid or partially paid shouldn't be edited or deleted
@@ -288,19 +288,19 @@ function destroyAll() {
                                         v-if="canUpload && !row.isPaidOrPartiallyPaid"
                                         :href="row.editUrl"
                                         class="cvr-action-btn"
-                                        title="Edit"
+                                        :title="$t('Edit')"
                                     >✎</Link>
                                     <button
                                         v-if="canDelete && !companyHasOdoo && !row.isPaidOrPartiallyPaid"
                                         @click="confirmDelete(row)"
                                         class="cvr-action-btn cvr-action-btn-danger"
-                                        title="Delete"
+                                        :title="$t('Delete')"
                                     >🗑</button>
                                 </div>
                             </td>
                         </tr>
                         <tr v-if="rows.length === 0">
-                            <td :colspan="columns.length + (isScheduleModel ? 4 : 2)" class="px-4 py-8 text-center cvr-text-muted">No records found.</td>
+                            <td :colspan="columns.length + (isScheduleModel ? 4 : 2)" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No records found.') }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -310,19 +310,19 @@ function destroyAll() {
             <div v-if="pagination.last_page > 1" class="flex items-center justify-between mt-4">
                 <p class="text-xs cvr-text-muted">Page {{ pagination.current_page }} of {{ pagination.last_page }}</p>
                 <div class="flex items-center gap-1">
-                    <button @click="goToPage(pagination.current_page - 1)" :disabled="pagination.current_page === 1" class="cvr-filter-pill" :class="{ 'opacity-40 cursor-not-allowed': pagination.current_page === 1 }">‹ Prev</button>
-                    <button @click="goToPage(pagination.current_page + 1)" :disabled="pagination.current_page === pagination.last_page" class="cvr-filter-pill" :class="{ 'opacity-40 cursor-not-allowed': pagination.current_page === pagination.last_page }">Next ›</button>
+                    <button @click="goToPage(pagination.current_page - 1)" :disabled="pagination.current_page === 1" class="cvr-filter-pill" :class="{ 'opacity-40 cursor-not-allowed': pagination.current_page === 1 }">{{ $t('‹ Prev') }}</button>
+                    <button @click="goToPage(pagination.current_page + 1)" :disabled="pagination.current_page === pagination.last_page" class="cvr-filter-pill" :class="{ 'opacity-40 cursor-not-allowed': pagination.current_page === pagination.last_page }">{{ $t('Next ›') }}</button>
                 </div>
             </div>
 
             <!-- Delete confirmation -->
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Delete this record?</h2>
-                    <p class="text-sm cvr-text-muted mb-4">This action cannot be undone.</p>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Delete this record?') }}</h2>
+                    <p class="text-sm cvr-text-muted mb-4">{{ $t('This action cannot be undone.') }}</p>
                     <div class="flex justify-end gap-2">
-                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">Delete</button>
+                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Delete') }}</button>
                     </div>
                 </div>
             </div>
@@ -338,23 +338,22 @@ function destroyAll() {
                     <h2 class="text-lg font-medium cvr-text-primary mb-3">
                         Delete all {{ totalRows }} {{ modelDisplayName }} record(s)?
                     </h2>
-                    <p class="text-sm cvr-text-muted mb-2">This action cannot be undone.</p>
+                    <p class="text-sm cvr-text-muted mb-2">{{ $t('This action cannot be undone.') }}</p>
                     <p class="text-sm cvr-num-amber mb-4">
-                        Any record that already has money recorded against it — a collection, a payment,
-                        an allocation — will be kept, and you will be told how many.
+                        {{ $t('Any record that already has money recorded against it — a collection, a payment, an allocation — will be kept, and you will be told how many.') }}
                     </p>
                     <div class="flex justify-end gap-2">
                         <button
                             :disabled="deletingAll"
                             @click="confirmingDeleteAll = false"
                             class="cvr-btn-secondary px-3 py-1.5 rounded border"
-                        >Close</button>
+                        >{{ $t('Close') }}</button>
                         <button
                             :disabled="deletingAll"
                             @click="destroyAll"
                             class="cvr-btn-danger px-3 py-1.5 rounded border"
                             :class="{ 'opacity-60 cursor-not-allowed': deletingAll }"
-                        >{{ deletingAll ? 'Deleting…' : 'Delete All' }}</button>
+                        >{{ deletingAll ? $t('Deleting…') : $t('Delete All') }}</button>
                     </div>
                 </div>
             </div>

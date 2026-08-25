@@ -73,7 +73,7 @@ const visibleColumnCount = computed(() => {
 });
 
 function formatAmount(value) {
-    return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return Number(value || 0).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /* Running end-balance color — same sign convention already
@@ -140,22 +140,22 @@ function submitInterest() {
     <AppLayout>
         <div class="p-6">
             <Link :href="urls.backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                ← Back to Bank Statement
+                {{ $t('← Back to Bank Statement') }}
             </Link>
 
             <div class="flex items-start justify-between flex-wrap gap-2 mt-2 mb-1">
                 <h1 class="text-xl font-semibold cvr-text-primary">
-                    Bank Statement
+                    {{ $t('Bank Statement') }}
                     <span class="cvr-text-secondary font-normal">
                         — {{ financialInstitutionName }} · {{ accountTypeName }} · {{ accountNumber }} · {{ String(currency).toUpperCase() }}
                     </span>
                 </h1>
                 <div class="flex items-center gap-2">
                     <a :href="urls.exportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
-                        ⬇️ Export to Excel
+                        {{ $t('⬇️ Export to Excel') }}
                     </a>
                     <Link v-if="!isCurrentAccount" :href="urls.withdrawalsSettlementReportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
-                        📖 Withdrawals Settlement Report
+                        {{ $t('📖 Withdrawals Settlement Report') }}
                     </Link>
                 </div>
             </div>
@@ -166,28 +166,28 @@ function submitInterest() {
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">📅</div>
                     <div>
-                        <p class="cvr-kpi-label">Beginning Balance</p>
+                        <p class="cvr-kpi-label">{{ $t('Beginning Balance') }}</p>
                         <p class="cvr-kpi-value cvr-num-blue">{{ formatAmount(kpis.beginningBalance) }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-green">⬆️</div>
                     <div>
-                        <p class="cvr-kpi-label">Total Debit</p>
+                        <p class="cvr-kpi-label">{{ $t('Total Debit') }}</p>
                         <p class="cvr-kpi-value cvr-num-green">{{ formatAmount(kpis.totalDebit) }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-copper">⬇️</div>
                     <div>
-                        <p class="cvr-kpi-label">Total Credit</p>
+                        <p class="cvr-kpi-label">{{ $t('Total Credit') }}</p>
                         <p class="cvr-kpi-value cvr-num">{{ formatAmount(kpis.totalCredit) }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">🏁</div>
                     <div>
-                        <p class="cvr-kpi-label">Ending Balance</p>
+                        <p class="cvr-kpi-label">{{ $t('Ending Balance') }}</p>
                         <p class="cvr-kpi-value cvr-num-blue">{{ formatAmount(kpis.endingBalance) }}</p>
                     </div>
                 </div>
@@ -200,19 +200,19 @@ function submitInterest() {
                         <thead class="cvr-table-head sticky top-0 z-10">
                             <tr>
                                 <th class="px-3 py-3 text-center">#</th>
-                                <th class="px-3 py-3 text-center">Date</th>
-                                <th v-if="!isCurrentAccount" class="px-3 py-3 text-right">Limit</th>
-                                <th v-if="showActualLimitColumn" class="px-3 py-3 text-right">Actual Limit</th>
-                                <th class="px-3 py-3 text-right">Beginning Balance</th>
-                                <th class="px-3 py-3 text-right">Debit</th>
-                                <th class="px-3 py-3 text-right">Credit</th>
-                                <th class="px-3 py-3 text-right">End Balance</th>
-                                <th v-if="!isCurrentAccount" class="px-3 py-3 text-right">Room</th>
-                                <th v-if="!isCurrentAccount" class="px-3 py-3 text-right">Calculated Interest</th>
-                                <th v-if="isMediumTermLoan" class="px-3 py-3 text-right">Principle</th>
-                                <th v-if="showReviewedAndActionsColumns" class="px-3 py-3 text-center">Reviewed</th>
-                                <th v-if="showReviewedAndActionsColumns" class="px-3 py-3 text-center">Actions</th>
-                                <th class="px-3 py-3 text-left min-w-[280px]">Comment</th>
+                                <th class="px-3 py-3 text-center">{{ $t('Date') }}</th>
+                                <th v-if="!isCurrentAccount" class="px-3 py-3 text-right">{{ $t('Limit') }}</th>
+                                <th v-if="showActualLimitColumn" class="px-3 py-3 text-right">{{ $t('Actual Limit') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Beginning Balance') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Debit') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Credit') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('End Balance') }}</th>
+                                <th v-if="!isCurrentAccount" class="px-3 py-3 text-right">{{ $t('Room') }}</th>
+                                <th v-if="!isCurrentAccount" class="px-3 py-3 text-right">{{ $t('Calculated Interest') }}</th>
+                                <th v-if="isMediumTermLoan" class="px-3 py-3 text-right">{{ $t('Principle') }}</th>
+                                <th v-if="showReviewedAndActionsColumns" class="px-3 py-3 text-center">{{ $t('Reviewed') }}</th>
+                                <th v-if="showReviewedAndActionsColumns" class="px-3 py-3 text-center">{{ $t('Actions') }}</th>
+                                <th class="px-3 py-3 text-start min-w-[280px]">{{ $t('Comment') }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -236,17 +236,17 @@ function submitInterest() {
                                 </td>
                                 <td v-if="showReviewedAndActionsColumns" class="px-3 py-2.5 text-center">
                                     <div class="flex items-center justify-center gap-1">
-                                        <button v-if="row.isCommissionFees" @click="openFeesModal(row)" class="cvr-action-btn" title="Edit Commission Fees">✏️</button>
-                                        <button v-if="row.interestType === 'end_of_month' || row.interestType === 'end_of_month_final'" @click="openInterestModal(row)" class="cvr-action-btn" title="Edit End-of-Month Interest">✏️</button>
+                                        <button v-if="row.isCommissionFees" @click="openFeesModal(row)" class="cvr-action-btn" :title="$t('Edit Commission Fees')">✏️</button>
+                                        <button v-if="row.interestType === 'end_of_month' || row.interestType === 'end_of_month_final'" @click="openInterestModal(row)" class="cvr-action-btn" :title="$t('Edit End-of-Month Interest')">✏️</button>
                                     </div>
                                 </td>
-                                <td class="px-3 py-2.5 text-left cvr-text-secondary">
+                                <td class="px-3 py-2.5 text-start cvr-text-secondary">
                                     <span class="block max-w-[360px] whitespace-normal">{{ row.comment }}</span>
                                     <span v-if="row.userComment" class="block max-w-[360px] whitespace-normal cvr-text-muted text-xs mt-0.5">{{ row.userComment }}</span>
                                 </td>
                             </tr>
                             <tr v-if="rows.length === 0">
-                                <td :colspan="visibleColumnCount" class="px-4 py-8 text-center cvr-text-muted">No movements found for this date range.</td>
+                                <td :colspan="visibleColumnCount" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No movements found for this date range.') }}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -269,20 +269,20 @@ function submitInterest() {
             <!-- Commission Fees modal -->
             <div v-if="feesTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Confirm Commission Fees Date &amp; Amount</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Confirm Commission Fees Date & Amount') }}</h2>
                     <div class="space-y-3">
                         <div>
-                            <label class="cvr-form-label">Amount</label>
+                            <label class="cvr-form-label">{{ $t('Amount') }}</label>
                             <input v-model.number="feesAmount" type="number" step="0.01" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Commission Date</label>
+                            <label class="cvr-form-label">{{ $t('Commission Date') }}</label>
                             <input v-model="feesDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
                     <div class="flex justify-end gap-2 mt-5">
-                        <button @click="feesTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="submitFees" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
+                        <button @click="feesTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="submitFees" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Confirm') }}</button>
                     </div>
                 </div>
             </div>
@@ -290,20 +290,20 @@ function submitInterest() {
             <!-- End-of-Month Interest modal -->
             <div v-if="interestTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Confirm End-of-Month Interest Date &amp; Amount</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Confirm End-of-Month Interest Date & Amount') }}</h2>
                     <div class="space-y-3">
                         <div>
-                            <label class="cvr-form-label">Amount ({{ interestIsCredit ? 'Credit' : 'Debit' }})</label>
+                            <label class="cvr-form-label">Amount ({{ interestIsCredit ? $t('Credit') : $t('Debit') }})</label>
                             <input v-model.number="interestAmount" type="number" step="0.01" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Date</label>
+                            <label class="cvr-form-label">{{ $t('Date') }}</label>
                             <input v-model="interestDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
                     <div class="flex justify-end gap-2 mt-5">
-                        <button @click="interestTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="submitInterest" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
+                        <button @click="interestTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="submitInterest" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Confirm') }}</button>
                     </div>
                 </div>
             </div>

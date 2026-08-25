@@ -140,6 +140,8 @@ class RoutePermissionMap
         'view.cash.expense' => 'cash_expense.view',
         'create.cash.expense' => 'cash_expense.create',
         'store.cash.expense' => 'cash_expense.create',
+        // Opens the create form pre-filled from an existing row.
+        'copy.cash.expense' => 'cash_expense.create',
         'edit.cash.expense' => 'cash_expense.update',
         'update.cash.expense' => 'cash_expense.update',
         'delete.cash.expense' => 'cash_expense.delete',
@@ -215,6 +217,9 @@ class RoutePermissionMap
 
         /* ───────────── Balances / aging / effectiveness ─────────── */
         'view.balances' => ['customer_balance.view', 'supplier_balance.view'],
+        // Offsetting a partner against themselves — see App\Models\InternalSettlement.
+        'store.internal.settlement' => 'customer_balance.settle',
+        'delete.internal.settlement' => 'customer_balance.settle',
         'show.total.net.balance.in' => ['customer_balance.view', 'supplier_balance.view'],
         'view.aging.analysis' => ['customer_aging.view', 'supplier_aging.view'],
         'result.aging.analysis' => ['customer_aging.view', 'supplier_aging.view'],

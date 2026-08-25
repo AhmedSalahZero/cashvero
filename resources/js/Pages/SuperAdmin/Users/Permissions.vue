@@ -161,27 +161,22 @@ function submit() {
       <Link
         :href="backUrl"
         class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm mb-4">
-        ← Back to Users
+        {{ $t('← Back to Users') }}
       </Link>
 
       <h1 class="text-xl font-semibold cvr-text-primary mb-1">Permissions for {{ user.name }}</h1>
       <p class="text-sm cvr-text-muted mb-1">{{ user.email }}</p>
       <p class="text-sm cvr-text-muted mb-6">
-        Role:
-        <strong class="cvr-text-primary capitalize">{{
-          user.role ? user.role.replace('-', ' ') : 'none'
-        }}</strong>
-        — a label and a starting template only. What this person can do is decided entirely by the
-        boxes below.
+        {{ $t('Role:') }}
+        <strong class="cvr-text-primary capitalize">{{ user.role ? user.role.replace('-', ' ') : 'none' }}</strong>
+        {{ $t('— a label and a starting template only. What this person can do is decided entirely by the boxes below.') }}
       </p>
 
       <div
         v-if="user.is_super_admin"
         class="cvr-card p-4 mb-6">
         <p class="text-sm cvr-text-secondary">
-          <strong class="cvr-text-primary">This user is a Super Admin</strong> and passes every
-          permission check through a centralised bypass, so nothing selected here changes what they
-          can do. Give them a different role to limit them.
+          <strong class="cvr-text-primary">{{ $t('This user is a Super Admin') }}</strong> {{ $t('and passes every permission check through a centralised bypass, so nothing selected here changes what they can do. Give them a different role to limit them.') }}
         </p>
       </div>
 
@@ -194,7 +189,7 @@ function submit() {
           <input
             v-model="search"
             type="search"
-            placeholder="Search modules and actions…"
+            :placeholder="$t('Search modules and actions…')"
             class="cvr-input flex-1 min-w-[14rem] px-3 py-2 rounded border" />
           <div class="flex items-center gap-2 flex-wrap">
             <button
@@ -213,13 +208,13 @@ function submit() {
               type="button"
               @click="expandAll"
               class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
-              Expand
+              {{ $t('Expand') }}
             </button>
             <button
               type="button"
               @click="collapseAll"
               class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
-              Collapse
+              {{ $t('Collapse') }}
             </button>
           </div>
           <span class="text-sm cvr-text-muted tabular-nums whitespace-nowrap">
@@ -231,7 +226,7 @@ function submit() {
         <div
           v-if="templates?.length"
           class="cvr-card p-4 flex flex-wrap items-center gap-3">
-          <span class="text-sm cvr-text-secondary">Start from a template:</span>
+          <span class="text-sm cvr-text-secondary">{{ $t('Start from a template:') }}</span>
           <button
             v-for="t in templates"
             :key="t.name"
@@ -243,8 +238,7 @@ function submit() {
             <span class="cvr-text-muted tabular-nums">({{ t.keys.length }})</span>
           </button>
           <span class="text-xs cvr-text-muted basis-full">
-            Fills the boxes below from that role. Nothing is saved until you press Save, and this
-            user stays unlinked from the template afterwards.
+            {{ $t('Fills the boxes below from that role. Nothing is saved until you press Save, and this user stays unlinked from the template afterwards.') }}
           </span>
         </div>
 
@@ -339,20 +333,20 @@ function submit() {
         <p
           v-if="!isSuperAdminEditor"
           class="text-xs cvr-text-muted">
-          Greyed-out actions are ones you do not hold yourself, so you cannot grant them.
+          {{ $t('Greyed-out actions are ones you do not hold yourself, so you cannot grant them.') }}
         </p>
 
         <div class="flex justify-end gap-2">
           <Link
             :href="backUrl"
             class="cvr-btn-secondary px-4 py-2 rounded border"
-            >Cancel</Link
+            >{{ $t('Cancel') }}</Link
           >
           <button
             type="submit"
             :disabled="submitting"
             class="cvr-btn-primary px-4 py-2 rounded">
-            {{ submitting ? 'Saving…' : 'Save Permissions' }}
+            {{ submitting ? $t('Saving…') : $t('Save Permissions') }}
           </button>
         </div>
       </form>

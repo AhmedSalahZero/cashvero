@@ -19,20 +19,20 @@ const filteredRows = computed(() => {
 });
 
 function formatAmount(value) {
-    return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return Number(value || 0).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 </script>
 
 <template>
     <AppLayout>
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">LG &amp; LC Facilities</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('LG & LC Facilities') }}</h1>
             <p class="text-sm cvr-text-blue mb-6">Every Letter of Guarantee and Letter of Credit facility across every bank for {{ company.name }}</p>
 
             <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
                 <div class="cvr-search-bar flex items-center gap-2 px-3 py-1.5 w-72">
                     <span class="cvr-text-muted text-sm">🔍</span>
-                    <input v-model="search" type="text" placeholder="Search by bank, contract, or type..." class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
+                    <input v-model="search" type="text" :placeholder="$t('Search by bank, contract, or type...')" class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
                 </div>
             </div>
 
@@ -40,14 +40,14 @@ function formatAmount(value) {
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-3 py-3 text-left">#</th>
-                            <th class="px-3 py-3 text-left">Type</th>
-                            <th class="px-3 py-3 text-left">Bank Name</th>
-                            <th class="px-3 py-3 text-left">Contract Name</th>
-                            <th class="px-3 py-3 text-left">Start Date</th>
-                            <th class="px-3 py-3 text-left">End Date</th>
-                            <th class="px-3 py-3 text-right">Limit Amount</th>
-                            <th class="px-3 py-3 text-left">Currency</th>
+                            <th class="px-3 py-3 text-start">#</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Type') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Bank Name') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Contract Name') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Start Date') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('End Date') }}</th>
+                            <th class="px-3 py-3 text-right">{{ $t('Limit Amount') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Currency') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -67,7 +67,7 @@ function formatAmount(value) {
                         </tr>
                         <tr v-if="filteredRows.length === 0">
                             <td colspan="8" class="px-4 py-8 text-center cvr-text-muted">
-                                No LG or LC facilities found.
+                                {{ $t('No LG or LC facilities found.') }}
                             </td>
                         </tr>
                     </tbody>

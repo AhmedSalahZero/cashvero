@@ -203,24 +203,24 @@ onBeforeUnmount(() => {
                 ← Back to {{ modelDisplayName }} Table
             </Link>
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ modelDisplayName }} Import</h1>
-            <p class="text-sm cvr-text-muted mb-6">Maximum 50,000 rows per upload</p>
+            <p class="text-sm cvr-text-muted mb-6">{{ $t('Maximum 50,000 rows per upload') }}</p>
 
             <p v-if="currentFileNameLabel" class="text-sm cvr-text-secondary mb-4">{{ currentFileNameLabel }}</p>
             <div v-if="skippedDuplicateCount > 0" class="cvr-card-bg cvr-border border rounded-lg p-3 mb-4" style="border-color: var(--cvr-num-amber)">
                 <p class="text-sm cvr-num-amber">Your last save skipped {{ skippedDuplicateCount }} row(s) that already existed and were not re-added.</p>
             </div>
-            <Link v-if="lastUploadFailedUrl" :href="lastUploadFailedUrl" class="inline-block text-sm cvr-num-red hover:underline mb-4">View last upload's failed rows →</Link>
+            <Link v-if="lastUploadFailedUrl" :href="lastUploadFailedUrl" class="inline-block text-sm cvr-num-red hover:underline mb-4">{{ $t('View last upload\'s failed rows →') }}</Link>
 
             <!-- State: parsing -->
             <div v-if="isParsing && !parseGaveUp" class="cvr-card-bg cvr-border border rounded-lg p-6 mb-6">
-                <p class="cvr-num-green font-medium mb-3">Uploading and parsing your file…</p>
+                <p class="cvr-num-green font-medium mb-3">{{ $t('Uploading and parsing your file…') }}</p>
                 <div class="h-2 rounded-full bg-white/5 overflow-hidden">
                     <div class="h-full rounded-full animate-pulse" style="width: 100%; background-color: var(--cvr-green-bright)"></div>
                 </div>
             </div>
             <div v-else-if="isParsing && parseGaveUp" class="cvr-card-bg cvr-border border rounded-lg p-6 mb-6 flex items-center justify-between gap-3 flex-wrap">
-                <p class="text-sm">This is taking longer than expected. Your file may still be processing in the background.</p>
-                <button type="button" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap" @click="checkParseAgain">Check Again</button>
+                <p class="text-sm">{{ $t('This is taking longer than expected. Your file may still be processing in the background.') }}</p>
+                <button type="button" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap" @click="checkParseAgain">{{ $t('Check Again') }}</button>
             </div>
 
             <!-- State: saving -->
@@ -232,7 +232,7 @@ onBeforeUnmount(() => {
             </div>
             <div v-else-if="isSaving && saveGaveUp" class="cvr-card-bg cvr-border border rounded-lg p-6 mb-6 flex items-center justify-between gap-3 flex-wrap">
                 <p class="text-sm">This is taking longer than expected ({{ savingPercent.toFixed(0) }}% when we stopped checking). Your data may still be saving in the background.</p>
-                <button type="button" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap" @click="checkSaveAgain">Check Again</button>
+                <button type="button" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap" @click="checkSaveAgain">{{ $t('Check Again') }}</button>
             </div>
 
             <!-- State: review (preview + duplicates + Save Data) -->
@@ -310,19 +310,19 @@ onBeforeUnmount(() => {
             <div v-else class="cvr-card-bg cvr-border border rounded-lg p-4 space-y-4">
                 <div class="cvr-form-grid-2">
                     <div>
-                        <label class="cvr-form-label">Import File *</label>
+                        <label class="cvr-form-label">{{ $t('Import File') }} *</label>
                         <input type="file" required accept=".xlsx,.xls,.csv" @change="handleFileChange" class="cvr-input w-full px-3 py-2 rounded" />
                         <p v-if="form.errors.excel_file" class="text-xs text-red-500 mt-1">{{ form.errors.excel_file }}</p>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Date Formatting *</label>
+                        <label class="cvr-form-label">{{ $t('Date Formatting') }} *</label>
                         <select v-model="form.format" required class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="" disabled>Select</option>
+                            <option value="" disabled>{{ $t('Select') }}</option>
                             <option v-for="opt in dateFormatOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
                         </select>
                     </div>
                 </div>
-                <button @click="submitUpload" :disabled="form.processing" class="cvr-btn-primary px-4 py-1.5 rounded text-sm">Upload</button>
+                <button @click="submitUpload" :disabled="form.processing" class="cvr-btn-primary px-4 py-1.5 rounded text-sm">{{ $t('Upload') }}</button>
             </div>
         </div>
     </AppLayout>

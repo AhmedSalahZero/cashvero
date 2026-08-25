@@ -268,7 +268,7 @@ const movementSeries = [
 /* ── Formatting / Number Color Rule helpers ──────────────────── */
 function fmt(value) {
     const n = Number(value || 0);
-    return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    return n.toLocaleString('en-EG', { maximumFractionDigits: 0 });
 }
 
 /* ── Details panel toggle (replaces the original's Bootstrap modals
@@ -298,41 +298,41 @@ const expandedLoanId = ref(null);
 <template>
     <AppLayout>
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Dashboard</h1>
-            <p class="text-sm cvr-text-muted mb-4">Current cash position, facility utilization &amp; bank movement</p>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Dashboard') }}</h1>
+            <p class="text-sm cvr-text-muted mb-4">{{ $t('Current cash position, facility utilization & bank movement') }}</p>
 
             <DashboardTabs active="cash" :urls="dashboardTabUrls" />
 
             <!-- Date + account owner filters -->
             <div class="cvr-card-bg cvr-border border rounded-lg p-3 mb-6 flex items-end gap-3 flex-wrap">
                 <div>
-                    <label class="cvr-form-label">As Of Date</label>
+                    <label class="cvr-form-label">{{ $t('As Of Date') }}</label>
                     <input v-model="filterDate" type="date" class="cvr-input px-3 py-2 rounded" />
                 </div>
 
                 <div v-if="canManageShareholderAccounts">
-                    <label class="cvr-form-label">Accounts</label>
+                    <label class="cvr-form-label">{{ $t('Accounts') }}</label>
                     <select v-model="accountOwner" @change="onAccountOwnerChange" class="cvr-select px-3 py-2 rounded">
-                        <option value="company">Company accounts</option>
-                        <option value="all">All accounts</option>
-                        <option value="shareholders">Shareholders accounts</option>
+                        <option value="company">{{ $t('Company accounts') }}</option>
+                        <option value="all">{{ $t('All accounts') }}</option>
+                        <option value="shareholders">{{ $t('Shareholders accounts') }}</option>
                     </select>
                 </div>
 
                 <div v-if="canManageShareholderAccounts && showsShareholderPicker">
-                    <label class="cvr-form-label">Shareholder</label>
+                    <label class="cvr-form-label">{{ $t('Shareholder') }}</label>
                     <select v-model="shareholderPartnerId" @change="applyFilters" class="cvr-select px-3 py-2 rounded">
-                        <option value="">All shareholders</option>
+                        <option value="">{{ $t('All shareholders') }}</option>
                         <option v-for="shareholder in shareholders" :key="shareholder.id" :value="shareholder.id">
                             {{ shareholder.name }}
                         </option>
                     </select>
                 </div>
 
-                <button class="cvr-btn-primary px-4 py-2 rounded" @click="applyDateFilter">Apply</button>
+                <button class="cvr-btn-primary px-4 py-2 rounded" @click="applyDateFilter">{{ $t('Apply') }}</button>
 
                 <p v-if="canManageShareholderAccounts && accountOwner === 'shareholders'" class="text-xs cvr-text-muted w-full">
-                    Cash in safe, leasing and all overdraft facilities are company-only instruments, so they are excluded from this view.
+                    {{ $t('Cash in safe, leasing and all overdraft facilities are company-only instruments, so they are excluded from this view.') }}
                 </p>
             </div>
 
@@ -388,9 +388,9 @@ const expandedLoanId = ref(null);
                     <table class="min-w-full text-sm">
                         <thead class="cvr-table-head">
                             <tr>
-                                <th class="px-4 py-2 text-left">Source</th>
-                                <th class="px-4 py-2 text-left">Financial Institution / Branch Name</th>
-                                <th class="px-4 py-2 text-left">Account Number</th>
+                                <th class="px-4 py-2 text-start">Source</th>
+                                <th class="px-4 py-2 text-start">Financial Institution / Branch Name</th>
+                                <th class="px-4 py-2 text-start">Account Number</th>
                                 <th class="px-4 py-2 text-right">Amount [ {{ activeCurrency }} ]</th>
                                 <th v-if="activeCurrency !== mainFunctionalCurrency" class="px-4 py-2 text-right">Exchange Rate</th>
                                 <th v-if="activeCurrency !== mainFunctionalCurrency" class="px-4 py-2 text-right">Amount [ {{ mainFunctionalCurrency }} ]</th>
@@ -414,7 +414,7 @@ const expandedLoanId = ref(null);
                 </div>
                 <div v-if="openDetail === 'td'" class="cvr-card-bg cvr-border border rounded-lg overflow-hidden mb-6">
                     <table class="min-w-full text-sm">
-                        <thead class="cvr-table-head"><tr><th class="px-4 py-2 text-left">Bank</th><th class="px-4 py-2 text-right">Amount</th></tr></thead>
+                        <thead class="cvr-table-head"><tr><th class="px-4 py-2 text-start">Bank</th><th class="px-4 py-2 text-right">Amount</th></tr></thead>
                         <tbody>
                             <tr v-for="(row, i) in (details?.[activeCurrency]?.time_of_deposits || [])" :key="i" class="cvr-table-row">
                                 <td class="px-4 py-2">{{ row.financial_institution_name }}</td>
@@ -425,7 +425,7 @@ const expandedLoanId = ref(null);
                 </div>
                 <div v-if="openDetail === 'cd'" class="cvr-card-bg cvr-border border rounded-lg overflow-hidden mb-6">
                     <table class="min-w-full text-sm">
-                        <thead class="cvr-table-head"><tr><th class="px-4 py-2 text-left">Bank</th><th class="px-4 py-2 text-right">Amount</th></tr></thead>
+                        <thead class="cvr-table-head"><tr><th class="px-4 py-2 text-start">Bank</th><th class="px-4 py-2 text-right">Amount</th></tr></thead>
                         <tbody>
                             <tr v-for="(row, i) in (details?.[activeCurrency]?.certificate_of_deposits || [])" :key="i" class="cvr-table-row">
                                 <td class="px-4 py-2">{{ row.financial_institution_name }}</td>
@@ -484,7 +484,7 @@ const expandedLoanId = ref(null);
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-4 py-2 text-left">Bank Name</th>
+                                    <th class="px-4 py-2 text-start">Bank Name</th>
                                     <th class="px-4 py-2 text-right">Limit</th>
                                     <th class="px-4 py-2 text-right">Outstanding</th>
                                     <th class="px-4 py-2 text-right">Available Room</th>
@@ -547,18 +547,18 @@ const expandedLoanId = ref(null);
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-4 py-2 text-left">Bank</th>
-                                    <th class="px-4 py-2 text-left">Loan</th>
+                                    <th class="px-4 py-2 text-start">Bank</th>
+                                    <th class="px-4 py-2 text-start">Loan</th>
                                     <th class="px-4 py-2 text-right">Limit</th>
                                     <th class="px-4 py-2 text-right">Paid</th>
                                     <th class="px-4 py-2 text-right">Outstanding</th>
-                                    <th class="px-4 py-2 text-left">Next Installment</th>
+                                    <th class="px-4 py-2 text-start">Next Installment</th>
                                     <th class="px-4 py-2 text-right">Past Due</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <template v-for="loan in mediumTermLoansArr[activeCurrency]" :key="loan.id">
-                                    <tr class="cvr-table-row cursor-pointer" @click="expandedLoanId = expandedLoanId === 'ml-'+loan.id ? null : 'ml-'+loan.id">
+                                    <tr class="cvr-table-row cursor-pointer" @click="expandedLoanId = expandedLoanId === 'ms-'+loan.id ? null : 'ms-'+loan.id">
                                         <td class="px-4 py-2">{{ loan.institution_name }}</td>
                                         <td class="px-4 py-2">{{ loan.name }}</td>
                                         <td class="px-4 py-2 text-right cvr-num-blue">{{ loan.limit_formatted }}</td>
@@ -567,7 +567,7 @@ const expandedLoanId = ref(null);
                                         <td class="px-4 py-2">{{ loan.next_installment_date || '—' }} <span v-if="loan.next_installment_amount" class="cvr-num">({{ loan.next_installment_amount }})</span></td>
                                         <td class="px-4 py-2 text-right cvr-num-red">{{ loan.total_past_due_remaining_formatted }}</td>
                                     </tr>
-                                    <tr v-if="expandedLoanId === 'ml-'+loan.id" class="cvr-sub-row">
+                                    <tr v-if="expandedLoanId === 'ms-'+loan.id" class="cvr-sub-row">
                                         <td colspan="7" class="px-4 py-2">
                                             <div v-if="(loan.past_dues || []).length" class="text-xs">
                                                 <span v-for="(pd, i) in loan.past_dues" :key="i" class="inline-block me-4 mb-1">
@@ -590,12 +590,12 @@ const expandedLoanId = ref(null);
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-4 py-2 text-left">Leasing Company</th>
-                                    <th class="px-4 py-2 text-left">Contract</th>
+                                    <th class="px-4 py-2 text-start">Leasing Company</th>
+                                    <th class="px-4 py-2 text-start">Contract</th>
                                     <th class="px-4 py-2 text-right">Limit</th>
                                     <th class="px-4 py-2 text-right">Paid</th>
                                     <th class="px-4 py-2 text-right">Outstanding</th>
-                                    <th class="px-4 py-2 text-left">Next Installment</th>
+                                    <th class="px-4 py-2 text-start">Next Installment</th>
                                     <th class="px-4 py-2 text-right">Past Due</th>
                                 </tr>
                             </thead>

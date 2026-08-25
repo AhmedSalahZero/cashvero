@@ -92,7 +92,7 @@ const runningBalances = computed(() => {
 });
 
 function formatAmount(value) {
-    return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+    return Number(value || 0).toLocaleString('en-EG', { maximumFractionDigits: 2 });
 }
 
 function balanceColorVar(balance) {
@@ -106,7 +106,7 @@ function balanceColorVar(balance) {
     <AppLayout>
         <div class="p-6">
             <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm mb-3">
-                ← Back to Balances
+                {{ $t('← Back to Balances') }}
             </Link>
             <div class="flex items-center justify-between flex-wrap gap-3 mb-1">
                 <h1 class="text-xl font-semibold cvr-text-primary">
@@ -115,32 +115,32 @@ function balanceColorVar(balance) {
                     <span class="cvr-text-secondary font-normal">[ {{ currencyLabel(currency) }} ]</span>
                 </h1>
                 <a v-if="exportUrl && rows.length" :href="exportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
-                    ⬇️ Export to Excel
+                    {{ $t('⬇️ Export to Excel') }}
                 </a>
             </div>
             <p class="text-sm cvr-text-muted mb-6">
-                {{ showAllPartner ? 'Every ' + customerStatementText.toLowerCase() + ' in this currency' : 'Movements for the selected date range' }}
+                {{ showAllPartner ? $t('Every ') + customerStatementText.toLowerCase() + $t(' in this currency') : $t('Movements for the selected date range') }}
             </p>
 
             <!-- Filter form -->
             <div class="cvr-card-bg cvr-border border rounded-lg p-4 mb-6">
                 <div class="cvr-form-grid-8-2-2">
                     <div>
-                        <label class="cvr-form-label">Name</label>
+                        <label class="cvr-form-label">{{ $t('Name') }}</label>
                         <select v-model="selectedPartnerId" class="cvr-input w-full px-3 py-2 rounded">
                             <option v-for="(name, id) in partners" :key="id" :value="id">{{ name }}</option>
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Start Date</label>
+                        <label class="cvr-form-label">{{ $t('Start Date') }}</label>
                         <input v-model="startDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">End Date</label>
+                        <label class="cvr-form-label">{{ $t('End Date') }}</label>
                         <input v-model="endDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                 </div>
-                <button @click="submitFilter" class="cvr-btn-primary px-4 py-1.5 rounded text-sm mt-4">Submit</button>
+                <button @click="submitFilter" class="cvr-btn-primary px-4 py-1.5 rounded text-sm mt-4">{{ $t('Submit') }}</button>
             </div>
 
             <!-- Table -->
@@ -149,30 +149,30 @@ function balanceColorVar(balance) {
                     <thead class="cvr-table-head">
                         <tr>
                             <th class="px-4 py-3 text-center">#</th>
-                            <th class="px-4 py-3 text-center">Date</th>
-                            <th class="px-4 py-3 text-left">Document Type</th>
-                            <th class="px-4 py-3 text-center">Document No</th>
-                            <th class="px-4 py-3 text-right">Debit</th>
-                            <th class="px-4 py-3 text-right">Credit</th>
-                            <th class="px-4 py-3 text-right">End Balance</th>
-                            <th class="px-4 py-3 text-left">Comment</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Date') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Document Type') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Document No') }}</th>
+                            <th class="px-4 py-3 text-right">{{ $t('Debit') }}</th>
+                            <th class="px-4 py-3 text-right">{{ $t('Credit') }}</th>
+                            <th class="px-4 py-3 text-right">{{ $t('End Balance') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Comment') }}</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-for="(item, index) in rows" :key="index" class="cvr-table-row">
                             <td class="px-4 py-3 text-center cvr-text-secondary">{{ index + 1 }}</td>
                             <td class="px-4 py-3 text-center cvr-text-secondary">{{ item.date }}</td>
-                            <td class="px-4 py-3 text-left cvr-text-primary">{{ item.document_type }}</td>
+                            <td class="px-4 py-3 text-start cvr-text-primary">{{ item.document_type }}</td>
                             <td class="px-4 py-3 text-center cvr-text-secondary">{{ item.document_no }}</td>
                             <td class="px-4 py-3 text-right cvr-num">{{ formatAmount(item.debit) }}</td>
                             <td class="px-4 py-3 text-right cvr-num">{{ formatAmount(item.credit) }}</td>
                             <td class="px-4 py-3 text-right font-medium" :style="{ color: balanceColorVar(runningBalances[index]) }">{{ formatAmount(runningBalances[index]) }}</td>
-                            <td class="px-4 py-3 text-left cvr-text-secondary">
+                            <td class="px-4 py-3 text-start cvr-text-secondary">
                                 <span class="block max-w-[320px] whitespace-normal">{{ item.comment }}</span>
                             </td>
                         </tr>
                         <tr v-if="rows.length === 0">
-                            <td colspan="8" class="px-4 py-8 text-center cvr-text-muted">No movements found for this date range.</td>
+                            <td colspan="8" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No movements found for this date range.') }}</td>
                         </tr>
                     </tbody>
                 </table>

@@ -39,7 +39,7 @@ function periodLabel(wk) {
 }
 
 function fmt(n) {
-    return (Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    return (Number(n) || 0).toLocaleString('en-EG', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 function rowTotal(series) {
     return weekKeys.value.reduce((s, wk) => s + (Number(series?.[wk]) || 0), 0);
@@ -62,32 +62,32 @@ const accumulatedTotal = computed(() => {
                 <div>
                     <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ title }}</h1>
                     <Link :href="urls.index" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                    ← Back to Consolidated Cash Flow
+                    {{ $t('← Back to Consolidated Cash Flow') }}
                 </Link>
                 </div>
                 <div class="flex items-center gap-2">
-                    <a :href="urls.exportExcel" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">Export Excel</a>
-                    <button type="button" @click="window.print()" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">Print</button>
+                    <a :href="urls.exportExcel" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">{{ $t('Export Excel') }}</a>
+                    <button type="button" @click="window.print()" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">{{ $t('Print') }}</button>
                 </div>
             </div>
 
-            <p class="text-sm cvr-text-muted mb-4"><strong class="cvr-text-primary">All amounts are shown in:</strong> {{ displayCurrency }} — <strong class="cvr-text-primary">Contracts filter currencies:</strong> {{ (filters?.currencies?.length ? filters.currencies.join(', ') : 'All') }} — <strong v-if="filters?.min_end_year" class="cvr-text-primary">Contracts ending in/after:</strong> <span v-if="filters?.min_end_year">{{ filters.min_end_year }} — </span><strong class="cvr-text-primary">Interval:</strong> {{ reportInterval }}</p>
+            <p class="text-sm cvr-text-muted mb-4"><strong class="cvr-text-primary">{{ $t('All amounts are shown in:') }}</strong> {{ displayCurrency }} — <strong class="cvr-text-primary">{{ $t('Contracts filter currencies:') }}</strong> {{ (filters?.currencies?.length ? filters.currencies.join(', ') : 'All') }} — <strong v-if="filters?.min_end_year" class="cvr-text-primary">{{ $t('Contracts ending in/after:') }}</strong> <span v-if="filters?.min_end_year">{{ filters.min_end_year }} — </span><strong class="cvr-text-primary">{{ $t('Interval:') }}</strong> {{ reportInterval }}</p>
 
             <div class="cvr-card-bg cvr-border border rounded-lg overflow-auto">
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-2 py-2 text-left whitespace-nowrap">Item</th>
+                            <th class="px-2 py-2 text-start whitespace-nowrap">{{ $t('Item') }}</th>
                             <th v-for="wk in weekKeys" :key="wk" class="px-2 py-2 text-center whitespace-nowrap">{{ periodLabel(wk) }}</th>
-                            <th class="px-2 py-2 text-center whitespace-nowrap">Total</th>
+                            <th class="px-2 py-2 text-center whitespace-nowrap">{{ $t('Total') }}</th>
                         </tr>
                         <tr v-if="reportInterval === 'weekly'">
-                            <th class="px-2 py-1 text-left text-xs opacity-80">Start Date</th>
+                            <th class="px-2 py-1 text-start text-xs opacity-80">{{ $t('Start Date') }}</th>
                             <th v-for="wk in weekKeys" :key="'sd'+wk" class="px-2 py-1 text-center text-xs opacity-80 whitespace-nowrap">{{ dates[wk]?.start_date }}</th>
                             <th></th>
                         </tr>
                         <tr v-if="reportInterval === 'weekly'">
-                            <th class="px-2 py-1 text-left text-xs opacity-80">End Date</th>
+                            <th class="px-2 py-1 text-start text-xs opacity-80">{{ $t('End Date') }}</th>
                             <th v-for="wk in weekKeys" :key="'ed'+wk" class="px-2 py-1 text-center text-xs opacity-80 whitespace-nowrap">{{ dates[wk]?.end_date }}</th>
                             <th></th>
                         </tr>
@@ -95,7 +95,7 @@ const accumulatedTotal = computed(() => {
                     <tbody>
                         <!-- Section A: Company level -->
                         <tr class="cvr-table-head">
-                            <td :colspan="weekKeys.length + 2" class="px-2 py-2 font-semibold">Section A — Company level (Cash &amp; Banks Balance)</td>
+                            <td :colspan="weekKeys.length + 2" class="px-2 py-2 font-semibold">{{ $t('Section A — Company level (Cash & Banks Balance)') }}</td>
                         </tr>
                         <tr v-for="(row, label) in banksSection" :key="'bank-'+label" class="cvr-table-row">
                             <td class="px-2 py-2 whitespace-nowrap">{{ label }}</td>
@@ -103,10 +103,10 @@ const accumulatedTotal = computed(() => {
                             <td class="px-2 py-2 text-center cvr-num font-semibold whitespace-nowrap">{{ fmt(rowTotal(row.total)) }}</td>
                         </tr>
                         <tr v-if="!Object.keys(banksSection || {}).length">
-                            <td :colspan="weekKeys.length + 2" class="px-2 py-4 text-center cvr-text-muted">No bank-level rows returned.</td>
+                            <td :colspan="weekKeys.length + 2" class="px-2 py-4 text-center cvr-text-muted">{{ $t('No bank-level rows returned.') }}</td>
                         </tr>
                         <tr class="cvr-table-row">
-                            <td class="px-2 py-2 whitespace-nowrap">Cash Inflow (unallocated)</td>
+                            <td class="px-2 py-2 whitespace-nowrap">{{ $t('Cash Inflow (unallocated)') }}</td>
                             <td v-for="wk in weekKeys" :key="wk" class="px-2 py-2 text-center cvr-num whitespace-nowrap">{{ fmt(companyUnallocatedCashIn?.[wk]) }}</td>
                             <td class="px-2 py-2 text-center cvr-num font-semibold whitespace-nowrap">{{ fmt(rowTotal(companyUnallocatedCashIn)) }}</td>
                         </tr>
@@ -116,7 +116,7 @@ const accumulatedTotal = computed(() => {
                             <tr class="cvr-table-head">
                                 <td :colspan="weekKeys.length + 2" class="px-2 py-2 font-semibold">
                                     {{ block.contract_name }}
-                                    <span v-if="block.contract_code" class="opacity-80 font-normal ml-1">[{{ block.contract_code }}]</span>
+                                    <span v-if="block.contract_code" class="opacity-80 font-normal ms-1">[{{ block.contract_code }}]</span>
                                 </td>
                             </tr>
                             <tr class="cvr-table-row cvr-summary-row">
@@ -136,45 +136,45 @@ const accumulatedTotal = computed(() => {
                             </tr>
                         </template>
                         <tr v-if="!contractsSection.length">
-                            <td :colspan="weekKeys.length + 2" class="px-2 py-4 text-center cvr-text-muted">No contracts selected/available for this run.</td>
+                            <td :colspan="weekKeys.length + 2" class="px-2 py-4 text-center cvr-text-muted">{{ $t('No contracts selected/available for this run.') }}</td>
                         </tr>
 
                         <!-- Unallocated -->
                         <tr class="cvr-table-head">
-                            <td :colspan="weekKeys.length + 2" class="px-2 py-2 font-semibold">Company cash out (unallocated)</td>
+                            <td :colspan="weekKeys.length + 2" class="px-2 py-2 font-semibold">{{ $t('Company cash out (unallocated)') }}</td>
                         </tr>
                         <tr class="cvr-table-row">
-                            <td class="px-2 py-2 whitespace-nowrap">Company cash out (unallocated)</td>
+                            <td class="px-2 py-2 whitespace-nowrap">{{ $t('Company cash out (unallocated)') }}</td>
                             <td v-for="wk in weekKeys" :key="wk" class="px-2 py-2 text-center cvr-num whitespace-nowrap">{{ fmt(companyUnallocatedCashOut?.[wk]) }}</td>
                             <td class="px-2 py-2 text-center cvr-num font-semibold whitespace-nowrap">{{ fmt(rowTotal(companyUnallocatedCashOut)) }}</td>
                         </tr>
 
                         <!-- Section C: Grand total -->
                         <tr class="cvr-table-head">
-                            <td :colspan="weekKeys.length + 2" class="px-2 py-2 font-semibold">Section C — Grand total</td>
+                            <td :colspan="weekKeys.length + 2" class="px-2 py-2 font-semibold">{{ $t('Section C — Grand total') }}</td>
                         </tr>
                         <tr class="cvr-table-row cvr-summary-row">
-                            <td class="px-2 py-2 whitespace-nowrap">Cash &amp; Banks Balance</td>
+                            <td class="px-2 py-2 whitespace-nowrap">{{ $t('Cash & Banks Balance') }}</td>
                             <td v-for="wk in weekKeys" :key="wk" class="px-2 py-2 text-center cvr-num whitespace-nowrap">{{ fmt(grandTotal.cash_and_banks?.[wk]) }}</td>
                             <td class="px-2 py-2 text-center cvr-num font-semibold whitespace-nowrap">{{ fmt(rowTotal(grandTotal.cash_and_banks)) }}</td>
                         </tr>
                         <tr class="cvr-table-row cvr-summary-row">
-                            <td class="px-2 py-2 whitespace-nowrap">Total Cash Inflow</td>
+                            <td class="px-2 py-2 whitespace-nowrap">{{ $t('Total Cash Inflow') }}</td>
                             <td v-for="wk in weekKeys" :key="wk" class="px-2 py-2 text-center cvr-num whitespace-nowrap">{{ fmt(grandTotal.cash_inflow?.[wk]) }}</td>
                             <td class="px-2 py-2 text-center cvr-num font-semibold whitespace-nowrap">{{ fmt(rowTotal(grandTotal.cash_inflow)) }}</td>
                         </tr>
                         <tr class="cvr-table-row cvr-summary-row">
-                            <td class="px-2 py-2 whitespace-nowrap">Total Cash Outflow</td>
+                            <td class="px-2 py-2 whitespace-nowrap">{{ $t('Total Cash Outflow') }}</td>
                             <td v-for="wk in weekKeys" :key="wk" class="px-2 py-2 text-center cvr-num whitespace-nowrap">{{ fmt(grandTotal.cash_outflow?.[wk]) }}</td>
                             <td class="px-2 py-2 text-center cvr-num font-semibold whitespace-nowrap">{{ fmt(rowTotal(grandTotal.cash_outflow)) }}</td>
                         </tr>
                         <tr class="cvr-table-row cvr-summary-row">
-                            <td class="px-2 py-2 whitespace-nowrap font-medium">Net Cash (+/-)</td>
+                            <td class="px-2 py-2 whitespace-nowrap font-medium">{{ $t('Net Cash (+/-)') }}</td>
                             <td v-for="wk in weekKeys" :key="wk" class="px-2 py-2 text-center font-medium whitespace-nowrap" :class="netClass(grandTotal.net_cash?.[wk])">{{ fmt(grandTotal.net_cash?.[wk]) }}</td>
                             <td class="px-2 py-2 text-center font-semibold whitespace-nowrap" :class="netClass(rowTotal(grandTotal.net_cash))">{{ fmt(rowTotal(grandTotal.net_cash)) }}</td>
                         </tr>
                         <tr class="cvr-table-row cvr-summary-row">
-                            <td class="px-2 py-2 whitespace-nowrap">Accumulated Net Cash (+/-)</td>
+                            <td class="px-2 py-2 whitespace-nowrap">{{ $t('Accumulated Net Cash (+/-)') }}</td>
                             <td v-for="wk in weekKeys" :key="wk" class="px-2 py-2 text-center whitespace-nowrap" :class="netClass(grandTotal.accumulated_net?.[wk])">{{ fmt(grandTotal.accumulated_net?.[wk]) }}</td>
                             <td class="px-2 py-2 text-center whitespace-nowrap" :class="netClass(accumulatedTotal)">{{ fmt(accumulatedTotal) }}</td>
                         </tr>

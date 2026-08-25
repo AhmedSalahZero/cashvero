@@ -129,8 +129,8 @@ const odooErrorTarget = ref(null);
 <template>
     <AppLayout :nav-urls="navUrls">
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">LG Issuance</h1>
-            <p class="text-sm cvr-text-blue mb-6">Letters Of Guarantee issued across all financial institutions</p>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('LG Issuance') }}</h1>
+            <p class="text-sm cvr-text-blue mb-6">{{ $t('Letters Of Guarantee issued across all financial institutions') }}</p>
 
             <!-- Tabs -->
             <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
@@ -146,47 +146,47 @@ const odooErrorTarget = ref(null);
                     </button>
                 </div>
                 <div class="flex items-center gap-2">
-                    <Link :href="createUrls['lg-facility']" class="cvr-btn-copper px-3 py-1.5 rounded text-sm">+ Via LG Facility</Link>
-                    <Link :href="createUrls['against-cd']" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">+ Against CD</Link>
-                    <Link :href="createUrls['against-td']" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">+ Against TD</Link>
-                    <Link :href="createUrls['hundred-percentage-cash-cover']" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">+ 100% Cash Cover</Link>
+                    <Link :href="createUrls['lg-facility']" class="cvr-btn-copper px-3 py-1.5 rounded text-sm">{{ $t('+ Via LG Facility') }}</Link>
+                    <Link :href="createUrls['against-cd']" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">{{ $t('+ Against CD') }}</Link>
+                    <Link :href="createUrls['against-td']" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">{{ $t('+ Against TD') }}</Link>
+                    <Link :href="createUrls['hundred-percentage-cash-cover']" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">{{ $t('+ 100% Cash Cover') }}</Link>
                 </div>
             </div>
 
             <!-- Search -->
             <div class="flex flex-wrap items-end gap-3 mb-4">
                 <div>
-                    <label class="cvr-form-label">Search By</label>
+                    <label class="cvr-form-label">{{ $t('Search By') }}</label>
                     <select v-model="searchField" class="cvr-input px-3 py-2 rounded">
-                        <option value="transaction_name">Transaction Name</option>
-                        <option value="lg_code">LG Code</option>
+                        <option value="transaction_name">{{ $t('Transaction Name') }}</option>
+                        <option value="lg_code">{{ $t('LG Code') }}</option>
                     </select>
                 </div>
                 <div class="cvr-search-bar flex items-center gap-2 px-3 py-1.5 w-64">
                     <span class="cvr-text-muted text-sm">🔍</span>
-                    <input v-model="searchValue" @keyup.enter="applySearch" type="text" placeholder="Search..." class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
+                    <input v-model="searchValue" @keyup.enter="applySearch" type="text" :placeholder="$t('Search...')" class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
                 </div>
-                <button @click="applySearch" class="cvr-btn-secondary px-3 py-2 rounded border text-sm">Search</button>
+                <button @click="applySearch" class="cvr-btn-secondary px-3 py-2 rounded border text-sm">{{ $t('Search') }}</button>
             </div>
 
             <!-- Table -->
-            <div v-if="tabLoading" class="text-center py-3 text-sm cvr-text-muted">Loading...</div>
+            <div v-if="tabLoading" class="text-center py-3 text-sm cvr-text-muted">{{ $t('Loading...') }}</div>
             <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden overflow-x-auto">
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-3 py-3 text-left">#</th>
-                            <th class="px-3 py-3 text-left">Transaction Name</th>
-                            <th class="px-3 py-3 text-left">Beneficiary</th>
-                            <th class="px-3 py-3 text-left">Source</th>
-                            <th class="px-3 py-3 text-left">Status</th>
-                            <th class="px-3 py-3 text-left">Bank Name</th>
-                            <th class="px-3 py-3 text-left">LG Code</th>
-                            <th class="px-3 py-3 text-left">LG Amount</th>
-                            <th v-if="activeTab === 'advanced-payment-lgs'" class="px-3 py-3 text-left">LG Current Amount</th>
-                            <th class="px-3 py-3 text-left">Issuance Date</th>
-                            <th class="px-3 py-3 text-left">Renewal Date</th>
-                            <th class="px-3 py-3 text-left">Actions</th>
+                            <th class="px-3 py-3 text-start">#</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Transaction Name') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Beneficiary') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Source') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Status') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Bank Name') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('LG Code') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('LG Amount') }}</th>
+                            <th v-if="activeTab === 'advanced-payment-lgs'" class="px-3 py-3 text-start">{{ $t('LG Current Amount') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Issuance Date') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Renewal Date') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -209,23 +209,23 @@ const odooErrorTarget = ref(null);
                             <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.renewal_date_formatted }}</td>
                             <td class="px-3 py-3">
                                 <div class="flex items-center gap-1.5 flex-wrap">
-                                    <button v-if="row.has_comment" @click="commentTarget = row" class="cvr-action-btn" title="User Comment">💬</button>
-                                    <button v-if="row.fully_integrated_with_odoo" @click="odooTarget = row" class="cvr-action-btn" title="Odoo References">👍</button>
-                                    <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn" style="color: #EF4444;" title="Odoo Error">🐛</button>
-                                    <Link :href="row.renewal_date_url" class="cvr-action-btn" title="Renewal">🔄</Link>
+                                    <button v-if="row.has_comment" @click="commentTarget = row" class="cvr-action-btn" :title="$t('User Comment')">💬</button>
+                                    <button v-if="row.fully_integrated_with_odoo" @click="odooTarget = row" class="cvr-action-btn" :title="$t('Odoo References')">👍</button>
+                                    <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn" style="color: #EF4444;" :title="$t('Odoo Error')">🐛</button>
+                                    <Link :href="row.renewal_date_url" class="cvr-action-btn" :title="$t('Renewal')">🔄</Link>
 
-                                    <button v-if="row.is_running || row.is_expired" @click="openCancel(row)" class="cvr-action-btn" title="Cancel Letter">🚫</button>
-                                    <button v-if="row.is_running && row.is_advanced_payment" @click="openAdvancedPayment(row)" class="cvr-action-btn" title="Amount To Be Decreased">⚖️</button>
-                                    <button v-if="row.is_cancelled" @click="openBackToRunning(row)" class="cvr-action-btn" title="Back To Running">↩️</button>
+                                    <button v-if="row.is_running || row.is_expired" @click="openCancel(row)" class="cvr-action-btn" :title="$t('Cancel Letter')">🚫</button>
+                                    <button v-if="row.is_running && row.is_advanced_payment" @click="openAdvancedPayment(row)" class="cvr-action-btn" :title="$t('Amount To Be Decreased')">⚖️</button>
+                                    <button v-if="row.is_cancelled" @click="openBackToRunning(row)" class="cvr-action-btn" :title="$t('Back To Running')">↩️</button>
 
-                                    <Link v-if="!row.is_cancelled" :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</Link>
-                                    <button v-if="!row.is_cancelled" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
+                                    <Link v-if="!row.is_cancelled" :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">{{ $t('Edit') }}</Link>
+                                    <button v-if="!row.is_cancelled" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">{{ $t('Delete') }}</button>
                                 </div>
                             </td>
                         </tr>
                         <tr v-if="currentTab.rows.length === 0">
                             <td colspan="12" class="px-4 py-8 text-center cvr-text-muted">
-                                No LG Issuance records found.
+                                {{ $t('No LG Issuance records found.') }}
                             </td>
                         </tr>
                     </tbody>
@@ -249,28 +249,28 @@ const odooErrorTarget = ref(null);
             <!-- Cancel modal -->
             <div v-if="cancelTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-lg">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Do you want to cancel this letter?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to cancel this letter?') }}</h2>
                     <div class="cvr-form-grid-2 mb-4">
                         <div>
-                            <label class="cvr-form-label">Bank Name</label>
+                            <label class="cvr-form-label">{{ $t('Bank Name') }}</label>
                             <input disabled :value="cancelTarget.bank_name" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">LG Code</label>
+                            <label class="cvr-form-label">{{ $t('LG Code') }}</label>
                             <input disabled :value="cancelTarget.lg_code" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">LG Current Amount</label>
+                            <label class="cvr-form-label">{{ $t('LG Current Amount') }}</label>
                             <input disabled :value="cancelTarget.lg_current_amount_formatted" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Cancellation Date *</label>
+                            <label class="cvr-form-label">{{ $t('Cancellation Date') }} *</label>
                             <input v-model="cancelForm.cancellation_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
                     <div class="flex justify-end gap-2">
-                        <button @click="cancelTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="submitCancel" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm</button>
+                        <button @click="cancelTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="submitCancel" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm') }}</button>
                     </div>
                 </div>
             </div>
@@ -279,21 +279,21 @@ const odooErrorTarget = ref(null);
             <div v-if="backToRunningTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-lg">
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">
-                        Do you want to change LG status back to Running?
+                        {{ $t('Do you want to change LG status back to Running?') }}
                     </h2>
                     <div class="cvr-form-grid-2 mb-4">
                         <div>
-                            <label class="cvr-form-label">Bank Name</label>
+                            <label class="cvr-form-label">{{ $t('Bank Name') }}</label>
                             <input disabled :value="backToRunningTarget.bank_name" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">LG Amount</label>
+                            <label class="cvr-form-label">{{ $t('LG Amount') }}</label>
                             <input disabled :value="backToRunningTarget.lg_amount_formatted" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
                     <div class="flex justify-end gap-2">
-                        <button @click="backToRunningTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="submitBackToRunning" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
+                        <button @click="backToRunningTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="submitBackToRunning" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Confirm') }}</button>
                     </div>
                 </div>
             </div>
@@ -306,19 +306,19 @@ const odooErrorTarget = ref(null);
                     </h2>
                     <div class="cvr-form-grid-4 mb-4 items-end">
                         <div>
-                            <label class="cvr-form-label">Bank Name</label>
+                            <label class="cvr-form-label">{{ $t('Bank Name') }}</label>
                             <input disabled :value="advancedPaymentTarget.bank_name" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">LG Amount</label>
+                            <label class="cvr-form-label">{{ $t('LG Amount') }}</label>
                             <input disabled :value="advancedPaymentTarget.lg_amount_formatted" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Date *</label>
+                            <label class="cvr-form-label">{{ $t('Date') }} *</label>
                             <input v-model="newAdvancedPaymentForm.date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Amount To Be Decreased *</label>
+                            <label class="cvr-form-label">{{ $t('Amount To Be Decreased') }} *</label>
                             <input v-model="newAdvancedPaymentForm.amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
@@ -326,10 +326,10 @@ const odooErrorTarget = ref(null);
                     <table class="min-w-full text-sm mb-4">
                         <thead class="cvr-table-head">
                             <tr>
-                                <th class="px-3 py-2 text-left">#</th>
-                                <th class="px-3 py-2 text-left">Date</th>
-                                <th class="px-3 py-2 text-left">Amount</th>
-                                <th class="px-3 py-2 text-left">Actions</th>
+                                <th class="px-3 py-2 text-start">#</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Date') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Amount') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Actions') }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -339,20 +339,20 @@ const odooErrorTarget = ref(null);
                                 <td class="px-3 py-2 cvr-num">{{ h.amount_formatted }}</td>
                                 <td class="px-3 py-2">
                                     <div class="flex items-center gap-2">
-                                        <button @click="openEditAdvancedPayment(h)" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</button>
-                                        <button @click="confirmDeleteAdvancedPayment(h)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
+                                        <button @click="openEditAdvancedPayment(h)" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">{{ $t('Edit') }}</button>
+                                        <button @click="confirmDeleteAdvancedPayment(h)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">{{ $t('Delete') }}</button>
                                     </div>
                                 </td>
                             </tr>
                             <tr v-if="advancedPaymentTarget.advanced_payment_histories.length === 0">
-                                <td colspan="4" class="px-3 py-6 text-center cvr-text-muted">No advanced payments yet.</td>
+                                <td colspan="4" class="px-3 py-6 text-center cvr-text-muted">{{ $t('No advanced payments yet.') }}</td>
                             </tr>
                         </tbody>
                     </table>
 
                     <div class="flex justify-end gap-2">
-                        <button @click="advancedPaymentTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="submitNewAdvancedPayment" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
+                        <button @click="advancedPaymentTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="submitNewAdvancedPayment" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Confirm') }}</button>
                     </div>
                 </div>
             </div>
@@ -360,20 +360,20 @@ const odooErrorTarget = ref(null);
             <!-- Edit Advanced Payment modal -->
             <div v-if="editAdvancedPaymentTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-md">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Edit Amount To Be Decreased</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Edit Amount To Be Decreased') }}</h2>
                     <div class="cvr-form-grid-2 mb-4">
                         <div>
-                            <label class="cvr-form-label">Date *</label>
+                            <label class="cvr-form-label">{{ $t('Date') }} *</label>
                             <input v-model="editAdvancedPaymentForm.decrease_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Amount To Be Decreased *</label>
+                            <label class="cvr-form-label">{{ $t('Amount To Be Decreased') }} *</label>
                             <input v-model="editAdvancedPaymentForm.amount_to_be_decreased" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
                     <div class="flex justify-end gap-2">
-                        <button @click="editAdvancedPaymentTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="submitEditAdvancedPayment" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
+                        <button @click="editAdvancedPaymentTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="submitEditAdvancedPayment" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Confirm') }}</button>
                     </div>
                 </div>
             </div>
@@ -381,10 +381,10 @@ const odooErrorTarget = ref(null);
             <!-- Delete Advanced Payment confirmation -->
             <div v-if="deleteAdvancedPaymentTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Do you want to delete this item?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to delete this item?') }}</h2>
                     <div class="flex justify-end gap-2">
-                        <button @click="deleteAdvancedPaymentTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyAdvancedPayment" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Delete</button>
+                        <button @click="deleteAdvancedPaymentTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyAdvancedPayment" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>
@@ -392,10 +392,10 @@ const odooErrorTarget = ref(null);
             <!-- Delete confirmation -->
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Do you want to delete this item?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to delete this item?') }}</h2>
                     <div class="flex justify-end gap-2">
-                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Delete</button>
+                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>
@@ -404,8 +404,8 @@ const odooErrorTarget = ref(null);
             <div v-if="commentTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-md">
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-lg font-medium cvr-text-primary">User Comment</h2>
-                        <button @click="commentTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                        <h2 class="text-lg font-medium cvr-text-primary">{{ $t('User Comment') }}</h2>
+                        <button @click="commentTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
                     </div>
                     <p class="cvr-text-secondary">{{ commentTarget.user_comment }}</p>
                 </div>
@@ -415,10 +415,10 @@ const odooErrorTarget = ref(null);
             <div v-if="odooTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-md">
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-lg font-medium cvr-text-primary">Odoo References</h2>
-                        <button @click="odooTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                        <h2 class="text-lg font-medium cvr-text-primary">{{ $t('Odoo References') }}</h2>
+                        <button @click="odooTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
                     </div>
-                    <ul class="text-sm cvr-text-secondary list-disc pl-5 space-y-1">
+                    <ul class="text-sm cvr-text-secondary list-disc ps-5 space-y-1">
                         <li v-for="(name, i) in odooTarget.odoo_reference_names" :key="i">{{ name }}</li>
                     </ul>
                 </div>
@@ -428,8 +428,8 @@ const odooErrorTarget = ref(null);
             <div v-if="odooErrorTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-lg">
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-lg font-medium cvr-num-red">Odoo Error</h2>
-                        <button @click="odooErrorTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                        <h2 class="text-lg font-medium cvr-num-red">{{ $t('Odoo Error') }}</h2>
+                        <button @click="odooErrorTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
                     </div>
                     <p class="text-sm cvr-text-primary whitespace-pre-wrap">{{ odooErrorTarget.odoo_error }}</p>
                 </div>

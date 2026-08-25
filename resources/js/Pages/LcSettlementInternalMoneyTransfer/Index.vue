@@ -128,26 +128,25 @@ function confirmReset() {
 <template>
     <AppLayout>
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Pending LC Settlements</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Pending LC Settlements') }}</h1>
             <p class="text-sm cvr-text-muted mb-6">
-                Bank-financed Letters of Credit already paid to the supplier, waiting to be settled with the bank.
-                To remove one from this list entirely, revert the LC back to Running from the LC Issuance screen.
+                {{ $t('Bank-financed Letters of Credit already paid to the supplier, waiting to be settled with the bank. To remove one from this list entirely, revert the LC back to Running from the LC Issuance screen.') }}
             </p>
 
             <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-4 py-3 text-left">#</th>
-                            <th class="px-4 py-3 text-left">Transaction</th>
-                            <th class="px-4 py-3 text-left">Supplier</th>
-                            <th class="px-4 py-3 text-left">LC Code</th>
-                            <th class="px-4 py-3 text-left">Currency</th>
-                            <th class="px-4 py-3 text-left">Paid To Supplier</th>
-                            <th class="px-4 py-3 text-right">Remaining Amount</th>
-                            <th class="px-4 py-3 text-left">Status</th>
-                            <th class="px-4 py-3 text-left">Settlements So Far</th>
-                            <th class="px-4 py-3 text-left">Control</th>
+                            <th class="px-4 py-3 text-start">#</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Transaction') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Supplier') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('LC Code') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Currency') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Paid To Supplier') }}</th>
+                            <th class="px-4 py-3 text-right">{{ $t('Remaining Amount') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Status') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Settlements So Far') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Control') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -169,14 +168,14 @@ function confirmReset() {
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-1">
                                     <RecordLogButton subject="LetterOfCreditIssuance" :id="row.letter_of_credit_issuance_id" :company-id="company.id" />
-                                    <button v-if="canSettle && !row.is_settled" @click="openSettle(row)" class="cvr-btn-primary px-3 py-1.5 rounded text-xs whitespace-nowrap">Mark As Settle</button>
-                                    <Link v-if="canUpdate && row.edit_url" :href="row.edit_url" class="cvr-action-btn" title="Edit Most Recent Settlement">✏️</Link>
-                                    <button v-if="canReset && row.settlements_count > 0" @click="resetTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Reset — undo every settlement made so far">↺</button>
+                                    <button v-if="canSettle && !row.is_settled" @click="openSettle(row)" class="cvr-btn-primary px-3 py-1.5 rounded text-xs whitespace-nowrap">{{ $t('Mark As Settle') }}</button>
+                                    <Link v-if="canUpdate && row.edit_url" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit Most Recent Settlement')">✏️</Link>
+                                    <button v-if="canReset && row.settlements_count > 0" @click="resetTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Reset — undo every settlement made so far')">↺</button>
                                 </div>
                             </td>
                         </tr>
                         <tr v-if="rows.length === 0">
-                            <td colspan="10" class="px-4 py-8 text-center cvr-text-muted">No bank-financed LC has been paid to a supplier yet.</td>
+                            <td colspan="10" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No bank-financed LC has been paid to a supplier yet.') }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -200,65 +199,65 @@ function confirmReset() {
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-5xl max-h-[85vh] overflow-y-auto">
                     <h2 class="text-lg font-medium cvr-text-primary mb-1">Settle LC — {{ settleTarget.transaction_name }}</h2>
                     <p class="text-xs cvr-text-muted mb-4">
-                        Remaining before this settlement: {{ Number(settleDataInfo.remaining_amount).toLocaleString() }} {{ settleTarget.currency }}.
-                        {{ settleDataInfo.days }} day(s) since {{ settleTarget.last_settlement_date_formatted || 'the LC was paid' }}, at {{ settleDataInfo.interest_rate }}%.
+                        Remaining before this settlement: {{ Number(settleDataInfo.remaining_amount).toLocaleString('en-EG') }} {{ settleTarget.currency }}.
+                        {{ settleDataInfo.days }} day(s) since {{ settleTarget.last_settlement_date_formatted || $t('the LC was paid') }}, at {{ settleDataInfo.interest_rate }}%.
                     </p>
                     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                         <div>
-                            <label class="cvr-form-label">Settlement Date *</label>
+                            <label class="cvr-form-label">{{ $t('Settlement Date') }} *</label>
                             <input v-model="settleForm.transfer_date" type="date" :max="new Date().toISOString().slice(0,10)" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Amount To Settle *</label>
+                            <label class="cvr-form-label">{{ $t('Amount To Settle') }} *</label>
                             <input v-model="settleForm.amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div class="md:col-span-2">
                             <!-- Client-requested (2026-08-18): the paying bank is fixed to
                                  whichever bank the LC itself was issued with — never a
                                  picker. Shown wide since it's a bank name, not a code. -->
-                            <label class="cvr-form-label">Pay From Bank</label>
+                            <label class="cvr-form-label">{{ $t('Pay From Bank') }}</label>
                             <input disabled :value="settleTarget.bank_name" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Account Type *</label>
+                            <label class="cvr-form-label">{{ $t('Account Type') }} *</label>
                             <select v-model="settleForm.from_account_type_id" class="cvr-input w-full px-3 py-2 rounded">
                                 <option v-for="t in accountTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Account Number *</label>
+                            <label class="cvr-form-label">{{ $t('Account Number') }} *</label>
                             <select v-model="settleForm.from_account_number" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="n in settleAccountNumbers" :key="n.value" :value="n.value">{{ n.label }}</option>
                             </select>
                         </div>
                     </div>
-                    <p class="text-xs cvr-text-muted -mt-3 mb-4">Amount defaults to the full remaining balance — reduce it for a partial settlement.</p>
+                    <p class="text-xs cvr-text-muted -mt-3 mb-4">{{ $t('Amount defaults to the full remaining balance — reduce it for a partial settlement.') }}</p>
                     <div class="cvr-card-bg cvr-border border rounded-lg p-4 mb-4">
-                        <h3 class="text-sm font-medium cvr-text-primary mb-3">Interest</h3>
+                        <h3 class="text-sm font-medium cvr-text-primary mb-3">{{ $t('Interest') }}</h3>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                                <label class="cvr-form-label">Interest Amount</label>
+                                <label class="cvr-form-label">{{ $t('Interest Amount') }}</label>
                                 <input v-model="settleForm.interest_amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
-                                <p class="text-xs cvr-text-muted mt-1">Pre-filled from the facility's rate — overwrite with what the bank actually charged.</p>
+                                <p class="text-xs cvr-text-muted mt-1">{{ $t('Pre-filled from the facility\'s rate — overwrite with what the bank actually charged.') }}</p>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Post Interest To</label>
+                                <label class="cvr-form-label">{{ $t('Post Interest To') }}</label>
                                 <select v-model="settleForm.interest_destination" class="cvr-input w-full px-3 py-2 rounded">
                                     <option v-for="d in interestDestinations" :key="d.value" :value="d.value">{{ d.title }}</option>
                                 </select>
-                                <p class="text-xs cvr-text-muted mt-1">LC Overdraft: credit + debit there. Current Account: single credit from the account above.</p>
+                                <p class="text-xs cvr-text-muted mt-1">{{ $t('LC Overdraft: credit + debit there. Current Account: single credit from the account above.') }}</p>
                             </div>
                         </div>
                     </div>
                     <div class="mb-4">
-                        <label class="cvr-form-label">Comment</label>
+                        <label class="cvr-form-label">{{ $t('Comment') }}</label>
                         <textarea v-model="settleForm.user_comment" rows="2" class="cvr-input w-full px-3 py-2 rounded"></textarea>
                     </div>
                     <div class="flex justify-end gap-2">
-                        <button @click="settleTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Cancel</button>
+                        <button @click="settleTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Cancel') }}</button>
                         <button @click="submitSettle" :disabled="settling" class="cvr-btn-primary px-4 py-2 rounded">
-                            {{ settling ? 'Settling...' : 'Confirm Settlement' }}
+                            {{ settling ? $t('Settling...') : $t('Confirm Settlement') }}
                         </button>
                     </div>
                 </div>
@@ -267,14 +266,14 @@ function confirmReset() {
             <!-- Reset confirmation -->
             <div v-if="resetTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-2">Reset this LC's settlement?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-2">{{ $t('Reset this LC\'s settlement?') }}</h2>
                     <p class="text-sm cvr-text-muted mb-4">
                         This undoes every settlement made so far for {{ resetTarget.transaction_name }} — principal and interest
                         alike — and returns the full original amount to "remaining". This can't be undone.
                     </p>
                     <div class="flex justify-end gap-2">
-                        <button @click="resetTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="confirmReset" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Reset</button>
+                        <button @click="resetTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="confirmReset" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Reset') }}</button>
                     </div>
                 </div>
             </div>

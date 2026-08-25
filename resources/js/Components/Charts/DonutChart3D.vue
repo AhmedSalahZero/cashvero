@@ -114,7 +114,7 @@ function build() {
         totalLabelObj.fontSize = 10;
         totalLabelObj.fill = cvrColor('--cvr-text-muted');
         totalLabelObj.textAlign = 'middle';
-        totalLabelObj.text = `${props.totalLabel}\n[bold font-size: 15]${props.valuePrefix}${total.toLocaleString(undefined, { maximumFractionDigits: 0 })}[/]`;
+        totalLabelObj.text = `${props.totalLabel}\n[bold font-size: 15]${props.valuePrefix}${total.toLocaleString('en-EG', { maximumFractionDigits: 0 })}[/]`;
     }
 }
 
@@ -143,8 +143,8 @@ watch(() => props.data, async () => {
          MultiLineChart.vue — see its template comment. -->
     <div :style="{ height: typeof height === 'number' ? height + 'px' : height }">
         <div v-if="!(data || []).some(r => Number(r[valueField]) > 0)" class="h-full flex items-center justify-center text-xs cvr-text-muted">
-            No data for this selection.
+            {{ $t('No data for this selection.') }}
         </div>
-        <div v-else ref="el" class="h-full"></div>
+        <div v-else ref="el" class="h-full" dir="ltr"></div>
     </div>
 </template>

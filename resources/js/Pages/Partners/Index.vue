@@ -100,37 +100,37 @@ function destroyRow() {
 <template>
     <AppLayout>
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Partners</h1>
-            <p class="text-sm cvr-text-muted mb-6">Customers, suppliers, employees, shareholders &amp; more</p>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Partners') }}</h1>
+            <p class="text-sm cvr-text-muted mb-6">{{ $t('Customers, suppliers, employees, shareholders & more') }}</p>
 
             <!-- KPI row -->
             <div class="cvr-kpi-row mb-6">
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">🤝</div>
                     <div>
-                        <p class="cvr-kpi-label">Total Partners</p>
+                        <p class="cvr-kpi-label">{{ $t('Total Partners') }}</p>
                         <p class="cvr-kpi-value">{{ counts.all }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-green">👥</div>
                     <div>
-                        <p class="cvr-kpi-label">Customers</p>
+                        <p class="cvr-kpi-label">{{ $t('Customers') }}</p>
                         <p class="cvr-kpi-value">{{ counts.customers }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-copper">🚚</div>
                     <div>
-                        <p class="cvr-kpi-label">Suppliers</p>
+                        <p class="cvr-kpi-label">{{ $t('Suppliers') }}</p>
                         <p class="cvr-kpi-value">{{ counts.suppliers }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">🏢</div>
                     <div>
-                        <p class="cvr-kpi-label">Subsidiary Companies</p>
-                        <p class="cvr-kpi-value">{{ counts['subsidiary-companies'] }}</p>
+                        <p class="cvr-kpi-label">{{ $t('Subsidiary Companies') }}</p>
+                        <p class="cvr-kpi-value">{{ counts[$t('subsidiary-companies')] }}</p>
                     </div>
                 </div>
             </div>
@@ -156,7 +156,7 @@ function destroyRow() {
                     :href="createUrl"
                     class="cvr-btn-copper inline-flex items-center gap-1 px-3 py-1.5 rounded text-sm whitespace-nowrap"
                 >
-                    + New Partner
+                    {{ $t('+ New Partner') }}
                 </Link>
             </div>
 
@@ -166,7 +166,7 @@ function destroyRow() {
                 <input
                     v-model="search"
                     type="text"
-                    placeholder="Search by name..."
+                    :placeholder="$t('Search by name...')"
                     class="bg-transparent outline-none text-sm w-full cvr-text-primary"
                 />
             </div>
@@ -179,14 +179,14 @@ function destroyRow() {
                     <thead class="cvr-table-head">
                         <tr>
                             <th class="px-4 py-3 text-center">#</th>
-                            <th class="px-4 py-3 text-left">Name</th>
-                            <th class="px-4 py-3 text-center">Customer</th>
-                            <th class="px-4 py-3 text-center">Supplier</th>
-                            <th class="px-4 py-3 text-center">Subsidiary</th>
-                            <th class="px-4 py-3 text-center whitespace-nowrap">Other Partner</th>
-                            <th class="px-4 py-3 text-center">Employee</th>
-                            <th class="px-4 py-3 text-center">Shareholder</th>
-                            <th v-if="anyRowControls()" class="px-4 py-3 text-center">Control</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Name') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Customer') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Supplier') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Subsidiary') }}</th>
+                            <th class="px-4 py-3 text-center whitespace-nowrap">{{ $t('Other Partner') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Employee') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Shareholder') }}</th>
+                            <th v-if="anyRowControls()" class="px-4 py-3 text-center">{{ $t('Control') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -194,7 +194,7 @@ function destroyRow() {
                             <td class="px-4 py-3 text-center cvr-text-secondary">{{ partners.from + i }}</td>
                             <!-- Long partner names no longer blow out the table —
                                  capped width + ellipsis, full name on hover. -->
-                            <td class="px-4 py-3 text-left cvr-text-primary">
+                            <td class="px-4 py-3 text-start cvr-text-primary">
                                 <span class="block truncate max-w-[260px]" :title="row.name">{{ row.name }}</span>
                             </td>
                             <td class="px-4 py-3 text-center">
@@ -221,13 +221,13 @@ function destroyRow() {
                             <td v-if="anyRowControls()" class="px-4 py-3 text-center">
                                 <div class="flex items-center justify-center gap-2">
                                     <RecordLogButton subject="Partner" :id="row.id" :company-id="company.id" />
-                                    <Link v-if="rowCan(row, 'update')" :href="row.edit_url" class="cvr-action-btn" title="Edit">✎</Link>
-                                    <button v-if="rowCan(row, 'delete') && !companyHasOdoo" @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" title="Delete">🗑</button>
+                                    <Link v-if="rowCan(row, 'update')" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✎</Link>
+                                    <button v-if="rowCan(row, 'delete') && !companyHasOdoo" @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" :title="$t('Delete')">🗑</button>
                                 </div>
                             </td>
                         </tr>
                         <tr v-if="partners.data.length === 0">
-                            <td colspan="9" class="px-4 py-8 text-center cvr-text-muted">No partners found.</td>
+                            <td colspan="9" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No partners found.') }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -254,10 +254,10 @@ function destroyRow() {
             <!-- Delete confirmation -->
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Do you want to delete this item?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to delete this item?') }}</h2>
                     <div class="flex justify-end gap-2">
-                        <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Delete</button>
+                        <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>

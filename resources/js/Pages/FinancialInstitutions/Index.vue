@@ -93,29 +93,29 @@ function destroyRow() {
 <template>
     <AppLayout :nav-urls="navUrls">
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Financial Institutions</h1>
-            <p class="text-sm cvr-text-muted mb-6">Banks, leasing, factoring &amp; mortgage relationships</p>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Financial Institutions') }}</h1>
+            <p class="text-sm cvr-text-muted mb-6">{{ $t('Banks, leasing, factoring & mortgage relationships') }}</p>
 
             <!-- KPI row -->
             <div class="cvr-kpi-row mb-6">
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-green">🏦</div>
                     <div>
-                        <p class="cvr-kpi-label">Banks</p>
+                        <p class="cvr-kpi-label">{{ $t('Banks') }}</p>
                         <p class="cvr-kpi-value">{{ banks.length }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">📋</div>
                     <div>
-                        <p class="cvr-kpi-label">Leasing Companies</p>
+                        <p class="cvr-kpi-label">{{ $t('Leasing Companies') }}</p>
                         <p class="cvr-kpi-value">{{ leasingCompanies.length }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-copper">🤝</div>
                     <div>
-                        <p class="cvr-kpi-label">Factoring Companies</p>
+                        <p class="cvr-kpi-label">{{ $t('Factoring Companies') }}</p>
                         <p class="cvr-kpi-value">{{ factoringCompanies.length }}</p>
                     </div>
                 </div>
@@ -140,21 +140,21 @@ function destroyRow() {
                     @click="openCreateCompanyModal('leasing')"
                     class="cvr-btn-copper inline-flex items-center gap-1 px-3 py-1.5 rounded text-sm"
                 >
-                    + New Leasing Company
+                    {{ $t('+ New Leasing Company') }}
                 </button>
                 <button
                     v-else-if="permissions.create && activeTab === 'factoring_companies'"
                     @click="openCreateCompanyModal('factoring')"
                     class="cvr-btn-copper inline-flex items-center gap-1 px-3 py-1.5 rounded text-sm"
                 >
-                    + New Factoring Company
+                    {{ $t('+ New Factoring Company') }}
                 </button>
                 <Link
                     v-else-if="permissions.create && createUrls[activeTab]"
                     :href="createUrls[activeTab]"
                     class="cvr-btn-copper inline-flex items-center gap-1 px-3 py-1.5 rounded text-sm"
                 >
-                    + New Bank
+                    {{ $t('+ New Bank') }}
                 </Link>
             </div>
 
@@ -164,7 +164,7 @@ function destroyRow() {
                 <input
                     v-model="search"
                     type="text"
-                    placeholder="Search name or branch..."
+                    :placeholder="$t('Search name or branch...')"
                     class="bg-transparent outline-none text-sm w-full cvr-text-primary"
                 />
             </div>
@@ -175,11 +175,11 @@ function destroyRow() {
                     <thead class="cvr-table-head">
                         <tr>
                             <th class="px-4 py-3 text-center">#</th>
-                            <th class="px-4 py-3 text-center">Bank</th>
-                            <th class="px-4 py-3 text-center">Branch Name</th>
-                            <th class="px-4 py-3 text-center">Company Account Number</th>
-                            <th class="px-4 py-3 text-center">Control</th>
-                            <th class="px-4 py-3 text-center">Actions</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Bank') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Branch Name') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Company Account Number') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Control') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -229,14 +229,14 @@ function destroyRow() {
                             <!-- Actions -->
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-2">
-                                    <Link :href="row.view_accounts_url" class="cvr-action-btn" title="Show All Accounts">👁</Link>
-                                    <Link v-if="permissions.update" :href="row.edit_url" class="cvr-action-btn" title="Edit">✎</Link>
-                                    <button v-if="permissions.delete" @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" title="Delete">🗑</button>
+                                    <Link :href="row.view_accounts_url" class="cvr-action-btn" :title="$t('Show All Accounts')">👁</Link>
+                                    <Link v-if="permissions.update" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✎</Link>
+                                    <button v-if="permissions.delete" @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" :title="$t('Delete')">🗑</button>
                                 </div>
                             </td>
                         </tr>
                         <tr v-if="filteredRows.length === 0">
-                            <td colspan="6" class="px-4 py-8 text-center cvr-text-muted">No banks found.</td>
+                            <td colspan="6" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No banks found.') }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -247,9 +247,9 @@ function destroyRow() {
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-4 py-3 text-left">#</th>
-                            <th class="px-4 py-3 text-left">Name</th>
-                            <th class="px-4 py-3 text-left">Actions</th>
+                            <th class="px-4 py-3 text-start">#</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Name') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -258,15 +258,15 @@ function destroyRow() {
                             <td class="px-4 py-3 cvr-text-primary">{{ row.name }}</td>
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-2">
-                                    <Link :href="row.contracts_url" class="cvr-action-btn" title="Contracts">📄</Link>
-                                    <button v-if="permissions.update && (activeTab === 'leasing_companies' || activeTab === 'factoring_companies')" @click="openEditCompanyModal(activeTab === 'factoring_companies' ? 'factoring' : 'leasing', row)" class="cvr-action-btn" title="Edit">✎</button>
-                                    <Link v-else-if="permissions.update" :href="row.edit_url" class="cvr-action-btn" title="Edit">✎</Link>
-                                    <button v-if="permissions.delete" @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" title="Delete">🗑</button>
+                                    <Link :href="row.contracts_url" class="cvr-action-btn" :title="$t('Contracts')">📄</Link>
+                                    <button v-if="permissions.update && (activeTab === 'leasing_companies' || activeTab === 'factoring_companies')" @click="openEditCompanyModal(activeTab === 'factoring_companies' ? 'factoring' : 'leasing', row)" class="cvr-action-btn" :title="$t('Edit')">✎</button>
+                                    <Link v-else-if="permissions.update" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✎</Link>
+                                    <button v-if="permissions.delete" @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" :title="$t('Delete')">🗑</button>
                                 </div>
                             </td>
                         </tr>
                         <tr v-if="filteredRows.length === 0">
-                            <td colspan="3" class="px-4 py-8 text-center cvr-text-muted">No companies found.</td>
+                            <td colspan="3" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No companies found.') }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -277,10 +277,10 @@ function destroyRow() {
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-4 py-3 text-left">#</th>
-                            <th class="px-4 py-3 text-left">Name</th>
-                            <th class="px-4 py-3 text-left">Branch Name</th>
-                            <th class="px-4 py-3 text-left">Control</th>
+                            <th class="px-4 py-3 text-start">#</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Name') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Branch Name') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Control') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -290,13 +290,13 @@ function destroyRow() {
                             <td class="px-4 py-3 cvr-text-secondary">{{ row.branch_name }}</td>
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-2">
-                                    <Link v-if="permissions.update" :href="row.edit_url" class="cvr-action-btn" title="Edit">✎</Link>
-                                    <button v-if="permissions.delete" @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" title="Delete">🗑</button>
+                                    <Link v-if="permissions.update" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✎</Link>
+                                    <button v-if="permissions.delete" @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" :title="$t('Delete')">🗑</button>
                                 </div>
                             </td>
                         </tr>
                         <tr v-if="filteredRows.length === 0">
-                            <td colspan="4" class="px-4 py-8 text-center cvr-text-muted">No mortgage companies found.</td>
+                            <td colspan="4" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No mortgage companies found.') }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -306,15 +306,15 @@ function destroyRow() {
             <div v-if="companyModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">
-                        {{ companyModal.mode === 'edit' ? 'Edit' : 'Add' }} {{ companyModalLabel }}
+                        {{ companyModal.mode === 'edit' ? $t('Edit') : $t('Add') }} {{ companyModalLabel }}
                     </h2>
                     <form @submit.prevent="submitCompanyModal">
-                        <label class="cvr-form-label">Name *</label>
+                        <label class="cvr-form-label">{{ $t('Name') }} *</label>
                         <input v-model="companyModal.name" type="text" class="cvr-input w-full px-3 py-2 rounded mb-4" autofocus />
                         <div class="flex justify-end gap-2">
-                            <button type="button" @click="companyModal = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                            <button type="button" @click="companyModal = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
                             <button type="submit" :disabled="companyModalSubmitting" class="cvr-btn-primary px-3 py-1.5 rounded">
-                                {{ companyModalSubmitting ? 'Saving...' : 'Save' }}
+                                {{ companyModalSubmitting ? $t('Saving...') : $t('Save') }}
                             </button>
                         </div>
                     </form>
@@ -324,10 +324,10 @@ function destroyRow() {
             <!-- Delete confirmation -->
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Do you want to delete this item?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to delete this item?') }}</h2>
                     <div class="flex justify-end gap-2">
-                        <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Delete</button>
+                        <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>

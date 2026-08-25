@@ -217,8 +217,8 @@ watch(() => props.data, async () => {
          two exists at a time and amCharts only ever touches its own. -->
     <div :style="{ height: typeof height === 'number' ? height + 'px' : height }">
         <div v-if="!(data || []).length" class="h-full flex items-center justify-center text-xs cvr-text-muted">
-            No data for this selection yet.
+            {{ $t('No data for this selection yet.') }}
         </div>
-        <div v-else ref="el" class="h-full"></div>
+        <div v-else ref="el" class="h-full" dir="ltr"></div>
     </div>
 </template>

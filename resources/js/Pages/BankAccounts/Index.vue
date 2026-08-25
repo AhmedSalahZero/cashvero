@@ -80,11 +80,11 @@ function toggleLock() {
                     :href="backUrl"
                     class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm"
                 >
-                    ← Back to Banks
+                    {{ $t('← Back to Banks') }}
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">
-                Bank Accounts
+                {{ $t('Bank Accounts') }}
             </h1>
             <p class="text-md cvr-text-blue mb-6">{{ financialInstitution.name }}</p>
 
@@ -93,21 +93,21 @@ function toggleLock() {
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-green">🏦</div>
                     <div>
-                        <p class="cvr-kpi-label">Total Accounts</p>
+                        <p class="cvr-kpi-label">{{ $t('Total Accounts') }}</p>
                         <p class="cvr-kpi-value">{{ totalAccounts }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">✓</div>
                     <div>
-                        <p class="cvr-kpi-label">Editable Accounts</p>
+                        <p class="cvr-kpi-label">{{ $t('Editable Accounts') }}</p>
                         <p class="cvr-kpi-value">{{ editableAccounts }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-copper">⇄</div>
                     <div>
-                        <p class="cvr-kpi-label">Currencies</p>
+                        <p class="cvr-kpi-label">{{ $t('Currencies') }}</p>
                         <p class="cvr-kpi-value">{{ currencyCount }}</p>
                     </div>
                 </div>
@@ -123,15 +123,15 @@ function toggleLock() {
                         class="cvr-filter-pill"
                         :class="{ 'cvr-filter-pill-active': activeCurrency === cur }"
                     >
-                        {{ cur === 'all' ? 'All' : cur }}
+                        {{ cur === 'all' ? $t('All') : cur }}
                     </button>
                 </div>
-                <div class="cvr-search-bar flex items-center gap-2 px-3 py-1.5 ml-auto w-64">
+                <div class="cvr-search-bar flex items-center gap-2 px-3 py-1.5 ms-auto w-64">
                     <span class="cvr-text-muted text-sm">🔍</span>
                     <input
                         v-model="search"
                         type="text"
-                        placeholder="Search account number or type..."
+                        :placeholder="$t('Search account number or type...')"
                         class="bg-transparent outline-none text-sm w-full cvr-text-primary"
                     />
                 </div>
@@ -142,15 +142,15 @@ function toggleLock() {
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-4 py-3 text-left">#</th>
-                            <th class="px-4 py-3 text-left">Type</th>
-                            <th class="px-4 py-3 text-left">Account Number</th>
+                            <th class="px-4 py-3 text-start">#</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Type') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Account Number') }}</th>
                             <!-- Owner column — only for users allowed to see
                                  shareholder-owned accounts (docs/shareholder-accounts.md, D6) -->
-                            <th v-if="permissions.canViewShareholderAccounts" class="px-4 py-3 text-left">Owner</th>
-                            <th class="px-4 py-3 text-left">Currency</th>
-                            <th class="px-4 py-3 text-left">Balance</th>
-                            <th class="px-4 py-3 text-left">Actions</th>
+                            <th v-if="permissions.canViewShareholderAccounts" class="px-4 py-3 text-start">{{ $t('Owner') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Currency') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Balance') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -167,7 +167,7 @@ function toggleLock() {
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap cvr-num">{{ account.account_number }}</td>
                             <td v-if="permissions.canViewShareholderAccounts" class="px-4 py-3 cvr-text-secondary">
-                                {{ account.shareholder_name || 'Company' }}
+                                {{ account.shareholder_name || $t('Company') }}
                             </td>
                             <td class="px-4 py-3 cvr-text-secondary">{{ account.currency_formatted }}</td>
                             <td class="px-4 py-3 cvr-num-green font-medium">{{ account.balance_formatted }}</td>
@@ -178,14 +178,14 @@ function toggleLock() {
                                         :href="account.edit_url"
                                         class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs"
                                     >
-                                        Edit
+                                        {{ $t('Edit') }}
                                     </Link>
                                     <button
                                         v-if="account.is_editable && permissions.canDelete"
                                         @click="confirmDelete(account)"
                                         class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs"
                                     >
-                                        Delete
+                                        {{ $t('Delete') }}
                                     </button>
                                     <button
                                         v-if="account.is_lockable && permissions.canLock"
@@ -201,7 +201,7 @@ function toggleLock() {
                         </tr>
                         <tr v-if="filteredAccounts.length === 0">
                             <td :colspan="permissions.canViewShareholderAccounts ? 7 : 6" class="px-4 py-8 text-center cvr-text-muted">
-                                No accounts match your search.
+                                {{ $t('No accounts match your search.') }}
                             </td>
                         </tr>
                     </tbody>
@@ -212,14 +212,14 @@ function toggleLock() {
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">
-                        Do you want to delete this item?
+                        {{ $t('Do you want to delete this item?') }}
                     </h2>
                     <div class="flex justify-end gap-2">
                         <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">
-                            Close
+                            {{ $t('Close') }}
                         </button>
                         <button @click="destroyAccount" class="cvr-btn-danger px-3 py-1.5 rounded border">
-                            Confirm Delete
+                            {{ $t('Confirm Delete') }}
                         </button>
                     </div>
                 </div>
@@ -229,14 +229,14 @@ function toggleLock() {
             <div v-if="lockTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">
-                        {{ lockTarget.is_active ? 'Do you want to lock this account?' : 'Do you want to unlock this account?' }}
+                        {{ lockTarget.is_active ? $t('Do you want to lock this account?') : $t('Do you want to unlock this account?') }}
                     </h2>
                     <div class="flex justify-end gap-2">
                         <button @click="cancelLockToggle" class="cvr-btn-secondary px-3 py-1.5 rounded border">
-                            Close
+                            {{ $t('Close') }}
                         </button>
                         <button @click="toggleLock" class="cvr-btn-danger px-3 py-1.5 rounded border">
-                            {{ lockTarget.is_active ? 'Confirm Lock' : 'Confirm Unlock' }}
+                            {{ lockTarget.is_active ? $t('Confirm Lock') : $t('Confirm Unlock') }}
                         </button>
                     </div>
                 </div>

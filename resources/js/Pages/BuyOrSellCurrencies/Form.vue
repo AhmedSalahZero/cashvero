@@ -340,11 +340,11 @@ function submit() {
         <div class="p-6">
             <div class="flex items-center gap-3 mb-1">
                 <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                    ← Back to Sell Or Buy Currencies
+                    {{ $t('← Back to Sell Or Buy Currencies') }}
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-6">
-                {{ isEdit ? 'Edit' : 'Add' }} Sell Or Buy Currencies
+                {{ isEdit ? $t('Edit') : $t('Add') }} Sell Or Buy Currencies
             </h1>
 
             <FormErrorSummary />
@@ -357,13 +357,13 @@ function submit() {
                         <div class="cvr-form-grid-2 w-full max-w-md">
                             <div>
                                 <label class="cvr-form-label">
-                                    Balance <span v-if="bankBalance.balanceDate">[ {{ bankBalance.balanceDate }} ]</span>
+                                    {{ $t('Balance') }} <span v-if="bankBalance.balanceDate">[ {{ bankBalance.balanceDate }} ]</span>
                                 </label>
                                 <input :value="formatNumber(bankBalance.balance)" disabled class="cvr-input w-full px-3 py-2 rounded opacity-80" />
                             </div>
                             <div>
                                 <label class="cvr-form-label">
-                                    Net Balance <span v-if="bankBalance.netBalanceDate">[ {{ bankBalance.netBalanceDate }} ]</span>
+                                    {{ $t('Net Balance') }} <span v-if="bankBalance.netBalanceDate">[ {{ bankBalance.netBalanceDate }} ]</span>
                                 </label>
                                 <input :value="formatNumber(bankBalance.netBalance)" disabled class="cvr-input w-full px-3 py-2 rounded opacity-80" />
                             </div>
@@ -371,34 +371,34 @@ function submit() {
                     </div>
                     <div v-else-if="isFromSafe" class="flex justify-end">
                         <div class="w-full max-w-xs">
-                            <label class="cvr-form-label">Balance</label>
+                            <label class="cvr-form-label">{{ $t('Balance') }}</label>
                             <input :value="formatNumber(cashSafeBalance)" disabled class="cvr-input w-full px-3 py-2 rounded opacity-80" />
                         </div>
                     </div>
 
                     <div class="cvr-form-grid-4">
                         <div>
-                            <label class="cvr-form-label">Type *</label>
+                            <label class="cvr-form-label">{{ $t('Type') }} *</label>
                             <select v-model="form.type" class="cvr-input w-full px-3 py-2 rounded">
                                 <option v-for="(label, key) in allTypes" :key="key" :value="key">{{ label }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Transaction Date *</label>
+                            <label class="cvr-form-label">{{ $t('Transaction Date') }} *</label>
                             <input v-model="form.transaction_date" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('transaction_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('transaction_date') }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Currency To Sell *</label>
+                            <label class="cvr-form-label">{{ $t('Currency To Sell') }} *</label>
                             <select v-model="form.currency_to_sell" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="(label, code) in currencies" :key="code" :value="code">{{ label }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Currency To Buy *</label>
+                            <label class="cvr-form-label">{{ $t('Currency To Buy') }} *</label>
                             <select v-model="form.currency_to_buy" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="(label, code) in currencies" :key="code" :value="code">{{ label }}</option>
                             </select>
                         </div>
@@ -406,24 +406,24 @@ function submit() {
 
                     <div class="cvr-form-grid-3">
                         <div>
-                            <label class="cvr-form-label">Currency To Sell Amount *</label>
+                            <label class="cvr-form-label">{{ $t('Currency To Sell Amount') }} *</label>
                             <input v-model="form.currency_to_sell_amount" type="number" step="0.01" class="cvr-input w-full px-3 py-2 rounded" />
-                            <p v-if="errorFor('currency_to_sell_amount')" class="text-xs mt-1 cvr-num-red">{{ errorFor('currency_to_sell_amount') }}</p>
+                            <p v-if="errorFor('currency_to_sell_amount')" class="text-xs mt-1 cvr-num-red">{{ errorFor($t('currency_to_sell_amount')) }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Exchange Rate *</label>
+                            <label class="cvr-form-label">{{ $t('Exchange Rate') }} *</label>
                             <input
                                 v-model="exchangeRateDisplay"
                                 @blur="onExchangeRateBlur"
                                 type="text"
                                 inputmode="decimal"
-                                placeholder="e.g. 53 or =1/53"
+                                :placeholder="$t('e.g. 53 or =1/53')"
                                 class="cvr-input w-full px-3 py-2 rounded"
                             />
-                            <p class="text-xs mt-1 cvr-text-muted">Type a number, or a formula like =1/53 — the result fills in when you leave the field.</p>
+                            <p class="text-xs mt-1 cvr-text-muted">{{ $t('Type a number, or a formula like =1/53 — the result fills in when you leave the field.') }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Currency To Buy Amount</label>
+                            <label class="cvr-form-label">{{ $t('Currency To Buy Amount') }}</label>
                             <input :value="form.currency_to_buy_amount" readonly class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                     </div>
@@ -431,35 +431,35 @@ function submit() {
                     <!-- FROM side: Bank fields — bank name gets double width (6:3:3) since bank names run long -->
                     <div v-if="isFromBank" class="cvr-form-grid-6-3-3">
                         <div>
-                            <label class="cvr-form-label">From Bank *</label>
+                            <label class="cvr-form-label">{{ $t('From Bank') }} *</label>
                             <select v-model="form.from_bank_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="bank in [...financialInstitutionBanks].sort((a, b) => a.name.localeCompare(b.name))" :key="bank.id" :value="bank.id">{{ bank.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">From Account Type *</label>
+                            <label class="cvr-form-label">{{ $t('From Account Type') }} *</label>
                             <select v-model="form.from_account_type_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="at in accountTypes" :key="at.id" :value="at.id">{{ at.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">From Account Number *</label>
+                            <label class="cvr-form-label">{{ $t('From Account Number') }} *</label>
                             <select v-model="form.from_account_number" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="num in fromAccountNumberOptions" :key="num.value" :value="num.value">{{ num.label }}</option>
                             </select>
-                            <p v-if="errorFor('from_account_number')" class="text-xs mt-1 cvr-num-red">{{ errorFor('from_account_number') }}</p>
+                            <p v-if="errorFor('from_account_number')" class="text-xs mt-1 cvr-num-red">{{ errorFor($t('from_account_number')) }}</p>
                         </div>
                     </div>
 
                     <!-- FROM side: Branch (Safe) field -->
                     <div v-if="isFromSafe" class="cvr-form-grid-3">
                         <div>
-                            <label class="cvr-form-label">From Branch *</label>
+                            <label class="cvr-form-label">{{ $t('From Branch') }} *</label>
                             <select v-model="form.from_branch_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="b in fromBranchOptions" :key="b.id" :value="b.id">{{ b.name }}</option>
                             </select>
                         </div>
@@ -468,23 +468,23 @@ function submit() {
                     <!-- TO side: Bank fields — bank name gets double width (6:3:3) since bank names run long -->
                     <div v-if="isToBank" class="cvr-form-grid-6-3-3">
                         <div>
-                            <label class="cvr-form-label">To Bank *</label>
+                            <label class="cvr-form-label">{{ $t('To Bank') }} *</label>
                             <select v-model="form.to_bank_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="bank in [...financialInstitutionBanks].sort((a, b) => a.name.localeCompare(b.name))" :key="bank.id" :value="bank.id">{{ bank.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">To Account Type *</label>
+                            <label class="cvr-form-label">{{ $t('To Account Type') }} *</label>
                             <select v-model="form.to_account_type_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="at in accountTypes" :key="at.id" :value="at.id">{{ at.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">To Account Number *</label>
+                            <label class="cvr-form-label">{{ $t('To Account Number') }} *</label>
                             <select v-model="form.to_account_number" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="num in toAccountNumberOptions" :key="num.value" :value="num.value">{{ num.label }}</option>
                             </select>
                             <p v-if="errorFor('to_account_number')" class="text-xs mt-1 cvr-num-red">{{ errorFor('to_account_number') }}</p>
@@ -494,9 +494,9 @@ function submit() {
                     <!-- TO side: Branch (Safe) field -->
                     <div v-if="isToSafe" class="cvr-form-grid-3">
                         <div>
-                            <label class="cvr-form-label">To Branch *</label>
+                            <label class="cvr-form-label">{{ $t('To Branch') }} *</label>
                             <select v-model="form.to_branch_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="b in toBranchOptions" :key="b.id" :value="b.id">{{ b.name }}</option>
                             </select>
                         </div>
@@ -504,14 +504,14 @@ function submit() {
                 </div>
 
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">User Comment</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('User Comment') }}</h2>
                     <textarea v-model="form.user_comment" rows="3" class="cvr-input w-full px-3 py-2 rounded"></textarea>
                 </div>
 
                 <div class="flex justify-end gap-2">
-                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">Cancel</Link>
+                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">{{ $t('Cancel') }}</Link>
                     <button type="submit" :disabled="submitting" class="cvr-btn-primary px-4 py-2 rounded">
-                        {{ submitting ? 'Saving...' : 'Save' }}
+                        {{ submitting ? $t('Saving...') : $t('Save') }}
                     </button>
                 </div>
             </form>

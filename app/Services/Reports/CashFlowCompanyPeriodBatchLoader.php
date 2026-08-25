@@ -7,6 +7,7 @@ use App\Models\Cheque;
 use App\Models\ForeignExchangeRate;
 use App\Models\LetterOfCreditIssuance;
 use App\Models\LetterOfGuaranteeIssuance;
+use App\Support\LetterOfGuarantee\LgRenewalTerms;
 use App\Enums\LcTypes;
 use App\Enums\LgTypes;
 use App\Models\MoneyPayment;
@@ -751,10 +752,18 @@ final class CashFlowCompanyPeriodBatchLoader
         // issuance — an outflow, the mirror image of the cancellation row
         // above. Issuance rows are written as debit=amount, credit=0,
         // type='debit-lg-amount' (see LetterOfGuaranteeIssuanceController).
+        //
+        // A renewal can re-price the cover, and that difference moves real
+        // money on the day the new period starts — so it belongs on this
+        // same line, not only in the bank account. It is a NET movement:
+        // raising the cover funds more (debit), lowering it releases some
+        // back (credit), so the amount is debit - credit. Issuance rows
+        // always carry credit = 0, which leaves them unchanged.
+        // @see \App\Support\LetterOfGuarantee\LgRenewalTerms
         $subTypeIssued = __('Issued LG Cash Cover');
         $issuedCoverQuery = DB::table('letter_of_guarantee_cash_cover_statements')
             ->where('letter_of_guarantee_cash_cover_statements.company_id', $companyId)
-            ->where('letter_of_guarantee_cash_cover_statements.type', 'debit-lg-amount')
+            ->whereIn('letter_of_guarantee_cash_cover_statements.type', ['debit-lg-amount', LgRenewalTerms::CASH_COVER_TYPE])
             ->join('letter_of_guarantee_issuances', 'letter_of_guarantee_issuances.id', '=', 'letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id')
             ->join('partners', 'partners.id', '=', 'letter_of_guarantee_issuances.partner_id')
             ->where('letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id', '>', 0)
@@ -762,7 +771,7 @@ final class CashFlowCompanyPeriodBatchLoader
             ->when($reportCurrency !== $mainFunctionalCurrency, function ($q) use ($reportCurrency) {
                 $q->where('letter_of_guarantee_cash_cover_statements.currency', $reportCurrency);
             })
-            ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, letter_of_guarantee_cash_cover_statements.debit as total_amount, letter_of_guarantee_cash_cover_statements.currency as currency, letter_of_guarantee_cash_cover_statements.date as movement_date, partners.name as partner_name, letter_of_guarantee_issuances.lg_code as lg_code')
+            ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, (letter_of_guarantee_cash_cover_statements.debit - letter_of_guarantee_cash_cover_statements.credit) as total_amount, letter_of_guarantee_cash_cover_statements.currency as currency, letter_of_guarantee_cash_cover_statements.date as movement_date, partners.name as partner_name, letter_of_guarantee_issuances.lg_code as lg_code')
             ->get();
 
         foreach ($issuedCoverQuery as $row) {

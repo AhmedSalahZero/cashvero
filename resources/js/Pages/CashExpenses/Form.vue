@@ -80,7 +80,7 @@ function submit() {
     <AppLayout>
         <div class="p-6 max-w-3xl mx-auto">
             <Link :href="backUrl" class="cvr-back-link inline-flex items-center gap-1 text-xs cvr-text-muted mb-4">
-                ← Back to Cash Expense Categories
+                {{ $t('← Back to Cash Expense Categories') }}
             </Link>
 
             <!-- Header -->
@@ -88,10 +88,10 @@ function submit() {
                 <div class="cvr-avatar" style="width: 3rem; height: 3rem; font-size: 1rem;">{{ initials }}</div>
                 <div>
                     <h1 class="text-xl font-semibold cvr-text-primary">
-                        {{ mode === 'edit' ? 'Edit Expense Category' : 'Add Expense Category' }}
+                        {{ mode === 'edit' ? $t('Edit Expense Category') : $t('Add Expense Category') }}
                     </h1>
                     <p class="text-sm cvr-text-muted">
-                        {{ mode === 'edit' ? 'Update this category and its expense item names' : 'Create a category and its expense item names' }}
+                        {{ mode === 'edit' ? $t('Update this category and its expense item names') : $t('Create a category and its expense item names') }}
                     </p>
                 </div>
             </div>
@@ -112,18 +112,18 @@ function submit() {
                 <!-- Section: Category Name -->
                 <div class="flex items-center gap-2 mb-4">
                     <span class="text-base">🗂️</span>
-                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">Category Information</h2>
+                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">{{ $t('Category Information') }}</h2>
                 </div>
 
                 <div class="mb-2">
                     <label class="cvr-form-label">
-                        Category Name <span class="text-red-500">*</span>
+                        {{ $t('Category Name') }} <span class="text-red-500">*</span>
                     </label>
                     <input
                         v-model="name"
                         type="text"
                         required
-                        placeholder="e.g. Utilities"
+                        :placeholder="$t('e.g. Utilities')"
                         class="cvr-input w-full px-3 py-2.5 rounded-lg text-sm"
                     />
                 </div>
@@ -134,7 +134,7 @@ function submit() {
                 <div class="flex items-center justify-between mb-1">
                     <div class="flex items-center gap-2">
                         <span class="text-base">💳</span>
-                        <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">Expense Item Names</h2>
+                        <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">{{ $t('Expense Item Names') }}</h2>
                     </div>
                 </div>
                 <p class="text-xs cvr-text-muted mb-4">
@@ -150,12 +150,12 @@ function submit() {
                     >
                         <div :class="companyHasOdoo ? 'cvr-form-grid-8-4' : ''" class="items-end">
                             <div>
-                                <label class="cvr-form-label">Name <span class="text-red-500">*</span></label>
+                                <label class="cvr-form-label">{{ $t('Name') }} <span class="text-red-500">*</span></label>
                                 <input
                                     v-model="row.name"
                                     type="text"
                                     required
-                                    placeholder="e.g. Electricity"
+                                    :placeholder="$t('e.g. Electricity')"
                                     class="cvr-input w-full px-3 py-2 rounded-lg text-sm"
                                 />
                             </div>
@@ -163,34 +163,34 @@ function submit() {
                                  company has Odoo integration credentials, exactly
                                  as in the original Blade form. -->
                             <div v-if="companyHasOdoo">
-                                <label class="cvr-form-label">Odoo Chart Of Account Number <span class="text-red-500">*</span></label>
+                                <label class="cvr-form-label">{{ $t('Odoo Chart Of Account Number') }} <span class="text-red-500">*</span></label>
                                 <input
                                     v-model="row.odoo_chart_of_account_number"
                                     type="number"
                                     required
-                                    placeholder="e.g. 400012"
+                                    :placeholder="$t('e.g. 400012')"
                                     class="cvr-input w-full px-3 py-2 rounded-lg text-sm"
                                 />
                             </div>
                         </div>
                         <div class="flex justify-end mt-3" v-if="items.length > 1">
                             <button type="button" @click="removeItemRow(row._rowId)" class="cvr-btn-remove-row">
-                                🗑 Remove Item
+                                {{ $t('🗑 Remove Item') }}
                             </button>
                         </div>
                     </div>
                 </div>
 
                 <button type="button" @click="addItemRow" class="cvr-btn-secondary mt-3 px-3 py-1.5 rounded-lg border text-sm inline-flex items-center gap-1">
-                    + Add Item
+                    {{ $t('+ Add Item') }}
                 </button>
 
                 <hr class="cvr-divider my-6" />
 
                 <div class="flex justify-end gap-2">
-                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded-lg border text-sm">Cancel</Link>
+                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded-lg border text-sm">{{ $t('Cancel') }}</Link>
                     <button type="submit" :disabled="submitting" class="cvr-btn-copper px-5 py-2 rounded-lg text-sm font-medium disabled:opacity-60">
-                        {{ submitting ? 'Saving…' : (mode === 'edit' ? 'Save Changes' : 'Create Category') }}
+                        {{ submitting ? $t('Saving…') : (mode === 'edit' ? $t('Save Changes') : $t('Create Category')) }}
                     </button>
                 </div>
             </form>

@@ -5,9 +5,11 @@ import { useTheme } from '@/composables/useTheme';
 import ToastStack from '@/Components/ToastStack.vue';
 import { useToasts } from '@/composables/useToasts';
 import NavIcon from '@/Components/NavIcon.vue';
+import LanguageSwitcher from '@/Components/LanguageSwitcher.vue';
 
 const { theme, toggleTheme } = useTheme();
 const page = usePage();
+const isRtl = computed(() => (page.props.dir || 'ltr') === 'rtl');
 
 const userName = computed(() => page.props.auth?.user?.name || 'User');
 const userInitial = computed(() => userName.value.charAt(0).toUpperCase());
@@ -280,12 +282,12 @@ if (page.flash?.success || page.flash?.error) {
                 <Link
                     v-if="menu.home?.show"
                     :href="menu.home.link"
-                    :title="!(isMobileNav || sidebarExpanded) ? 'Home' : ''"
+                    :title="!(isMobileNav || sidebarExpanded) ? $t('Home') : ''"
                     class="cvr-nav-item flex items-center gap-2 py-2 rounded text-sm mb-2"
                     :class="[(isMobileNav || sidebarExpanded) ? 'px-3' : 'px-0 justify-center', { 'cvr-nav-item-active': isActiveLink(menu.home.link) }]"
                 >
                     <NavIcon :name="menu.home.icon" :size="18" />
-                    <span v-if="isMobileNav || sidebarExpanded" class="truncate">Home</span>
+                    <span v-if="isMobileNav || sidebarExpanded" class="truncate">{{ $t('Home') }}</span>
                 </Link>
 
                 <!-- 12 collapsible sections -->
@@ -303,19 +305,19 @@ if (page.flash?.success || page.flash?.error) {
                             </span>
                             <NavIcon
                                 v-if="isMobileNav || sidebarExpanded"
-                                :name="isSectionExpanded(key) ? 'chevron-down' : 'chevron-right'"
+                                :name="isSectionExpanded(key) ? 'chevron-down' : (isRtl ? 'chevron-left' : 'chevron-right')"
                                 :size="14"
                             />
                         </button>
 
-                        <div v-if="isSectionExpanded(key) && (isMobileNav || sidebarExpanded)" class="pl-2 mt-0.5 space-y-0.5">
+                        <div v-if="isSectionExpanded(key) && (isMobileNav || sidebarExpanded)" class="ps-2 mt-0.5 space-y-0.5">
                             <template v-for="(sub, idx) in menu[key].items" :key="idx">
                                 <template v-if="sub.show">
                                     <!-- Action item (Odoo Read Partners/Invoices/Contracts) -->
                                     <button
                                         v-if="sub.type === 'action'"
                                         @click="openAction(sub); closeMobileNav()"
-                                        class="cvr-nav-sub-item w-full text-left flex items-center gap-2 py-1.5 px-3 rounded text-xs"
+                                        class="cvr-nav-sub-item w-full text-start flex items-center gap-2 py-1.5 px-3 rounded text-xs"
                                     >
                                         <NavIcon :name="sub.icon" :size="14" />
                                         <span class="truncate">{{ sub.title }}</span>
@@ -357,8 +359,8 @@ if (page.flash?.success || page.flash?.error) {
                 <button
                     @click="toggleSidebar"
                     class="cvr-action-btn"
-                    :title="isMobileNav ? 'Open menu' : 'Toggle sidebar'"
-                    aria-label="Toggle navigation"
+                    :title="isMobileNav ? $t('Open menu') : $t('Toggle sidebar')"
+                    :aria-label="$t('Toggle navigation')"
                 >
                     <NavIcon name="menu" :size="18" />
                 </button>
@@ -372,40 +374,40 @@ if (page.flash?.success || page.flash?.error) {
                         <button
                             @click="adminMenuOpen = !adminMenuOpen"
                             class="cvr-action-btn"
-                            title="Manage Companies & Users"
+                            :title="$t('Manage Companies & Users')"
                         >
                             <NavIcon name="wrench" :size="18" />
                         </button>
                         <div
                             v-if="adminMenuOpen"
-                            class="absolute right-0 mt-2 w-52 cvr-modal rounded-lg shadow-lg z-50 py-1"
+                            class="absolute end-0 mt-2 w-52 cvr-modal rounded-lg shadow-lg z-50 py-1"
                         >
                             <Link
                                 v-if="adminUrls.companies"
                                 :href="adminUrls.companies"
                                 @click="adminMenuOpen = false"
-                                class="flex items-center gap-2 w-full text-left px-4 py-2 text-sm cvr-text-secondary cvr-table-row"
+                                class="flex items-center gap-2 w-full text-start px-4 py-2 text-sm cvr-text-secondary cvr-table-row"
                             >
                                 <NavIcon name="building-2" :size="16" />
-                                Companies
+                                {{ $t('Companies') }}
                             </Link>
                             <Link
                                 v-if="adminUrls.users"
                                 :href="adminUrls.users"
                                 @click="adminMenuOpen = false"
-                                class="flex items-center gap-2 w-full text-left px-4 py-2 text-sm cvr-text-secondary cvr-table-row"
+                                class="flex items-center gap-2 w-full text-start px-4 py-2 text-sm cvr-text-secondary cvr-table-row"
                             >
                                 <NavIcon name="user" :size="16" />
-                                Users
+                                {{ $t('Users') }}
                             </Link>
                             <Link
                                 v-if="adminUrls.roles"
                                 :href="adminUrls.roles"
                                 @click="adminMenuOpen = false"
-                                class="flex items-center gap-2 w-full text-left px-4 py-2 text-sm cvr-text-secondary cvr-table-row"
+                                class="flex items-center gap-2 w-full text-start px-4 py-2 text-sm cvr-text-secondary cvr-table-row"
                             >
                                 <NavIcon name="shield" :size="16" />
-                                Roles &amp; Permissions
+                                {{ $t('Roles & Permissions') }}
                             </Link>
                         </div>
                     </div>
@@ -415,25 +417,25 @@ if (page.flash?.success || page.flash?.error) {
                         <button
                             @click="notificationsOpen = !notificationsOpen"
                             class="cvr-action-btn relative"
-                            title="Notifications"
+                            :title="$t('Notifications')"
                         >
                             <NavIcon name="bell" :size="18" />
                             <span
                                 v-if="totalNotificationCount > 0"
-                                class="absolute -top-1 -right-1 text-[0.6rem] leading-none rounded-full px-1.5 py-0.5 cvr-badge-overdue font-bold"
+                                class="absolute -top-1 -end-1 text-[0.6rem] leading-none rounded-full px-1.5 py-0.5 cvr-badge-overdue font-bold"
                             >{{ totalNotificationCount }}</span>
                         </button>
 
                         <div
                             v-if="notificationsOpen"
-                            class="absolute right-0 mt-2 w-80 cvr-modal rounded-lg shadow-lg z-50 py-2"
+                            class="absolute end-0 mt-2 w-80 cvr-modal rounded-lg shadow-lg z-50 py-2"
                         >
                             <div class="px-4 py-2 flex items-center justify-between">
-                                <p class="text-sm font-semibold cvr-text-primary">Notifications</p>
+                                <p class="text-sm font-semibold cvr-text-primary">{{ $t('Notifications') }}</p>
                                 <button @click="notificationsOpen = false" class="text-xs cvr-text-muted">✕</button>
                             </div>
                             <div v-if="notificationMenu.length === 0" class="px-4 py-6 text-center text-sm cvr-text-muted">
-                                Nothing to show.
+                                {{ $t('Nothing to show.') }}
                             </div>
                             <div v-for="(cat, i) in notificationMenu" :key="i" class="px-4 py-2 border-t" style="border-color: var(--cvr-border);">
                                 <div class="flex items-center justify-between mb-1">
@@ -453,12 +455,14 @@ if (page.flash?.success || page.flash?.error) {
                         </div>
                     </div>
 
+                    <LanguageSwitcher />
+
                     <button
                         @click="toggleTheme"
                         class="text-xs px-3 py-1.5 rounded cvr-btn-secondary border inline-flex items-center gap-1.5"
                     >
                         <NavIcon :name="theme === 'dark' ? 'sun' : 'moon'" :size="14" />
-                        {{ theme === 'dark' ? 'Light' : 'Dark' }}
+                        {{ theme === 'dark' ? $t('Light') : $t('Dark') }}
                     </button>
                     <div class="relative">
                         <button @click="userMenuOpen = !userMenuOpen" class="flex items-center gap-2">
@@ -467,7 +471,7 @@ if (page.flash?.success || page.flash?.error) {
                         </button>
                         <div
                             v-if="userMenuOpen"
-                            class="absolute right-0 mt-2 w-44 cvr-modal rounded-lg shadow-lg z-50 py-1"
+                            class="absolute end-0 mt-2 w-44 cvr-modal rounded-lg shadow-lg z-50 py-1"
                         >
                             <div class="px-4 py-2 text-sm font-medium cvr-text-primary border-b" style="border-color: var(--cvr-border);">
                                 {{ userName }}
@@ -475,17 +479,17 @@ if (page.flash?.success || page.flash?.error) {
                             <Link
                                 :href="profileUrl"
                                 @click="userMenuOpen = false"
-                                class="flex items-center gap-2 w-full text-left px-4 py-2 text-sm cvr-text-secondary cvr-table-row"
+                                class="flex items-center gap-2 w-full text-start px-4 py-2 text-sm cvr-text-secondary cvr-table-row"
                             >
                                 <NavIcon name="user" :size="16" />
-                                Profile
+                                {{ $t('Profile') }}
                             </Link>
                             <button
                                 @click="logout"
-                                class="flex items-center gap-2 w-full text-left px-4 py-2 text-sm cvr-text-secondary cvr-table-row"
+                                class="flex items-center gap-2 w-full text-start px-4 py-2 text-sm cvr-text-secondary cvr-table-row"
                             >
                                 <NavIcon name="log-out" :size="16" />
-                                Logout
+                                {{ $t('Logout') }}
                             </button>
                         </div>
                     </div>
@@ -509,21 +513,21 @@ if (page.flash?.success || page.flash?.error) {
                     {{ actionTarget.title }}?
                 </h2>
                 <p class="text-sm cvr-text-muted mb-4">
-                    This will sync now from Odoo. Continue?
+                    {{ $t('This will sync now from Odoo. Continue?') }}
                 </p>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                     <div>
-                        <label class="cvr-form-label">Start Date</label>
+                        <label class="cvr-form-label">{{ $t('Start Date') }}</label>
                         <input v-model="odooStartDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">End Date</label>
+                        <label class="cvr-form-label">{{ $t('End Date') }}</label>
                         <input v-model="odooEndDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                 </div>
                 <div class="flex justify-end gap-2">
-                    <button @click="actionTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Cancel</button>
-                    <button @click="confirmAction" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
+                    <button @click="actionTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Cancel') }}</button>
+                    <button @click="confirmAction" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Confirm') }}</button>
                 </div>
             </div>
         </div>
@@ -534,15 +538,15 @@ if (page.flash?.success || page.flash?.error) {
             <div class="cvr-modal rounded-lg p-4 sm:p-6 w-full sm:max-w-7xl max-w-[calc(100vw-2rem)] max-h-[92vh] flex flex-col">
                 <div class="flex items-center justify-between mb-4 gap-2">
                     <h2 class="text-lg font-medium cvr-text-primary truncate">{{ notificationDetail.title }}</h2>
-                    <button @click="notificationDetail = null" class="cvr-btn-secondary px-3 py-1.5 rounded border flex-shrink-0">Close</button>
+                    <button @click="notificationDetail = null" class="cvr-btn-secondary px-3 py-1.5 rounded border flex-shrink-0">{{ $t('Close') }}</button>
                 </div>
                 <div class="overflow-auto flex-1 cvr-table-scroll">
-                    <div v-if="notificationDetailLoading" class="text-center py-8 cvr-text-muted text-sm">Loading...</div>
+                    <div v-if="notificationDetailLoading" class="text-center py-8 cvr-text-muted text-sm">{{ $t('Loading...') }}</div>
                     <table v-else class="min-w-full text-sm">
                         <thead class="cvr-table-head">
                             <tr>
-                                <th class="px-3 py-2 text-left">#</th>
-                                <th v-for="(h, i) in notificationDetail.headers" :key="i" class="px-3 py-2 text-left">{{ h }}</th>
+                                <th class="px-3 py-2 text-start">#</th>
+                                <th v-for="(h, i) in notificationDetail.headers" :key="i" class="px-3 py-2 text-start">{{ h }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -552,7 +556,7 @@ if (page.flash?.success || page.flash?.error) {
                             </tr>
                             <tr v-if="notificationDetail.rows.length === 0">
                                 <td :colspan="notificationDetail.headers.length + 1" class="px-3 py-8 text-center cvr-text-muted">
-                                    Nothing here right now.
+                                    {{ $t('Nothing here right now.') }}
                                 </td>
                             </tr>
                         </tbody>

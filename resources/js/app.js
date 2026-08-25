@@ -5,6 +5,7 @@ import { createApp, h } from 'vue';
 import { createInertiaApp, router } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { checkPermission } from './composables/usePermissions';
+import { applyLocale, i18n } from './i18n';
 
 createInertiaApp({
     title: (title) => `${title} - CashVero`,
@@ -14,7 +15,16 @@ createInertiaApp({
             import.meta.glob('./Pages/**/*.vue'),
         ),
     setup({ el, App, props, plugin }) {
-        const app = createApp({ render: () => h(App, props) }).use(plugin);
+        const initialLocale = props.initialPage.props.locale || 'en';
+        applyLocale(initialLocale);
+
+        router.on('navigate', (event) => {
+            applyLocale(event.detail.page.props.locale || 'en');
+        });
+
+        const app = createApp({ render: () => h(App, props) })
+            .use(plugin)
+            .use(i18n);
 
         /**
          * Global `$can` — the same check as the usePermissions()

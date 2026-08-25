@@ -144,16 +144,16 @@ const errors = computed(() => page.props.errors || {});
     <AppLayout>
         <div class="p-6">
             <Link :href="backUrl" class="cvr-back-link inline-flex items-center gap-1 text-xs cvr-text-muted mb-4">
-                ← Back to Suppliers Opening Balance
+                {{ $t('← Back to Suppliers Opening Balance') }}
             </Link>
 
             <div class="flex items-center gap-3 mb-6">
                 <div class="cvr-avatar" style="width: 3rem; height: 3rem; font-size: 1.1rem;">🚚</div>
                 <div>
                     <h1 class="text-xl font-semibold cvr-text-primary">
-                        {{ isEdit ? 'Manage Suppliers Opening Balance' : 'Set Up Suppliers Opening Balance' }}
+                        {{ isEdit ? $t('Manage Suppliers Opening Balance') : $t('Set Up Suppliers Opening Balance') }}
                     </h1>
-                    <p class="text-sm cvr-text-muted">Opening invoices and advanced down payments</p>
+                    <p class="text-sm cvr-text-muted">{{ $t('Opening invoices and advanced down payments') }}</p>
                 </div>
             </div>
 
@@ -162,7 +162,7 @@ const errors = computed(() => page.props.errors || {});
                 class="mb-5 px-4 py-3 rounded-lg text-sm"
                 style="background: var(--cvr-danger-bg); border: 1px solid var(--cvr-danger-border); color: var(--cvr-danger-text);"
             >
-                <p class="font-medium mb-1">⚠ Please fix the following:</p>
+                <p class="font-medium mb-1">{{ $t('⚠ Please fix the following:') }}</p>
                 <p v-for="(msg, field) in errors" :key="field">{{ msg }}</p>
             </div>
 
@@ -170,11 +170,11 @@ const errors = computed(() => page.props.errors || {});
             <div class="cvr-card mb-6">
                 <div class="flex items-center gap-2 mb-3">
                     <span class="text-base">📅</span>
-                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">Opening Balance Date</h2>
+                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">{{ $t('Opening Balance Date') }}</h2>
                 </div>
                 <div class="max-w-xs">
                     <input v-model="date" type="date" readonly disabled class="cvr-input w-full px-3 py-2 rounded-lg text-sm cvr-text-muted cursor-not-allowed" />
-                    <p class="text-xs mt-1 cvr-text-muted">Set on the company itself — this date can only be changed by editing the company.</p>
+                    <p class="text-xs mt-1 cvr-text-muted">{{ $t('Set on the company itself — this date can only be changed by editing the company.') }}</p>
                 </div>
             </div>
 
@@ -183,67 +183,67 @@ const errors = computed(() => page.props.errors || {});
                 <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center gap-2">
                         <span class="text-base">🧾</span>
-                        <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">Suppliers Opening Balance</h2>
+                        <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">{{ $t('Suppliers Opening Balance') }}</h2>
                     </div>
-                    <button type="button" @click="addInvoice" class="cvr-btn-secondary px-3 py-1.5 rounded-lg border text-sm">+ Add Row</button>
+                    <button type="button" @click="addInvoice" class="cvr-btn-secondary px-3 py-1.5 rounded-lg border text-sm">{{ $t('+ Add Row') }}</button>
                 </div>
-                <p v-if="invoices.length === 0" class="text-sm cvr-text-muted py-4 text-center cvr-card-bg cvr-border border rounded-lg">No opening invoices. Click "+ Add Row" if there are any.</p>
+                <p v-if="invoices.length === 0" class="text-sm cvr-text-muted py-4 text-center cvr-card-bg cvr-border border rounded-lg">{{ $t('No opening invoices. Click "+ Add Row" if there are any.') }}</p>
                 <div class="space-y-3">
                     <div v-for="row in invoices" :key="row._key" class="cvr-card-bg cvr-border border rounded-lg p-3">
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div>
-                                <label class="cvr-form-label">Supplier</label>
+                                <label class="cvr-form-label">{{ $t('Supplier') }}</label>
                                 <select v-model="row.partner_id" @change="onInvoiceSupplierChange(row)" class="cvr-input w-full px-2 py-1.5 rounded text-sm">
                                     <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.name }}</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Invoice No</label>
+                                <label class="cvr-form-label">{{ $t('Invoice No') }}</label>
                                 <input v-model="row.invoice_number" type="text" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Contract Name</label>
+                                <label class="cvr-form-label">{{ $t('Contract Name') }}</label>
                                 <select v-model="row.contract_name" @change="onInvoiceContractChange(row)" class="cvr-input w-full px-2 py-1.5 rounded text-sm">
                                     <option value="">—</option>
                                     <option v-for="name in Object.keys(row._contracts)" :key="name" :value="name">{{ name }}</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Contract Code</label>
+                                <label class="cvr-form-label">{{ $t('Contract Code') }}</label>
                                 <input v-model="row.contract_code" type="text" readonly class="cvr-input w-full px-2 py-1.5 rounded text-sm opacity-70 cursor-not-allowed" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Contract Date</label>
+                                <label class="cvr-form-label">{{ $t('Contract Date') }}</label>
                                 <input v-model="row.contract_date" type="date" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Purchase Order Number</label>
+                                <label class="cvr-form-label">{{ $t('Purchase Order Number') }}</label>
                                 <select v-model="row.purchases_order_number" class="cvr-input w-full px-2 py-1.5 rounded text-sm">
                                     <option value="">—</option>
                                     <option v-for="(poNumber, poId) in row._salesOrders" :key="poId" :value="poNumber">{{ poNumber }}</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Amount</label>
+                                <label class="cvr-form-label">{{ $t('Amount') }}</label>
                                 <input v-model="row.paid_amount" type="number" step="0.01" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Currency</label>
+                                <label class="cvr-form-label">{{ $t('Currency') }}</label>
                                 <select v-model="row.currency" class="cvr-input w-full px-2 py-1.5 rounded text-sm">
                                     <option v-for="[code, label] in currencyOptions" :key="code" :value="code">{{ label }}</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Exchange Rate</label>
+                                <label class="cvr-form-label">{{ $t('Exchange Rate') }}</label>
                                 <input v-model="row.exchange_rate" type="number" step="0.0001" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Due Date</label>
+                                <label class="cvr-form-label">{{ $t('Due Date') }}</label>
                                 <input v-model="row.invoice_due_date" type="date" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                         </div>
                         <div class="flex justify-end mt-3">
-                            <button type="button" @click="removeInvoice(row._key)" class="cvr-btn-remove-row">🗑 Remove Row</button>
+                            <button type="button" @click="removeInvoice(row._key)" class="cvr-btn-remove-row">{{ $t('🗑 Remove Row') }}</button>
                         </div>
                     </div>
                 </div>
@@ -254,43 +254,43 @@ const errors = computed(() => page.props.errors || {});
                 <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center gap-2">
                         <span class="text-base">💸</span>
-                        <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">Suppliers Advanced Opening Balance</h2>
+                        <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">{{ $t('Suppliers Advanced Opening Balance') }}</h2>
                     </div>
-                    <button type="button" @click="addDownPayment" class="cvr-btn-secondary px-3 py-1.5 rounded-lg border text-sm">+ Add Row</button>
+                    <button type="button" @click="addDownPayment" class="cvr-btn-secondary px-3 py-1.5 rounded-lg border text-sm">{{ $t('+ Add Row') }}</button>
                 </div>
-                <p v-if="downPayments.length === 0" class="text-sm cvr-text-muted py-4 text-center cvr-card-bg cvr-border border rounded-lg">No advanced down payments. Click "+ Add Row" if there are any.</p>
+                <p v-if="downPayments.length === 0" class="text-sm cvr-text-muted py-4 text-center cvr-card-bg cvr-border border rounded-lg">{{ $t('No advanced down payments. Click "+ Add Row" if there are any.') }}</p>
                 <div class="space-y-3">
                     <div v-for="row in downPayments" :key="row._key" class="cvr-card-bg cvr-border border rounded-lg p-3">
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div>
-                                <label class="cvr-form-label">Supplier</label>
+                                <label class="cvr-form-label">{{ $t('Supplier') }}</label>
                                 <select v-model="row.partner_id" @change="onDownPaymentSupplierChange(row)" class="cvr-input w-full px-2 py-1.5 rounded text-sm">
                                     <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.name }}</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Amount</label>
+                                <label class="cvr-form-label">{{ $t('Amount') }}</label>
                                 <input v-model="row.paid_amount" type="number" step="0.01" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Currency</label>
+                                <label class="cvr-form-label">{{ $t('Currency') }}</label>
                                 <select v-model="row.currency" class="cvr-input w-full px-2 py-1.5 rounded text-sm">
                                     <option v-for="[code, label] in currencyOptions" :key="code" :value="code">{{ label }}</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Exchange Rate</label>
+                                <label class="cvr-form-label">{{ $t('Exchange Rate') }}</label>
                                 <input v-model="row.exchange_rate" type="number" step="0.0001" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Type</label>
+                                <label class="cvr-form-label">{{ $t('Type') }}</label>
                                 <select v-model="row.down_payment_type" class="cvr-input w-full px-2 py-1.5 rounded text-sm">
-                                    <option value="general">General</option>
-                                    <option value="over_contract">Over Contract</option>
+                                    <option value="general">{{ $t('General') }}</option>
+                                    <option value="over_contract">{{ $t('Over Contract') }}</option>
                                 </select>
                             </div>
                             <div v-if="row.down_payment_type === 'over_contract'">
-                                <label class="cvr-form-label">Contract</label>
+                                <label class="cvr-form-label">{{ $t('Contract') }}</label>
                                 <select v-model="row.contract_id" class="cvr-input w-full px-2 py-1.5 rounded text-sm">
                                     <option value="">—</option>
                                     <option v-for="(c, name) in row._contracts" :key="name" :value="c.id">{{ name }}</option>
@@ -298,16 +298,16 @@ const errors = computed(() => page.props.errors || {});
                             </div>
                         </div>
                         <div class="flex justify-end mt-3">
-                            <button type="button" @click="removeDownPayment(row._key)" class="cvr-btn-remove-row">🗑 Remove Row</button>
+                            <button type="button" @click="removeDownPayment(row._key)" class="cvr-btn-remove-row">{{ $t('🗑 Remove Row') }}</button>
                         </div>
                     </div>
                 </div>
             </div>
 
             <div class="flex justify-end gap-2 pb-8">
-                <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded-lg border text-sm">Cancel</Link>
+                <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded-lg border text-sm">{{ $t('Cancel') }}</Link>
                 <button type="button" @click="submit" :disabled="submitting" class="cvr-btn-copper px-5 py-2 rounded-lg text-sm font-medium disabled:opacity-60">
-                    {{ submitting ? 'Saving…' : 'Save' }}
+                    {{ submitting ? $t('Saving…') : $t('Save') }}
                 </button>
             </div>
         </div>

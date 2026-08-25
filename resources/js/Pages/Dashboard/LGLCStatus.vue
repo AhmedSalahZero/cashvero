@@ -94,7 +94,7 @@ function switchCurrency(currency) {
 
 function fmt(value) {
     const n = Number(value || 0);
-    return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    return n.toLocaleString('en-EG', { maximumFractionDigits: 0 });
 }
 
 /* ── Limit card → per-bank Details modal ─────────────────────────
@@ -156,17 +156,17 @@ function tableRows(section) {
 <template>
     <AppLayout>
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Dashboard</h1>
-            <p class="text-sm cvr-text-muted mb-4">Letters of Guarantee &amp; Letters of Credit — limits, outstanding balances &amp; cash cover</p>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Dashboard') }}</h1>
+            <p class="text-sm cvr-text-muted mb-4">{{ $t('Letters of Guarantee & Letters of Credit — limits, outstanding balances & cash cover') }}</p>
 
             <DashboardTabs active="lglc" :urls="dashboardTabUrls" />
 
             <div class="cvr-card-bg cvr-border border rounded-lg p-3 mb-6 flex items-end gap-3 flex-wrap">
                 <div>
-                    <label class="cvr-form-label">As Of Date</label>
+                    <label class="cvr-form-label">{{ $t('As Of Date') }}</label>
                     <input v-model="filterDate" type="date" class="cvr-input px-3 py-2 rounded" />
                 </div>
-                <button class="cvr-btn-primary px-4 py-2 rounded" @click="applyFilter">Apply</button>
+                <button class="cvr-btn-primary px-4 py-2 rounded" @click="applyFilter">{{ $t('Apply') }}</button>
             </div>
 
             <div class="flex items-center gap-2 flex-wrap mb-6">
@@ -219,11 +219,11 @@ function tableRows(section) {
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-4 py-2 text-left">#</th>
-                                    <th class="px-4 py-2 text-left">Financial Institution</th>
-                                    <th class="px-4 py-2 text-left">Type</th>
-                                    <th class="px-4 py-2 text-left">Source</th>
-                                    <th class="px-4 py-2 text-left">Status</th>
+                                    <th class="px-4 py-2 text-start">#</th>
+                                    <th class="px-4 py-2 text-start">Financial Institution</th>
+                                    <th class="px-4 py-2 text-start">Type</th>
+                                    <th class="px-4 py-2 text-start">Source</th>
+                                    <th class="px-4 py-2 text-start">Status</th>
                                     <th v-if="section.key === 'lg'" class="px-4 py-2 text-right">Count</th>
                                     <th v-if="section.key === 'lc'" class="px-4 py-2 text-right">Limit</th>
                                     <th class="px-4 py-2 text-right">Outstanding</th>
@@ -261,15 +261,15 @@ function tableRows(section) {
             <!-- Limit card → per-bank Details modal -->
             <div v-if="limitDetailsModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-4xl max-h-[85vh] overflow-auto">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Details</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Details') }}</h2>
                     <table class="min-w-full text-sm mb-4">
                         <thead class="cvr-table-head">
                             <tr>
-                                <th class="px-2 py-2 text-left">Financial Institution</th>
-                                <th class="px-2 py-2 text-right">Limit</th>
-                                <th class="px-2 py-2 text-right">Outstanding</th>
-                                <th class="px-2 py-2 text-right">Room</th>
-                                <th class="px-2 py-2 text-right">Cash Cover</th>
+                                <th class="px-2 py-2 text-start">{{ $t('Financial Institution') }}</th>
+                                <th class="px-2 py-2 text-right">{{ $t('Limit') }}</th>
+                                <th class="px-2 py-2 text-right">{{ $t('Outstanding') }}</th>
+                                <th class="px-2 py-2 text-right">{{ $t('Room') }}</th>
+                                <th class="px-2 py-2 text-right">{{ $t('Cash Cover') }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -280,9 +280,9 @@ function tableRows(section) {
                                 <td class="px-2 py-2 text-right cvr-num-green">{{ fmt(row.room) }}</td>
                                 <td class="px-2 py-2 text-right cvr-num">{{ fmt(row.cash_cover) }}</td>
                             </tr>
-                            <tr v-if="!limitDetailsModal.rows.length"><td colspan="5" class="px-2 py-4 text-center cvr-text-muted">No facilities found.</td></tr>
+                            <tr v-if="!limitDetailsModal.rows.length"><td colspan="5" class="px-2 py-4 text-center cvr-text-muted">{{ $t('No facilities found.') }}</td></tr>
                             <tr v-if="limitDetailsModal.rows.length" class="font-semibold cvr-summary-row">
-                                <td class="px-2 py-2">Total</td>
+                                <td class="px-2 py-2">{{ $t('Total') }}</td>
                                 <td class="px-2 py-2 text-right cvr-num-blue">{{ fmt(limitDetailsModal.totals.limit) }}</td>
                                 <td class="px-2 py-2 text-right cvr-num-amber">{{ fmt(limitDetailsModal.totals.outstanding) }}</td>
                                 <td class="px-2 py-2 text-right cvr-num-green">{{ fmt(limitDetailsModal.totals.room) }}</td>
@@ -291,7 +291,7 @@ function tableRows(section) {
                         </tbody>
                     </table>
                     <div class="flex justify-end">
-                        <button @click="limitDetailsModal = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                        <button @click="limitDetailsModal = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
                     </div>
                 </div>
             </div>

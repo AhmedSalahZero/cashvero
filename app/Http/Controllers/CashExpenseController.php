@@ -103,6 +103,13 @@ class CashExpenseController
 				'odoo_error' => $model->getOdooError(),
 				'odoo_reference_names' => $model->getOdooReferenceNames(),
 				'edit_url' => $model->isOpenBalance() ? null : route('edit.cash.expense', ['company' => $company->id, 'cashExpense' => $model->id]),
+				/**
+				 * Same isOpenBalance() guard as edit/delete: an opening
+				 * balance row is system-generated from an import, not
+				 * something a user entered, so there is nothing
+				 * meaningful to copy it into.
+				 */
+				'copy_url' => $model->isOpenBalance() ? null : route('copy.cash.expense', ['company' => $company->id, 'cashExpense' => $model->id]),
 				'delete_url' => $model->isOpenBalance() ? null : route('delete.cash.expense', ['company' => $company->id, 'cashExpense' => $model->id]),
 			];
 		};
@@ -150,7 +157,7 @@ class CashExpenseController
 				->paginate($paginationPerPage, ['*'], $pageParamByType[$type])
 				->withQueryString();
 
-			$mapped = $paginator->through(function (CashExpense $model) use ($mapCommon, $type) {
+			$mapped = $paginator->through(function (CashExpense $model) use ($mapCommon, $type, $company) {
 				$common = $mapCommon($model);
 				if ($type === CashExpense::OUTGOING_TRANSFER) {
 					return array_merge($common, [
@@ -249,11 +256,70 @@ class CashExpenseController
     }
 
 	/**
+	 * "Copy" — the CREATE form, opened pre-filled from an existing
+	 * expense so an expense that repeats (same category, same bank,
+	 * same amount) can be saved again without re-typing it.
+	 *
+	 * It is the create form, not the edit form: nothing about
+	 * $cashExpense is touched, and saving inserts a NEW row. Only
+	 * buildFormProps()'s third argument differs from create(), which
+	 * is what strips the identity of the copied row — see
+	 * COPY_CLEARED_FIELDS for exactly which fields do not survive a
+	 * copy, and why.
+	 */
+	public function copy(Company $company, CashExpense $cashExpense)
+	{
+		return \Inertia\Inertia::render('CashExpense/Form', $this->buildFormProps($company, $cashExpense, true));
+	}
+
+	/**
+	 * The fields a COPY deliberately does not carry over.
+	 *
+	 * `cheque_number` and `receipt_number` are unique — per delivery
+	 * bank and per receiving branch respectively (see
+	 * UniqueChequeNumberRule / UniqueReceiptNumberForReceivingBranchRule
+	 * in StoreCashExpenseRequest). Copying either would guarantee a
+	 * validation failure on the very first save, which is the exact
+	 * opposite of what a copy is for, so they come through blank for
+	 * the user to fill in.
+	 *
+	 * The three id fields are the copied row's identity. They must be
+	 * null or the form would submit as an edit of the original —
+	 * `payable_cheque_id`/`cash_payment_id` in particular are what the
+	 * uniqueness rules exclude from their own check, so leaving them
+	 * set would let a genuine duplicate number through.
+	 */
+	private const COPY_CLEARED_FIELDS = [
+		'id', 'payable_cheque_id', 'cash_payment_id',
+		'cheque_number', 'receipt_number',
+		/**
+		 * A copy opens with the date empty, so it is entered for the
+		 * day the new expense is actually being made rather than
+		 * inheriting the copied one by accident.
+		 *
+		 * ⚠️ This is listed HERE rather than being nulled inside the
+		 * shared 'model' array (where it was briefly set to null) —
+		 * buildFormProps() serves edit() too, and a null there blanks
+		 * the date when opening an EXISTING expense for editing. The
+		 * Vue form falls back to today when the date is empty
+		 * (Form.vue: `props.model?.payment_date ?? todayDate()`), so
+		 * that would silently re-date every expense on save.
+		 */
+		'payment_date',
+	];
+
+	/**
 	 * Turns the old create()/edit()'s existing query logic (all
 	 * UNCHANGED below) into the flat, pre-formatted prop shape Inertia
 	 * needs. New presentation-layer code only.
+	 *
+	 * $isCopy renders the SAME filled-in form as edit, but as a create:
+	 * `mode` is 'create', the identity fields are stripped, and
+	 * `submitUrl` points at store() instead of update(). Everything
+	 * else — including the contract allocations — is copied as-is, so
+	 * the form opens ready to save.
 	 */
-	protected function buildFormProps(Company $company, ?CashExpense $model): array
+	protected function buildFormProps(Company $company, ?CashExpense $model, bool $isCopy = false): array
 	{
 		$currencies = getCurrencies();
 		$clientsWithContracts = Partner::onlyCompany($company->id)->onlyCustomers()->onlyThatHaveCustomerContracts()->get();
@@ -263,9 +329,20 @@ class CashExpenseController
 		$cashExpenseCategories = CashExpenseCategory::where('company_id', $company->id)->orderBy('name', 'asc')->get();
 		$cashExpenseCategoryNames = CashExpenseCategoryName::whereIn('cash_expense_category_id', $cashExpenseCategories->pluck('id'))->get();
 
-		return [
+		$props = [
 			'company' => ['id' => $company->id, 'mainFunctionalCurrency' => $company->getMainFunctionalCurrency()],
-			'mode' => $model ? 'edit' : 'create',
+			'mode' => $model && ! $isCopy ? 'edit' : 'create',
+			/**
+			 * A copy is a create, with one exception: the contract
+			 * dropdown must list the SAME contracts the copied
+			 * allocations point at. get.contracts.for.customer.or.supplier
+			 * hides child contracts (parent_id != null) unless
+			 * inEditMode is set, so without this a copied allocation on
+			 * a sub-contract would open with an empty Contract select.
+			 * The form uses this for that lookup only — everything else
+			 * about it stays a create.
+			 */
+			'isCopy' => $isCopy,
 			'locale' => app()->getLocale(),
 			'types' => [
 				CashExpense::CASH_PAYMENT => __('Cash Payment'),
@@ -328,12 +405,20 @@ class CashExpenseController
 				'payable_cheque_id' => $model->payableCheque?->id,
 				'cash_payment_id' => $model->cashPayment?->id,
 			] : null,
-			'submitUrl' => $model
+			'submitUrl' => $model && ! $isCopy
 				? route('update.cash.expense', ['company' => $company->id, 'cashExpense' => $model->id])
 				: route('store.cash.expense', ['company' => $company->id]),
 			'backUrl' => route('view.cash.expense', ['company' => $company->id]),
 			'getBankBalanceUrl' => route('update.balance.and.net.balance.based.on.account.number', ['company' => $company->id]),
 		];
+
+		if ($isCopy && $props['model']) {
+			foreach (self::COPY_CLEARED_FIELDS as $field) {
+				$props['model'][$field] = null;
+			}
+		}
+
+		return $props;
 	}
 
 	public function store(Company $company , StoreCashExpenseRequest $request

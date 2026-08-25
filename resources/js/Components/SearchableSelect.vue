@@ -80,11 +80,11 @@ function selectOption(value) {
             type="button"
             @click="toggleOpen"
             :disabled="disabled"
-            class="cvr-input w-full px-3 py-2 rounded flex items-center justify-between text-left gap-2"
+            class="cvr-input w-full px-3 py-2 rounded flex items-center justify-between text-start gap-2"
             :class="{ 'opacity-40 cursor-not-allowed': disabled }"
         >
             <span class="truncate text-sm" :class="selectedLabel ? 'cvr-text-primary' : 'cvr-text-placeholder'">
-                {{ selectedLabel || placeholder }}
+                {{ selectedLabel || $t(placeholder) }}
             </span>
             <span class="cvr-text-muted text-xs shrink-0 transition-transform" :class="{ 'rotate-180': open }">▾</span>
         </button>
@@ -100,7 +100,7 @@ function selectOption(value) {
                     v-model="search"
                     type="text"
                     class="cvr-input w-full px-2 py-1.5 rounded text-sm"
-                    placeholder="Search…"
+                    :placeholder="$t('Search…')"
                     @keydown.esc.prevent="close"
                 />
             </div>
@@ -109,13 +109,13 @@ function selectOption(value) {
                     v-for="opt in filteredOptions"
                     :key="opt.value"
                     type="button"
-                    class="w-full text-left px-3 py-1.5 text-sm cursor-pointer hover:bg-white/5 truncate"
+                    class="w-full text-start px-3 py-1.5 text-sm cursor-pointer hover:bg-white/5 truncate"
                     :class="String(opt.value) === String(modelValue) ? 'cvr-text-primary font-medium' : 'cvr-text-primary'"
                     @click="selectOption(opt.value)"
                 >
                     {{ opt.label }}
                 </button>
-                <p v-if="!filteredOptions.length" class="px-3 py-4 text-xs cvr-text-muted text-center">No matches</p>
+                <p v-if="!filteredOptions.length" class="px-3 py-4 text-xs cvr-text-muted text-center">{{ $t('No matches') }}</p>
             </div>
         </div>
     </div>

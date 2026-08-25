@@ -6,6 +6,7 @@ use App\Models\CurrentAccountBankStatement;
 use App\Models\FinancialInstitutionAccount;
 use App\Models\LetterOfGuaranteeIssuance;
 use App\Models\LgRenewalDateHistory;
+use App\Support\LetterOfGuarantee\LgRenewalTerms;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -29,10 +30,24 @@ use Illuminate\Support\Facades\DB;
  *      resources/js/Pages/LetterOfGuaranteeIssuance/RenewalHistory.vue,
  *      distinguished by a `mode: 'create' | 'edit'` prop (via the
  *      shared renderPage() helper below).
- *   ✅ store() / update() / destroy() → UNCHANGED, deliberately (all
- *      three already redirected back to the now-migrated index()
- *      page before this pass). The financial logic — renewal-fees
- *      posting, Odoo sync, commission recalculation — is untouched.
+ *   ✅ store() / update() / destroy() → the Vue migration left all
+ *      three untouched. They were changed later, for a different
+ *      reason (below): the renewal-fees posting, Odoo sync and
+ *      commission recalculation they already did are still exactly
+ *      as they were.
+ *
+ * ── Renewal re-pricing ─────────────────────────────────────────────
+ * A renewal is no longer just "a new expiry date + a renewal fee".
+ * The bank re-prices the guarantee when it renews it: it can ask for
+ * a different cash cover and charge a different commission, and both
+ * apply to the NEW term only. store()/update()/destroy() delegate all
+ * of that to LgRenewalTerms — see that class for how the difference
+ * is computed and why only the difference is posted.
+ *
+ * The one ordering rule that matters here: the new terms must reach
+ * the issuance BEFORE the new term's commission rows are posted,
+ * because storeCommissionToCreditCurrentAccountBankStatement() reads
+ * the commission off the issuance.
  *
  * ⚠️ IMPORTANT — the same date-format trap as TimeOfDeposit's
  * renewal history: store() and update() manually parse the incoming
@@ -83,6 +98,12 @@ class LetterOfGuaranteeIssuanceRenewalDateController
 				'is_original' => $isOriginal,
 				'days_count' => $daysCount,
 				'fees_amount_formatted' => $history->getFeesAmountFormatted(),
+				// NULL on all three = this renewal changed no terms,
+				// which is every renewal recorded before the bank's
+				// re-pricing was supported. The table shows a dash.
+				'cash_cover_amount_formatted' => $history->getCashCoverAmountFormatted(),
+				'cash_cover_difference_formatted' => $history->getCashCoverDifferenceFormatted(),
+				'lg_commission_amount_formatted' => $history->getLgCommissionAmountFormatted(),
 				'is_last' => $index === $count - 1,
 				'edit_url' => route('edit.letter.of.issuance.renewal.date', ['company' => $company->id, 'letterOfGuaranteeIssuance' => $letterOfGuaranteeIssuance->id, 'LgRenewalDateHistory' => $history->id]),
 				'delete_url' => route('delete.letter.of.issuance.renewal.date', ['company' => $company->id, 'letterOfGuaranteeIssuance' => $letterOfGuaranteeIssuance->id, 'LgRenewalDateHistory' => $history->id]),
@@ -116,6 +137,48 @@ class LetterOfGuaranteeIssuanceRenewalDateController
 					: $currentRenewalDate,
 				'renewal_date' => $model ? $model->getRenewalDate() : null,
 				'fees_amount' => $model ? $model->getFeesAmount() : 0,
+				/**
+				 * The bank re-prices the LG at renewal, so the three
+				 * term fields open pre-filled with what is in force
+				 * right now — the user overwrites only what the bank
+				 * actually changed.
+				 *
+				 * In edit mode the issuance is ALREADY carrying this
+				 * renewal's terms (they were applied when it was
+				 * saved), so the issuance value is the right default
+				 * either way; the row's own value is preferred only
+				 * so an unchanged term stays visibly unchanged.
+				 */
+				'cash_cover_amount' => $model && ! is_null($model->getCashCoverAmount())
+					? $model->getCashCoverAmount()
+					: $letterOfGuaranteeIssuance->getCashCoverAmount(),
+				'lg_commission_amount' => $model && ! is_null($model->getLgCommissionAmount())
+					? $model->getLgCommissionAmount()
+					: $letterOfGuaranteeIssuance->getLgCommissionAmount(),
+				'min_lg_commission_fees' => $model && ! is_null($model->getMinLgCommissionFees())
+					? $model->getMinLgCommissionFees()
+					: $letterOfGuaranteeIssuance->getMinLgCommissionFees(),
+			],
+			/**
+			 * What is in force BEFORE the renewal being written — shown
+			 * read-only next to each input so "10 became 20" is
+			 * visible without digging through the history table.
+			 */
+			'currentTerms' => [
+				'cash_cover_amount' => $model && ! is_null($model->getPreviousCashCoverAmount())
+					? $model->getPreviousCashCoverAmount()
+					: $letterOfGuaranteeIssuance->getCashCoverAmount(),
+				'lg_commission_amount' => $model && ! is_null($model->lg_commission_amount)
+					? $model->previous_lg_commission_amount
+					: $letterOfGuaranteeIssuance->getLgCommissionAmount(),
+				'min_lg_commission_fees' => $model && ! is_null($model->min_lg_commission_fees)
+					? $model->previous_min_lg_commission_fees
+					: $letterOfGuaranteeIssuance->getMinLgCommissionFees(),
+				'currency' => $letterOfGuaranteeIssuance->getLgCurrency(),
+				// Already translated here, same as every other LG form
+				// gets it — the raw code ('quarterly') is not a
+				// translation key anywhere.
+				'commission_interval' => getCommissionInterval()[$letterOfGuaranteeIssuance->getLgCommissionInterval()] ?? null,
 			],
 			'storeUrl' => route('store.letter.of.issuance.renewal.date', ['company' => $company->id, 'letterOfGuaranteeIssuance' => $letterOfGuaranteeIssuance->id]),
 			'updateUrl' => $model ? route('update.letter.of.issuance.renewal.date', ['company' => $company->id, 'letterOfGuaranteeIssuance' => $letterOfGuaranteeIssuance->id, 'LgRenewalDateHistory' => $model->id]) : null,
@@ -171,7 +234,20 @@ class LetterOfGuaranteeIssuanceRenewalDateController
 			'renewal_date'=>$renewalDate,
 			'letter_of_guarantee_issuance_id'=>$letterOfGuaranteeIssuance->id
 		]);
-		
+
+		/**
+		 * The bank can re-price the LG at renewal — a different cash
+		 * cover, a different commission. This has to run BEFORE the
+		 * commission rows below are posted: they read the commission
+		 * straight off the issuance, so the issuance must already be
+		 * carrying the NEW one. $expiryDate (the old expiry) is the
+		 * start of the new term, which is the same date the renewal
+		 * fee and the new term's first commission land on.
+		 *
+		 * @see \App\Support\LetterOfGuarantee\LgRenewalTerms
+		 */
+		LgRenewalTerms::apply($lgRenewalDateHistory, $letterOfGuaranteeIssuance, LgRenewalTerms::fromInput($request->all()), $expiryDate);
+
 		$lgRenewalDateHistory->handleRenewalFeesForOdoo($renewalFeesAmount,$expiryDate);
 		
 		$this->storeCommissionToCreditCurrentAccountBankStatement($lgRenewalDateHistory,$letterOfGuaranteeIssuance,$company,$expiryDate,$renewalDate,$transactionName,$lgType);
@@ -248,11 +324,29 @@ class LetterOfGuaranteeIssuanceRenewalDateController
 
 		$renewalFeesCurrentAccountBankStatement = $letterOfGuaranteeIssuance->renewalFeesCurrentAccountBankStatement($expiryDate) ;
 		$financialInstitution = $letterOfGuaranteeIssuance->financialInstitutionBank;
+		/**
+		 * Put the issuance back on the terms that were in force BEFORE
+		 * this renewal, and drop the cash cover difference it posted,
+		 * before re-applying below. Without this the difference would
+		 * be measured against the terms this very row already set —
+		 * saving the same 20,000 twice would post another 10,000.
+		 *
+		 * Runs before the commission rows are dropped because it also
+		 * removes this renewal's cash-cover row from
+		 * current_account_bank_statements, which shares the same
+		 * lg_renewal_date_history_id.
+		 */
+		LgRenewalTerms::revert($LgRenewalDateHistory, $letterOfGuaranteeIssuance);
 		CurrentAccountBankStatement::deleteButTriggerChangeOnLastElement($LgRenewalDateHistory->commissionCurrentBankStatements()->withoutGlobalScope('only_active')->get());
 		$transactionName = $letterOfGuaranteeIssuance->getTransactionName();
 		$lgType = $letterOfGuaranteeIssuance->getLgType();
 		$financialInstitutionAccount = FinancialInstitutionAccount::find($letterOfGuaranteeIssuance->lg_fees_and_commission_account_id);
 		$financialInstitutionAccountOpeningBalance = $financialInstitutionAccount->getOpeningBalanceDate();
+		/**
+		 * Same ordering rule as store(): the new terms have to be on
+		 * the issuance before the commission is re-posted.
+		 */
+		LgRenewalTerms::apply($LgRenewalDateHistory, $letterOfGuaranteeIssuance, LgRenewalTerms::fromInput($request->all()), $expiryDate);
 		$this->storeCommissionToCreditCurrentAccountBankStatement($LgRenewalDateHistory,$letterOfGuaranteeIssuance,$company,$expiryDate,$renewalDate,$transactionName,$lgType);
 		if($renewalFeesCurrentAccountBankStatement){
 			$renewalFeesCurrentAccountBankStatement->handleFullDateAfterDateEdit($expiryDate,0,$renewalFeesAmount);
@@ -279,6 +373,14 @@ class LetterOfGuaranteeIssuanceRenewalDateController
 	public function destroy( Company $company ,  LetterOfGuaranteeIssuance $letterOfGuaranteeIssuance , LgRenewalDateHistory $LgRenewalDateHistory)
 	{
 		
+		/**
+		 * Deleting a renewal un-does its re-pricing too: the issuance
+		 * goes back to the cash cover and commission that were in
+		 * force before it, and the cash cover difference it posted is
+		 * removed. Only rows carrying THIS renewal's id are touched —
+		 * the original issuance's cash cover stays put.
+		 */
+		LgRenewalTerms::revert($LgRenewalDateHistory, $letterOfGuaranteeIssuance);
 		CurrentAccountBankStatement::deleteButTriggerChangeOnLastElement($LgRenewalDateHistory->commissionCurrentBankStatements()->withoutGlobalScope('only_active')->get());
 		$oldRenewalDate = $letterOfGuaranteeIssuance->getRenewalDate();
 		$expiryDate = $letterOfGuaranteeIssuance->getRenewalDateBefore($oldRenewalDate);

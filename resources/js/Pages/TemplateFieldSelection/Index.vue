@@ -67,10 +67,10 @@ function submit() {
     <AppLayout :nav-urls="navUrls">
         <div class="p-6 max-w-4xl">
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">Export Fields — {{ modelDisplayName }}</h1>
-            <p class="text-sm cvr-text-muted mb-6">Please choose fields that you need to be in your Excel sheet</p>
+            <p class="text-sm cvr-text-muted mb-6">{{ $t('Please choose fields that you need to be in your Excel sheet') }}</p>
 
             <p v-if="isLoanScheduleModel" class="text-xs cvr-text-muted mb-4">
-                All fields are included for this template — selection isn't customizable here, matching the original.
+                {{ $t('All fields are included for this template — selection isn\'t customizable here, matching the original.') }}
             </p>
 
             <!-- Real native form: triggers a genuine file download,
@@ -92,7 +92,7 @@ function submit() {
                             :disabled="isLoanScheduleModel"
                             @change="toggleSelectAll($event.target.checked)"
                         />
-                        <span class="font-semibold cvr-text-primary">Select All</span>
+                        <span class="font-semibold cvr-text-primary">{{ $t('Select All') }}</span>
                     </label>
 
                     <div class="grid grid-cols-2 gap-x-6 gap-y-3">
@@ -112,7 +112,7 @@ function submit() {
                             <span class="cvr-text-secondary text-sm">
                                 {{ f.label }}
                                 <span v-if="f.field_name === 'document_type'" class="text-xs cvr-text-muted">
-                                    (Only allowed content: INV, inv, invoice, INVOICE, فاتوره)
+                                    {{ $t('(Only allowed content: INV, inv, invoice, INVOICE, فاتوره)') }}
                                 </span>
                             </span>
                         </label>
@@ -120,13 +120,9 @@ function submit() {
                 </div>
 
                 <div v-if="showBankPicker" class="cvr-card mb-6">
-                    <p class="font-semibold cvr-text-primary mb-1">Drawee Banks</p>
+                    <p class="font-semibold cvr-text-primary mb-1">{{ $t('Drawee Banks') }}</p>
                     <p class="text-xs cvr-text-muted mb-4">
-                        Pick the bank(s) the company issues cheques against, in favor of the leasing
-                        company. Only these will appear in the Drawee Bank dropdown in the downloaded
-                        template — matching the exact name as stored in CashVero, so there's no risk of
-                        a mismatched English/Arabic spelling. Leave all unchecked to include every bank
-                        the company has on file.
+                        {{ $t('Pick the bank(s) the company issues cheques against, in favor of the leasing company. Only these will appear in the Drawee Bank dropdown in the downloaded template — matching the exact name as stored in CashVero, so there\'s no risk of a mismatched English/Arabic spelling. Leave all unchecked to include every bank the company has on file.') }}
                     </p>
                     <div class="grid grid-cols-2 gap-x-6 gap-y-2">
                         <label v-for="b in banks" :key="b.id" class="flex items-center gap-2 cursor-pointer">
@@ -137,7 +133,7 @@ function submit() {
                     <input v-for="id in selectedBankIds" :key="id" type="hidden" name="bank_ids[]" :value="id" />
                 </div>
 
-                <button type="submit" class="cvr-btn-primary px-4 py-2 rounded">Download</button>
+                <button type="submit" class="cvr-btn-primary px-4 py-2 rounded">{{ $t('Download') }}</button>
             </form>
         </div>
     </AppLayout>

@@ -114,7 +114,7 @@ function buildDonutChart(el, data) {
     totalLabel.verticalCenter = 'middle';
     totalLabel.fontSize = 11;
     totalLabel.fill = cvrColor('--cvr-text-muted');
-    totalLabel.text = 'TOTAL\n[bold font-size: 14]' + total.toLocaleString(undefined, { maximumFractionDigits: 0 }) + '[/]';
+    totalLabel.text = 'TOTAL\n[bold font-size: 14]' + total.toLocaleString('en-EG', { maximumFractionDigits: 0 }) + '[/]';
     totalLabel.textAlign = 'middle';
 
     return chart;
@@ -172,7 +172,7 @@ const combinedAgingBarData = computed(() => [
 function formatAmount(value) {
     const n = Number(value || 0);
     if (!n) return '-';
-    return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    return n.toLocaleString('en-EG', { maximumFractionDigits: 0 });
 }
 
 // Number Color Rule: past due = red (overdue, needs attention),
@@ -224,12 +224,12 @@ function dateRange(kind, interval) {
             <!-- Chart breakdowns -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
                 <div class="cvr-card-bg cvr-border border rounded-lg p-4" style="border-top: 3px solid var(--cvr-num-amber)">
-                    <h3 class="text-sm font-semibold cvr-text-primary mb-2">Total Aging Analysis</h3>
+                    <h3 class="text-sm font-semibold cvr-text-primary mb-2">{{ $t('Total Aging Analysis') }}</h3>
                     <div :ref="donutRefs.total" style="height: 400px"></div>
                 </div>
                 <div class="cvr-card-bg cvr-border border rounded-lg p-4 lg:col-span-2" style="border-top: 3px solid var(--cvr-num-red)">
-                    <h3 class="text-sm font-semibold cvr-text-primary mb-1">Coming &amp; Past Dues Aging Analysis</h3>
-                    <p class="text-xs cvr-text-muted mb-2">Past Due (left) · Coming Due (right)</p>
+                    <h3 class="text-sm font-semibold cvr-text-primary mb-1">{{ $t('Coming & Past Dues Aging Analysis') }}</h3>
+                    <p class="text-xs cvr-text-muted mb-2">{{ $t('Past Due (left) · Coming Due (right)') }}</p>
                     <AgingDivergingBarChart :data="combinedAgingBarData" :height="400" />
                 </div>
             </div>
@@ -239,7 +239,7 @@ function dateRange(kind, interval) {
                 <table class="text-sm border-collapse">
                     <thead>
                         <tr>
-                            <th rowspan="2" class="px-4 py-2 text-left sticky left-0 z-10 cvr-table-head" style="min-width: 220px">{{ clientNameText }}</th>
+                            <th rowspan="2" class="px-4 py-2 text-start sticky start-0 z-10 cvr-table-head" style="min-width: 220px">{{ clientNameText }}</th>
                             <!--
                                 FIX (per screenshot, 2026-08-13): the collapsed
                                 group header used to keep occupying 1 column
@@ -254,20 +254,20 @@ function dateRange(kind, interval) {
                                 there's never a header cell with no row-2
                                 counterpart.
                             -->
-                            <th v-if="pastDueExpanded" :colspan="pastDueColumns.length" class="px-2 py-2 text-center border-l cvr-border cvr-table-head cursor-pointer select-none" @click="pastDueExpanded = false" title="Click to collapse Past Due detail">
-                                <span class="inline-block transition-transform mr-1 rotate-90">▸</span>Past Due
+                            <th v-if="pastDueExpanded" :colspan="pastDueColumns.length" class="px-2 py-2 text-center border-l cvr-border cvr-table-head cursor-pointer select-none" @click="pastDueExpanded = false" :title="$t('Click to collapse Past Due detail')">
+                                <span class="inline-block transition-transform me-1 rotate-90">▸</span>{{ $t('Past Due') }}
                             </th>
                             <th rowspan="2" class="px-3 py-2 text-center border-l cvr-border cvr-table-head cursor-pointer select-none" style="min-width: 100px" @click="pastDueExpanded = !pastDueExpanded" :title="pastDueExpanded ? 'Click to collapse Past Due detail' : 'Click to expand Past Due detail'">
-                                <span class="inline-block transition-transform mr-1" :class="{ 'rotate-90': pastDueExpanded }">▸</span>Past Due<br />Total
+                                <span class="inline-block transition-transform me-1" :class="{ 'rotate-90': pastDueExpanded }">▸</span>{{ $t('Past Due') }}<br />{{ $t('Total') }}
                             </th>
-                            <th rowspan="2" class="px-3 py-2 text-center border-l cvr-border cvr-table-head" style="min-width: 100px">Current Due<br />[{{ agingDate }}]</th>
-                            <th v-if="comingDueExpanded" :colspan="comingDueColumns.length" class="px-2 py-2 text-center border-l cvr-border cvr-table-head cursor-pointer select-none" @click="comingDueExpanded = false" title="Click to collapse Coming Due detail">
-                                <span class="inline-block transition-transform mr-1 rotate-90">▸</span>Coming Due
+                            <th rowspan="2" class="px-3 py-2 text-center border-l cvr-border cvr-table-head" style="min-width: 100px">{{ $t('Current Due') }}<br />[{{ agingDate }}]</th>
+                            <th v-if="comingDueExpanded" :colspan="comingDueColumns.length" class="px-2 py-2 text-center border-l cvr-border cvr-table-head cursor-pointer select-none" @click="comingDueExpanded = false" :title="$t('Click to collapse Coming Due detail')">
+                                <span class="inline-block transition-transform me-1 rotate-90">▸</span>{{ $t('Coming Due') }}
                             </th>
                             <th rowspan="2" class="px-3 py-2 text-center border-l cvr-border cvr-table-head cursor-pointer select-none" style="min-width: 100px" @click="comingDueExpanded = !comingDueExpanded" :title="comingDueExpanded ? 'Click to collapse Coming Due detail' : 'Click to expand Coming Due detail'">
-                                <span class="inline-block transition-transform mr-1" :class="{ 'rotate-90': comingDueExpanded }">▸</span>Coming Due<br />Total
+                                <span class="inline-block transition-transform me-1" :class="{ 'rotate-90': comingDueExpanded }">▸</span>{{ $t('Coming Due') }}<br />{{ $t('Total') }}
                             </th>
-                            <th rowspan="2" class="px-3 py-2 text-center border-l cvr-border cvr-table-head" style="min-width: 110px">Grand Total</th>
+                            <th rowspan="2" class="px-3 py-2 text-center border-l cvr-border cvr-table-head" style="min-width: 110px">{{ $t('Grand Total') }}</th>
                         </tr>
                         <tr>
                             <template v-if="pastDueExpanded">
@@ -287,8 +287,8 @@ function dateRange(kind, interval) {
                     <tbody>
                         <template v-for="client in clientRows" :key="client.name">
                             <tr class="cvr-table-row cursor-pointer" @click="toggleExpand(client.name)">
-                                <td class="px-4 py-2 text-left sticky left-0 z-10 cvr-card-bg cvr-text-primary">
-                                    <span class="cvr-text-muted inline-block mr-1 transition-transform" :class="{ 'rotate-90': expandedClients.has(client.name) }">▸</span>
+                                <td class="px-4 py-2 text-start sticky start-0 z-10 cvr-card-bg cvr-text-primary">
+                                    <span class="cvr-text-muted inline-block me-1 transition-transform" :class="{ 'rotate-90': expandedClients.has(client.name) }">▸</span>
                                     {{ client.name }}
                                 </td>
                                 <template v-if="pastDueExpanded">
@@ -304,8 +304,8 @@ function dateRange(kind, interval) {
                             </tr>
                             <template v-if="expandedClients.has(client.name)">
                                 <tr v-for="invoice in client.invoices" :key="client.name + '-' + invoice.invoice_number" class="cvr-sub-row">
-                                    <td class="px-4 py-1.5 text-left sticky left-0 z-10 cvr-text-secondary text-xs cvr-sub-row-sticky">
-                                        <span class="inline-block pl-4" style="border-left: 2px solid var(--cvr-green-bright)">↳ {{ invoice.invoice_number }}</span>
+                                    <td class="px-4 py-1.5 text-start sticky start-0 z-10 cvr-text-secondary text-xs cvr-sub-row-sticky">
+                                        <span class="inline-block ps-4" style="border-left: 2px solid var(--cvr-green-bright)">↳ {{ invoice.invoice_number }}</span>
                                     </td>
                                     <template v-if="pastDueExpanded">
                                         <td v-for="interval in pastDueColumns" :key="'ipd-'+interval" class="px-2 py-1.5 text-center border-l cvr-border text-xs" :class="cellClass(invoice.past_due[interval], 'past_due')">{{ formatAmount(invoice.past_due[interval]) }}</td>
@@ -321,12 +321,12 @@ function dateRange(kind, interval) {
                             </template>
                         </template>
                         <tr v-if="clientRows.length === 0">
-                            <td :colspan="(pastDueExpanded ? pastDueColumns.length : 0) + (comingDueExpanded ? comingDueColumns.length : 0) + 5" class="px-4 py-8 text-center cvr-text-muted">No outstanding balances found.</td>
+                            <td :colspan="(pastDueExpanded ? pastDueColumns.length : 0) + (comingDueExpanded ? comingDueColumns.length : 0) + 5" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No outstanding balances found.') }}</td>
                         </tr>
                     </tbody>
                     <tfoot v-if="clientRows.length">
                         <tr class="font-semibold" style="background: var(--cvr-green-deep)">
-                            <td class="px-4 py-2 text-left sticky left-0 z-10" style="background: var(--cvr-green-deep)">Total</td>
+                            <td class="px-4 py-2 text-start sticky start-0 z-10" style="background: var(--cvr-green-deep)">{{ $t('Total') }}</td>
                             <template v-if="pastDueExpanded">
                                 <td v-for="interval in pastDueColumns" :key="'tpd-'+interval" class="px-2 py-2 text-center border-l cvr-border cvr-num-red">{{ formatAmount(totalsRow.past_due[interval]) }}</td>
                             </template>

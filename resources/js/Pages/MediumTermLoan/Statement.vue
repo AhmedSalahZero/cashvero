@@ -30,7 +30,7 @@ const props = defineProps({
     navUrls: Object,
 });
 
-const fmt = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+const fmt = (n) => Number(n || 0).toLocaleString('en-EG', { maximumFractionDigits: 0 });
 
 const pct = (paid, due) => {
     const d = Number(due || 0);
@@ -50,7 +50,7 @@ const hasSchedule = computed(() => (props.breakdown || []).length > 0);
         <div class="p-6">
             <div class="flex items-center gap-3 mb-1">
                 <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                    ← Back to Medium Term Loan
+                    {{ $t('← Back to Medium Term Loan') }}
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">MTL Statement — {{ loan.name }}</h1>
@@ -63,18 +63,18 @@ const hasSchedule = computed(() => (props.breakdown || []).length > 0);
             <!-- ── Interest vs Principle: due, paid, remaining ─────────── -->
             <div class="grid gap-4 mb-6" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-3">Interest</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-3">{{ $t('Interest') }}</h2>
                     <div class="space-y-2 text-sm">
                         <div class="flex justify-between">
-                            <span class="cvr-text-muted">Total Due (scheduled)</span>
+                            <span class="cvr-text-muted">{{ $t('Total Due (scheduled)') }}</span>
                             <span class="cvr-num">{{ fmt(totals.interest_due) }}</span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="cvr-text-muted">Paid</span>
+                            <span class="cvr-text-muted">{{ $t('Paid') }}</span>
                             <span class="cvr-num">{{ fmt(totals.interest_paid) }}</span>
                         </div>
                         <div class="flex justify-between font-semibold">
-                            <span class="cvr-text-secondary">Remaining</span>
+                            <span class="cvr-text-secondary">{{ $t('Remaining') }}</span>
                             <span class="cvr-num">{{ fmt(totals.interest_remaining) }}</span>
                         </div>
                     </div>
@@ -85,18 +85,18 @@ const hasSchedule = computed(() => (props.breakdown || []).length > 0);
                 </div>
 
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-3">Principle</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-3">{{ $t('Principle') }}</h2>
                     <div class="space-y-2 text-sm">
                         <div class="flex justify-between">
-                            <span class="cvr-text-muted">Total Due (scheduled)</span>
+                            <span class="cvr-text-muted">{{ $t('Total Due (scheduled)') }}</span>
                             <span class="cvr-num">{{ fmt(totals.principle_due) }}</span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="cvr-text-muted">Paid</span>
+                            <span class="cvr-text-muted">{{ $t('Paid') }}</span>
                             <span class="cvr-num">{{ fmt(totals.principle_paid) }}</span>
                         </div>
                         <div class="flex justify-between font-semibold">
-                            <span class="cvr-text-secondary">Remaining</span>
+                            <span class="cvr-text-secondary">{{ $t('Remaining') }}</span>
                             <span class="cvr-num">{{ fmt(totals.principle_remaining) }}</span>
                         </div>
                     </div>
@@ -107,18 +107,18 @@ const hasSchedule = computed(() => (props.breakdown || []).length > 0);
                 </div>
 
                 <div v-if="loan.is_payable_facility" class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-3">Facility</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-3">{{ $t('Facility') }}</h2>
                     <div class="space-y-2 text-sm">
                         <div class="flex justify-between">
-                            <span class="cvr-text-muted">Limit</span>
+                            <span class="cvr-text-muted">{{ $t('Limit') }}</span>
                             <span class="cvr-num">{{ fmt(loan.limit) }}</span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="cvr-text-muted">Drawn</span>
+                            <span class="cvr-text-muted">{{ $t('Drawn') }}</span>
                             <span class="cvr-num">{{ fmt(loan.drawn) }}</span>
                         </div>
                         <div class="flex justify-between font-semibold">
-                            <span class="cvr-text-secondary">Available Room</span>
+                            <span class="cvr-text-secondary">{{ $t('Available Room') }}</span>
                             <span class="cvr-num">{{ fmt(loan.available_room) }}</span>
                         </div>
                     </div>
@@ -129,38 +129,36 @@ const hasSchedule = computed(() => (props.breakdown || []).length > 0);
                 </div>
 
                 <div v-else class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-3">Facility</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-3">{{ $t('Facility') }}</h2>
                     <p class="text-sm cvr-text-muted">
-                        This is an <strong>existing</strong> loan — it was drawn and spent before joining
-                        CashVero, so there is no drawdown ledger for it. It is repayment-only, and the
-                        interest/principle split above is tracked from its installment schedule.
+                        {{ $t('This is an') }} <strong>{{ $t('existing') }}</strong> {{ $t('loan — it was drawn and spent before joining CashVero, so there is no drawdown ledger for it. It is repayment-only, and the interest/principle split above is tracked from its installment schedule.') }}
                     </p>
                 </div>
             </div>
 
             <!-- ── Per-installment breakdown ───────────────────────────── -->
-            <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-2">Installment Breakdown</h2>
+            <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-2">{{ $t('Installment Breakdown') }}</h2>
             <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden overflow-x-auto mb-8">
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-3 py-3 text-left" rowspan="2">#</th>
-                            <th class="px-3 py-3 text-left" rowspan="2">Date</th>
-                            <th class="px-3 py-3 text-left" rowspan="2">Status</th>
-                            <th class="px-3 py-2 text-center cvr-border border-l" colspan="3">Installment</th>
-                            <th class="px-3 py-2 text-center cvr-border border-l" colspan="3">Interest</th>
-                            <th class="px-3 py-2 text-center cvr-border border-l" colspan="3">Principle</th>
+                            <th class="px-3 py-3 text-start" rowspan="2">#</th>
+                            <th class="px-3 py-3 text-start" rowspan="2">{{ $t('Date') }}</th>
+                            <th class="px-3 py-3 text-start" rowspan="2">{{ $t('Status') }}</th>
+                            <th class="px-3 py-2 text-center cvr-border border-l" colspan="3">{{ $t('Installment') }}</th>
+                            <th class="px-3 py-2 text-center cvr-border border-l" colspan="3">{{ $t('Interest') }}</th>
+                            <th class="px-3 py-2 text-center cvr-border border-l" colspan="3">{{ $t('Principle') }}</th>
                         </tr>
                         <tr>
-                            <th class="px-3 py-2 text-right cvr-border border-l">Due</th>
-                            <th class="px-3 py-2 text-right">Paid</th>
-                            <th class="px-3 py-2 text-right">Left</th>
-                            <th class="px-3 py-2 text-right cvr-border border-l">Due</th>
-                            <th class="px-3 py-2 text-right">Paid</th>
-                            <th class="px-3 py-2 text-right">Left</th>
-                            <th class="px-3 py-2 text-right cvr-border border-l">Due</th>
-                            <th class="px-3 py-2 text-right">Paid</th>
-                            <th class="px-3 py-2 text-right">Left</th>
+                            <th class="px-3 py-2 text-right cvr-border border-l">{{ $t('Due') }}</th>
+                            <th class="px-3 py-2 text-right">{{ $t('Paid') }}</th>
+                            <th class="px-3 py-2 text-right">{{ $t('Left') }}</th>
+                            <th class="px-3 py-2 text-right cvr-border border-l">{{ $t('Due') }}</th>
+                            <th class="px-3 py-2 text-right">{{ $t('Paid') }}</th>
+                            <th class="px-3 py-2 text-right">{{ $t('Left') }}</th>
+                            <th class="px-3 py-2 text-right cvr-border border-l">{{ $t('Due') }}</th>
+                            <th class="px-3 py-2 text-right">{{ $t('Paid') }}</th>
+                            <th class="px-3 py-2 text-right">{{ $t('Left') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -180,13 +178,13 @@ const hasSchedule = computed(() => (props.breakdown || []).length > 0);
                         </tr>
                         <tr v-if="!hasSchedule">
                             <td colspan="12" class="px-4 py-8 text-center cvr-text-muted">
-                                No schedule uploaded for this loan yet.
+                                {{ $t('No schedule uploaded for this loan yet.') }}
                             </td>
                         </tr>
                     </tbody>
                     <tfoot v-if="hasSchedule" class="cvr-table-head font-semibold">
                         <tr>
-                            <td class="px-3 py-3" colspan="3">Total</td>
+                            <td class="px-3 py-3" colspan="3">{{ $t('Total') }}</td>
                             <td class="px-3 py-3 text-right cvr-num cvr-border border-l">{{ fmt(totals.installment_due) }}</td>
                             <td class="px-3 py-3 text-right cvr-num">{{ fmt(totals.installment_paid) }}</td>
                             <td class="px-3 py-3 text-right cvr-num">{{ fmt(totals.installment_remaining) }}</td>
@@ -213,8 +211,8 @@ const hasSchedule = computed(() => (props.breakdown || []).length > 0);
                     <table class="min-w-full text-sm">
                         <thead class="cvr-table-head">
                             <tr>
-                                <th class="px-3 py-3 text-left">Date</th>
-                                <th class="px-3 py-3 text-left">Description</th>
+                                <th class="px-3 py-3 text-start">Date</th>
+                                <th class="px-3 py-3 text-start">Description</th>
                                 <th class="px-3 py-3 text-right">Beginning</th>
                                 <th class="px-3 py-3 text-right">Drawn (Credit)</th>
                                 <th class="px-3 py-3 text-right">Principle (Debit)</th>

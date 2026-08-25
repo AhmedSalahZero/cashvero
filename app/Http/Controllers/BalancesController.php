@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\Company;
+use App\Models\ForeignExchangeRate;
+use App\Models\InternalSettlement;
 use App\Models\MoneyPayment;
 use App\Models\MoneyReceived;
 use App\Models\Partner;
 use App\Models\User;
 use App\Traits\GeneralFunctions;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -131,6 +134,30 @@ class BalancesController
 		$invoicesBalancesForMainFunctionalCurrency = $this->addMainCurrency($invoicesBalances,$downPaymentsInMainCurrency,$partnersWithoutInvoices,$clientNameColumnName,$clientIdColumnName);
 		
 		$invoicesBalances = array_merge($invoicesBalances , $invoicesBalancesForMainFunctionalCurrency);
+
+		/**
+		 * Internal settlements come off the net LAST — deliberately
+		 * after addMainCurrency() has run.
+		 *
+		 * addMainCurrency() builds each partner's main-currency row by
+		 * summing net_balance_in_main_currency off the per-currency
+		 * rows. Subtracting here rather than earlier means those
+		 * per-currency rows are still untouched when it reads them, so
+		 * the main-currency row is adjusted exactly once — by its own
+		 * amount_in_main_currency total — instead of inheriting an
+		 * already-adjusted figure and then being adjusted again.
+		 *
+		 * Doing it before sumNetBalancePerCurrency() is equally
+		 * deliberate: the currency KPI cards at the top of the page and
+		 * the rows underneath them are then the same numbers, which is
+		 * the whole point of the cards.
+		 */
+		$settlementTotals = InternalSettlement::totalsByPartnerAndCurrency(
+			$company->id,
+			array_values(array_unique(array_column($invoicesBalances, $clientIdColumnName)))
+		);
+		$this->applyInternalSettlements($invoicesBalances, $settlementTotals, $clientIdColumnName);
+
 		$cardNetBalances = $this->sumNetBalancePerCurrency($invoicesBalances,$mainFunctionalCurrency,$clientNameColumnName);
 		$hasMoreThanCurrency = isset($cardNetBalances['currencies']) && count($cardNetBalances['currencies']) >1 ;
 
@@ -139,6 +166,49 @@ class BalancesController
 		// see Style Guide §8). This block is purely presentational:
 		// it reshapes the exact same $invoicesBalances / $cardNetBalances
 		// the Blade version already had, nothing above is touched.
+		/**
+		 * Partners who are a customer AND a supplier at the same time —
+		 * the only ones an internal settlement can apply to, since it
+		 * offsets one of their balances against the other. is_customer
+		 * and is_supplier are independent flags, so this is a normal
+		 * situation, not an edge case: a company you both sell to and
+		 * buy from.
+		 */
+		$dualRolePartnerIds = Partner::query()
+			->where('company_id', $company->id)
+			->where('is_customer', 1)
+			->where('is_supplier', 1)
+			->pluck('id')
+			->flip()
+			->toArray();
+
+		/**
+		 * The settlements already recorded, so the modal can show what
+		 * has been settled before rather than only a running total —
+		 * and can take one back if it was entered wrongly.
+		 *
+		 * Only fetched for partners a settlement could apply to at all,
+		 * which on a real page is a small minority of the rows.
+		 */
+		$settlementsByPartnerAndCurrency = [];
+		foreach (InternalSettlement::query()
+			->where('company_id', $company->id)
+			->whereIn('partner_id', array_keys($dualRolePartnerIds))
+			->orderByDesc('settlement_date')
+			->orderByDesc('id')
+			->get() as $settlement) {
+			$settlementsByPartnerAndCurrency[$settlement->partner_id.'|'.$settlement->currency][] = [
+				'id' => $settlement->id,
+				'date' => $settlement->getDate(),
+				'date_formatted' => $settlement->getDateFormatted(),
+				'amount' => $settlement->getAmount(),
+				'user_comment' => $settlement->getUserComment(),
+				'delete_url' => route('delete.internal.settlement', [
+					'company' => $company->id, 'internalSettlement' => $settlement->id,
+				]),
+			];
+		}
+
 		$rowsByCurrency = [];
 		foreach ($invoicesBalances as $row) {
 			$currency = $row->currency;
@@ -151,10 +221,33 @@ class BalancesController
 			if (!$currency) {
 				continue;
 			}
+			$partnerId = (int) $row->{$clientIdColumnName};
+			$isDualRole = isset($dualRolePartnerIds[$partnerId]);
+			$netBalance = (float) $row->net_balance;
+
 			$rowsByCurrency[$currency][] = [
 				'client_id' => $row->{$clientIdColumnName},
 				'client_name' => $row->{$clientNameColumnName},
 				'currency' => $currency,
+				// How much of this balance has already been offset
+				// against the same partner's other side. Its own column
+				// so the net stays auditable: invoices − down payments
+				// − internal settlements = net balance.
+				'internal_settlements' => (float) ($row->internal_settlement_amount ?? 0),
+				'is_dual_role' => $isDualRole,
+				/**
+				 * Whether a NEW settlement can be recorded on this row.
+				 *
+				 * - main_currency is a computed roll-up across every
+				 *   currency, not a balance that exists anywhere — an
+				 *   offset has to be booked in a real currency.
+				 * - Nothing left owed means nothing left to offset. The
+				 *   server re-checks this on save (see
+				 *   storeInternalSettlement); this only decides whether
+				 *   the button is worth showing.
+				 */
+				'can_settle' => $isDualRole && $currency !== 'main_currency' && $netBalance > 0,
+				'settlements' => $settlementsByPartnerAndCurrency[$partnerId.'|'.$currency] ?? [],
 				// The two halves of net_balance, shown as their own columns so
 				// the number is auditable instead of just asserted.
 				'invoices' => (float) ($row->invoices_amount ?? 0),
@@ -213,6 +306,16 @@ class BalancesController
 		return Inertia::render('Balances/Index', [
 			'company' => ['id' => $company->id],
 			'modelType' => $modelType,
+			/**
+			 * A settlement is always entered from the CUSTOMER side —
+			 * "he owes us 10,000, how much of it do we hand back to him
+			 * as a supplier". The Suppliers Balances page still shows
+			 * the resulting column, because its own Net Balance moved
+			 * too and an unexplained drop is worse than a read-only
+			 * column; it just cannot start one.
+			 */
+			'canSettleInternally' => $modelType === 'CustomerInvoice' && hasAuthFor('customer_balance.settle'),
+			'storeInternalSettlementUrl' => route('store.internal.settlement', ['company' => $company->id]),
 			'title' => $title,
 			'customersOrSupplierText' => $customersOrSupplierText,
 			'customersOrSupplierStatementText' => $customersOrSupplierStatementText,
@@ -220,6 +323,169 @@ class BalancesController
 			'currencyCards' => $currencyCards,
 		]);
     }
+	/**
+	 * Takes each partner's internal settlements off their net balance,
+	 * and records the amount taken off as its own figure on the row.
+	 *
+	 * Rows are mutated in place, the same way subtractQuery() applies
+	 * down payments, so every consumer downstream — the rows, the
+	 * currency cards, the totals — sees one consistent number.
+	 *
+	 * A main_currency row is matched on the 'main_currency' key rather
+	 * than on a currency, because it stands for every currency at once;
+	 * see InternalSettlement::totalsByPartnerAndCurrency().
+	 *
+	 * @param  array<int, \stdClass>  $invoicesBalances
+	 * @param  array<string, float>  $settlementTotals
+	 */
+	protected function applyInternalSettlements(array $invoicesBalances, array $settlementTotals, string $clientIdColumnName): void
+	{
+		foreach ($invoicesBalances as $row) {
+			$row->internal_settlement_amount = 0;
+
+			if (! $row->currency) {
+				continue;
+			}
+
+			$settled = $settlementTotals[$row->{$clientIdColumnName}.'|'.$row->currency] ?? 0;
+
+			if (! $settled) {
+				continue;
+			}
+
+			$row->internal_settlement_amount = $settled;
+			$row->net_balance = $row->net_balance - $settled;
+		}
+	}
+
+	/**
+	 * What is genuinely left to offset for one partner, in one
+	 * currency, right now.
+	 *
+	 * This is the cap. It is computed here from the source tables
+	 * rather than trusted from the page, because the page's number was
+	 * true when it was rendered and a second tab, or a colleague, may
+	 * have settled against the same balance since.
+	 *
+	 * The three terms are exactly the three the balances page shows,
+	 * in the same order:
+	 *   invoices − down payments − already settled = net balance
+	 */
+	protected function customerBalanceAvailableToSettle(Company $company, int $partnerId, string $currency): float
+	{
+		$invoices = (float) DB::table('customer_invoices')
+			->where('company_id', $company->id)
+			->where('customer_id', $partnerId)
+			->where('currency', $currency)
+			->sum('net_balance');
+
+		$downPayments = (float) DB::table('down_payment_settlements')
+			->where('company_id', $company->id)
+			->where('customer_id', $partnerId)
+			->where('currency', $currency)
+			->sum('down_payment_balance');
+
+		$alreadySettled = InternalSettlement::totalFor($company->id, $partnerId, $currency);
+
+		return round($invoices - $downPayments - $alreadySettled, 2);
+	}
+
+	/**
+	 * Records one internal settlement.
+	 *
+	 * The partner must be a customer AND a supplier — the whole point
+	 * is that the two balances belong to the same person, so there is
+	 * no second party for the money to move to. Both checks are made
+	 * here and not only in the UI: the amount decides what two
+	 * statements say afterwards.
+	 */
+	public function storeInternalSettlement(Request $request, Company $company)
+	{
+		$validated = $request->validate([
+			'partner_id' => ['required', 'integer'],
+			'currency' => ['required', 'string'],
+			'settlement_date' => ['required', 'date'],
+			'amount' => ['required', 'numeric', 'gt:0'],
+			'user_comment' => ['nullable', 'string'],
+		]);
+
+		$partner = Partner::where('company_id', $company->id)->find($validated['partner_id']);
+
+		if (! $partner || ! $partner->isCustomer() || ! $partner->isSupplier()) {
+			return redirect()->back()->with('fail', __('An internal settlement is only possible for a partner who is both a customer and a supplier.'));
+		}
+
+		/**
+		 * main_currency is a roll-up of every currency, not a balance
+		 * anyone holds — there is no single rate an offset booked
+		 * against it could be unwound at later.
+		 */
+		if ($validated['currency'] === 'main_currency') {
+			return redirect()->back()->with('fail', __('Please record the settlement in the currency it is owed in.'));
+		}
+
+		$available = $this->customerBalanceAvailableToSettle($company, (int) $partner->id, $validated['currency']);
+		$amount = round((float) $validated['amount'], 2);
+
+		if ($available <= 0) {
+			return redirect()->back()->with('fail', __('This customer has no remaining balance to settle.'));
+		}
+
+		if ($amount > $available) {
+			return redirect()->back()->with('fail', __('The settlement cannot exceed the customer balance of :balance :currency.', [
+				'balance' => number_format($available, 2),
+				'currency' => $validated['currency'],
+			]));
+		}
+
+		$mainCurrency = $company->getMainFunctionalCurrency();
+		/**
+		 * Stamped now, from the settlement's own date — so the
+		 * main-currency view keeps reading the rate that applied when
+		 * the offset was agreed, however rates move afterwards.
+		 */
+		$exchangeRate = $validated['currency'] === $mainCurrency
+			? 1
+			: (float) ForeignExchangeRate::getExchangeRateForCurrencyAndClosestDate(
+				$validated['currency'], $mainCurrency, $validated['settlement_date'], $company->id
+			);
+		$exchangeRate = $exchangeRate > 0 ? $exchangeRate : 1;
+
+		InternalSettlement::create([
+			'company_id' => $company->id,
+			'partner_id' => $partner->id,
+			'currency' => $validated['currency'],
+			'settlement_date' => Carbon::make($validated['settlement_date'])->format('Y-m-d'),
+			'amount' => $amount,
+			'exchange_rate' => $exchangeRate,
+			'amount_in_main_currency' => round($amount * $exchangeRate, 2),
+			'user_comment' => $validated['user_comment'] ?? null,
+			'created_by' => $request->user()?->id,
+			'updated_by' => $request->user()?->id,
+		]);
+
+		return redirect()->back()->with('success', __('Internal Settlement Saved Successfully'));
+	}
+
+	/**
+	 * Takes a settlement back.
+	 *
+	 * Deleting the row is the whole reversal: both balances and both
+	 * statements are derived from this table, so removing it restores
+	 * each side to exactly what it was — no compensating entry to get
+	 * wrong.
+	 */
+	public function destroyInternalSettlement(Company $company, InternalSettlement $internalSettlement)
+	{
+		if ((int) $internalSettlement->company_id !== (int) $company->id) {
+			abort(403);
+		}
+
+		$internalSettlement->delete();
+
+		return redirect()->back()->with('success', __('Internal Settlement Deleted Successfully'));
+	}
+
 	protected function getDownPaymentInMainCurrency(array $partnerIds,string $mainFunctionalCurrency,string $clientIdColumnName,string $downPaymentSettlementModelName , string $moneyModelName,Company $company):array{
 		$result = [];
 		$fullDownPaymentModelName = 'App\Models\\'.$downPaymentSettlementModelName;

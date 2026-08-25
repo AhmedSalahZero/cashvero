@@ -179,6 +179,56 @@ trait HasBalances
 				$tempArr[$index] = $currentData ;
 			}
 		}
+		/**
+		 * Internal settlements — the same partner offset against
+		 * themselves (see App\Models\InternalSettlement).
+		 *
+		 * One stored row produces a line on BOTH statements, which is
+		 * what makes the offset explainable from either side:
+		 *   - customer statement: a CREDIT, they owe us that much less
+		 *   - supplier statement: a DEBIT, we owe them that much less
+		 * That is the same debit/credit convention this method already
+		 * uses for a collection and a payment respectively, so the
+		 * running balance treats it exactly like the settlement it
+		 * stands in for.
+		 *
+		 * The main-currency view reads the amount converted at the rate
+		 * stamped on the settlement's own date, not today's — same
+		 * reasoning as everything else on this statement.
+		 */
+		foreach (\App\Models\InternalSettlement::query()
+			->where('company_id', getCurrentCompanyId())
+			->where('partner_id', $partnerId)
+			->when(!$isMainCurrency, fn ($q) => $q->where('currency', $currency))
+			->whereBetween('settlement_date', [$startDate, $endDate])
+			->get() as $internalSettlement) {
+			$settlementAmount = $isMainCurrency
+				? $internalSettlement->getAmountInMainCurrency()
+				: $internalSettlement->getAmount();
+
+			if (!$settlementAmount) {
+				continue;
+			}
+
+			$currentData = [];
+			$currentData['date'] = $internalSettlement->getDateFormatted();
+			$currentData['document_type'] = \App\Models\InternalSettlement::documentType();
+			$currentData['document_no'] = null;
+			$currentData['debit'] = $isCustomer ? 0 : $settlementAmount;
+			$currentData['credit'] = $isCustomer ? $settlementAmount : 0;
+			$currentData['comment'] = trim(
+				\App\Models\InternalSettlement::statementComment($isCustomer)
+				. ($internalSettlement->getUserComment() ? ' — ' . $internalSettlement->getUserComment() : '')
+			);
+
+			$index++ ;
+			if($isNotBegBalance){
+				$formattedData[] = $currentData ;
+			}else{
+				$tempArr[] = $currentData ;
+			}
+		}
+
 		$partnerType = $modelType =='SupplierInvoice' ? 'is_supplier' : 'is_customer' ;
 		$allMoneyModels =  $fullMoneyModelName::
 		where('company_id',getCurrentCompanyId())

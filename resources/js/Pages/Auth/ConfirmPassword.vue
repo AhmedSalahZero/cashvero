@@ -31,7 +31,7 @@ const showPassword = ref(false);
 </script>
 
 <template>
-    <Head title="Confirm Password — CashVero" />
+    <Head :title="$t('Confirm Password — CashVero')" />
     <AuthLayout>
         <div v-if="Object.keys(form.errors).length" class="zav-alert zav-alert-danger" role="alert">
             <ul>
@@ -40,14 +40,14 @@ const showPassword = ref(false);
         </div>
 
         <div class="zav-form-header">
-            <h2 class="zav-welcome">Confirm your password</h2>
+            <h2 class="zav-welcome">{{ $t('Confirm your password') }}</h2>
             <div class="zav-welcome-line"></div>
-            <p class="zav-welcome-sub">For your security, please confirm your password to continue</p>
+            <p class="zav-welcome-sub">{{ $t('For your security, please confirm your password to continue') }}</p>
         </div>
 
         <form class="zav-form" @submit.prevent="submit">
             <div class="zav-field">
-                <label class="zav-label" for="password">Password</label>
+                <label class="zav-label" for="password">{{ $t('Password') }}</label>
                 <div class="zav-input-wrap">
                     <input
                         id="password"
@@ -74,7 +74,7 @@ const showPassword = ref(false);
             </div>
 
             <button type="submit" class="zav-btn-submit" :disabled="form.processing">
-                {{ form.processing ? 'Confirming…' : 'Confirm Password' }}
+                {{ form.processing ? $t('Confirming…') : $t('Confirm Password') }}
             </button>
         </form>
     </AuthLayout>

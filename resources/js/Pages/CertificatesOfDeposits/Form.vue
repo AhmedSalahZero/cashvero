@@ -94,11 +94,11 @@ function submit() {
         <div class="p-6">
             <div class="flex items-center gap-3 mb-1">
                 <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                    ← Back to Certificates Of Deposit
+                    {{ $t('← Back to Certificates Of Deposit') }}
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">
-                {{ isEdit ? 'Edit' : 'Add' }} Certificate Of Deposit
+                {{ isEdit ? $t('Edit') : $t('Add') }} Certificate Of Deposit
             </h1>
             <p class="text-sm cvr-text-muted mb-6">{{ financialInstitution.name }}</p>
 
@@ -106,20 +106,20 @@ function submit() {
 
             <form @submit.prevent="submit" class="space-y-6">
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Main Information</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Main Information') }}</h2>
 
                     <div class="cvr-form-grid-3">
                         <div>
-                            <label class="cvr-form-label">Financial Institution Name</label>
+                            <label class="cvr-form-label">{{ $t('Financial Institution Name') }}</label>
                             <input disabled :value="financialInstitution.name" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Account Number *</label>
+                            <label class="cvr-form-label">{{ $t('Account Number') }} *</label>
                             <input v-model="form.account_number" type="text" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('account_number')" class="text-xs mt-1 cvr-num-red">{{ errorFor('account_number') }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Currency</label>
+                            <label class="cvr-form-label">{{ $t('Currency') }}</label>
                             <select v-model="form.currency" class="cvr-input w-full px-3 py-2 rounded">
                                 <option v-for="(label, code) in currencies" :key="code" :value="code">{{ label }}</option>
                             </select>
@@ -130,44 +130,44 @@ function submit() {
                              — matches the original blade exactly (no `required`
                              attribute, no asterisk there). -->
                         <div v-if="hasOdooIntegration">
-                            <label class="cvr-form-label">Odoo Code</label>
+                            <label class="cvr-form-label">{{ $t('Odoo Code') }}</label>
                             <input v-model="form.odoo_code" type="text" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
 
                         <div>
-                            <label class="cvr-form-label">Deducted From Account #</label>
+                            <label class="cvr-form-label">{{ $t('Deducted From Account #') }}</label>
                             <select v-model="form.deducted_from_account_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option :value="0">Opening Balance</option>
+                                <option :value="0">{{ $t('Opening Balance') }}</option>
                                 <option v-for="a in deductedFromOptions" :key="a.id" :value="a.id">{{ a.account_number }}</option>
                             </select>
                         </div>
 
                         <div>
-                            <label class="cvr-form-label">Start Date *</label>
+                            <label class="cvr-form-label">{{ $t('Start Date') }} *</label>
                             <input v-model="form.start_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">End Date *</label>
+                            <label class="cvr-form-label">{{ $t('End Date') }} *</label>
                             <input v-model="form.end_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('end_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('end_date') }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Amount *</label>
+                            <label class="cvr-form-label">{{ $t('Amount') }} *</label>
                             <input v-model="form.amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
 
                         <div>
-                            <label class="cvr-form-label">Interest Rate (%) *</label>
+                            <label class="cvr-form-label">{{ $t('Interest Rate (%)') }} *</label>
                             <input v-model="form.interest_rate" type="number" step="0.01" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Interest Amount [At Maturity]</label>
+                            <label class="cvr-form-label">{{ $t('Interest Amount [At Maturity]') }}</label>
                             <input :value="form.interest_amount" readonly class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Add Maturity Amount To Account *</label>
+                            <label class="cvr-form-label">{{ $t('Add Maturity Amount To Account') }} *</label>
                             <select v-model="form.maturity_amount_added_to_account_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="" disabled>Select</option>
+                                <option value="" disabled>{{ $t('Select') }}</option>
                                 <option v-for="a in maturityAccountOptions" :key="a.id" :value="a.id">{{ a.account_number }}</option>
                             </select>
                         </div>
@@ -181,24 +181,24 @@ function submit() {
                     </div>
 
                     <div class="mt-4">
-                        <label class="cvr-form-label mb-2 block">Interest Amount Interval</label>
+                        <label class="cvr-form-label mb-2 block">{{ $t('Interest Amount Interval') }}</label>
                         <div class="flex items-center gap-6">
                             <label class="flex items-center gap-2 cvr-text-primary text-sm">
                                 <input type="radio" :value="true" v-model="form.is_at_maturity" />
-                                At Maturity
+                                {{ $t('At Maturity') }}
                             </label>
                             <label class="flex items-center gap-2 cvr-text-primary text-sm">
                                 <input type="radio" :value="false" v-model="form.is_at_maturity" />
-                                Periodically (biweekly / monthly / quarterly / etc.)
+                                {{ $t('Periodically (biweekly / monthly / quarterly / etc.)') }}
                             </label>
                         </div>
                     </div>
                 </div>
 
                 <div class="flex justify-end gap-2">
-                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">Cancel</Link>
+                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">{{ $t('Cancel') }}</Link>
                     <button type="submit" :disabled="submitting" class="cvr-btn-primary px-4 py-2 rounded">
-                        {{ submitting ? 'Saving...' : 'Save' }}
+                        {{ submitting ? $t('Saving...') : $t('Save') }}
                     </button>
                 </div>
             </form>

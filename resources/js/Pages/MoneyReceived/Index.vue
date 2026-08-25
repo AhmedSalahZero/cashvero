@@ -240,7 +240,7 @@ function submitApplyCollection() {
 <template>
     <AppLayout>
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Money Received</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Money Received') }}</h1>
             <p class="text-sm cvr-text-blue mb-6">{{ company.name }}</p>
 
             <!-- KPI cards (active tab) -->
@@ -248,15 +248,15 @@ function submitApplyCollection() {
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">📄</div>
                     <div>
-                        <p class="cvr-kpi-label">Records</p>
+                        <p class="cvr-kpi-label">{{ $t('Records') }}</p>
                         <p class="cvr-kpi-value">{{ currentTab.totalCount }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-green">💰</div>
                     <div>
-                        <p class="cvr-kpi-label">Total Amount</p>
-                        <p class="cvr-kpi-value">{{ Number(currentTab.totalAmount || 0).toLocaleString() }}</p>
+                        <p class="cvr-kpi-label">{{ $t('Total Amount') }}</p>
+                        <p class="cvr-kpi-value">{{ Number(currentTab.totalAmount || 0).toLocaleString('en-EG') }}</p>
                     </div>
                 </div>
             </div>
@@ -276,10 +276,10 @@ function submitApplyCollection() {
                 </div>
                 <div v-if="permissions.canCreate" class="flex items-center gap-2">
                     <Link :href="urls.createMoneyReceived" class="cvr-btn-copper px-3 py-1.5 rounded text-sm inline-flex items-center gap-1">
-                        + Money Received
+                        {{ $t('+ Money Received') }}
                     </Link>
                     <Link :href="urls.createDownPayment" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm inline-flex items-center gap-1">
-                        + Down Payment
+                        {{ $t('+ Down Payment') }}
                     </Link>
                 </div>
             </div>
@@ -287,30 +287,30 @@ function submitApplyCollection() {
             <!-- Date range + Filter -->
             <div class="flex flex-wrap items-end gap-3 mb-4">
                 <div>
-                    <label class="cvr-form-label">Start Date</label>
+                    <label class="cvr-form-label">{{ $t('Start Date') }}</label>
                     <input v-model="fromDate" type="date" class="cvr-input px-3 py-2 rounded" />
                 </div>
                 <div>
-                    <label class="cvr-form-label">End Date</label>
+                    <label class="cvr-form-label">{{ $t('End Date') }}</label>
                     <input v-model="toDate" type="date" class="cvr-input px-3 py-2 rounded" />
                 </div>
-                <button @click="applyDateFilter" class="cvr-btn-secondary px-3 py-2 rounded border text-sm">Submit</button>
+                <button @click="applyDateFilter" class="cvr-btn-secondary px-3 py-2 rounded border text-sm">{{ $t('Submit') }}</button>
 
-                <button @click="showFilter = !showFilter" class="cvr-btn-secondary px-3 py-2 rounded border text-sm ml-auto">
-                    🔍 Filter
+                <button @click="showFilter = !showFilter" class="cvr-btn-secondary px-3 py-2 rounded border text-sm ms-auto">
+                    {{ $t('🔍 Filter') }}
                 </button>
             </div>
 
             <div v-if="showFilter" class="cvr-card-bg cvr-border border rounded-lg p-4 mb-4 cvr-form-grid-4">
                 <div>
-                    <label class="cvr-form-label">Field Name</label>
+                    <label class="cvr-form-label">{{ $t('Field Name') }}</label>
                     <select v-model="filterField" class="cvr-input w-full px-3 py-2 rounded">
-                        <option value="">Select</option>
+                        <option value="">{{ $t('Select') }}</option>
                         <option v-for="(label, key) in currentTab.searchFields" :key="key" :value="key">{{ label }}</option>
                     </select>
                 </div>
                 <div v-if="!isDateField">
-                    <label class="cvr-form-label">Search Text</label>
+                    <label class="cvr-form-label">{{ $t('Search Text') }}</label>
                     <input v-model="filterValue" type="text" class="cvr-input w-full px-3 py-2 rounded" />
                 </div>
                 <template v-else>
@@ -324,8 +324,8 @@ function submitApplyCollection() {
                     </div>
                 </template>
                 <div class="flex items-end gap-2">
-                    <button @click="applySearch" class="cvr-btn-primary px-3 py-2 rounded text-sm">Search</button>
-                    <button @click="resetSearch" class="cvr-btn-secondary px-3 py-2 rounded border text-sm">Reset</button>
+                    <button @click="applySearch" class="cvr-btn-primary px-3 py-2 rounded text-sm">{{ $t('Search') }}</button>
+                    <button @click="resetSearch" class="cvr-btn-secondary px-3 py-2 rounded border text-sm">{{ $t('Reset') }}</button>
                 </div>
             </div>
 
@@ -346,72 +346,72 @@ function submitApplyCollection() {
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th v-if="hasBatchCollection" class="px-4 py-3 text-left">Select</th>
-                            <th class="px-4 py-3 text-left">Type</th>
-                            <th class="px-4 py-3 text-left">Customer Name</th>
+                            <th v-if="hasBatchCollection" class="px-4 py-3 text-start">{{ $t('Select') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Type') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Customer Name') }}</th>
 
                             <template v-if="['cheque', 'cheque-rejected'].includes(activeTab)">
-                                <th class="px-4 py-3 text-left">Receiving Date</th>
-                                <th class="px-4 py-3 text-left">Cheque Number</th>
-                                <th class="px-4 py-3 text-left">Cheque Amount</th>
-                                <th class="px-4 py-3 text-left">Currency</th>
-                                <th class="px-4 py-3 text-left">Drawee Bank</th>
-                                <th class="px-4 py-3 text-left">Due Date</th>
-                                <th v-if="activeTab === 'cheque'" class="px-4 py-3 text-left">Due After Days</th>
-                                <th class="px-4 py-3 text-left">Status</th>
+                                <th class="px-4 py-3 text-start">Receiving Date</th>
+                                <th class="px-4 py-3 text-start">Cheque Number</th>
+                                <th class="px-4 py-3 text-start">Cheque Amount</th>
+                                <th class="px-4 py-3 text-start">Currency</th>
+                                <th class="px-4 py-3 text-start">Drawee Bank</th>
+                                <th class="px-4 py-3 text-start">Due Date</th>
+                                <th v-if="activeTab === 'cheque'" class="px-4 py-3 text-start">Due After Days</th>
+                                <th class="px-4 py-3 text-start">Status</th>
                             </template>
 
                             <template v-else-if="activeTab === 'cheque-under-collection'">
-                                <th class="px-4 py-3 text-left">Cheque Number</th>
-                                <th class="px-4 py-3 text-left">Cheque Amount</th>
-                                <th class="px-4 py-3 text-left">Deposit Date</th>
-                                <th class="px-4 py-3 text-left">Drawal Bank</th>
-                                <th class="px-4 py-3 text-left">Account Type</th>
-                                <th class="px-4 py-3 text-left">Account Number</th>
-                                <th class="px-4 py-3 text-left">Cheque Due Date</th>
-                                <th class="px-4 py-3 text-left">Clearance Days</th>
-                                <th class="px-4 py-3 text-left">Expected Collection Date</th>
-                                <th class="px-4 py-3 text-left">Status</th>
+                                <th class="px-4 py-3 text-start">Cheque Number</th>
+                                <th class="px-4 py-3 text-start">Cheque Amount</th>
+                                <th class="px-4 py-3 text-start">Deposit Date</th>
+                                <th class="px-4 py-3 text-start">Drawal Bank</th>
+                                <th class="px-4 py-3 text-start">Account Type</th>
+                                <th class="px-4 py-3 text-start">Account Number</th>
+                                <th class="px-4 py-3 text-start">Cheque Due Date</th>
+                                <th class="px-4 py-3 text-start">Clearance Days</th>
+                                <th class="px-4 py-3 text-start">Expected Collection Date</th>
+                                <th class="px-4 py-3 text-start">Status</th>
                             </template>
 
                             <template v-else-if="activeTab === 'cheque-collected'">
-                                <th class="px-4 py-3 text-left">Cheque Number</th>
-                                <th class="px-4 py-3 text-left">Cheque Amount</th>
-                                <th class="px-4 py-3 text-left">Due Date</th>
-                                <th class="px-4 py-3 text-left">Deposit Date</th>
-                                <th class="px-4 py-3 text-left">Drawal Bank</th>
-                                <th class="px-4 py-3 text-left">Account Type</th>
-                                <th class="px-4 py-3 text-left">Account Number</th>
-                                <th class="px-4 py-3 text-left">Actual Collection Date</th>
+                                <th class="px-4 py-3 text-start">Cheque Number</th>
+                                <th class="px-4 py-3 text-start">Cheque Amount</th>
+                                <th class="px-4 py-3 text-start">Due Date</th>
+                                <th class="px-4 py-3 text-start">Deposit Date</th>
+                                <th class="px-4 py-3 text-start">Drawal Bank</th>
+                                <th class="px-4 py-3 text-start">Account Type</th>
+                                <th class="px-4 py-3 text-start">Account Number</th>
+                                <th class="px-4 py-3 text-start">Actual Collection Date</th>
                             </template>
 
                             <template v-else-if="activeTab === 'incoming-transfer'">
-                                <th class="px-4 py-3 text-left">Receiving Date</th>
-                                <th class="px-4 py-3 text-left">Receiving Bank</th>
-                                <th class="px-4 py-3 text-left">Transfer Amount</th>
-                                <th class="px-4 py-3 text-left">Currency</th>
-                                <th class="px-4 py-3 text-left">Account Type</th>
-                                <th class="px-4 py-3 text-left">Account Number</th>
+                                <th class="px-4 py-3 text-start">Receiving Date</th>
+                                <th class="px-4 py-3 text-start">Receiving Bank</th>
+                                <th class="px-4 py-3 text-start">Transfer Amount</th>
+                                <th class="px-4 py-3 text-start">Currency</th>
+                                <th class="px-4 py-3 text-start">Account Type</th>
+                                <th class="px-4 py-3 text-start">Account Number</th>
                             </template>
 
                             <template v-else-if="activeTab === 'cash-in-safe'">
-                                <th class="px-4 py-3 text-left">Receiving Date</th>
-                                <th class="px-4 py-3 text-left">Branch</th>
-                                <th class="px-4 py-3 text-left">Received Amount</th>
-                                <th class="px-4 py-3 text-left">Currency</th>
-                                <th class="px-4 py-3 text-left">Receipt Number</th>
+                                <th class="px-4 py-3 text-start">Receiving Date</th>
+                                <th class="px-4 py-3 text-start">Branch</th>
+                                <th class="px-4 py-3 text-start">Received Amount</th>
+                                <th class="px-4 py-3 text-start">Currency</th>
+                                <th class="px-4 py-3 text-start">Receipt Number</th>
                             </template>
 
                             <template v-else-if="activeTab === 'cash-in-bank'">
-                                <th class="px-4 py-3 text-left">Receiving Date</th>
-                                <th class="px-4 py-3 text-left">Receiving Bank</th>
-                                <th class="px-4 py-3 text-left">Deposit Amount</th>
-                                <th class="px-4 py-3 text-left">Currency</th>
-                                <th class="px-4 py-3 text-left">Account Type</th>
-                                <th class="px-4 py-3 text-left">Account Number</th>
+                                <th class="px-4 py-3 text-start">Receiving Date</th>
+                                <th class="px-4 py-3 text-start">Receiving Bank</th>
+                                <th class="px-4 py-3 text-start">Deposit Amount</th>
+                                <th class="px-4 py-3 text-start">Currency</th>
+                                <th class="px-4 py-3 text-start">Account Type</th>
+                                <th class="px-4 py-3 text-start">Account Number</th>
                             </template>
 
-                            <th class="px-4 py-3 text-left">Control</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Control') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -489,9 +489,9 @@ function submitApplyCollection() {
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-1 flex-wrap">
                                     <RecordLogButton subject="MoneyReceived" :id="row.id" :company-id="company.id" />
-                                    <button v-if="row.has_comment" @click="commentTarget = row" class="cvr-action-btn" title="User Comment">💬</button>
-                                    <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Odoo Error">🐞</button>
-                                    <button v-if="row.is_fully_integrated_with_odoo" @click="integratedTarget = row" class="cvr-action-btn" title="Fully Integrated">👍</button>
+                                    <button v-if="row.has_comment" @click="commentTarget = row" class="cvr-action-btn" :title="$t('User Comment')">💬</button>
+                                    <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Odoo Error')">🐞</button>
+                                    <button v-if="row.is_fully_integrated_with_odoo" @click="integratedTarget = row" class="cvr-action-btn" :title="$t('Fully Integrated')">👍</button>
 
                                     <!-- Cheques In Safe -->
                                     <template v-if="activeTab === 'cheque'">
@@ -529,7 +529,7 @@ function submitApplyCollection() {
                         </tr>
                         <tr v-if="rows.length === 0">
                             <td colspan="14" class="px-4 py-8 text-center cvr-text-muted">
-                                No records found for this tab.
+                                {{ $t('No records found for this tab.') }}
                             </td>
                         </tr>
                     </tbody>
@@ -552,10 +552,10 @@ function submitApplyCollection() {
             <!-- Delete confirmation -->
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Do you want to delete this item?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to delete this item?') }}</h2>
                     <div class="flex justify-end gap-2">
-                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Delete</button>
+                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>
@@ -563,10 +563,10 @@ function submitApplyCollection() {
             <!-- User comment -->
             <div v-if="commentTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-md">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">User Comment</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('User Comment') }}</h2>
                     <p class="cvr-text-secondary mb-4">{{ commentTarget.user_comment }}</p>
                     <div class="flex justify-end">
-                        <button @click="commentTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                        <button @click="commentTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
                     </div>
                 </div>
             </div>
@@ -574,11 +574,11 @@ function submitApplyCollection() {
             <!-- Odoo error -->
             <div v-if="odooErrorTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-lg">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Odoo Error</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Odoo Error') }}</h2>
                     <p class="cvr-text-secondary mb-4">{{ odooErrorTarget.odoo_error }}</p>
                     <div class="flex justify-end gap-2">
-                        <button @click="odooErrorTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="resendOdoo" class="cvr-btn-primary px-3 py-1.5 rounded">Resend</button>
+                        <button @click="odooErrorTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="resendOdoo" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Resend') }}</button>
                     </div>
                 </div>
             </div>
@@ -586,12 +586,12 @@ function submitApplyCollection() {
             <!-- Odoo references -->
             <div v-if="integratedTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-md">
-                    <h2 class="text-lg font-medium cvr-text-blue mb-4">Odoo References</h2>
+                    <h2 class="text-lg font-medium cvr-text-blue mb-4">{{ $t('Odoo References') }}</h2>
                     <ul class="list-disc list-inside cvr-text-secondary mb-4">
                         <li v-for="(ref, i) in integratedTarget.odoo_reference_names" :key="i">{{ ref }}</li>
                     </ul>
                     <div class="flex justify-end">
-                        <button @click="integratedTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                        <button @click="integratedTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
                     </div>
                 </div>
             </div>
@@ -600,52 +600,52 @@ function submitApplyCollection() {
             <div v-if="collectionTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-6xl">
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">
-                        Send {{ collectionTarget.ids.length > 1 ? 'these cheques' : 'this cheque' }} to under collection?
+                        Send {{ collectionTarget.ids.length > 1 ? $t('these cheques') : $t('this cheque') }} to under collection?
                     </h2>
                     <div class="cvr-form-grid-3 mb-4">
                         <div>
-                            <label class="cvr-form-label">Cheque Deposit Date *</label>
+                            <label class="cvr-form-label">{{ $t('Cheque Deposit Date') }} *</label>
                             <input v-model="collectionForm.deposit_date" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="depositDateWarning" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ depositDateWarning }}</p>
                             <p v-else-if="errors.deposit_date" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.deposit_date }}</p>
                         </div>
                         <div class="col-span-2">
-                            <label class="cvr-form-label">Drawal Bank *</label>
+                            <label class="cvr-form-label">{{ $t('Drawal Bank') }} *</label>
                             <select v-model="collectionForm.drawl_bank_id" @change="onCollectionAccountTypeChange" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="bank in [...financialInstitutionBanks].sort((a, b) => a.name.localeCompare(b.name))" :key="bank.id" :value="bank.id">{{ bank.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Account Type *</label>
+                            <label class="cvr-form-label">{{ $t('Account Type') }} *</label>
                             <select v-model="collectionForm.account_type" @change="onCollectionAccountTypeChange" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="type in accountTypes" :key="type.id" :value="type.id">{{ type.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Account Number *</label>
+                            <label class="cvr-form-label">{{ $t('Account Number') }} *</label>
                             <select v-model="collectionForm.account_number" @change="onCollectionAccountNumberChange" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="num in collectionAccountNumbers" :key="num.value" :value="num.value">{{ num.label }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Balance <span class="cvr-text-muted text-xs">{{ collectionBalance.balance_date }}</span></label>
+                            <label class="cvr-form-label">{{ $t('Balance') }} <span class="cvr-text-muted text-xs">{{ collectionBalance.balance_date }}</span></label>
                             <input disabled :value="collectionBalance.balance" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Net Balance <span class="cvr-text-muted text-xs">{{ collectionBalance.net_balance_date }}</span></label>
+                            <label class="cvr-form-label">{{ $t('Net Balance') }} <span class="cvr-text-muted text-xs">{{ collectionBalance.net_balance_date }}</span></label>
                             <input disabled :value="collectionBalance.net_balance" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Clearance Days *</label>
+                            <label class="cvr-form-label">{{ $t('Clearance Days') }} *</label>
                             <input v-model="collectionForm.clearance_days" type="number" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
                     <div class="flex justify-end gap-2">
-                        <button @click="collectionTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="submitSendToCollection" :disabled="!!depositDateWarning" class="cvr-btn-primary px-3 py-1.5 rounded" :class="{ 'opacity-40 cursor-not-allowed': depositDateWarning }">Confirm</button>
+                        <button @click="collectionTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="submitSendToCollection" :disabled="!!depositDateWarning" class="cvr-btn-primary px-3 py-1.5 rounded" :class="{ 'opacity-40 cursor-not-allowed': depositDateWarning }">{{ $t('Confirm') }}</button>
                     </div>
                 </div>
             </div>
@@ -653,32 +653,32 @@ function submitApplyCollection() {
             <!-- Apply Collection -->
             <div v-if="applyCollectionTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-lg">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Mark this cheque as collected?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Mark this cheque as collected?') }}</h2>
                     <div class="cvr-form-grid-2 mb-4">
                         <div>
-                            <label class="cvr-form-label">Customer Name</label>
+                            <label class="cvr-form-label">{{ $t('Customer Name') }}</label>
                             <input disabled :value="applyCollectionTarget.customer_name" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Cheque Number</label>
+                            <label class="cvr-form-label">{{ $t('Cheque Number') }}</label>
                             <input disabled :value="applyCollectionTarget.cheque_number" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Cheque Amount</label>
+                            <label class="cvr-form-label">{{ $t('Cheque Amount') }}</label>
                             <input disabled :value="applyCollectionTarget.received_amount_formatted" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Due Date</label>
+                            <label class="cvr-form-label">{{ $t('Due Date') }}</label>
                             <input disabled :value="applyCollectionTarget.due_date_formatted" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div class="col-span-2">
-                            <label class="cvr-form-label">Collection Date *</label>
+                            <label class="cvr-form-label">{{ $t('Collection Date') }} *</label>
                             <input v-model="applyCollectionDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
                     <div class="flex justify-end gap-2">
-                        <button @click="applyCollectionTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="submitApplyCollection" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
+                        <button @click="applyCollectionTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="submitApplyCollection" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Confirm') }}</button>
                     </div>
                 </div>
             </div>

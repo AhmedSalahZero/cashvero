@@ -55,32 +55,32 @@ function submit() {
 <template>
     <AppLayout>
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Safe Statement</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Safe Statement') }}</h1>
             <p class="text-sm cvr-text-muted mb-6">
-                A transaction-by-transaction ledger for the cash held in one branch's safe, for a chosen date range.
+                {{ $t('A transaction-by-transaction ledger for the cash held in one branch\'s safe, for a chosen date range.') }}
             </p>
 
             <div class="cvr-card-bg cvr-border border rounded-lg p-5">
                 <div class="cvr-form-grid-4">
                     <div>
-                        <label class="cvr-form-label">Start Date *</label>
+                        <label class="cvr-form-label">{{ $t('Start Date') }} *</label>
                         <input v-model="startDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">End Date *</label>
+                        <label class="cvr-form-label">{{ $t('End Date') }} *</label>
                         <input v-model="endDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">Currency *</label>
+                        <label class="cvr-form-label">{{ $t('Currency') }} *</label>
                         <select v-model="currency" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="" disabled>Select currency</option>
+                            <option value="" disabled>{{ $t('Select currency') }}</option>
                             <option v-for="(label, code) in currencies" :key="code" :value="code">{{ String(label).toUpperCase() }}</option>
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Safe *</label>
+                        <label class="cvr-form-label">{{ $t('Safe') }} *</label>
                         <select v-model="branchId" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="" disabled>Select Safe</option>
+                            <option value="" disabled>{{ $t('Select Safe') }}</option>
                             <option v-for="(name, id) in branches" :key="id" :value="id">{{ name }}</option>
                         </select>
                     </div>
@@ -92,7 +92,7 @@ function submit() {
                     class="cvr-btn-primary px-4 py-1.5 rounded text-sm mt-5"
                     :class="{ 'opacity-40 cursor-not-allowed': !canSubmit }"
                 >
-                    View Statement
+                    {{ $t('View Statement') }}
                 </button>
             </div>
         </div>

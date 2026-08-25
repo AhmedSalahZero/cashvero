@@ -262,14 +262,14 @@ function submitAllocations() {
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">📄</div>
                     <div>
-                        <p class="cvr-kpi-label">Contracts</p>
+                        <p class="cvr-kpi-label">{{ $t('Contracts') }}</p>
                         <p class="cvr-kpi-value">{{ totalCount }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-copper">🧾</div>
                     <div>
-                        <p class="cvr-kpi-label">{{ type === 'Supplier' ? 'Purchase Orders' : 'Sales Orders' }}</p>
+                        <p class="cvr-kpi-label">{{ type === $t('Supplier') ? $t('Purchase Orders') : $t('Sales Orders') }}</p>
                         <p class="cvr-kpi-value">{{ totalOrders }}</p>
                     </div>
                 </div>
@@ -289,15 +289,15 @@ function submitAllocations() {
                     </button>
                 </div>
                 <Link v-if="canCreate" :href="createUrl" class="cvr-btn-copper px-3 py-1.5 rounded text-sm inline-flex items-center gap-1">
-                    + Create
+                    {{ $t('+ Create') }}
                 </Link>
             </div>
 
             <!-- Search -->
             <div class="flex flex-wrap items-end gap-3 mb-4">
-                <div class="cvr-search-bar flex items-center gap-2 px-3 py-1.5 ml-auto w-full sm:w-72 max-w-full">
+                <div class="cvr-search-bar flex items-center gap-2 px-3 py-1.5 ms-auto w-full sm:w-72 max-w-full">
                     <span class="cvr-text-muted text-sm">🔍</span>
-                    <input v-model="search" type="text" placeholder="Search partner, contract name, or code..." class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
+                    <input v-model="search" type="text" :placeholder="$t('Search partner, contract name, or code...')" class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
                 </div>
             </div>
 
@@ -306,20 +306,20 @@ function submitAllocations() {
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-4 py-3 text-left">Partner Name</th>
-                            <th class="px-4 py-3 text-left">Contract Name</th>
-                            <th class="px-4 py-3 text-left">Contract Code</th>
-                            <th class="px-4 py-3 text-left">Start Date</th>
-                            <th class="px-4 py-3 text-left">End Date</th>
-                            <th class="px-4 py-3 text-left">Amount</th>
-                            <th class="px-4 py-3 text-left">Actions</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Partner Name') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Contract Name') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Contract Code') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Start Date') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('End Date') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Amount') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
                         <template v-for="row in filteredRows" :key="row.id">
                             <tr class="cvr-table-row">
                                 <td class="px-4 py-3 cvr-text-primary cursor-pointer" @click="toggleExpand(row.id)">
-                                    <span v-if="row.sub_items.length" class="mr-1">{{ expandedIds.has(row.id) ? '▾' : '▸' }}</span>
+                                    <span v-if="row.sub_items.length" class="me-1">{{ expandedIds.has(row.id) ? '▾' : '▸' }}</span>
                                     <span class="font-medium">{{ row.client_name }}</span>
                                 </td>
                                 <td class="px-4 py-3 cvr-text-secondary">{{ row.name }}</td>
@@ -386,7 +386,7 @@ function submitAllocations() {
                                                 <button @click="toggle" class="cvr-tag">Options ▾</button>
                                             </template>
                                             <template #content>
-                                                <button @click="confirmDelete(row)" class="block w-full text-left px-3 py-2 text-xs cvr-dropdown-item">
+                                                <button @click="confirmDelete(row)" class="block w-full text-start px-3 py-2 text-xs cvr-dropdown-item">
                                                     Delete
                                                 </button>
                                             </template>
@@ -398,7 +398,7 @@ function submitAllocations() {
                             <!-- Sales/Purchase Order sub-rows -->
                             <template v-if="expandedIds.has(row.id)">
                                 <tr v-for="subItem in row.sub_items" :key="'sub-' + subItem.id" class="cvr-table-row bg-black/5">
-                                    <td class="px-4 py-2 pl-10 cvr-text-muted text-xs" colspan="2">{{ subItem.order_label }}</td>
+                                    <td class="px-4 py-2 ps-10 cvr-text-muted text-xs" colspan="2">{{ subItem.order_label }}</td>
                                     <td class="px-4 py-2 cvr-text-secondary text-xs">{{ subItem.order_number }}</td>
                                     <td class="px-4 py-2 cvr-text-muted text-xs">Amount</td>
                                     <td class="px-4 py-2 cvr-num text-xs" colspan="2">{{ subItem.amount_formatted }}</td>
@@ -432,10 +432,10 @@ function submitAllocations() {
             <!-- Delete confirmation -->
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Do you want to delete this contract?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to delete this contract?') }}</h2>
                     <div class="flex justify-end gap-2">
-                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Delete</button>
+                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>
@@ -447,8 +447,8 @@ function submitAllocations() {
                         Do you want to mark this contract as {{ statusChangeTarget.label }}?
                     </h2>
                     <div class="flex justify-end gap-2">
-                        <button @click="statusChangeTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="submitStatusChange" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
+                        <button @click="statusChangeTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="submitStatusChange" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Confirm') }}</button>
                     </div>
                 </div>
             </div>
@@ -467,14 +467,14 @@ function submitAllocations() {
                         <table class="min-w-full text-xs">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-3 py-2 text-left">Supplier Name</th>
-                                    <th class="px-3 py-2 text-left">Contract Name</th>
-                                    <th class="px-3 py-2 text-left">Contract Code</th>
-                                    <th class="px-3 py-2 text-left">Purchase Order Number</th>
-                                    <th class="px-3 py-2 text-left">Start Date</th>
-                                    <th class="px-3 py-2 text-left">End Date</th>
-                                    <th class="px-3 py-2 text-left">Currency</th>
-                                    <th class="px-3 py-2 text-right">Amount</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Supplier Name') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Contract Name') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Contract Code') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Purchase Order Number') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Start Date') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('End Date') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Currency') }}</th>
+                                    <th class="px-3 py-2 text-right">{{ $t('Amount') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -497,7 +497,7 @@ function submitAllocations() {
                                     :key="total.currency"
                                     class="cvr-table-head font-semibold"
                                 >
-                                    <td class="px-3 py-2" colspan="6">Total</td>
+                                    <td class="px-3 py-2" colspan="6">{{ $t('Total') }}</td>
                                     <td class="px-3 py-2 uppercase">{{ total.currency }}</td>
                                     <td class="px-3 py-2 text-right cvr-num whitespace-nowrap">{{ total.total_formatted }}</td>
                                 </tr>
@@ -505,7 +505,7 @@ function submitAllocations() {
                         </table>
                     </div>
                     <div class="flex justify-end mt-4">
-                        <button @click="relatedContractsTarget = null" class="cvr-btn-primary px-3 py-1.5 rounded">Close</button>
+                        <button @click="relatedContractsTarget = null" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Close') }}</button>
                     </div>
                 </div>
             </div>
@@ -523,18 +523,18 @@ function submitAllocations() {
                     <table class="min-w-full text-xs">
                         <thead class="cvr-table-head">
                             <tr>
-                                <th class="px-3 py-2 text-left">Invoice Date</th>
-                                <th class="px-3 py-2 text-left">Invoice Number</th>
-                                <th class="px-3 py-2 text-left">Currency</th>
-                                <th class="px-3 py-2 text-left">Amount</th>
-                                <th class="px-3 py-2 text-left">Withhold</th>
-                                <th class="px-3 py-2 text-left">VAT</th>
-                                <th class="px-3 py-2 text-left">Deductions</th>
-                                <th class="px-3 py-2 text-left">Collected</th>
-                                <th class="px-3 py-2 text-left">Due Date</th>
-                                <th class="px-3 py-2 text-left">Net Balance</th>
-                                <th class="px-3 py-2 text-left">Status</th>
-                                <th class="px-3 py-2 text-left">Aging</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Invoice Date') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Invoice Number') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Currency') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Amount') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Withhold') }}</th>
+                                <th class="px-3 py-2 text-start">VAT</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Deductions') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Collected') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Due Date') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Net Balance') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Status') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Aging') }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -546,7 +546,7 @@ function submitAllocations() {
                                     {{ invoice.amount_formatted }}
                                     <i v-if="invoice.is_foreign_currency"
                                         @click="openFxBreakdown(invoice)"
-                                        class="ml-1 cursor-pointer" title="Exchange Rate Breakdown">ℹ️</i>
+                                        class="ms-1 cursor-pointer" :title="$t('Exchange Rate Breakdown')">ℹ️</i>
                                 </td>
                                 <td class="px-3 py-2 cvr-num">{{ invoice.withhold_amount_formatted }}</td>
                                 <td class="px-3 py-2 cvr-num">{{ invoice.vat_amount_formatted }}</td>
@@ -558,12 +558,12 @@ function submitAllocations() {
                                 <td class="px-3 py-2">{{ invoice.aging }}</td>
                             </tr>
                             <tr v-if="!invoicesTarget.invoices.length">
-                                <td colspan="12" class="px-3 py-6 text-center cvr-text-muted">No invoices under this contract.</td>
+                                <td colspan="12" class="px-3 py-6 text-center cvr-text-muted">{{ $t('No invoices under this contract.') }}</td>
                             </tr>
                         </tbody>
                     </table>
                     <div class="flex justify-end mt-4">
-                        <button @click="invoicesTarget = null" class="cvr-btn-primary px-3 py-1.5 rounded">Close</button>
+                        <button @click="invoicesTarget = null" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Close') }}</button>
                     </div>
                 </div>
             </div>
@@ -576,17 +576,17 @@ function submitAllocations() {
                     <table class="min-w-full text-sm mb-4">
                         <tbody>
                             <tr class="cvr-table-row">
-                                <td class="px-3 py-2 cvr-text-secondary">Amount In Main Currency</td>
+                                <td class="px-3 py-2 cvr-text-secondary">{{ $t('Amount In Main Currency') }}</td>
                                 <td class="px-3 py-2 text-right cvr-num font-medium">{{ fxBreakdownTarget.amount_in_main_currency_formatted }}</td>
                             </tr>
                             <tr class="cvr-table-row">
-                                <td class="px-3 py-2 cvr-text-secondary">Exchange Rate</td>
+                                <td class="px-3 py-2 cvr-text-secondary">{{ $t('Exchange Rate') }}</td>
                                 <td class="px-3 py-2 text-right cvr-num font-medium">{{ fxBreakdownTarget.exchange_rate_formatted }}</td>
                             </tr>
                         </tbody>
                     </table>
                     <div class="flex justify-end">
-                        <button @click="fxBreakdownTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                        <button @click="fxBreakdownTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
                     </div>
                 </div>
             </div>
@@ -604,12 +604,12 @@ function submitAllocations() {
                     <table class="min-w-full text-xs mb-3">
                         <thead class="cvr-table-head">
                             <tr>
-                                <th class="px-2 py-2 text-left">Customer</th>
-                                <th class="px-2 py-2 text-left">Contract</th>
-                                <th class="px-2 py-2 text-left">Code</th>
-                                <th class="px-2 py-2 text-left">Contract Amount</th>
-                                <th class="px-2 py-2 text-left">Allocate %</th>
-                                <th class="px-2 py-2 text-left">Allocate Amount</th>
+                                <th class="px-2 py-2 text-start">{{ $t('Customer') }}</th>
+                                <th class="px-2 py-2 text-start">{{ $t('Contract') }}</th>
+                                <th class="px-2 py-2 text-start">{{ $t('Code') }}</th>
+                                <th class="px-2 py-2 text-start">{{ $t('Contract Amount') }}</th>
+                                <th class="px-2 py-2 text-start">{{ $t('Allocate %') }}</th>
+                                <th class="px-2 py-2 text-start">{{ $t('Allocate Amount') }}</th>
                                 <th class="px-2 py-2"></th>
                             </tr>
                         </thead>
@@ -617,13 +617,13 @@ function submitAllocations() {
                             <tr v-for="(row, index) in allocationRows" :key="index" class="cvr-table-row">
                                 <td class="px-2 py-2">
                                     <select v-model="row.partner_id" @change="onPartnerChange(row)" class="cvr-input px-2 py-1 rounded w-full">
-                                        <option value="">Select customer...</option>
+                                        <option value="">{{ $t('Select customer...') }}</option>
                                         <option v-for="client in clientsWithContracts" :key="client.id" :value="client.id">{{ client.name }}</option>
                                     </select>
                                 </td>
                                 <td class="px-2 py-2">
                                     <select v-model="row.contract_id" @change="onContractChange(row)" class="cvr-input px-2 py-1 rounded w-full" :disabled="!row.partner_id">
-                                        <option value="">Select contract...</option>
+                                        <option value="">{{ $t('Select contract...') }}</option>
                                         <option v-for="c in (contractsByPartner[row.partner_id] || [])" :key="c.id" :value="c.id">{{ c.name }}</option>
                                     </select>
                                 </td>
@@ -643,12 +643,12 @@ function submitAllocations() {
                     </table>
 
                     <button @click="addAllocationRow" class="cvr-btn-secondary px-3 py-1.5 rounded border text-xs mb-4">
-                        + Add Row
+                        {{ $t('+ Add Row') }}
                     </button>
 
                     <div class="flex justify-end gap-2">
-                        <button @click="closeAllocationModal" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="submitAllocations" class="cvr-btn-primary px-3 py-1.5 rounded">Save Allocations</button>
+                        <button @click="closeAllocationModal" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="submitAllocations" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Save Allocations') }}</button>
                     </div>
                 </div>
             </div>

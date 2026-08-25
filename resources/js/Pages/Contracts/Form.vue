@@ -217,52 +217,52 @@ function submit() {
             <form @submit.prevent="submit" class="space-y-6">
                 <!-- Contract Information -->
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Contract Information</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Contract Information') }}</h2>
 
                     <div class="cvr-form-grid-3">
                         <div>
-                            <label class="cvr-form-label">Name *</label>
+                            <label class="cvr-form-label">{{ $t('Name') }} *</label>
                             <input v-model="form.name" type="text" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('name')" class="text-xs mt-1 cvr-num-red">{{ errorFor('name') }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Code *</label>
+                            <label class="cvr-form-label">{{ $t('Code') }} *</label>
                             <input v-model="form.code" type="text" :readonly="isEdit" class="cvr-input w-full px-3 py-2 rounded" :class="{ 'opacity-70': isEdit }" />
                             <p v-if="errorFor('code')" class="text-xs mt-1 cvr-num-red">{{ errorFor('code') }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Partner Name *</label>
+                            <label class="cvr-form-label">{{ $t('Partner Name') }} *</label>
                             <select v-model="form.partner_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select...</option>
+                                <option value="">{{ $t('Select...') }}</option>
                                 <option v-for="c in localClients" :key="c.id" :value="c.id">{{ c.name }}</option>
                             </select>
                             <p v-if="errorFor('partner_id')" class="text-xs mt-1 cvr-num-red">{{ errorFor('partner_id') }}</p>
                         </div>
 
                         <div>
-                            <label class="cvr-form-label">Start Date *</label>
+                            <label class="cvr-form-label">{{ $t('Start Date') }} *</label>
                             <input v-model="form.start_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('start_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('start_date') }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">End Date *</label>
+                            <label class="cvr-form-label">{{ $t('End Date') }} *</label>
                             <input v-model="form.end_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('end_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('end_date') }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Amount *</label>
+                            <label class="cvr-form-label">{{ $t('Amount') }} *</label>
                             <input v-model="form.amount" type="number" step="0.01" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('amount')" class="text-xs mt-1 cvr-num-red">{{ errorFor('amount') }}</p>
                         </div>
 
                         <div>
-                            <label class="cvr-form-label">Currency *</label>
+                            <label class="cvr-form-label">{{ $t('Currency') }} *</label>
                             <select v-model="form.currency" class="cvr-input w-full px-3 py-2 rounded">
                                 <option v-for="(label, code) in currencies" :key="code" :value="code">{{ label }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Exchange Rate *</label>
+                            <label class="cvr-form-label">{{ $t('Exchange Rate') }} *</label>
                             <input v-model="form.exchange_rate" type="number" step="0.0001" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
@@ -272,7 +272,7 @@ function submit() {
                         <label class="flex items-start gap-2 cursor-pointer">
                             <input v-model="form.is_monthly_executed" type="checkbox" class="mt-0.5" />
                             <span>
-                                <span class="text-sm cvr-text-primary">Monthly Executed</span>
+                                <span class="text-sm cvr-text-primary">{{ $t('Monthly Executed') }}</span>
                                 <span class="block text-xs cvr-text-muted mt-0.5">
                                     The contract value is executed evenly across its own period instead of through
                                     {{ salesOrderOrPurchaseNumberText }}s. The cash flow report pays out one slice per
@@ -282,11 +282,11 @@ function submit() {
                         </label>
 
                         <p v-if="isMonthlyExecuted && contractMonths" class="text-xs cvr-num-green mt-2 ms-6">
-                            {{ contractMonths }} month<span v-if="contractMonths !== 1">s</span> ·
+                            {{ contractMonths }} month<span v-if="contractMonths !== 1">{{ $t('s') }}</span> ·
                             {{ monthlyAmount.toFixed(2) }} {{ form.currency }} per month
                         </p>
                         <p v-else-if="isMonthlyExecuted" class="text-xs cvr-num-amber mt-2 ms-6">
-                            Set a Start Date and an End Date to see the monthly amount.
+                            {{ $t('Set a Start Date and an End Date to see the monthly amount.') }}
                         </p>
                     </div>
                 </div>
@@ -303,9 +303,9 @@ function submit() {
                     <table class="min-w-full text-sm mb-3">
                         <thead class="cvr-table-head">
                             <tr>
-                                <th class="px-3 py-2 text-left">{{ salesOrderOrPurchaseNumberText }}</th>
-                                <th class="px-3 py-2 text-left">Amount</th>
-                                <th class="px-3 py-2 text-left">Execution Details</th>
+                                <th class="px-3 py-2 text-start">{{ salesOrderOrPurchaseNumberText }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Amount') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Execution Details') }}</th>
                                 <th class="px-3 py-2"></th>
                             </tr>
                         </thead>
@@ -319,7 +319,7 @@ function submit() {
                                 </td>
                                 <td class="px-3 py-2">
                                     <button type="button" @click="openExecutionModal(index)" class="cvr-btn-secondary px-2 py-1.5 rounded border text-xs">
-                                        Insert Execution Details
+                                        {{ $t('Insert Execution Details') }}
                                     </button>
                                 </td>
                                 <td class="px-3 py-2">
@@ -335,9 +335,9 @@ function submit() {
                 </div>
 
                 <div class="flex justify-end gap-2">
-                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">Cancel</Link>
+                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">{{ $t('Cancel') }}</Link>
                     <button type="submit" :disabled="submitting" class="cvr-btn-primary px-4 py-2 rounded">
-                        {{ submitting ? 'Saving...' : 'Save' }}
+                        {{ submitting ? $t('Saving...') : $t('Save') }}
                     </button>
                 </div>
             </form>
@@ -347,7 +347,7 @@ function submit() {
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-5xl max-h-[85vh] overflow-y-auto">
                     <div class="flex items-center justify-between mb-1">
                         <h2 class="text-lg font-medium cvr-text-primary">
-                            Execution Details — {{ orders[executionModalIndex].number || '(unnamed order)' }}
+                            Execution Details — {{ orders[executionModalIndex].number || $t('(unnamed order)') }}
                         </h2>
                         <button @click="closeExecutionModal" class="cvr-btn-secondary px-2 py-1 rounded border text-xs">✕</button>
                     </div>
@@ -358,11 +358,11 @@ function submit() {
                     <table class="min-w-full text-xs">
                         <thead class="cvr-table-head">
                             <tr>
-                                <th class="px-2 py-2 text-left">Execution %</th>
-                                <th class="px-2 py-2 text-left">Amount</th>
-                                <th class="px-2 py-2 text-left">Start Date</th>
-                                <th class="px-2 py-2 text-left">End Date</th>
-                                <th class="px-2 py-2 text-left">Collection Days</th>
+                                <th class="px-2 py-2 text-start">{{ $t('Execution %') }}</th>
+                                <th class="px-2 py-2 text-start">{{ $t('Amount') }}</th>
+                                <th class="px-2 py-2 text-start">{{ $t('Start Date') }}</th>
+                                <th class="px-2 py-2 text-start">{{ $t('End Date') }}</th>
+                                <th class="px-2 py-2 text-start">{{ $t('Collection Days') }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -387,7 +387,7 @@ function submit() {
                     </table>
 
                     <div class="flex justify-end mt-4">
-                        <button @click="closeExecutionModal" class="cvr-btn-primary px-3 py-1.5 rounded">Save</button>
+                        <button @click="closeExecutionModal" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Save') }}</button>
                     </div>
                 </div>
             </div>

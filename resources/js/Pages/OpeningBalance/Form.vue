@@ -163,16 +163,16 @@ function fieldError(group, index, field) {
     <AppLayout>
         <div class="p-6">
             <Link :href="backUrl" class="cvr-back-link inline-flex items-center gap-1 text-xs cvr-text-muted mb-4">
-                ← Back to Cash in Safe &amp; Cheque Balance
+                {{ $t('← Back to Cash in Safe & Cheque Balance') }}
             </Link>
 
             <div class="flex items-center gap-3 mb-6">
                 <div class="cvr-avatar" style="width: 3rem; height: 3rem; font-size: 1.1rem;">🗄️</div>
                 <div>
                     <h1 class="text-xl font-semibold cvr-text-primary">
-                        {{ isEdit ? 'Manage Opening Balance' : 'Set Up Opening Balance' }}
+                        {{ isEdit ? $t('Manage Opening Balance') : $t('Set Up Opening Balance') }}
                     </h1>
-                    <p class="text-sm cvr-text-muted">Cash in safe, cheques in safe, cheques under collection, and payable cheques</p>
+                    <p class="text-sm cvr-text-muted">{{ $t('Cash in safe, cheques in safe, cheques under collection, and payable cheques') }}</p>
                 </div>
             </div>
 
@@ -181,7 +181,7 @@ function fieldError(group, index, field) {
                 class="mb-5 px-4 py-3 rounded-lg text-sm"
                 style="background: var(--cvr-danger-bg); border: 1px solid var(--cvr-danger-border); color: var(--cvr-danger-text);"
             >
-                <p class="font-medium mb-1">⚠ Please fix the following:</p>
+                <p class="font-medium mb-1">{{ $t('⚠ Please fix the following:') }}</p>
                 <p v-for="(msg, field) in errors" :key="field">{{ msg }}</p>
             </div>
 
@@ -189,11 +189,11 @@ function fieldError(group, index, field) {
             <div class="cvr-card mb-6">
                 <div class="flex items-center gap-2 mb-3">
                     <span class="text-base">📅</span>
-                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">Opening Balance Date</h2>
+                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">{{ $t('Opening Balance Date') }}</h2>
                 </div>
                 <div class="max-w-xs">
                     <input v-model="date" type="date" readonly disabled class="cvr-input w-full px-3 py-2 rounded-lg text-sm cvr-text-muted cursor-not-allowed" />
-                    <p class="text-xs mt-1 cvr-text-muted">Set on the company itself — this date can only be changed by editing the company.</p>
+                    <p class="text-xs mt-1 cvr-text-muted">{{ $t('Set on the company itself — this date can only be changed by editing the company.') }}</p>
                 </div>
             </div>
 
@@ -202,24 +202,24 @@ function fieldError(group, index, field) {
                 <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center gap-2">
                         <span class="text-base">🗄️</span>
-                        <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">Cash In Safe Opening Balance</h2>
+                        <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">{{ $t('Cash In Safe Opening Balance') }}</h2>
                     </div>
-                    <button type="button" @click="addCashInSafe" class="cvr-btn-secondary px-3 py-1.5 rounded-lg border text-sm">+ Add Row</button>
+                    <button type="button" @click="addCashInSafe" class="cvr-btn-secondary px-3 py-1.5 rounded-lg border text-sm">{{ $t('+ Add Row') }}</button>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full text-sm">
                         <thead class="cvr-table-head">
                             <tr>
-                                <th class="px-3 py-2 text-left">Branch</th>
-                                <th class="px-3 py-2 text-left">Amount</th>
-                                <th class="px-3 py-2 text-left">Currency</th>
-                                <th class="px-3 py-2 text-left">Exchange Rate</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Branch') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Amount') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Currency') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Exchange Rate') }}</th>
                                 <th class="px-3 py-2"></th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-if="cashInSafe.length === 0">
-                                <td colspan="5" class="px-4 py-6 text-center cvr-text-muted">No cash in safe rows. Click "+ Add Row" if there are any.</td>
+                                <td colspan="5" class="px-4 py-6 text-center cvr-text-muted">{{ $t('No cash in safe rows. Click "+ Add Row" if there are any.') }}</td>
                             </tr>
                             <tr v-for="(row, i) in cashInSafe" :key="row._key" class="cvr-table-row">
                                 <td class="px-3 py-2">
@@ -242,7 +242,7 @@ function fieldError(group, index, field) {
                                     <input v-model="row.exchange_rate" type="number" step="0.0001" class="cvr-input px-2 py-1.5 rounded text-sm w-24" />
                                 </td>
                                 <td class="px-3 py-2 text-center">
-                                    <button type="button" @click="removeCashInSafe(row._key)" class="cvr-action-btn cvr-action-btn-danger" title="Remove">🗑</button>
+                                    <button type="button" @click="removeCashInSafe(row._key)" class="cvr-action-btn cvr-action-btn-danger" :title="$t('Remove')">🗑</button>
                                 </td>
                             </tr>
                         </tbody>
@@ -255,27 +255,27 @@ function fieldError(group, index, field) {
                 <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center gap-2">
                         <span class="text-base">📄</span>
-                        <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">Cheque In Safe Opening Balance</h2>
+                        <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">{{ $t('Cheque In Safe Opening Balance') }}</h2>
                     </div>
-                    <button type="button" @click="addCheque" class="cvr-btn-secondary px-3 py-1.5 rounded-lg border text-sm">+ Add Row</button>
+                    <button type="button" @click="addCheque" class="cvr-btn-secondary px-3 py-1.5 rounded-lg border text-sm">{{ $t('+ Add Row') }}</button>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full text-sm">
                         <thead class="cvr-table-head">
                             <tr>
-                                <th class="px-3 py-2 text-left">Customer</th>
-                                <th class="px-3 py-2 text-left">Currency</th>
-                                <th class="px-3 py-2 text-left">Due Date</th>
-                                <th class="px-3 py-2 text-left">Drawee Bank</th>
-                                <th class="px-3 py-2 text-left">Amount</th>
-                                <th class="px-3 py-2 text-left">Cheque #</th>
-                                <th class="px-3 py-2 text-left">Exchange Rate</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Customer') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Currency') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Due Date') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Drawee Bank') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Amount') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Cheque #') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Exchange Rate') }}</th>
                                 <th class="px-3 py-2"></th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-if="cheque.length === 0">
-                                <td colspan="8" class="px-4 py-6 text-center cvr-text-muted">No cheques in safe. Click "+ Add Row" if there are any.</td>
+                                <td colspan="8" class="px-4 py-6 text-center cvr-text-muted">{{ $t('No cheques in safe. Click "+ Add Row" if there are any.') }}</td>
                             </tr>
                             <tr v-for="(row, i) in cheque" :key="row._key" class="cvr-table-row">
                                 <td class="px-3 py-2">
@@ -307,7 +307,7 @@ function fieldError(group, index, field) {
                                     <input v-model="row.exchange_rate" type="number" step="0.0001" class="cvr-input px-2 py-1.5 rounded text-sm w-24" />
                                 </td>
                                 <td class="px-3 py-2 text-center">
-                                    <button type="button" @click="removeCheque(row._key)" class="cvr-action-btn cvr-action-btn-danger" title="Remove">🗑</button>
+                                    <button type="button" @click="removeCheque(row._key)" class="cvr-action-btn cvr-action-btn-danger" :title="$t('Remove')">🗑</button>
                                 </td>
                             </tr>
                         </tbody>
@@ -320,80 +320,80 @@ function fieldError(group, index, field) {
                 <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center gap-2">
                         <span class="text-base">⏳</span>
-                        <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">Cheque Under Collection Opening Balance</h2>
+                        <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">{{ $t('Cheque Under Collection Opening Balance') }}</h2>
                     </div>
-                    <button type="button" @click="addChequeUnderCollection" class="cvr-btn-secondary px-3 py-1.5 rounded-lg border text-sm">+ Add Row</button>
+                    <button type="button" @click="addChequeUnderCollection" class="cvr-btn-secondary px-3 py-1.5 rounded-lg border text-sm">{{ $t('+ Add Row') }}</button>
                 </div>
-                <p v-if="chequeUnderCollection.length === 0" class="text-sm cvr-text-muted py-4 text-center cvr-card-bg cvr-border border rounded-lg">No cheques under collection. Click "+ Add Row" if there are any.</p>
+                <p v-if="chequeUnderCollection.length === 0" class="text-sm cvr-text-muted py-4 text-center cvr-card-bg cvr-border border rounded-lg">{{ $t('No cheques under collection. Click "+ Add Row" if there are any.') }}</p>
                 <div class="space-y-3">
                     <div v-for="(row, i) in chequeUnderCollection" :key="row._key" class="cvr-card-bg cvr-border border rounded-lg p-3">
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div>
-                                <label class="cvr-form-label">Customer</label>
+                                <label class="cvr-form-label">{{ $t('Customer') }}</label>
                                 <select v-model="row.customer_id" class="cvr-input w-full px-2 py-1.5 rounded text-sm">
                                     <option v-for="c in customers" :key="c.id" :value="c.id">{{ c.name }}</option>
                                 </select>
-                                <p v-if="fieldError('cheque-under-collection', i, 'customer_id')" class="text-xs mt-0.5" style="color: var(--cvr-danger-text);">{{ fieldError('cheque-under-collection', i, 'customer_id') }}</p>
+                                <p v-if="fieldError('cheque-under-collection', i, 'customer_id')" class="text-xs mt-0.5" style="color: var(--cvr-danger-text);">{{ fieldError($t('cheque-under-collection'), i, 'customer_id') }}</p>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Currency</label>
+                                <label class="cvr-form-label">{{ $t('Currency') }}</label>
                                 <select v-model="row.currency" class="cvr-input w-full px-2 py-1.5 rounded text-sm">
                                     <option v-for="[code, label] in currencyOptions" :key="code" :value="code">{{ label }}</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Due Date</label>
+                                <label class="cvr-form-label">{{ $t('Due Date') }}</label>
                                 <input v-model="row.due_date" type="date" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Drawee Bank</label>
+                                <label class="cvr-form-label">{{ $t('Drawee Bank') }}</label>
                                 <select v-model="row.drawee_bank_id" class="cvr-input w-full px-2 py-1.5 rounded text-sm">
                                     <option v-for="b in draweeBanks" :key="b.id" :value="b.id">{{ b.name }}</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Amount</label>
+                                <label class="cvr-form-label">{{ $t('Amount') }}</label>
                                 <input v-model="row.received_amount" type="number" step="0.01" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Cheque #</label>
+                                <label class="cvr-form-label">{{ $t('Cheque #') }}</label>
                                 <input v-model="row.cheque_number" type="text" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Exchange Rate</label>
+                                <label class="cvr-form-label">{{ $t('Exchange Rate') }}</label>
                                 <input v-model="row.exchange_rate" type="number" step="0.0001" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Deposit Date</label>
+                                <label class="cvr-form-label">{{ $t('Deposit Date') }}</label>
                                 <input v-model="row.deposit_date" type="date" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Drawal Bank</label>
+                                <label class="cvr-form-label">{{ $t('Drawal Bank') }}</label>
                                 <select v-model="row.drawl_bank_id" class="cvr-input w-full px-2 py-1.5 rounded text-sm" @change="row.account_number = ''">
                                     <option v-for="b in financialInstitutionBanks" :key="b.id" :value="b.id">{{ b.name }}</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Account Type</label>
+                                <label class="cvr-form-label">{{ $t('Account Type') }}</label>
                                 <select v-model="row.account_type" class="cvr-input w-full px-2 py-1.5 rounded text-sm" @change="row.account_number = ''">
-                                    <option value="">Select</option>
+                                    <option value="">{{ $t('Select') }}</option>
                                     <option v-for="t in accountTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Account Number</label>
+                                <label class="cvr-form-label">{{ $t('Account Number') }}</label>
                                 <select v-model="row.account_number" class="cvr-input w-full px-2 py-1.5 rounded text-sm">
-                                    <option value="">Select</option>
+                                    <option value="">{{ $t('Select') }}</option>
                                     <option v-for="a in accountNumberOptions(row.drawl_bank_id, row.account_type)" :key="a.account_number" :value="a.account_number">{{ a.account_number }}</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Clearance Days</label>
+                                <label class="cvr-form-label">{{ $t('Clearance Days') }}</label>
                                 <input v-model="row.clearance_days" type="number" min="0" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                         </div>
                         <div class="flex justify-end mt-3">
-                            <button type="button" @click="removeChequeUnderCollection(row._key)" class="cvr-btn-remove-row">🗑 Remove Row</button>
+                            <button type="button" @click="removeChequeUnderCollection(row._key)" class="cvr-btn-remove-row">{{ $t('🗑 Remove Row') }}</button>
                         </div>
                     </div>
                 </div>
@@ -404,75 +404,75 @@ function fieldError(group, index, field) {
                 <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center gap-2">
                         <span class="text-base">💸</span>
-                        <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">Payable Cheques Opening Balance</h2>
+                        <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">{{ $t('Payable Cheques Opening Balance') }}</h2>
                     </div>
-                    <button type="button" @click="addPayableCheque" class="cvr-btn-secondary px-3 py-1.5 rounded-lg border text-sm">+ Add Row</button>
+                    <button type="button" @click="addPayableCheque" class="cvr-btn-secondary px-3 py-1.5 rounded-lg border text-sm">{{ $t('+ Add Row') }}</button>
                 </div>
-                <p v-if="payableCheque.length === 0" class="text-sm cvr-text-muted py-4 text-center cvr-card-bg cvr-border border rounded-lg">No payable cheques. Click "+ Add Row" if there are any.</p>
+                <p v-if="payableCheque.length === 0" class="text-sm cvr-text-muted py-4 text-center cvr-card-bg cvr-border border rounded-lg">{{ $t('No payable cheques. Click "+ Add Row" if there are any.') }}</p>
                 <div class="space-y-3">
                     <div v-for="(row, i) in payableCheque" :key="row._key" class="cvr-card-bg cvr-border border rounded-lg p-3">
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div>
-                                <label class="cvr-form-label">Supplier</label>
+                                <label class="cvr-form-label">{{ $t('Supplier') }}</label>
                                 <select v-model="row.supplier_id" class="cvr-input w-full px-2 py-1.5 rounded text-sm">
                                     <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.name }}</option>
                                 </select>
                                 <p v-if="fieldError('payable_cheque', i, 'supplier_id')" class="text-xs mt-0.5" style="color: var(--cvr-danger-text);">{{ fieldError('payable_cheque', i, 'supplier_id') }}</p>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Currency</label>
+                                <label class="cvr-form-label">{{ $t('Currency') }}</label>
                                 <select v-model="row.currency" class="cvr-input w-full px-2 py-1.5 rounded text-sm">
                                     <option v-for="[code, label] in currencyOptions" :key="code" :value="code">{{ label }}</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Due Date</label>
+                                <label class="cvr-form-label">{{ $t('Due Date') }}</label>
                                 <input v-model="row.due_date" type="date" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Amount</label>
+                                <label class="cvr-form-label">{{ $t('Amount') }}</label>
                                 <input v-model="row.paid_amount" type="number" step="0.01" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Cheque #</label>
+                                <label class="cvr-form-label">{{ $t('Cheque #') }}</label>
                                 <input v-model="row.cheque_number" type="text" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Exchange Rate</label>
+                                <label class="cvr-form-label">{{ $t('Exchange Rate') }}</label>
                                 <input v-model="row.exchange_rate" type="number" step="0.0001" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Payment Bank</label>
+                                <label class="cvr-form-label">{{ $t('Payment Bank') }}</label>
                                 <select v-model="row.delivery_bank_id" class="cvr-input w-full px-2 py-1.5 rounded text-sm" @change="row.account_number = ''">
                                     <option v-for="b in financialInstitutionBanks" :key="b.id" :value="b.id">{{ b.name }}</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Account Type</label>
+                                <label class="cvr-form-label">{{ $t('Account Type') }}</label>
                                 <select v-model="row.account_type" class="cvr-input w-full px-2 py-1.5 rounded text-sm" @change="row.account_number = ''">
-                                    <option value="">Select</option>
+                                    <option value="">{{ $t('Select') }}</option>
                                     <option v-for="t in accountTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Account Number</label>
+                                <label class="cvr-form-label">{{ $t('Account Number') }}</label>
                                 <select v-model="row.account_number" class="cvr-input w-full px-2 py-1.5 rounded text-sm">
-                                    <option value="">Select</option>
+                                    <option value="">{{ $t('Select') }}</option>
                                     <option v-for="a in accountNumberOptions(row.delivery_bank_id, row.account_type)" :key="a.account_number" :value="a.account_number">{{ a.account_number }}</option>
                                 </select>
                             </div>
                         </div>
                         <div class="flex justify-end mt-3">
-                            <button type="button" @click="removePayableCheque(row._key)" class="cvr-btn-remove-row">🗑 Remove Row</button>
+                            <button type="button" @click="removePayableCheque(row._key)" class="cvr-btn-remove-row">{{ $t('🗑 Remove Row') }}</button>
                         </div>
                     </div>
                 </div>
             </div>
 
             <div class="flex justify-end gap-2 pb-8">
-                <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded-lg border text-sm">Cancel</Link>
+                <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded-lg border text-sm">{{ $t('Cancel') }}</Link>
                 <button type="button" @click="submit" :disabled="submitting" class="cvr-btn-copper px-5 py-2 rounded-lg text-sm font-medium disabled:opacity-60">
-                    {{ submitting ? 'Saving…' : 'Save' }}
+                    {{ submitting ? $t('Saving…') : $t('Save') }}
                 </button>
             </div>
         </div>

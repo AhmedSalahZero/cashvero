@@ -64,9 +64,9 @@ function submit() {
 <template>
     <AppLayout>
         <div class="p-6 max-w-5xl mx-auto">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Notifications Settings</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Notifications Settings') }}</h1>
             <p class="text-sm cvr-text-muted mb-6">
-                Days before/after due dates used for customer, supplier, and cheque notifications.
+                {{ $t('Days before/after due dates used for customer, supplier, and cheque notifications.') }}
             </p>
 
             <form @submit.prevent="submit" class="space-y-6">
@@ -96,7 +96,7 @@ function submit() {
                         class="cvr-btn-copper px-5 py-2 rounded-lg text-sm font-medium"
                         :disabled="submitting"
                     >
-                        {{ submitting ? 'Saving…' : 'Save' }}
+                        {{ submitting ? $t('Saving…') : $t('Save') }}
                     </button>
                 </div>
             </form>

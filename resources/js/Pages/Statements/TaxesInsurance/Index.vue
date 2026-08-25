@@ -58,40 +58,40 @@ function submit() {
 }
 
 function fmt(value) {
-    return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return Number(value || 0).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 </script>
 
 <template>
     <AppLayout>
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Taxes &amp; Insurance</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Taxes & Insurance') }}</h1>
             <p class="text-sm cvr-text-muted mb-6">
-                A list of payments made to tax and insurance partners, for a chosen date range and currency.
+                {{ $t('A list of payments made to tax and insurance partners, for a chosen date range and currency.') }}
             </p>
 
             <div class="cvr-card-bg cvr-border border rounded-lg p-5 mb-6">
                 <div class="cvr-form-grid-3 mb-5">
                     <div>
-                        <label class="cvr-form-label">Start Date *</label>
+                        <label class="cvr-form-label">{{ $t('Start Date') }} *</label>
                         <input v-model="startDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">End Date *</label>
+                        <label class="cvr-form-label">{{ $t('End Date') }} *</label>
                         <input v-model="endDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">Currency</label>
+                        <label class="cvr-form-label">{{ $t('Currency') }}</label>
                         <select v-model="currency" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="">All currencies</option>
+                            <option value="">{{ $t('All currencies') }}</option>
                             <option v-for="(label, code) in currencies" :key="code" :value="code">{{ String(label).toUpperCase() }}</option>
                         </select>
                     </div>
                 </div>
 
                 <div class="max-w-xl">
-                    <label class="cvr-form-label">Paid To <span class="cvr-text-muted font-normal">(leave empty for all)</span></label>
-                    <MultiSelectDropdown v-model="selectedPartnerIds" :options="partnerOptions" placeholder="All tax / insurance partners" />
+                    <label class="cvr-form-label">{{ $t('Paid To') }} <span class="cvr-text-muted font-normal">{{ $t('(leave empty for all)') }}</span></label>
+                    <MultiSelectDropdown v-model="selectedPartnerIds" :options="partnerOptions" :placeholder="$t('All tax / insurance partners')" />
                 </div>
 
                 <button
@@ -100,12 +100,12 @@ function fmt(value) {
                     class="cvr-btn-primary px-4 py-1.5 rounded text-sm mt-5"
                     :class="{ 'opacity-40 cursor-not-allowed': !canSubmit }"
                 >
-                    View Report
+                    {{ $t('View Report') }}
                 </button>
                 <ul v-if="!canSubmit" class="text-xs mt-2 space-y-0.5" style="color: var(--cvr-danger-text);">
-                    <li v-if="!startDate">— Start Date is not set.</li>
-                    <li v-if="!endDate">— End Date is not set.</li>
-                    <li v-if="endDate > maxDate">— End Date can't be in the future.</li>
+                    <li v-if="!startDate">{{ $t('— Start Date is not set.') }}</li>
+                    <li v-if="!endDate">{{ $t('— End Date is not set.') }}</li>
+                    <li v-if="endDate > maxDate">{{ $t('— End Date can\'t be in the future.') }}</li>
                 </ul>
             </div>
 
@@ -119,12 +119,12 @@ function fmt(value) {
                     <table class="min-w-full text-sm">
                         <thead class="cvr-table-head">
                             <tr>
-                                <th class="px-3 py-2 text-left">Date</th>
-                                <th class="px-3 py-2 text-left">Currency</th>
-                                <th class="px-3 py-2 text-left">Paid To</th>
+                                <th class="px-3 py-2 text-start">Date</th>
+                                <th class="px-3 py-2 text-start">Currency</th>
+                                <th class="px-3 py-2 text-start">Paid To</th>
                                 <th class="px-3 py-2 text-right">Amount</th>
                                 <th class="px-3 py-2 text-right">Accumulated Amount</th>
-                                <th class="px-3 py-2 text-left">Comment</th>
+                                <th class="px-3 py-2 text-start">Comment</th>
                             </tr>
                         </thead>
                         <tbody>

@@ -123,7 +123,7 @@ function switchCurrency(currency) {
 
 function fmt(value) {
     const n = Number(value || 0);
-    return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    return n.toLocaleString('en-EG', { maximumFractionDigits: 0 });
 }
 
 const invoiceTypeLabels = { CustomerInvoice: 'Customer Invoices', SupplierInvoice: 'Supplier Invoices' };
@@ -204,8 +204,8 @@ function chequeBarData(modelType) {
 <template>
     <AppLayout>
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Dashboard</h1>
-            <p class="text-sm cvr-text-muted mb-4">Cash flow projection, invoice &amp; cheque aging, past-due summary</p>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Dashboard') }}</h1>
+            <p class="text-sm cvr-text-muted mb-4">{{ $t('Cash flow projection, invoice & cheque aging, past-due summary') }}</p>
 
             <DashboardTabs active="forecast" :urls="dashboardTabUrls" />
 
@@ -215,24 +215,24 @@ function chequeBarData(modelType) {
                      here now too — CashFlowReportController has always accepted
                      it, the dropdown just never listed it. -->
                 <div>
-                    <label class="cvr-form-label">Report Interval</label>
+                    <label class="cvr-form-label">{{ $t('Report Interval') }}</label>
                     <select v-model="reportIntervalModel" class="cvr-input px-3 py-2 rounded w-44">
-                        <option value="daily">Daily</option>
-                        <option value="weekly">Weekly</option>
-                        <option value="monthly">Monthly</option>
+                        <option value="daily">{{ $t('Daily') }}</option>
+                        <option value="weekly">{{ $t('Weekly') }}</option>
+                        <option value="monthly">{{ $t('Monthly') }}</option>
                     </select>
                 </div>
                 <div>
-                    <label class="cvr-form-label">Start Date</label>
+                    <label class="cvr-form-label">{{ $t('Start Date') }}</label>
                     <input v-model="startDateModel" type="date" class="cvr-input px-3 py-2 rounded w-44" />
                 </div>
                 <div>
-                    <label class="cvr-form-label">End Date</label>
+                    <label class="cvr-form-label">{{ $t('End Date') }}</label>
                     <input v-model="endDateModel" type="date" class="cvr-input px-3 py-2 rounded w-44" />
                 </div>
-                <button class="cvr-btn-primary px-4 py-2 rounded" @click="applyFilter">Apply</button>
+                <button class="cvr-btn-primary px-4 py-2 rounded" @click="applyFilter">{{ $t('Apply') }}</button>
                 <span v-if="contractCode" class="cvr-badge cvr-badge-info self-center">Contract: {{ contractCode }}</span>
-                <p class="text-xs cvr-text-muted w-full">Today's date must fall within the Start/End Date range.</p>
+                <p class="text-xs cvr-text-muted w-full">{{ $t('Today\'s date must fall within the Start/End Date range.') }}</p>
             </div>
 
             <div class="flex items-center gap-2 flex-wrap mb-6">
@@ -255,7 +255,7 @@ function chequeBarData(modelType) {
                     <MultiLineChart :data="cashFlowReport?.[activeCurrency]?.total_cash_in_out_flow || []" :series="cashFlowSeries" :height="300" />
                 </div>
                 <div class="cvr-chart-card" style="border-top-color: var(--cvr-blue)">
-                    <h4 class="text-sm font-semibold cvr-text-primary mb-2">Accumulated Net Cash</h4>
+                    <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ $t('Accumulated Net Cash') }}</h4>
                     <MultiLineChart :data="cashFlowReport?.[activeCurrency]?.accumulated_net_cash || []" :series="netCashSeries" :height="300" />
                 </div>
             </div>
@@ -265,14 +265,14 @@ function chequeBarData(modelType) {
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
                 <div v-for="modelType in invoiceTypesModels" :key="'inv-'+modelType" class="cvr-chart-card" style="border-top-color: var(--cvr-num-amber)">
                     <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ invoiceTypeLabels[modelType] || modelType }} Aging</h4>
-                    <p class="text-xs cvr-text-muted mb-1">Past Due (left) · Current &amp; Coming Due (right)</p>
+                    <p class="text-xs cvr-text-muted mb-1">{{ $t('Past Due (left) · Current & Coming Due (right)') }}</p>
                     <AgingDivergingBarChart :data="agingBarData(modelType)" :height="300" />
                 </div>
             </div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
                 <div v-for="modelType in invoiceTypesModels" :key="'chq-'+modelType" class="cvr-chart-card" style="border-top-color: var(--cvr-copper-bright)">
                     <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ chequeTypeLabels[modelType] || modelType }} Aging</h4>
-                    <p class="text-xs cvr-text-muted mb-1">Past Due (left) · Current &amp; Coming Due (right)</p>
+                    <p class="text-xs cvr-text-muted mb-1">{{ $t('Past Due (left) · Current & Coming Due (right)') }}</p>
                     <AgingDivergingBarChart :data="chequeBarData(modelType)" :height="300" />
                 </div>
             </div>
@@ -281,7 +281,7 @@ function chequeBarData(modelType) {
             <div class="cvr-section-heading"><h2>Past Due Summary [{{ currencyName }}]</h2></div>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
                 <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
-                    <div class="px-4 py-2 cvr-table-head text-xs">Past Due Customer Invoices</div>
+                    <div class="px-4 py-2 cvr-table-head text-xs">{{ $t('Past Due Customer Invoices') }}</div>
                     <table class="min-w-full text-xs">
                         <tbody>
                             <tr v-for="(row, i) in (pastDueCustomerInvoices?.[currencyName] || [])" :key="i" class="cvr-table-row">
@@ -289,12 +289,12 @@ function chequeBarData(modelType) {
                                 <td class="px-3 py-1.5">{{ row.invoice_due_date }}</td>
                                 <td class="px-3 py-1.5 text-right cvr-num-red">{{ fmt(row.net_balance) }}</td>
                             </tr>
-                            <tr v-if="!(pastDueCustomerInvoices?.[currencyName] || []).length"><td class="px-3 py-4 text-center cvr-text-muted">None</td></tr>
+                            <tr v-if="!(pastDueCustomerInvoices?.[currencyName] || []).length"><td class="px-3 py-4 text-center cvr-text-muted">{{ $t('None') }}</td></tr>
                         </tbody>
                     </table>
                 </div>
                 <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
-                    <div class="px-4 py-2 cvr-table-head text-xs">Past Due Supplier Invoices</div>
+                    <div class="px-4 py-2 cvr-table-head text-xs">{{ $t('Past Due Supplier Invoices') }}</div>
                     <table class="min-w-full text-xs">
                         <tbody>
                             <tr v-for="(row, i) in (pastDueSupplierInvoices || [])" :key="i" class="cvr-table-row">
@@ -302,19 +302,19 @@ function chequeBarData(modelType) {
                                 <td class="px-3 py-1.5">{{ row.invoice_due_date }}</td>
                                 <td class="px-3 py-1.5 text-right cvr-num-red">{{ fmt(row.net_balance) }}</td>
                             </tr>
-                            <tr v-if="!(pastDueSupplierInvoices || []).length"><td class="px-3 py-4 text-center cvr-text-muted">None</td></tr>
+                            <tr v-if="!(pastDueSupplierInvoices || []).length"><td class="px-3 py-4 text-center cvr-text-muted">{{ $t('None') }}</td></tr>
                         </tbody>
                     </table>
                 </div>
                 <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
-                    <div class="px-4 py-2 cvr-table-head text-xs">Past Due Loans & Leasing Installments</div>
+                    <div class="px-4 py-2 cvr-table-head text-xs">{{ $t('Past Due Loans & Leasing Installments') }}</div>
                     <table class="min-w-full text-xs">
                         <tbody>
                             <tr v-for="(row, i) in (pastDueInstallments || [])" :key="i" class="cvr-table-row">
                                 <td class="px-3 py-1.5">{{ row.date }}</td>
                                 <td class="px-3 py-1.5 text-right cvr-num-red">{{ fmt(row.remaining) }}</td>
                             </tr>
-                            <tr v-if="!(pastDueInstallments || []).length"><td class="px-3 py-4 text-center cvr-text-muted">None</td></tr>
+                            <tr v-if="!(pastDueInstallments || []).length"><td class="px-3 py-4 text-center cvr-text-muted">{{ $t('None') }}</td></tr>
                         </tbody>
                     </table>
                 </div>

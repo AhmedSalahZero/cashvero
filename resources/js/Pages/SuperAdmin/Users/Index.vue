@@ -45,14 +45,14 @@ function destroyRow() {
     <AppLayout>
         <div class="p-6">
             <div class="flex items-center justify-between mb-6">
-                <h1 class="text-xl font-semibold cvr-text-primary">Users Table</h1>
+                <h1 class="text-xl font-semibold cvr-text-primary">{{ $t('Users Table') }}</h1>
                 <div class="flex items-center gap-3">
                     <div class="cvr-search-bar flex items-center gap-2 px-3 py-1.5 w-64">
                         <span class="cvr-text-muted text-sm">🔍</span>
-                        <input v-model="searchTerm" type="text" placeholder="Search users..." class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
+                        <input v-model="searchTerm" type="text" :placeholder="$t('Search users...')" class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
                     </div>
                     <Link v-if="can('user.create')" :href="createUrl" class="cvr-btn-copper px-3 py-1.5 rounded text-sm inline-flex items-center gap-1">
-                        + Add
+                        {{ $t('+ Add') }}
                     </Link>
                 </div>
             </div>
@@ -61,31 +61,31 @@ function destroyRow() {
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-3 py-3 text-left">Avatar</th>
-                            <th class="px-3 py-3 text-left">Name</th>
-                            <th class="px-3 py-3 text-left">Role</th>
-                            <th class="px-3 py-3 text-left">Companies</th>
-                            <th class="px-3 py-3 text-left">Control</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Avatar') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Name') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Role') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Companies') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Control') }}</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-for="row in rows" :key="row.id" class="cvr-table-row">
                             <td class="px-3 py-3">
-                                <img :src="row.avatar_url || '/images/user.png'" alt="avatar" class="w-16 h-16 object-cover rounded-full" />
+                                <img :src="row.avatar_url || '/images/user.png'" :alt="$t('avatar')" class="w-16 h-16 object-cover rounded-full" />
                             </td>
                             <td class="px-3 py-3 cvr-text-primary">{{ row.name }}</td>
                             <td class="px-3 py-3 cvr-text-secondary capitalize">{{ row.role_name }}</td>
                             <td class="px-3 py-3 cvr-text-secondary">{{ row.companies.join(', ') }}</td>
                             <td class="px-3 py-3">
                                 <div class="flex items-center gap-1.5">
-                                    <Link v-if="can('user.update')" :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</Link>
-                                    <Link v-if="can('user.assign_roles')" :href="row.permissions_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs" title="Permissions">👁</Link>
-                                    <button v-if="can('user.delete')" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
+                                    <Link v-if="can('user.update')" :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">{{ $t('Edit') }}</Link>
+                                    <Link v-if="can('user.assign_roles')" :href="row.permissions_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs" :title="$t('Permissions')">👁</Link>
+                                    <button v-if="can('user.delete')" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">{{ $t('Delete') }}</button>
                                 </div>
                             </td>
                         </tr>
                         <tr v-if="rows.length === 0">
-                            <td colspan="5" class="px-4 py-8 text-center cvr-text-muted">No users found.</td>
+                            <td colspan="5" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No users found.') }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -95,11 +95,11 @@ function destroyRow() {
 
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Are you sure you want to delete this user?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Are you sure you want to delete this user?') }}</h2>
                     <div class="flex justify-end gap-2">
-                        <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">Cancel</button>
+                        <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Cancel') }}</button>
                         <button @click="destroyRow" :disabled="deleting" class="cvr-btn-danger px-3 py-1.5 rounded border">
-                            {{ deleting ? 'Deleting...' : 'Confirm Delete' }}
+                            {{ deleting ? $t('Deleting...') : $t('Confirm Delete') }}
                         </button>
                     </div>
                 </div>

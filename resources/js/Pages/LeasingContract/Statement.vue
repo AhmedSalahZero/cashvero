@@ -49,7 +49,7 @@ const props = defineProps({
 });
 
 function fmt(value) {
-    return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return Number(value || 0).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /* Same sign convention as Bank Statement's running balance: positive →
@@ -71,7 +71,7 @@ const hasPeriod = computed(() => Boolean(props.period?.start_formatted || props.
             </Link>
 
             <h1 class="text-xl font-semibold cvr-text-primary mt-2 mb-1">
-                Leasing Contract Statement
+                {{ $t('Leasing Contract Statement') }}
                 <span class="cvr-text-secondary font-normal">
                     — {{ leasingCompany.name }} · {{ contract.name }} · {{ String(contract.currency_formatted).toUpperCase() }}
                 </span>
@@ -86,35 +86,35 @@ const hasPeriod = computed(() => Boolean(props.period?.start_formatted || props.
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">📅</div>
                     <div>
-                        <p class="cvr-kpi-label">Beginning Balance</p>
+                        <p class="cvr-kpi-label">{{ $t('Beginning Balance') }}</p>
                         <p class="cvr-kpi-value cvr-num-blue">{{ fmt(kpis.beginningBalance) }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-copper">⬇️</div>
                     <div>
-                        <p class="cvr-kpi-label">Drawn (Credit)</p>
+                        <p class="cvr-kpi-label">{{ $t('Drawn (Credit)') }}</p>
                         <p class="cvr-kpi-value cvr-num">{{ fmt(kpis.totalCredit) }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-green">⬆️</div>
                     <div>
-                        <p class="cvr-kpi-label">Principle Repaid (Debit)</p>
+                        <p class="cvr-kpi-label">{{ $t('Principle Repaid (Debit)') }}</p>
                         <p class="cvr-kpi-value cvr-num-green">{{ fmt(kpis.totalDebit) }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">🏁</div>
                     <div>
-                        <p class="cvr-kpi-label">Ending Balance</p>
+                        <p class="cvr-kpi-label">{{ $t('Ending Balance') }}</p>
                         <p class="cvr-kpi-value cvr-num-blue">{{ fmt(kpis.endingBalance) }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-green">🏦</div>
                     <div>
-                        <p class="cvr-kpi-label">Available Room</p>
+                        <p class="cvr-kpi-label">{{ $t('Available Room') }}</p>
                         <p class="cvr-kpi-value cvr-num-green">{{ fmt(kpis.availableRoom) }}</p>
                         <p class="text-xs cvr-text-muted">of {{ fmt(contract.limit) }} limit</p>
                     </div>
@@ -128,15 +128,15 @@ const hasPeriod = computed(() => Boolean(props.period?.start_formatted || props.
                         <thead class="cvr-table-head sticky top-0 z-10">
                             <tr>
                                 <th class="px-3 py-3 text-center">#</th>
-                                <th class="px-3 py-3 text-center">Date</th>
-                                <th class="px-3 py-3 text-right">Limit</th>
-                                <th class="px-3 py-3 text-right">Beginning Balance</th>
-                                <th class="px-3 py-3 text-right">Debit</th>
-                                <th class="px-3 py-3 text-right">Credit</th>
-                                <th class="px-3 py-3 text-right">End Balance</th>
-                                <th class="px-3 py-3 text-right">Room</th>
-                                <th class="px-3 py-3 text-right">Interest Paid</th>
-                                <th class="px-3 py-3 text-left min-w-[280px]">Comment</th>
+                                <th class="px-3 py-3 text-center">{{ $t('Date') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Limit') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Beginning Balance') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Debit') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Credit') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('End Balance') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Room') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Interest Paid') }}</th>
+                                <th class="px-3 py-3 text-start min-w-[280px]">{{ $t('Comment') }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -150,9 +150,9 @@ const hasPeriod = computed(() => Boolean(props.period?.start_formatted || props.
                                 <td class="px-3 py-2.5 text-right font-medium" :style="{ color: endBalanceColorVar(row.end_balance) }">{{ fmt(row.end_balance) }}</td>
                                 <td class="px-3 py-2.5 text-right cvr-num">{{ fmt(row.room) }}</td>
                                 <td class="px-3 py-2.5 text-right cvr-num">{{ fmt(row.interest_amount) }}</td>
-                                <td class="px-3 py-2.5 text-left cvr-text-secondary">
+                                <td class="px-3 py-2.5 text-start cvr-text-secondary">
                                     <span class="block max-w-[360px] whitespace-normal">
-                                        {{ row.is_repayment ? 'Installment repayment' : 'Supplier paid by the leasing company out of this contract' }}
+                                        {{ row.is_repayment ? $t('Installment repayment') : $t('Supplier paid by the leasing company out of this contract') }}
                                     </span>
                                     <span v-if="row.comment" class="block max-w-[360px] whitespace-normal cvr-text-muted text-xs mt-0.5">{{ row.comment }}</span>
                                 </td>

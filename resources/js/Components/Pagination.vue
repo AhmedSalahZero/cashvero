@@ -83,7 +83,7 @@ function goTo(page) {
 <template>
     <div v-if="lastPage > 1" class="flex items-center justify-between gap-4 mt-4 text-sm flex-wrap">
         <p v-if="showTotal && total != null" class="cvr-text-muted">
-            {{ Number(total).toLocaleString() }} total {{ label }}
+            {{ Number(total).toLocaleString('en-EG') }} {{ $t('total') }} {{ $t(label) }}
         </p>
         <div v-else></div>
 
@@ -93,7 +93,7 @@ function goTo(page) {
                 :disabled="currentPage === 1"
                 class="cvr-btn-secondary px-3 py-1.5 rounded border text-xs"
                 :class="{ 'opacity-40 cursor-not-allowed': currentPage === 1 }"
-                aria-label="Previous page"
+                :aria-label="$t('Previous page')"
             >‹</button>
 
             <template v-for="(page, i) in pages" :key="i">
@@ -112,7 +112,7 @@ function goTo(page) {
                 :disabled="currentPage === lastPage"
                 class="cvr-btn-secondary px-3 py-1.5 rounded border text-xs"
                 :class="{ 'opacity-40 cursor-not-allowed': currentPage === lastPage }"
-                aria-label="Next page"
+                :aria-label="$t('Next page')"
             >›</button>
         </div>
     </div>

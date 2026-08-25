@@ -111,77 +111,77 @@ function submit() {
 <template>
     <AppLayout>
         <div class="p-6 mx-auto">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-2">Consolidated Cash Flow Report</h1>
-            <p class="text-sm cvr-text-muted mb-1">Note: the report period must include today (same rule as the main cash flow report).</p>
-            <p class="text-sm cvr-text-muted mb-6">Tip: leave currencies or contracts empty to include everything available, or narrow them down. Monthly interval is faster than daily for long periods.</p>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-2">{{ $t('Consolidated Cash Flow Report') }}</h1>
+            <p class="text-sm cvr-text-muted mb-1">{{ $t('Note: the report period must include today (same rule as the main cash flow report).') }}</p>
+            <p class="text-sm cvr-text-muted mb-6">{{ $t('Tip: leave currencies or contracts empty to include everything available, or narrow them down. Monthly interval is faster than daily for long periods.') }}</p>
 
             <div class="cvr-card-bg cvr-border border rounded-lg p-5">
                 <form @submit.prevent="submit" class="space-y-4">
                     <div class="cvr-form-grid-4">
                         <div>
-                            <label class="cvr-form-label">Report Interval *</label>
+                            <label class="cvr-form-label">{{ $t('Report Interval') }} *</label>
                             <select v-model="reportInterval" required class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="daily">Daily</option>
-                                <option value="weekly">Weekly</option>
-                                <option value="monthly">Monthly</option>
+                                <option value="daily">{{ $t('Daily') }}</option>
+                                <option value="weekly">{{ $t('Weekly') }}</option>
+                                <option value="monthly">{{ $t('Monthly') }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Start Date *</label>
+                            <label class="cvr-form-label">{{ $t('Start Date') }} *</label>
                             <input v-model="startDate" type="date" required class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">End Date *</label>
+                            <label class="cvr-form-label">{{ $t('End Date') }} *</label>
                             <input v-model="endDate" type="date" required class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Currencies (leave empty for all)</label>
-                            <MultiSelectDropdown v-model="currencies" :options="currencyOptions" placeholder="All currencies" />
+                            <label class="cvr-form-label">{{ $t('Currencies (leave empty for all)') }}</label>
+                            <MultiSelectDropdown v-model="currencies" :options="currencyOptions" :placeholder="$t('All currencies')" />
                         </div>
                     </div>
 
                     <div>
-                        <label class="cvr-form-label">For Years Equal or Greater Than</label>
+                        <label class="cvr-form-label">{{ $t('For Years Equal or Greater Than') }}</label>
                         <select v-model="minEndYear" class="cvr-input w-full px-3 py-2 rounded md:w-64">
-                            <option value="">Any end date</option>
+                            <option value="">{{ $t('Any end date') }}</option>
                             <option v-for="y in endYearOptions" :key="y" :value="y">{{ y }}</option>
                         </select>
                     </div>
 
                     <div>
-                        <label class="cvr-form-label">Contracts (leave empty for all active contracts)</label>
-                        <MultiSelectDropdown v-model="contractIds" :options="contractOptions" placeholder="All active contracts" />
+                        <label class="cvr-form-label">{{ $t('Contracts (leave empty for all active contracts)') }}</label>
+                        <MultiSelectDropdown v-model="contractIds" :options="contractOptions" :placeholder="$t('All active contracts')" />
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label class="cvr-form-label">Customer Past Due Collection Plan (optional)</label>
-                            <p class="text-xs cvr-text-muted mb-2">E.g. 30% within 30 days, 30% within 45 days, 20% within 60 days, 20% within 90 days.</p>
+                            <label class="cvr-form-label">{{ $t('Customer Past Due Collection Plan (optional)') }}</label>
+                            <p class="text-xs cvr-text-muted mb-2">{{ $t('E.g. 30% within 30 days, 30% within 45 days, 20% within 60 days, 20% within 90 days.') }}</p>
                             <div class="space-y-2">
                                 <div v-for="(tier, i) in customerPastDueTiers" :key="'cust-'+i" class="flex items-center gap-2">
                                     <input v-model.number="tier.percentage" type="number" min="0" max="100" step="1" placeholder="%" class="cvr-input w-24 px-3 py-2 rounded" />
-                                    <span class="text-sm cvr-text-muted">% within</span>
-                                    <input v-model.number="tier.days" type="number" min="1" step="1" placeholder="Days" class="cvr-input w-28 px-3 py-2 rounded" />
-                                    <span class="text-sm cvr-text-muted">days</span>
+                                    <span class="text-sm cvr-text-muted">{{ $t('% within') }}</span>
+                                    <input v-model.number="tier.days" type="number" min="1" step="1" :placeholder="$t('Days')" class="cvr-input w-28 px-3 py-2 rounded" />
+                                    <span class="text-sm cvr-text-muted">{{ $t('days') }}</span>
                                 </div>
                             </div>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Supplier Past Due Payment Plan (optional)</label>
-                            <p class="text-xs cvr-text-muted mb-2">E.g. 30% within 30 days, 30% within 45 days, 20% within 60 days, 20% within 90 days.</p>
+                            <label class="cvr-form-label">{{ $t('Supplier Past Due Payment Plan (optional)') }}</label>
+                            <p class="text-xs cvr-text-muted mb-2">{{ $t('E.g. 30% within 30 days, 30% within 45 days, 20% within 60 days, 20% within 90 days.') }}</p>
                             <div class="space-y-2">
                                 <div v-for="(tier, i) in supplierPastDueTiers" :key="'supp-'+i" class="flex items-center gap-2">
                                     <input v-model.number="tier.percentage" type="number" min="0" max="100" step="1" placeholder="%" class="cvr-input w-24 px-3 py-2 rounded" />
-                                    <span class="text-sm cvr-text-muted">% within</span>
-                                    <input v-model.number="tier.days" type="number" min="1" step="1" placeholder="Days" class="cvr-input w-28 px-3 py-2 rounded" />
-                                    <span class="text-sm cvr-text-muted">days</span>
+                                    <span class="text-sm cvr-text-muted">{{ $t('% within') }}</span>
+                                    <input v-model.number="tier.days" type="number" min="1" step="1" :placeholder="$t('Days')" class="cvr-input w-28 px-3 py-2 rounded" />
+                                    <span class="text-sm cvr-text-muted">{{ $t('days') }}</span>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <div class="flex justify-end">
-                        <button type="submit" class="cvr-btn-primary px-4 py-2 rounded">Run Report</button>
+                        <button type="submit" class="cvr-btn-primary px-4 py-2 rounded">{{ $t('Run Report') }}</button>
                     </div>
                 </form>
             </div>

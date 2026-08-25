@@ -9,6 +9,7 @@ use App\Models\Cheque;
 use App\Models\ForeignExchangeRate;
 use App\Models\LetterOfCreditIssuance;
 use App\Models\LetterOfGuaranteeIssuance;
+use App\Support\LetterOfGuarantee\LgRenewalTerms;
 use App\Models\MoneyPayment;
 use App\Models\MoneyReceived;
 use App\Models\PayableCheque;
@@ -999,17 +1000,23 @@ final class CashFlowContractDetailPeriodBatchLoader
         // excluding Opening Balance, per explicit product decision — this
         // is the row previously missing from the Contract Cash Flow report
         // entirely.
+        //
+        // The cover a renewal re-prices moves on this same line — a NET
+        // movement (debit - credit), so raising it funds more and lowering
+        // it releases some back. Issuance rows carry credit = 0 and are
+        // unaffected. Same treatment as the company-level loader.
+        // @see \App\Support\LetterOfGuarantee\LgRenewalTerms
         $subTypeIssued = __('Issued LG Cash Cover');
         $issuedCoverRows = DB::table('letter_of_guarantee_cash_cover_statements')
             ->join('letter_of_guarantee_issuances', 'letter_of_guarantee_issuances.id', '=', 'letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id')
             ->join('partners', 'partners.id', '=', 'letter_of_guarantee_issuances.partner_id')
             ->where('letter_of_guarantee_cash_cover_statements.company_id', $companyId)
-            ->where('letter_of_guarantee_cash_cover_statements.type', 'debit-lg-amount')
+            ->whereIn('letter_of_guarantee_cash_cover_statements.type', ['debit-lg-amount', LgRenewalTerms::CASH_COVER_TYPE])
             ->where('letter_of_guarantee_issuances.contract_id', $contractId)
             ->where('letter_of_guarantee_issuances.category_name', LetterOfGuaranteeIssuance::NEW_ISSUANCE)
             ->where('letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id', '>', 0)
             ->whereBetween('letter_of_guarantee_cash_cover_statements.date', [$periodStart, $periodEnd])
-            ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, letter_of_guarantee_cash_cover_statements.debit as total_amount, letter_of_guarantee_cash_cover_statements.currency as currency, letter_of_guarantee_cash_cover_statements.date as movement_date, partners.name as partner_name, letter_of_guarantee_issuances.lg_code as lg_code')
+            ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, (letter_of_guarantee_cash_cover_statements.debit - letter_of_guarantee_cash_cover_statements.credit) as total_amount, letter_of_guarantee_cash_cover_statements.currency as currency, letter_of_guarantee_cash_cover_statements.date as movement_date, partners.name as partner_name, letter_of_guarantee_issuances.lg_code as lg_code')
             ->get();
 
         foreach ($issuedCoverRows as $row) {

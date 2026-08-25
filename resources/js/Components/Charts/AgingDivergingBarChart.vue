@@ -175,8 +175,8 @@ watch(() => props.data, async () => {
          MultiLineChart.vue — see its template comment. -->
     <div :style="{ height: typeof height === 'number' ? height + 'px' : height }">
         <div v-if="!(data || []).length" class="h-full flex items-center justify-center text-xs cvr-text-muted">
-            No aging data for this selection.
+            {{ $t('No aging data for this selection.') }}
         </div>
-        <div v-else ref="el" class="h-full"></div>
+        <div v-else ref="el" class="h-full" dir="ltr"></div>
     </div>
 </template>

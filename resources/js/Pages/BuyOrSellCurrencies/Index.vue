@@ -149,9 +149,9 @@ const odooErrorTarget = ref(null);
     <AppLayout>
         <div class="p-6">
             <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
-                <h1 class="text-xl font-semibold cvr-text-primary">Sell Or Buy Currencies</h1>
+                <h1 class="text-xl font-semibold cvr-text-primary">{{ $t('Sell Or Buy Currencies') }}</h1>
                 <Link v-if="canCreate" :href="createUrl" class="cvr-btn-copper px-3 py-1.5 rounded text-sm inline-flex items-center gap-1">
-                    + Sell Or Buy Currencies
+                    {{ $t('+ Sell Or Buy Currencies') }}
                 </Link>
             </div>
 
@@ -192,21 +192,21 @@ const odooErrorTarget = ref(null);
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-3 py-3 text-left">#</th>
-                                    <th class="px-3 py-3 text-left">Transaction Date</th>
-                                    <th class="px-3 py-3 text-left">Amount To Sell</th>
-                                    <th class="px-3 py-3 text-left">Currency To Sell</th>
-                                    <th class="px-3 py-3 text-left">Exchange Rate</th>
-                                    <th class="px-3 py-3 text-left">Amount To Buy</th>
-                                    <th class="px-3 py-3 text-left">Currency To Buy</th>
+                                    <th class="px-3 py-3 text-start">#</th>
+                                    <th class="px-3 py-3 text-start">Transaction Date</th>
+                                    <th class="px-3 py-3 text-start">Amount To Sell</th>
+                                    <th class="px-3 py-3 text-start">Currency To Sell</th>
+                                    <th class="px-3 py-3 text-start">Exchange Rate</th>
+                                    <th class="px-3 py-3 text-start">Amount To Buy</th>
+                                    <th class="px-3 py-3 text-start">Currency To Buy</th>
                                     <th
                                         v-for="col in columnsFor(type)"
                                         :key="col"
-                                        class="px-3 py-3 text-left whitespace-nowrap"
+                                        class="px-3 py-3 text-start whitespace-nowrap"
                                     >
                                         {{ columnLabels[col] }}
                                     </th>
-                                    <th v-if="canUpdate || canDelete" class="px-3 py-3 text-left">Control</th>
+                                    <th v-if="canUpdate || canDelete" class="px-3 py-3 text-start">Control</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -273,10 +273,10 @@ const odooErrorTarget = ref(null);
             <!-- Delete confirmation -->
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Do you want to delete this item?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to delete this item?') }}</h2>
                     <div class="flex justify-end gap-2">
-                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Delete</button>
+                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>
@@ -284,10 +284,10 @@ const odooErrorTarget = ref(null);
             <!-- User comment modal -->
             <div v-if="commentTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-md">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">User Comment</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('User Comment') }}</h2>
                     <p class="cvr-text-secondary whitespace-pre-wrap">{{ commentTarget.user_comment }}</p>
                     <div class="flex justify-end mt-4">
-                        <button @click="commentTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                        <button @click="commentTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
                     </div>
                 </div>
             </div>
@@ -295,10 +295,10 @@ const odooErrorTarget = ref(null);
             <!-- Odoo error modal -->
             <div v-if="odooErrorTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-md">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Odoo Error</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Odoo Error') }}</h2>
                     <p class="cvr-text-secondary mb-4">{{ odooErrorTarget.odoo_error }}</p>
                     <div class="flex justify-end mt-4">
-                        <button @click="odooErrorTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                        <button @click="odooErrorTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
                     </div>
                 </div>
             </div>
@@ -306,12 +306,12 @@ const odooErrorTarget = ref(null);
             <!-- Odoo references modal -->
             <div v-if="odooRefTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-md">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Odoo References</h2>
-                    <ul class="list-disc pl-5 cvr-text-secondary">
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Odoo References') }}</h2>
+                    <ul class="list-disc ps-5 cvr-text-secondary">
                         <li v-for="(ref, i) in odooRefTarget.odoo_reference_names" :key="i">{{ ref }}</li>
                     </ul>
                     <div class="flex justify-end mt-4">
-                        <button @click="odooRefTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                        <button @click="odooRefTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
                     </div>
                 </div>
             </div>

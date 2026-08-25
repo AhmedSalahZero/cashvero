@@ -242,8 +242,13 @@ class TimeOfDepositsController
 		 * Flatten a TD collection into plain arrays for Inertia, with
 		 * every action URL this row's row-menu could need pre-resolved.
 		 */
-		$mapDeposits = function (Collection $deposits) use ($company, $financialInstitution) {
-			return $deposits->map(function (TimeOfDeposit $td) use ($company, $financialInstitution) {
+		/**
+		 * حسابات البنك الجارية بتتقرا مرة واحدة هنا وبتتمرر لكل صف علشان
+		 * مايبقاش فيه استعلام لكل وديعة.
+		 */
+		$settlementAccounts = $financialInstitution->accounts ;
+		$mapDeposits = function (Collection $deposits) use ($company, $financialInstitution, $settlementAccounts) {
+			return $deposits->map(function (TimeOfDeposit $td) use ($company, $financialInstitution, $settlementAccounts) {
 				return [
 					'id' => $td->id,
 					'status' => $td->getStatus(),
@@ -262,6 +267,16 @@ class TimeOfDepositsController
 					'break_interest_amount_formatted' => $td->getBreakInterestAmountFormatted(),
 					'blocked_against_formatted' => $td->getBlockedAgainstFormatted(),
 					'is_due_today_or_greater' => $td->isDueTodayOrGreater(),
+					/**
+					 * حساب التسوية اللي بوب اب الاستحقاق / الكسر بيسأل عنه — القيمة
+					 * الافتراضية هي حساب الخصم الاصلي ، وبتبقى فاضية لو الوديعة
+					 * اتسجلت opening balance.
+					 */
+					'settlement_account_id' => $td->getSettlementOrDeductedFromAccountId(),
+					'settlement_account_options' => $td->getSettlementAccountOptions($settlementAccounts)->map(fn ($a) => [
+						'id' => (int) $a->getId(),
+						'account_number' => AccountNumberLabel::forOwnedInstrument($a),
+					])->values(),
 					'edit_url' => route('edit.time.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'timeOfDeposit' => $td->id]),
 					'delete_url' => route('delete.time.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'timeOfDeposit' => $td->id]),
 					'apply_deposit_url' => route('apply.deposit.to.time.of.deposit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'timeOfDeposit' => $td->id]),
@@ -558,8 +573,20 @@ class TimeOfDepositsController
 		}
 		$actualDepositDate = $actualDepositDate->format('Y-m-d') ;
 		$actualInterestAmount  = number_unformat($request->get('actual_interest_amount')) ;
+		/**
+		 * * حساب التسوية اللي اصل الوديعة هيترد عليه — اليوزر بيختاره من البوب اب
+		 * * وقيمته الافتراضية هي حساب الخصم الاصلي لو كان موجود ، ولو الوديعة
+		 * * opening balance
+		 * * فا لازم يختاره هنا لان مافيش
+		 * * deducted_from_account_id
+		 */
+		$settlementAccountId = $request->get('settlement_account_id') ;
+		if(!$timeOfDeposit->isEligibleSettlementAccount($settlementAccountId,$financialInstitution->accounts)){
+			return redirect()->back()->with('fail',__('Please Select A Valid Settlement Account'));
+		}
 		$type = TimeOfDeposit::MATURED ;
 		$timeOfDeposit->update([
+			'settlement_account_id'=>$settlementAccountId,
 			'deposit_date'=>$actualDepositDate,
 			'actual_interest_amount'=>$actualInterestAmount,
 			'status'=>$type
@@ -573,7 +600,7 @@ class TimeOfDepositsController
 		$commentEn = __('TD Amount',[],'en');
 		$commentAr = __('TD Amount',[],'ar');
 		$timeOfDeposit->handleDebitStatement($financialInstitution->id , $accountType , $timeOfDeposit->getMaturityAmountAddedToAccountNumber() , null , $actualDepositDate,$timeOfDeposit->getAmount(),null,null,1,$commentEn,$commentAr);
-		$timeOfDeposit->handleTdOrCdStoreDepositForOdoo(true);
+		$timeOfDeposit->handleTdOrCdStoreDepositForOdoo(true,$actualDepositDate);
 		return redirect()->route('view.time.of.deposit',['company'=>$company->id,'financialInstitution'=>$financialInstitution->id ,'active'=>$type])->with('success',__('Time Of Deposit Has Been Marked As Matured'));
 	}
 	
@@ -604,6 +631,7 @@ class TimeOfDepositsController
 		
 		$type = TimeOfDeposit::RUNNING ;
 		$timeOfDeposit->update([
+			'settlement_account_id'=>null,
 			'deposit_date'=>null,
 			'actual_interest_amount'=>null,
 			'status'=>TimeOfDeposit::RUNNING,
@@ -637,14 +665,26 @@ class TimeOfDepositsController
 		$breakInterestAmount  = $request->get('break_interest_amount') ;
 		$breakChargeAmount  = $request->get('break_charge_amount',0) ;
 		$amount  = $request->get('amount') ;
+		/**
+		 * * حساب التسوية اللي اصل الوديعة هيترد عليه — اليوزر بيختاره من البوب اب
+		 * * وقيمته الافتراضية هي حساب الخصم الاصلي لو كان موجود ، ولو الوديعة
+		 * * opening balance
+		 * * فا لازم يختاره هنا لان مافيش
+		 * * deducted_from_account_id
+		 */
+		$settlementAccountId = $request->get('settlement_account_id') ;
+		if(!$timeOfDeposit->isEligibleSettlementAccount($settlementAccountId,$financialInstitution->accounts)){
+			return redirect()->back()->with('fail',__('Please Select A Valid Settlement Account'));
+		}
 		$type = TimeOfDeposit::BROKEN ;
 		$timeOfDeposit->update([
+			'settlement_account_id'=>$settlementAccountId,
 			'break_date'=>$breakDate,
 			'break_interest_amount'=>$breakInterestAmount,
 			'status'=>$type,
 			'break_charge_amount'=>$breakChargeAmount
 		]);
-		$timeOfDeposit->handleTdOrCdStoreDepositForOdoo(true);
+		$timeOfDeposit->handleTdOrCdStoreDepositForOdoo(true,$breakDate);
 		
 		$accountType = AccountType::where('slug',AccountType::CURRENT_ACCOUNT)->first() ;
 		/**
@@ -700,6 +740,7 @@ class TimeOfDepositsController
 		
 		
 		$timeOfDeposit->update([
+			'settlement_account_id'=>null,
 			'break_date'=>null,
 			'break_interest_amount'=>null,
 			'status'=>$type,

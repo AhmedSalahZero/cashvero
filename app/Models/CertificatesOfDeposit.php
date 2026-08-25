@@ -43,6 +43,7 @@ use Illuminate\Support\Str;
  * @property int|null $inbound_journal_entry_id
  * @property int|null $outbound_journal_entry_id
  * @property int|null $deducted_from_account_id
+ * @property int|null $settlement_account_id الحساب الجاري اللي الوديعة بترجع عليه وقت الاستحقاق او الكسر
  * @property int|null $odoo_id
  * @property string|null $odoo_code
  * @property string $status

@@ -122,10 +122,10 @@ function submit() {
         <div class="p-6">
             <div class="flex items-center gap-3 mb-1">
                 <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                    ← Back to Accounts
+                    {{ $t('← Back to Accounts') }}
                 </Link>
             </div>
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Edit Financial Institution Account</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Edit Financial Institution Account') }}</h1>
             <p class="text-sm cvr-text-muted mb-6">{{ financialInstitution.name }}</p>
 
             <div v-if="generalError" class="mb-4 px-4 py-3 rounded cvr-badge-overdue text-sm">
@@ -135,40 +135,40 @@ function submit() {
             <form @submit.prevent="submit" class="space-y-6">
                 <!-- Account details -->
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Company Account Information</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Company Account Information') }}</h2>
                     <div class="cvr-form-grid-4">
                         <div>
-                            <label class="cvr-form-label">Account Number *</label>
+                            <label class="cvr-form-label">{{ $t('Account Number') }} *</label>
                             <input v-model="form.account_number" required type="text" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             <p v-if="fieldError('account_number')" class="text-xs mt-1" style="color: var(--cvr-danger-text);">{{ fieldError('account_number') }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">IBAN</label>
+                            <label class="cvr-form-label">{{ $t('IBAN') }}</label>
                             <input v-model="form.iban" type="text" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                         </div>
                         <div v-if="hasOdooIntegration">
-                            <label class="cvr-form-label">Odoo Code *</label>
+                            <label class="cvr-form-label">{{ $t('Odoo Code') }} *</label>
                             <input v-model="form.odoo_code" required type="text" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Balance Amount *</label>
+                            <label class="cvr-form-label">{{ $t('Balance Amount') }} *</label>
                             <input v-model.number="form.balance_amount" required type="number" step="0.01" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Balance Date *</label>
+                            <label class="cvr-form-label">{{ $t('Balance Date') }} *</label>
                             <input v-model="form.balance_date" required type="date" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             <p v-if="fieldError('balance_date')" class="text-xs mt-1" style="color: var(--cvr-danger-text);">{{ fieldError('balance_date') }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Currency *</label>
+                            <label class="cvr-form-label">{{ $t('Currency') }} *</label>
                             <select v-model="form.currency" required class="cvr-select w-full px-2 py-1.5 rounded text-sm">
-                                <option value="" disabled>Select</option>
+                                <option value="" disabled>{{ $t('Select') }}</option>
                                 <option v-for="(label, code) in currencies" :key="code" :value="code">{{ label }}</option>
                             </select>
                             <p v-if="fieldError('currency')" class="text-xs mt-1" style="color: var(--cvr-danger-text);">{{ fieldError('currency') }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Exchange Rate *</label>
+                            <label class="cvr-form-label">{{ $t('Exchange Rate') }} *</label>
                             <input v-model.number="form.exchange_rate" required type="number" step="0.0001" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                         </div>
                         <ShareholderOwnershipFields
@@ -184,16 +184,16 @@ function submit() {
                 <!-- Interest rate schedule -->
                 <div class="cvr-card">
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide">Interest Rate Schedule</h2>
+                        <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide">{{ $t('Interest Rate Schedule') }}</h2>
                         <button type="button" @click="addInterestRow" class="cvr-btn-primary px-3 py-1.5 rounded text-sm">
-                            + Add Period
+                            {{ $t('+ Add Period') }}
                         </button>
                     </div>
 
                     <div v-for="(row, index) in interestRows" :key="row._rowId" class="cvr-border border rounded-lg p-4 mb-3">
                         <div class="cvr-form-grid-3">
                             <div>
-                                <label class="cvr-form-label">Interest Calculation Start Date *</label>
+                                <label class="cvr-form-label">{{ $t('Interest Calculation Start Date') }} *</label>
                                 <input
                                     v-model="row.start_date"
                                     required
@@ -202,30 +202,30 @@ function submit() {
                                     class="cvr-input w-full px-2 py-1.5 rounded text-sm"
                                     :class="{ 'opacity-60 cursor-not-allowed': index === 0 }"
                                 />
-                                <p v-if="index === 0" class="text-xs mt-1 cvr-text-muted">Always matches the account's balance date above.</p>
+                                <p v-if="index === 0" class="text-xs mt-1 cvr-text-muted">{{ $t('Always matches the account\'s balance date above.') }}</p>
                                 <p v-if="interestError(index, 'start_date')" class="text-xs mt-1" style="color: var(--cvr-danger-text);">{{ interestError(index, 'start_date') }}</p>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Interest Rate *</label>
+                                <label class="cvr-form-label">{{ $t('Interest Rate') }} *</label>
                                 <input v-model.number="row.interest_rate" required type="number" step="0.01" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Min Balance *</label>
+                                <label class="cvr-form-label">{{ $t('Min Balance') }} *</label>
                                 <input v-model.number="row.min_balance" required type="number" step="0.01" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                         </div>
                         <div class="flex justify-end mt-3" v-if="interestRows.length > 1">
                             <button type="button" @click="removeInterestRow(row._rowId)" class="cvr-btn-remove-row">
-                                🗑 Remove Period
+                                {{ $t('🗑 Remove Period') }}
                             </button>
                         </div>
                     </div>
                 </div>
 
                 <div class="flex justify-end gap-2">
-                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">Cancel</Link>
+                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">{{ $t('Cancel') }}</Link>
                     <button type="submit" :disabled="submitting" class="cvr-btn-primary px-4 py-2 rounded disabled:opacity-50">
-                        {{ submitting ? 'Saving...' : 'Update' }}
+                        {{ submitting ? $t('Saving...') : $t('Update') }}
                     </button>
                 </div>
             </form>

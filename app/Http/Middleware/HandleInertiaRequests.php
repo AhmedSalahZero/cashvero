@@ -8,6 +8,7 @@ use App\Support\SidebarMenu;
 use Inertia\Inertia;
 use Inertia\Middleware;
 use Illuminate\Http\Request;
+use Mcamara\LaravelLocalization\Facades\LaravelLocalization;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -46,6 +47,17 @@ class HandleInertiaRequests extends Middleware
         }
 
         return array_merge(parent::share($request), [
+            'locale' => Inertia::always(fn () => app()->getLocale()),
+            'dir' => Inertia::always(fn () => app()->getLocale() === 'ar' ? 'rtl' : 'ltr'),
+            'languageUrls' => Inertia::always(function () {
+                $urls = [];
+                foreach (['en', 'ar'] as $locale) {
+                    $url = LaravelLocalization::getLocalizedURL($locale);
+                    $urls[$locale] = $url ?: url('/'.$locale);
+                }
+
+                return $urls;
+            }),
             'auth' => [
                 /**
                  * ⚠️ REAL PERFORMANCE + DISCLOSURE BUG FIXED HERE

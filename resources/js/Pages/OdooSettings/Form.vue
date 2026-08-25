@@ -3,6 +3,8 @@ import { ref, reactive } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import FormErrorSummary from '@/Components/FormErrorSummary.vue';
+import { useI18n } from 'vue-i18n';
+const { t } = useI18n();
 
 const props = defineProps({
     company: Object,
@@ -108,7 +110,7 @@ function addRevenueRow() {
 }
 function removeRevenueRow(index) {
     if (revenues.value.length <= 1) return;
-    if (!confirm('Are you sure you want to delete this element?')) return;
+    if (!confirm(t('Are you sure you want to delete this element?'))) return;
     revenues.value.splice(index, 1);
 }
 
@@ -133,8 +135,8 @@ function submit() {
 <template>
     <AppLayout :nav-urls="navUrls">
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Other Integration Settings</h1>
-            <p class="text-sm cvr-text-muted mb-6">Please insert Odoo Chart Of Account Number for each field below.</p>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Other Integration Settings') }}</h1>
+            <p class="text-sm cvr-text-muted mb-6">{{ $t('Please insert Odoo Chart Of Account Number for each field below.') }}</p>
 
             <FormErrorSummary />
 
@@ -152,18 +154,18 @@ function submit() {
 
                 <!-- Interest Revenues Accounts -->
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Interest Revenues Accounts</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Interest Revenues Accounts') }}</h2>
                     <div v-for="(row, index) in revenues" :key="row.key" class="flex items-end gap-3 mb-3">
                         <div class="w-56">
-                            <label class="cvr-form-label">Bank *</label>
+                            <label class="cvr-form-label">{{ $t('Bank') }} *</label>
                             <select v-model="row.financial_institution_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="all">All</option>
+                                <option value="all">{{ $t('All') }}</option>
                                 <option v-for="b in financialInstitutionBanks" :key="b.id" :value="b.id">{{ b.name }}</option>
                             </select>
                         </div>
                         <div class="w-56">
-                            <label class="cvr-form-label">Chart Of Account Number *</label>
-                            <input v-model="row.odoo_code" type="text" placeholder="Chart Of Account Number" class="cvr-input w-full px-3 py-2 rounded" />
+                            <label class="cvr-form-label">{{ $t('Chart Of Account Number') }} *</label>
+                            <input v-model="row.odoo_code" type="text" :placeholder="$t('Chart Of Account Number')" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <button
                             v-if="revenues.length > 1"
@@ -171,17 +173,17 @@ function submit() {
                             @click="removeRevenueRow(index)"
                             class="cvr-btn-danger px-3 py-2 rounded border text-xs"
                         >
-                            Delete
+                            {{ $t('Delete') }}
                         </button>
                     </div>
                     <button type="button" @click="addRevenueRow" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
-                        + Repeat
+                        {{ $t('+ Repeat') }}
                     </button>
                 </div>
 
                 <div class="flex justify-end gap-2">
                     <button type="submit" :disabled="submitting" class="cvr-btn-primary px-4 py-2 rounded">
-                        {{ submitting ? 'Saving...' : 'Save' }}
+                        {{ submitting ? $t('Saving...') : $t('Save') }}
                     </button>
                 </div>
             </form>

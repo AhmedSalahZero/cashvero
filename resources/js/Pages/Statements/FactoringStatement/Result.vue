@@ -26,7 +26,7 @@ const props = defineProps({
 const rows = computed(() => props.paginator?.data || []);
 
 function formatAmount(value) {
-    return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return Number(value || 0).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function endBalanceColorVar(balance) {
@@ -45,28 +45,28 @@ function goToPage(url) {
     <AppLayout>
         <div class="p-6">
             <Link :href="urls.backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                ← Back to Factoring Statement
+                {{ $t('← Back to Factoring Statement') }}
             </Link>
 
             <!-- Tabs -->
             <div class="flex items-center gap-1 mb-4 border-b cvr-border">
                 <span class="px-4 py-2 text-sm font-medium border-b-2" style="border-color: var(--cvr-green-bright); color: var(--cvr-green-bright);">
-                    📄 Factoring Statement
+                    {{ $t('📄 Factoring Statement') }}
                 </span>
                 <a :href="urls.chargesStatementUrl" class="px-4 py-2 text-sm font-medium cvr-text-muted hover:cvr-text-primary">
-                    🧾 Factoring Charges Statement
+                    {{ $t('🧾 Factoring Charges Statement') }}
                 </a>
             </div>
 
             <div class="flex items-start justify-between flex-wrap gap-2 mb-1">
                 <h1 class="text-xl font-semibold cvr-text-primary">
-                    Factoring Statement
+                    {{ $t('Factoring Statement') }}
                     <span class="cvr-text-secondary font-normal">
                         — {{ factoringCompanyName }} · {{ contractLabel }} · {{ String(currency).toUpperCase() }}
                     </span>
                 </h1>
                 <a :href="urls.exportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
-                    ⬇️ Export to Excel
+                    {{ $t('⬇️ Export to Excel') }}
                 </a>
             </div>
             <p class="text-sm cvr-text-muted mb-6">{{ kpis.transactionCount }} transactions in this date range.</p>
@@ -76,21 +76,21 @@ function goToPage(url) {
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-green">⬆️</div>
                     <div>
-                        <p class="cvr-kpi-label">Total Debit</p>
+                        <p class="cvr-kpi-label">{{ $t('Total Debit') }}</p>
                         <p class="cvr-kpi-value cvr-num-green">{{ formatAmount(kpis.totalDebit) }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-copper">⬇️</div>
                     <div>
-                        <p class="cvr-kpi-label">Total Credit</p>
+                        <p class="cvr-kpi-label">{{ $t('Total Credit') }}</p>
                         <p class="cvr-kpi-value cvr-num">{{ formatAmount(kpis.totalCredit) }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">🏁</div>
                     <div>
-                        <p class="cvr-kpi-label">Ending Balance</p>
+                        <p class="cvr-kpi-label">{{ $t('Ending Balance') }}</p>
                         <p class="cvr-kpi-value cvr-num-blue">{{ formatAmount(kpis.endingBalance) }}</p>
                     </div>
                 </div>
@@ -103,11 +103,11 @@ function goToPage(url) {
                         <thead class="cvr-table-head sticky top-0 z-10">
                             <tr>
                                 <th class="px-3 py-3 text-center">#</th>
-                                <th class="px-3 py-3 text-center">Date</th>
-                                <th class="px-3 py-3 text-right">Debit</th>
-                                <th class="px-3 py-3 text-right">Credit</th>
-                                <th class="px-3 py-3 text-right">End Balance</th>
-                                <th class="px-3 py-3 text-left min-w-[280px]">Comment</th>
+                                <th class="px-3 py-3 text-center">{{ $t('Date') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Debit') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Credit') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('End Balance') }}</th>
+                                <th class="px-3 py-3 text-start min-w-[280px]">{{ $t('Comment') }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -119,12 +119,12 @@ function goToPage(url) {
                                 <td class="px-3 py-2.5 text-right cvr-num">{{ row.debit > 0 ? formatAmount(row.debit) : '' }}</td>
                                 <td class="px-3 py-2.5 text-right cvr-num">{{ row.credit > 0 ? formatAmount(row.credit) : '' }}</td>
                                 <td class="px-3 py-2.5 text-right font-medium" :style="{ color: endBalanceColorVar(row.endBalance) }">{{ formatAmount(row.endBalance) }}</td>
-                                <td class="px-3 py-2.5 text-left cvr-text-secondary">
+                                <td class="px-3 py-2.5 text-start cvr-text-secondary">
                                     <span class="block max-w-[360px] whitespace-normal">{{ row.comment }}</span>
                                 </td>
                             </tr>
                             <tr v-if="rows.length === 0">
-                                <td colspan="6" class="px-4 py-8 text-center cvr-text-muted">No movements found for this date range.</td>
+                                <td colspan="6" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No movements found for this date range.') }}</td>
                             </tr>
                         </tbody>
                     </table>

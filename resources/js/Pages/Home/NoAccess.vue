@@ -27,24 +27,23 @@ function logout() {
         <div class="p-6 flex justify-center">
             <div class="cvr-card p-8 max-w-xl w-full">
                 <h1 class="text-xl font-semibold cvr-text-primary mb-3">
-                    No permissions have been set for your account yet
+                    {{ $t('No permissions have been set for your account yet') }}
                 </h1>
 
                 <p class="text-sm cvr-text-secondary mb-4">
-                    You are signed in as <strong class="cvr-text-primary">{{ userName }}</strong
-                    ><span v-if="roleName"> with the <strong class="cvr-text-primary capitalize">{{ roleName.replace('-', ' ') }}</strong> role</span>,
-                    but no permissions are assigned to you, so there is nothing you can open.
+                    {{ $t('You are signed in as') }} <strong class="cvr-text-primary">{{ userName }}</strong
+                    ><span v-if="roleName"> {{ $t('with the') }} <strong class="cvr-text-primary capitalize">{{ roleName.replace('-', ' ') }}</strong> {{ $t('role') }}</span>{{ $t(', but no permissions are assigned to you, so there is nothing you can open.') }}
                 </p>
 
                 <p class="text-sm cvr-text-muted mb-6">
-                    Ask an administrator to open
-                    <strong class="cvr-text-primary">Users → your account → the permissions icon</strong>
-                    and select what you should be able to do. Access takes effect on your next page load.
+                    {{ $t('Ask an administrator to open') }}
+                    <strong class="cvr-text-primary">{{ $t('Users → your account → the permissions icon') }}</strong>
+                    {{ $t('and select what you should be able to do. Access takes effect on your next page load.') }}
                 </p>
 
                 <div class="flex gap-2">
-                    <Link href="/" class="cvr-btn-primary px-4 py-2 rounded">Try again</Link>
-                    <button @click="logout" class="cvr-btn-secondary px-4 py-2 rounded border">Sign out</button>
+                    <Link href="/" class="cvr-btn-primary px-4 py-2 rounded">{{ $t('Try again') }}</Link>
+                    <button @click="logout" class="cvr-btn-secondary px-4 py-2 rounded border">{{ $t('Sign out') }}</button>
                 </div>
             </div>
         </div>

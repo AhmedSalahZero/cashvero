@@ -334,11 +334,11 @@ body {
 .cvr-text-muted     { color: var(--cvr-text-muted); }
 
 /* ── Number Color Rule — use across every table/report/dashboard ─ */
-.cvr-num        { color: var(--cvr-num); font-variant-numeric: tabular-nums; }
-.cvr-num-blue   { color: var(--cvr-num-blue); font-variant-numeric: tabular-nums; }
-.cvr-num-green  { color: var(--cvr-num-green); font-variant-numeric: tabular-nums; }
-.cvr-num-amber  { color: var(--cvr-num-amber); font-variant-numeric: tabular-nums; }
-.cvr-num-red    { color: var(--cvr-num-red); font-variant-numeric: tabular-nums; }
+.cvr-num        { color: var(--cvr-num); font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; text-align: right; }
+.cvr-num-blue   { color: var(--cvr-num-blue); font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; text-align: right; }
+.cvr-num-green  { color: var(--cvr-num-green); font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; text-align: right; }
+.cvr-num-amber  { color: var(--cvr-num-amber); font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; text-align: right; }
+.cvr-num-red    { color: var(--cvr-num-red); font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; text-align: right; }
 
 /* ── Inline bars ──────────────────────────────────────────────────
    A proportion drawn next to the number it belongs to (aging shares,
@@ -1042,14 +1042,21 @@ aside .cvr-nav-sub-item.cvr-nav-item-active .cvr-nav-icon-svg {
     position: fixed;
     top: 0;
     bottom: 0;
-    left: 0;
+    inset-inline-start: 0;
+    left: auto;
     z-index: 50;
     width: min(18rem, 85vw);
     transform: translateX(-100%);
     transition: transform 0.2s ease;
     box-shadow: none;
 }
-.cvr-sidebar-mobile-open {
+[dir="rtl"] .cvr-sidebar-mobile {
+    left: auto;
+    right: auto;
+    transform: translateX(100%);
+}
+.cvr-sidebar-mobile-open,
+[dir="rtl"] .cvr-sidebar-mobile-open {
     transform: translateX(0);
     box-shadow: var(--cvr-shadow-lg, 0 10px 40px rgba(0, 0, 0, 0.35));
 }
@@ -1111,4 +1118,14 @@ aside .cvr-nav-sub-item.cvr-nav-item-active .cvr-nav-icon-svg {
     main .grid.grid-cols-6 {
         grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
     }
+}
+
+/* ── Arabic / RTL ─────────────────────────────────────────────── */
+[dir="rtl"] body {
+    font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
+}
+
+[dir="rtl"] .cvr-toast-enter-from,
+[dir="rtl"] .cvr-toast-leave-to {
+    transform: translateX(-24px);
 }

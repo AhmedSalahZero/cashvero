@@ -50,22 +50,22 @@ function destroyRow() {
 <template>
     <AppLayout>
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Cash Expense Categories</h1>
-            <p class="text-sm cvr-text-muted mb-6">Categories and their expense item names, used when logging cash expenses</p>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Cash Expense Categories') }}</h1>
+            <p class="text-sm cvr-text-muted mb-6">{{ $t('Categories and their expense item names, used when logging cash expenses') }}</p>
 
             <!-- KPI row -->
             <div class="cvr-kpi-row mb-6">
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">🗂️</div>
                     <div>
-                        <p class="cvr-kpi-label">Categories</p>
+                        <p class="cvr-kpi-label">{{ $t('Categories') }}</p>
                         <p class="cvr-kpi-value">{{ categories.length }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-green">💳</div>
                     <div>
-                        <p class="cvr-kpi-label">Expense Items</p>
+                        <p class="cvr-kpi-label">{{ $t('Expense Items') }}</p>
                         <p class="cvr-kpi-value">{{ totalItems }}</p>
                     </div>
                 </div>
@@ -78,13 +78,13 @@ function destroyRow() {
                     <input
                         v-model="search"
                         type="text"
-                        placeholder="Search category or item name..."
+                        :placeholder="$t('Search category or item name...')"
                         class="bg-transparent outline-none text-sm w-full cvr-text-primary"
                     />
                 </div>
 
                 <Link v-if="permissions.canCreate" :href="createUrl" class="cvr-btn-copper inline-flex items-center gap-1 px-3 py-1.5 rounded text-sm whitespace-nowrap">
-                    + New Category
+                    {{ $t('+ New Category') }}
                 </Link>
             </div>
 
@@ -93,9 +93,9 @@ function destroyRow() {
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-4 py-3 text-left">Name</th>
-                            <th class="px-4 py-3 text-center">Items</th>
-                            <th class="px-4 py-3 text-center">Control</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Name') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Items') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Control') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -126,7 +126,7 @@ function destroyRow() {
                             </tr>
                             <tr v-if="openIds.has(category.id)" class="cvr-table-row">
                                 <td colspan="3" class="px-4 py-3 cvr-card-bg">
-                                    <ul class="pl-6 space-y-1">
+                                    <ul class="ps-6 space-y-1">
                                         <li v-for="item in category.items" :key="item.id" class="text-sm cvr-text-secondary flex items-center gap-2">
                                             <span class="cvr-text-muted">•</span>
                                             <span class="truncate max-w-[400px]" :title="item.name">{{ item.name }}</span>
@@ -136,7 +136,7 @@ function destroyRow() {
                             </tr>
                         </template>
                         <tr v-if="filteredCategories.length === 0">
-                            <td colspan="3" class="px-4 py-8 text-center cvr-text-muted">No expense categories found.</td>
+                            <td colspan="3" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No expense categories found.') }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -148,8 +148,8 @@ function destroyRow() {
                     <h2 class="text-lg font-medium cvr-text-primary mb-2">Delete "{{ deleteTarget.name }}"?</h2>
                     <p class="text-sm cvr-text-muted mb-4">This will also remove its {{ deleteTarget.items.length }} expense item(s).</p>
                     <div class="flex justify-end gap-2">
-                        <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Delete</button>
+                        <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>

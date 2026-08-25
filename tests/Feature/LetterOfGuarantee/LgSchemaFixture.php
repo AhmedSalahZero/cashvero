@@ -55,8 +55,38 @@ trait LgSchemaFixture
             $table->unsignedBigInteger('company_id');
             $table->string('source')->nullable();
             $table->string('status')->nullable();
+            $table->string('category_name')->default('new-issuance');
             $table->string('lg_type')->nullable();
+            $table->string('transaction_name')->nullable();
+            $table->string('lg_code')->nullable();
+            $table->unsignedBigInteger('partner_id')->nullable();
+            $table->unsignedBigInteger('financial_institution_id')->nullable();
+            $table->unsignedBigInteger('lg_facility_id')->nullable();
+            $table->date('issuance_date')->nullable();
             $table->date('renewal_date')->nullable();
+            $table->date('cancellation_date')->nullable();
+            $table->integer('lg_duration_months')->default(0);
+            /**
+             * The pricing side of an issuance — what a renewal is
+             * allowed to change.
+             *
+             * @see \App\Support\LetterOfGuarantee\LgRenewalTerms
+             */
+            $table->decimal('lg_amount', 14)->default(0);
+            $table->string('lg_currency')->nullable();
+            $table->decimal('cash_cover_rate', 5)->default(0);
+            $table->decimal('cash_cover_amount', 14)->default(0);
+            $table->string('cash_cover_deducted_from_account_type')->nullable();
+            $table->string('cash_cover_deducted_from_account_id')->nullable();
+            $table->string('lg_fees_and_commission_account_type')->nullable();
+            $table->unsignedBigInteger('lg_fees_and_commission_account_id')->nullable();
+            $table->decimal('lg_commission_rate', 5)->default(0);
+            $table->decimal('lg_commission_amount', 14)->default(0);
+            $table->string('lg_commission_interval')->nullable();
+            $table->decimal('min_lg_commission_fees', 14)->default(0);
+            $table->decimal('issuance_fees', 14)->default(0);
+            $table->string('cd_or_td_account_type_id')->nullable();
+            $table->string('cd_or_td_id')->nullable();
             $table->unsignedBigInteger('journal_entry_id')->nullable();
             $table->unsignedBigInteger('commission_fees_journal_entry_id')->nullable();
             $table->unsignedBigInteger('issuance_fees_journal_entry_id')->nullable();
@@ -67,6 +97,8 @@ trait LgSchemaFixture
         Schema::create('financial_institution_accounts', function ($table) {
             $table->bigIncrements('id');
             $table->unsignedBigInteger('company_id');
+            $table->string('account_number')->nullable();
+            $table->string('currency')->nullable();
             $table->date('balance_date')->nullable();
             $table->json('synced_end_of_month_years')->nullable();
         });
@@ -79,8 +111,11 @@ trait LgSchemaFixture
                 $table->unsignedBigInteger('cd_or_td_id')->default(0);
                 $table->unsignedBigInteger('financial_institution_id')->default(0);
                 $table->unsignedBigInteger('letter_of_guarantee_issuance_id')->default(0);
-                $table->unsignedBigInteger('lg_facility_id')->default(0);
+                // nullable, same as production: an LG issued outside a
+                // facility has none.
+                $table->unsignedBigInteger('lg_facility_id')->nullable();
                 $table->unsignedBigInteger('lg_advanced_payment_history_id')->default(0);
+                $table->unsignedBigInteger('lg_renewal_date_history_id')->nullable();
                 $table->string('lg_type')->nullable();
                 $table->string('currency')->nullable();
                 $table->unsignedBigInteger('company_id');
@@ -110,6 +145,9 @@ trait LgSchemaFixture
             $table->boolean('is_commission_fees')->default(0);
             $table->boolean('is_issuance_fees')->default(0);
             $table->boolean('is_renewal_fees')->default(0);
+            $table->boolean('is_renewal_cash_cover')->default(0);
+            $table->unsignedBigInteger('lg_renewal_date_history_id')->nullable();
+            $table->string('end_of_month_period')->nullable();
             $table->string('type')->nullable();
             $table->string('interest_type')->nullable();
             $table->date('date')->nullable();
@@ -137,6 +175,24 @@ trait LgSchemaFixture
             $table->unsignedBigInteger('company_id');
             $table->unsignedBigInteger('letter_of_guarantee_issuance_id');
             $table->date('renewal_date')->nullable();
+            $table->decimal('fees_amount', 14)->default(0);
+            $table->unsignedBigInteger('renewal_fees_journal_entry_id')->nullable();
+            $table->string('renewal_fees_account_bank_statement_odoo_id')->nullable();
+            /**
+             * The terms this renewal set, and the terms it replaced.
+             * NULL on both sides means the renewal changed nothing —
+             * which is what every renewal recorded before re-pricing
+             * was supported looks like.
+             */
+            $table->decimal('cash_cover_amount', 14)->nullable();
+            $table->decimal('cash_cover_rate', 5)->nullable();
+            $table->decimal('lg_commission_amount', 14)->nullable();
+            $table->decimal('min_lg_commission_fees', 14)->nullable();
+            $table->decimal('previous_cash_cover_amount', 14)->nullable();
+            $table->decimal('previous_cash_cover_rate', 5)->nullable();
+            $table->decimal('previous_lg_commission_amount', 14)->nullable();
+            $table->decimal('previous_min_lg_commission_fees', 14)->nullable();
+            $table->timestamps();
         });
 
         /**

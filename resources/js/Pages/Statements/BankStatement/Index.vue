@@ -107,23 +107,22 @@ function submit() {
 <template>
 	<AppLayout>
 		<div class="p-6">
-			<h1 class="text-xl font-semibold cvr-text-primary mb-1">Bank Statement</h1>
-			<p class="text-sm cvr-text-muted mb-6"> A transaction-by-transaction ledger for one bank account or
-				facility, for a chosen date range. </p>
+			<h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Bank Statement') }}</h1>
+			<p class="text-sm cvr-text-muted mb-6"> {{ $t('A transaction-by-transaction ledger for one bank account or facility, for a chosen date range.') }} </p>
 			<div class="cvr-card-bg cvr-border border rounded-lg p-5">
 				<div class="cvr-form-grid-3 mb-4">
 					<div>
-						<label class="cvr-form-label">Start Date *</label>
+						<label class="cvr-form-label">{{ $t('Start Date') }} *</label>
 						<input v-model="startDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
 					</div>
 					<div>
-						<label class="cvr-form-label">End Date *</label>
+						<label class="cvr-form-label">{{ $t('End Date') }} *</label>
 						<input v-model="endDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
 					</div>
 					<div>
-						<label class="cvr-form-label">Currency *</label>
+						<label class="cvr-form-label">{{ $t('Currency') }} *</label>
 						<select v-model="currency" class="cvr-input w-full px-3 py-2 rounded">
-							<option value="" disabled>Select currency</option>
+							<option value="" disabled>{{ $t('Select currency') }}</option>
 							<option v-for="(label, code) in currencies" :key="code" :value="code">
 								{{ String(label).toUpperCase() }}</option>
 						</select>
@@ -131,34 +130,34 @@ function submit() {
 				</div>
 				<div class="cvr-form-grid-6-4-2">
 					<div>
-						<label class="cvr-form-label">Bank *</label>
+						<label class="cvr-form-label">{{ $t('Bank') }} *</label>
 						<SearchableSelect
 							v-model="financialInstitutionId"
 							:options="bankOptions"
-							placeholder="Select bank"
+							:placeholder="$t('Select bank')"
 						/>
 					</div>
 					<div>
-						<label class="cvr-form-label">Account Type *</label>
+						<label class="cvr-form-label">{{ $t('Account Type') }} *</label>
 						<select v-model="accountTypeId" class="cvr-input w-full px-3 py-2 rounded">
-							<option value="" disabled>Select account type</option>
+							<option value="" disabled>{{ $t('Select account type') }}</option>
 							<option v-for="type in accountTypes" :key="type.id" :value="type.id">{{ type.name }}
 							</option>
 						</select>
 					</div>
 					<div>
-						<label class="cvr-form-label">Account Number *</label>
+						<label class="cvr-form-label">{{ $t('Account Number') }} *</label>
 						<select v-model="accountNumber" class="cvr-input w-full px-3 py-2 rounded"
 							:disabled="loadingAccountNumbers || accountNumberOptions.length === 0">
 							<option value="" disabled>
-								{{ loadingAccountNumbers ? 'Loading…' : (accountNumberOptions.length ? 'Select account number' : 'Select bank & account type first') }}
+								{{ loadingAccountNumbers ? $t('Loading…') : (accountNumberOptions.length ? $t('Select account number') : $t('Select bank & account type first')) }}
 							</option>
 							<option v-for="num in accountNumberOptions" :key="num.value" :value="num.value">{{ num.label }}</option>
 						</select>
 					</div>
 				</div>
 				<button @click="submit" :disabled="!canSubmit" class="cvr-btn-primary px-4 py-1.5 rounded text-sm mt-5"
-					:class="{ 'opacity-40 cursor-not-allowed': !canSubmit }"> View Statement </button>
+					:class="{ 'opacity-40 cursor-not-allowed': !canSubmit }"> {{ $t('View Statement') }} </button>
 			</div>
 		</div>
 	</AppLayout>

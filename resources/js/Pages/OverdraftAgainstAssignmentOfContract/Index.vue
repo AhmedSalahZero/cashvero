@@ -253,24 +253,24 @@ function submitRenew() {
         <div class="p-6">
             <div class="flex items-center gap-3 mb-1">
                 <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                    ← Back to Banks
+                    {{ $t('← Back to Banks') }}
                 </Link>
             </div>
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Overdraft Against Assignment of Contract</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Overdraft Against Assignment of Contract') }}</h1>
             <p class="text-sm cvr-text-blue mb-6">{{ financialInstitution.name }}</p>
 
             <div class="cvr-kpi-row mb-6">
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">📄</div>
                     <div>
-                        <p class="cvr-kpi-label">Contracts</p>
+                        <p class="cvr-kpi-label">{{ $t('Contracts') }}</p>
                         <p class="cvr-kpi-value">{{ totalCount }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-copper">⇄</div>
                     <div>
-                        <p class="cvr-kpi-label">Currencies</p>
+                        <p class="cvr-kpi-label">{{ $t('Currencies') }}</p>
                         <p class="cvr-kpi-value">{{ currencyCount }}</p>
                     </div>
                 </div>
@@ -279,10 +279,10 @@ function submitRenew() {
             <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
                 <div class="cvr-search-bar flex items-center gap-2 px-3 py-1.5 w-64">
                     <span class="cvr-text-muted text-sm">🔍</span>
-                    <input v-model="search" type="text" placeholder="Search account or currency..." class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
+                    <input v-model="search" type="text" :placeholder="$t('Search account or currency...')" class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
                 </div>
                 <Link v-if="canCreate" :href="createUrl" class="cvr-btn-copper px-3 py-1.5 rounded text-sm inline-flex items-center gap-1">
-                    + New Record
+                    {{ $t('+ New Record') }}
                 </Link>
             </div>
 
@@ -295,7 +295,7 @@ function submitRenew() {
                     @click="activeMainTab = 'facilities'"
                     class="px-4 py-2 text-sm font-medium border-b-2 -mb-px"
                     :class="activeMainTab === 'facilities' ? 'border-current cvr-text-primary' : 'border-transparent cvr-text-muted'"
-                >Facilities</button>
+                >{{ $t('Facilities') }}</button>
                 <button
                     @click="activeMainTab = 'archived'"
                     class="px-4 py-2 text-sm font-medium border-b-2 -mb-px"
@@ -308,16 +308,16 @@ function submitRenew() {
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-4 py-3 text-left">#</th>
-                            <th class="px-4 py-3 text-left">Start Date</th>
-                            <th class="px-4 py-3 text-left">End Date</th>
-                            <th class="px-4 py-3 text-left">Account Number</th>
-                            <th class="px-4 py-3 text-left">Currency</th>
-                            <th class="px-4 py-3 text-left">Limit</th>
-                            <th class="px-4 py-3 text-left">Borrowing Rate</th>
-                            <th class="px-4 py-3 text-left">Margin Rate</th>
-                            <th class="px-4 py-3 text-left">Interest Rate</th>
-                            <th class="px-4 py-3 text-left">Actions</th>
+                            <th class="px-4 py-3 text-start">#</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Start Date') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('End Date') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Account Number') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Currency') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Limit') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Borrowing Rate') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Margin Rate') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Interest Rate') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -334,20 +334,20 @@ function submitRenew() {
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-2">
                                     <RecordLogButton subject="OverdraftAgainstAssignmentOfContract" :id="row.id" :company-id="company.id" />
-                                    <button @click="openRates(row)" class="cvr-action-btn" title="Rates">％</button>
-                                    <button @click="openLendingInformation(row)" class="cvr-action-btn" title="Lending Information">🔗</button>
+                                    <button @click="openRates(row)" class="cvr-action-btn" :title="$t('Rates')">％</button>
+                                    <button @click="openLendingInformation(row)" class="cvr-action-btn" :title="$t('Lending Information')">🔗</button>
                                     <button
                                         v-if="canUpdate"
                                         @click="openRenew(row)"
                                         class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs"
-                                        title="Record a renewal — new limit/terms from a chosen date, without losing history"
-                                    >Renew</button>
+                                        :title="$t('Record a renewal — new limit/terms from a chosen date, without losing history')"
+                                    >{{ $t('Renew') }}</button>
                                     <Link
                                         v-if="canUpdate"
                                         :href="row.edit_url"
                                         class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs"
-                                        title="Edits the current, running terms of this facility. Past (archived) chapters are never affected."
-                                    >Edit</Link>
+                                        :title="$t('Edits the current, running terms of this facility. Past (archived) chapters are never affected.')"
+                                    >{{ $t('Edit') }}</Link>
                                     <button
                                         v-if="row.lock_url"
                                         @click="confirmLockToggle(row)"
@@ -359,13 +359,13 @@ function submitRenew() {
                                         v-if="canDelete"
                                         @click="confirmDelete(row)"
                                         class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs"
-                                    >Delete</button>
+                                    >{{ $t('Delete') }}</button>
                                 </div>
                             </td>
                         </tr>
                         <tr v-if="filteredRows.length === 0">
                             <td colspan="10" class="px-4 py-8 text-center cvr-text-muted">
-                                No Overdraft Against Assignment of Contract records found.
+                                {{ $t('No Overdraft Against Assignment of Contract records found.') }}
                             </td>
                         </tr>
                     </tbody>
@@ -383,12 +383,12 @@ function submitRenew() {
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-4 py-3 text-left">#</th>
-                            <th class="px-4 py-3 text-left">Account Number</th>
-                            <th class="px-4 py-3 text-left">Currency</th>
-                            <th class="px-4 py-3 text-left">Current Limit</th>
-                            <th class="px-4 py-3 text-left">Renewals</th>
-                            <th class="px-4 py-3 text-left"></th>
+                            <th class="px-4 py-3 text-start">#</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Account Number') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Currency') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Current Limit') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Renewals') }}</th>
+                            <th class="px-4 py-3 text-start"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -406,14 +406,14 @@ function submitRenew() {
                                     <table class="w-full text-xs border rounded overflow-hidden">
                                         <thead class="cvr-table-head">
                                             <tr>
-                                                <th class="px-3 py-2 text-left">Effective Date</th>
-                                                <th class="px-3 py-2 text-left">Contract End Date</th>
-                                                <th class="px-3 py-2 text-left">Limit</th>
-                                                <th class="px-3 py-2 text-left">Highest-Debt Rate</th>
-                                                <th class="px-3 py-2 text-left">Admin Fees Rate</th>
-                                                <th class="px-3 py-2 text-left">Settlement Days</th>
-                                                <th class="px-3 py-2 text-left">Chapter</th>
-                                                <th class="px-3 py-2 text-left"></th>
+                                                <th class="px-3 py-2 text-start">Effective Date</th>
+                                                <th class="px-3 py-2 text-start">Contract End Date</th>
+                                                <th class="px-3 py-2 text-start">Limit</th>
+                                                <th class="px-3 py-2 text-start">Highest-Debt Rate</th>
+                                                <th class="px-3 py-2 text-start">Admin Fees Rate</th>
+                                                <th class="px-3 py-2 text-start">Settlement Days</th>
+                                                <th class="px-3 py-2 text-start">Chapter</th>
+                                                <th class="px-3 py-2 text-start"></th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -441,7 +441,7 @@ function submitRenew() {
                         </template>
                         <tr v-if="archivedRows.length === 0">
                             <td colspan="6" class="px-4 py-8 text-center cvr-text-muted">
-                                No facility has been renewed yet.
+                                {{ $t('No facility has been renewed yet.') }}
                             </td>
                         </tr>
                     </tbody>
@@ -451,14 +451,13 @@ function submitRenew() {
             <!-- Delete renewal confirmation -->
             <div v-if="deleteRenewalTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-2">Delete this renewal?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-2">{{ $t('Delete this renewal?') }}</h2>
                     <p class="text-xs cvr-text-muted mb-4">
-                        The facility will revert to its previous chapter's terms. This is blocked if any transactions
-                        are already dated on or after the renewal's effective date.
+                        {{ $t('The facility will revert to its previous chapter\'s terms. This is blocked if any transactions are already dated on or after the renewal\'s effective date.') }}
                     </p>
                     <div class="flex justify-end gap-2">
-                        <button @click="cancelDeleteRenewal" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyRenewal" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Delete</button>
+                        <button @click="cancelDeleteRenewal" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyRenewal" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>
@@ -466,10 +465,10 @@ function submitRenew() {
             <!-- Delete confirmation -->
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Do you want to delete this item?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to delete this item?') }}</h2>
                     <div class="flex justify-end gap-2">
-                        <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Delete</button>
+                        <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>
@@ -478,12 +477,12 @@ function submitRenew() {
             <div v-if="lockTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">
-                        {{ lockTarget.is_active ? 'Do you want to lock this account?' : 'Do you want to unlock this account?' }}
+                        {{ lockTarget.is_active ? $t('Do you want to lock this account?') : $t('Do you want to unlock this account?') }}
                     </h2>
                     <div class="flex justify-end gap-2">
-                        <button @click="cancelLockToggle" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                        <button @click="cancelLockToggle" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
                         <button @click="toggleLock" class="cvr-btn-danger px-3 py-1.5 rounded border">
-                            {{ lockTarget.is_active ? 'Confirm Lock' : 'Confirm Unlock' }}
+                            {{ lockTarget.is_active ? $t('Confirm Lock') : $t('Confirm Unlock') }}
                         </button>
                     </div>
                 </div>
@@ -492,27 +491,27 @@ function submitRenew() {
             <!-- Rates modal -->
             <div v-if="ratesTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-4xl">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Rates Information</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Rates Information') }}</h2>
 
                     <div v-if="canCreateRate" class="cvr-form-grid-5 mb-4 items-end">
                         <div>
-                            <label class="cvr-form-label">Date *</label>
+                            <label class="cvr-form-label">{{ $t('Date') }} *</label>
                             <input v-model="newRateForm.date_create" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Borrowing Rate</label>
+                            <label class="cvr-form-label">{{ $t('Borrowing Rate') }}</label>
                             <input v-model="newRateForm.borrowing_rate_create" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Margin Rate</label>
+                            <label class="cvr-form-label">{{ $t('Margin Rate') }}</label>
                             <input v-model="newRateForm.margin_rate_create" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Interest Rate</label>
+                            <label class="cvr-form-label">{{ $t('Interest Rate') }}</label>
                             <input disabled :value="newRateInterest" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Min Interest Rate</label>
+                            <label class="cvr-form-label">{{ $t('Min Interest Rate') }}</label>
                             <input v-model="newRateForm.min_interest_rate_create" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         
@@ -521,12 +520,12 @@ function submitRenew() {
                     <table class="min-w-full text-sm mb-4">
                         <thead class="cvr-table-head">
                             <tr>
-                                <th class="px-3 py-2 text-left">#</th>
-                                <th class="px-3 py-2 text-left">Date</th>
-                                <th class="px-3 py-2 text-left">Borrowing Rate</th>
-                                <th class="px-3 py-2 text-left">Margin Rate</th>
-                                <th class="px-3 py-2 text-left">Interest Rate</th>
-                                <th class="px-3 py-2 text-left">Actions</th>
+                                <th class="px-3 py-2 text-start">#</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Date') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Borrowing Rate') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Margin Rate') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Interest Rate') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Actions') }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -539,10 +538,10 @@ function submitRenew() {
                                 <td class="px-3 py-2">
                                     <div v-if="index === ratesTarget.rates.length - 1" class="flex items-center gap-2">
                                         <button v-if="canUpdate" @click="openEditRate(rate)" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">
-                                            Edit
+                                            {{ $t('Edit') }}
                                         </button>
                                         <button v-if="canDelete" @click="confirmDeleteRate(rate)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">
-                                            Delete
+                                            {{ $t('Delete') }}
                                         </button>
                                     </div>
                                 </td>
@@ -551,8 +550,8 @@ function submitRenew() {
                     </table>
 
                     <div class="flex justify-end gap-2">
-                        <button @click="ratesTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button v-if="canCreateRate" @click="submitNewRate" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm New Rate</button>
+                        <button @click="ratesTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button v-if="canCreateRate" @click="submitNewRate" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Confirm New Rate') }}</button>
                     </div>
                 </div>
             </div>
@@ -562,9 +561,7 @@ function submitRenew() {
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-2xl max-h-[95vh] overflow-y-auto">
                     <h2 class="text-lg font-medium cvr-text-primary mb-1">Renew Facility — {{ renewTarget.account_number }}</h2>
                     <p class="text-xs cvr-text-muted mb-4">
-                        Leave a field blank to keep it unchanged from the current terms. Nothing dated before the
-                        effective date is ever recalculated — past interest, fees, and due dates stay exactly as they were.
-                        The Borrowing Rate is not part of this form; use the separate Rates (％) action for that.
+                        {{ $t('Leave a field blank to keep it unchanged from the current terms. Nothing dated before the effective date is ever recalculated — past interest, fees, and due dates stay exactly as they were. The Borrowing Rate is not part of this form; use the separate Rates (％) action for that.') }}
                     </p>
 
                     <!-- Read-only terms history -->
@@ -572,13 +569,13 @@ function submitRenew() {
                         <table class="w-full text-xs">
                             <thead>
                                 <tr class="cvr-table-head">
-                                    <th class="px-3 py-2 text-left">Effective Date</th>
-                                    <th class="px-3 py-2 text-left">Contract End Date</th>
-                                    <th class="px-3 py-2 text-left">Limit</th>
-                                    <th class="px-3 py-2 text-left">Highest-Debt Rate</th>
-                                    <th class="px-3 py-2 text-left">Admin Fees Rate</th>
-                                    <th class="px-3 py-2 text-left">Settlement Days</th>
-                                    <th class="px-3 py-2 text-left">Chapter</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Effective Date') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Contract End Date') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Limit') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Highest-Debt Rate') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Admin Fees Rate') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Settlement Days') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Chapter') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -589,7 +586,7 @@ function submitRenew() {
                                     <td class="px-3 py-2">{{ term.highest_debt_balance_rate }} %</td>
                                     <td class="px-3 py-2">{{ term.admin_fees_rate }} %</td>
                                     <td class="px-3 py-2">{{ term.to_be_setteled_max_within_days }}</td>
-                                    <td class="px-3 py-2 cvr-text-muted">{{ term.is_original ? 'Original' : 'Renewal' }}</td>
+                                    <td class="px-3 py-2 cvr-text-muted">{{ term.is_original ? $t('Original') : $t('Renewal') }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -597,49 +594,49 @@ function submitRenew() {
 
                     <div class="cvr-form-grid-2 mb-4">
                         <div>
-                            <label class="block text-xs cvr-text-secondary mb-1">Renewal Effective Date *</label>
+                            <label class="block text-xs cvr-text-secondary mb-1">{{ $t('Renewal Effective Date') }} *</label>
                             <input type="date" v-model="renewForm.effective_date" class="cvr-input w-full" />
                             <p class="text-xs cvr-text-muted mt-1">
-                                Current contract end date: <strong>{{ currentContractEndDate }}</strong> — the renewal date must be after this.
+                                {{ $t('Current contract end date:') }} <strong>{{ currentContractEndDate }}</strong> {{ $t('— the renewal date must be after this.') }}
                             </p>
                             <p v-if="renewErrors.effective_date" class="text-xs text-red-600 mt-1">{{ renewErrors.effective_date }}</p>
                         </div>
                         <div>
-                            <label class="block text-xs cvr-text-secondary mb-1">New Contract End Date *</label>
+                            <label class="block text-xs cvr-text-secondary mb-1">{{ $t('New Contract End Date') }} *</label>
                             <input type="date" v-model="renewForm.contract_end_date" class="cvr-input w-full" />
                             <p v-if="renewErrors.contract_end_date" class="text-xs text-red-600 mt-1">{{ renewErrors.contract_end_date }}</p>
                         </div>
                         <div>
-                            <label class="block text-xs cvr-text-secondary mb-1">New Limit</label>
-                            <input type="number" step="any" v-model="renewForm.limit" class="cvr-input w-full" placeholder="Unchanged" />
+                            <label class="block text-xs cvr-text-secondary mb-1">{{ $t('New Limit') }}</label>
+                            <input type="number" step="any" v-model="renewForm.limit" class="cvr-input w-full" :placeholder="$t('Unchanged')" />
                             <p v-if="renewErrors.limit" class="text-xs text-red-600 mt-1">{{ renewErrors.limit }}</p>
                         </div>
                         <div>
-                            <label class="block text-xs cvr-text-secondary mb-1">New Max Lending Limit Per Contract</label>
-                            <input type="number" step="any" v-model="renewForm.max_lending_limit_per_contract" class="cvr-input w-full" placeholder="Unchanged" />
+                            <label class="block text-xs cvr-text-secondary mb-1">{{ $t('New Max Lending Limit Per Contract') }}</label>
+                            <input type="number" step="any" v-model="renewForm.max_lending_limit_per_contract" class="cvr-input w-full" :placeholder="$t('Unchanged')" />
                             <p v-if="renewErrors.max_lending_limit_per_contract" class="text-xs text-red-600 mt-1">{{ renewErrors.max_lending_limit_per_contract }}</p>
                         </div>
                         <div>
-                            <label class="block text-xs cvr-text-secondary mb-1">New Settlement Days</label>
-                            <input type="number" v-model="renewForm.to_be_setteled_max_within_days" class="cvr-input w-full" placeholder="Unchanged" />
+                            <label class="block text-xs cvr-text-secondary mb-1">{{ $t('New Settlement Days') }}</label>
+                            <input type="number" v-model="renewForm.to_be_setteled_max_within_days" class="cvr-input w-full" :placeholder="$t('Unchanged')" />
                         </div>
                         <div>
-                            <label class="block text-xs cvr-text-secondary mb-1">New Highest-Debt-Balance Rate %</label>
-                            <input type="number" step="any" v-model="renewForm.highest_debt_balance_rate" class="cvr-input w-full" placeholder="Unchanged" />
+                            <label class="block text-xs cvr-text-secondary mb-1">{{ $t('New Highest-Debt-Balance Rate %') }}</label>
+                            <input type="number" step="any" v-model="renewForm.highest_debt_balance_rate" class="cvr-input w-full" :placeholder="$t('Unchanged')" />
                         </div>
                         <div>
-                            <label class="block text-xs cvr-text-secondary mb-1">New Admin Fees Rate %</label>
-                            <input type="number" step="any" v-model="renewForm.admin_fees_rate" class="cvr-input w-full" placeholder="Unchanged" />
+                            <label class="block text-xs cvr-text-secondary mb-1">{{ $t('New Admin Fees Rate %') }}</label>
+                            <input type="number" step="any" v-model="renewForm.admin_fees_rate" class="cvr-input w-full" :placeholder="$t('Unchanged')" />
                         </div>
                         <div class="col-span-2">
-                            <label class="block text-xs cvr-text-secondary mb-1">Notes</label>
-                            <textarea v-model="renewForm.notes" class="cvr-input w-full" rows="2" placeholder="e.g. Bank renewal letter reference"></textarea>
+                            <label class="block text-xs cvr-text-secondary mb-1">{{ $t('Notes') }}</label>
+                            <textarea v-model="renewForm.notes" class="cvr-input w-full" rows="2" :placeholder="$t('e.g. Bank renewal letter reference')"></textarea>
                         </div>
                     </div>
 
                     <div class="flex justify-end gap-2">
-                        <button @click="cancelRenew" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="submitRenew" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm Renewal</button>
+                        <button @click="cancelRenew" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="submitRenew" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Confirm Renewal') }}</button>
                     </div>
                 </div>
             </div>
@@ -647,32 +644,32 @@ function submitRenew() {
             <!-- Edit rate modal -->
             <div v-if="editRateTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-md">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Edit Rate</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Edit Rate') }}</h2>
                     <div class="cvr-form-grid-2 mb-4">
                         <div>
-                            <label class="cvr-form-label">Date *</label>
+                            <label class="cvr-form-label">{{ $t('Date') }} *</label>
                             <input v-model="editRateForm.date_edit" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Borrowing Rate</label>
+                            <label class="cvr-form-label">{{ $t('Borrowing Rate') }}</label>
                             <input v-model="editRateForm.borrowing_rate_edit" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Margin Rate</label>
+                            <label class="cvr-form-label">{{ $t('Margin Rate') }}</label>
                             <input v-model="editRateForm.margin_rate_edit" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Min Interest Rate</label>
+                            <label class="cvr-form-label">{{ $t('Min Interest Rate') }}</label>
                             <input v-model="editRateForm.min_interest_rate_edit" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Interest Rate</label>
+                            <label class="cvr-form-label">{{ $t('Interest Rate') }}</label>
                             <input disabled :value="editRateInterest" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                     </div>
                     <div class="flex justify-end gap-2">
-                        <button @click="editRateTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="submitEditRate" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
+                        <button @click="editRateTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="submitEditRate" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Confirm') }}</button>
                     </div>
                 </div>
             </div>
@@ -680,10 +677,10 @@ function submitRenew() {
             <!-- Delete rate confirmation -->
             <div v-if="deleteRateTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Do you want to delete this item?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to delete this item?') }}</h2>
                     <div class="flex justify-end gap-2">
-                        <button @click="cancelDeleteRate" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyRate" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Delete</button>
+                        <button @click="cancelDeleteRate" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyRate" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>
@@ -691,60 +688,60 @@ function submitRenew() {
             <!-- Lending Information modal — view linked contracts + add new -->
             <div v-if="lendingTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-7xl">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Lending Information</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Lending Information') }}</h2>
 
                     <div v-if="canCreateRate" class="cvr-form-grid-4 mb-4 items-end">
                         <div>
-                            <label class="cvr-form-label">Customer *</label>
+                            <label class="cvr-form-label">{{ $t('Customer') }} *</label>
                             <select v-model="newLendingForm.customer_id_create" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="" disabled>Select</option>
+                                <option value="" disabled>{{ $t('Select') }}</option>
                                 <option v-for="c in customers" :key="c.id" :value="c.id">{{ c.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Contract *</label>
+                            <label class="cvr-form-label">{{ $t('Contract') }} *</label>
                             <select v-model="newLendingForm.contract_id_create" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="" disabled>Select</option>
+                                <option value="" disabled>{{ $t('Select') }}</option>
                                 <option v-for="c in contractsForNewCustomer" :key="c.id" :value="c.id">{{ c.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Amount</label>
+                            <label class="cvr-form-label">{{ $t('Amount') }}</label>
                             <input disabled :value="selectedNewContract?.amount_formatted ?? 0" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Assignment Date *</label>
+                            <label class="cvr-form-label">{{ $t('Assignment Date') }} *</label>
                             <input v-model="newLendingForm.assignment_date_create" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Start Date</label>
+                            <label class="cvr-form-label">{{ $t('Start Date') }}</label>
                             <input disabled :value="selectedNewContract?.start_date ?? ''" type="date" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">End Date</label>
+                            <label class="cvr-form-label">{{ $t('End Date') }}</label>
                             <input disabled :value="selectedNewContract?.end_date ?? ''" type="date" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Lending Rate (%)</label>
+                            <label class="cvr-form-label">{{ $t('Lending Rate (%)') }}</label>
                             <input v-model="newLendingForm.lending_rate_create" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <button @click="submitNewLending" class="cvr-btn-primary px-3 py-2 rounded self-end">
-                            + Add
+                            {{ $t('+ Add') }}
                         </button>
                     </div>
 
                     <table class="min-w-full text-sm mb-4">
                         <thead class="cvr-table-head">
                             <tr>
-                                <th class="px-3 py-2 text-left">Customer</th>
-                                <th class="px-3 py-2 text-left">Contract</th>
-                                <th class="px-3 py-2 text-left">Amount</th>
-                                <th class="px-3 py-2 text-left">Start Date</th>
-                                <th class="px-3 py-2 text-left">End Date</th>
-                                <th class="px-3 py-2 text-left">Assignment Date</th>
-                                <th class="px-3 py-2 text-left">Lending Rate</th>
-                                <th class="px-3 py-2 text-left">Lending Amount</th>
-                                <th class="px-3 py-2 text-left">Actions</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Customer') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Contract') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Amount') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Start Date') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('End Date') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Assignment Date') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Lending Rate') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Lending Amount') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Actions') }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -760,22 +757,22 @@ function submitRenew() {
                                 <td class="px-3 py-2">
                                     <div class="flex items-center gap-2">
                                         <button v-if="canUpdate" @click="openEditLending(info)" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">
-                                            Edit
+                                            {{ $t('Edit') }}
                                         </button>
                                         <button v-if="canDelete" @click="confirmDeleteLending(info)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">
-                                            Delete
+                                            {{ $t('Delete') }}
                                         </button>
                                     </div>
                                 </td>
                             </tr>
                             <tr v-if="lendingTarget.lending_information.length === 0">
-                                <td colspan="9" class="px-3 py-6 text-center cvr-text-muted">No contracts assigned yet.</td>
+                                <td colspan="9" class="px-3 py-6 text-center cvr-text-muted">{{ $t('No contracts assigned yet.') }}</td>
                             </tr>
                         </tbody>
                     </table>
 
                     <div class="flex justify-end">
-                        <button @click="lendingTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                        <button @click="lendingTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
                     </div>
                 </div>
             </div>
@@ -783,32 +780,32 @@ function submitRenew() {
             <!-- Edit Lending Information modal -->
             <div v-if="editLendingTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-lg">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Edit Lending Information</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Edit Lending Information') }}</h2>
                     <div class="cvr-form-grid-2 mb-4">
                         <div>
-                            <label class="cvr-form-label">Customer *</label>
+                            <label class="cvr-form-label">{{ $t('Customer') }} *</label>
                             <select v-model="editLendingForm.customer_id_edit" class="cvr-input w-full px-3 py-2 rounded">
                                 <option v-for="c in customers" :key="c.id" :value="c.id">{{ c.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Contract *</label>
+                            <label class="cvr-form-label">{{ $t('Contract') }} *</label>
                             <select v-model="editLendingForm.contract_id_edit" class="cvr-input w-full px-3 py-2 rounded">
                                 <option v-for="c in contractsForEditCustomer" :key="c.id" :value="c.id">{{ c.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Assignment Date *</label>
+                            <label class="cvr-form-label">{{ $t('Assignment Date') }} *</label>
                             <input v-model="editLendingForm.assignment_date_edit" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Lending Rate (%)</label>
+                            <label class="cvr-form-label">{{ $t('Lending Rate (%)') }}</label>
                             <input v-model="editLendingForm.lending_rate_edit" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
                     <div class="flex justify-end gap-2">
-                        <button @click="editLendingTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="submitEditLending" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
+                        <button @click="editLendingTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="submitEditLending" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Confirm') }}</button>
                     </div>
                 </div>
             </div>
@@ -819,10 +816,10 @@ function submitRenew() {
                  above; router.get() matches it exactly. -->
             <div v-if="deleteLendingTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Do you want to delete this item?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to delete this item?') }}</h2>
                     <div class="flex justify-end gap-2">
-                        <button @click="cancelDeleteLending" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyLending" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Delete</button>
+                        <button @click="cancelDeleteLending" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyLending" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>

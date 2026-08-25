@@ -18,20 +18,20 @@ const filteredRows = computed(() => {
 });
 
 function formatAmount(value) {
-    return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return Number(value || 0).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 </script>
 
 <template>
     <AppLayout>
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Leasing Facilities</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Leasing Facilities') }}</h1>
             <p class="text-sm cvr-text-blue mb-6">Every leasing contract across every leasing company for {{ company.name }}</p>
 
             <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
                 <div class="cvr-search-bar flex items-center gap-2 px-3 py-1.5 w-72">
                     <span class="cvr-text-muted text-sm">🔍</span>
-                    <input v-model="search" type="text" placeholder="Search by leasing company or contract..." class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
+                    <input v-model="search" type="text" :placeholder="$t('Search by leasing company or contract...')" class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
                 </div>
             </div>
 
@@ -39,13 +39,13 @@ function formatAmount(value) {
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-3 py-3 text-left">#</th>
-                            <th class="px-3 py-3 text-left">Leasing Company Name</th>
-                            <th class="px-3 py-3 text-left">Contract Name</th>
-                            <th class="px-3 py-3 text-left">Start Date</th>
-                            <th class="px-3 py-3 text-left">End Date</th>
-                            <th class="px-3 py-3 text-right">Limit Amount</th>
-                            <th class="px-3 py-3 text-left">Currency</th>
+                            <th class="px-3 py-3 text-start">#</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Leasing Company Name') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Contract Name') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Start Date') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('End Date') }}</th>
+                            <th class="px-3 py-3 text-right">{{ $t('Limit Amount') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Currency') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -60,7 +60,7 @@ function formatAmount(value) {
                         </tr>
                         <tr v-if="filteredRows.length === 0">
                             <td colspan="7" class="px-4 py-8 text-center cvr-text-muted">
-                                No leasing facilities found.
+                                {{ $t('No leasing facilities found.') }}
                             </td>
                         </tr>
                     </tbody>

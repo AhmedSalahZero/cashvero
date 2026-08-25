@@ -31,7 +31,7 @@ defineProps({
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-3 py-2 text-center">Row Number</th>
+                            <th class="px-3 py-2 text-center">{{ $t('Row Number') }}</th>
                             <th v-for="h in headers" :key="h" class="px-3 py-2 text-center">{{ h }}</th>
                         </tr>
                     </thead>
@@ -44,7 +44,7 @@ defineProps({
                             </td>
                         </tr>
                         <tr v-if="rows.length === 0">
-                            <td :colspan="headers.length + 1" class="px-4 py-8 text-center cvr-text-muted">No failed rows found.</td>
+                            <td :colspan="headers.length + 1" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No failed rows found.') }}</td>
                         </tr>
                     </tbody>
                 </table>

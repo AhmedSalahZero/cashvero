@@ -243,8 +243,8 @@ const commentTarget = ref(null);
 <template>
     <AppLayout :nav-urls="navUrls">
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">LC Issuance</h1>
-            <p class="text-sm cvr-text-blue mb-6">Letters Of Credit issued across all financial institutions</p>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('LC Issuance') }}</h1>
+            <p class="text-sm cvr-text-blue mb-6">{{ $t('Letters Of Credit issued across all financial institutions') }}</p>
 
             <!-- Tabs -->
             <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
@@ -260,25 +260,25 @@ const commentTarget = ref(null);
                     </button>
                 </div>
                 <div class="flex items-center gap-2">
-                    <Link v-if="permissions.canCreate" :href="createUrls['lc-facility']" class="cvr-btn-copper px-3 py-1.5 rounded text-sm">+ Via LC Facility</Link>
-                    <Link v-if="permissions.canCreate" :href="createUrls['hundred-percentage-cash-cover']" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">+ 100% Cash Cover</Link>
+                    <Link v-if="permissions.canCreate" :href="createUrls['lc-facility']" class="cvr-btn-copper px-3 py-1.5 rounded text-sm">{{ $t('+ Via LC Facility') }}</Link>
+                    <Link v-if="permissions.canCreate" :href="createUrls['hundred-percentage-cash-cover']" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">{{ $t('+ 100% Cash Cover') }}</Link>
                 </div>
             </div>
 
             <!-- Search -->
             <div class="flex flex-wrap items-end gap-3 mb-4">
                 <div>
-                    <label class="cvr-form-label">Search By</label>
+                    <label class="cvr-form-label">{{ $t('Search By') }}</label>
                     <select v-model="searchField" class="cvr-input px-3 py-2 rounded">
-                        <option value="transaction_name">Transaction Name</option>
-                        <option value="lc_code">LC Code</option>
+                        <option value="transaction_name">{{ $t('Transaction Name') }}</option>
+                        <option value="lc_code">{{ $t('LC Code') }}</option>
                     </select>
                 </div>
                 <div class="cvr-search-bar flex items-center gap-2 px-3 py-1.5 w-64">
                     <span class="cvr-text-muted text-sm">🔍</span>
-                    <input v-model="searchValue" @keyup.enter="applySearch" type="text" placeholder="Search..." class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
+                    <input v-model="searchValue" @keyup.enter="applySearch" type="text" :placeholder="$t('Search...')" class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
                 </div>
-                <button @click="applySearch" class="cvr-btn-secondary px-3 py-2 rounded border text-sm">Search</button>
+                <button @click="applySearch" class="cvr-btn-secondary px-3 py-2 rounded border text-sm">{{ $t('Search') }}</button>
             </div>
 
             <!-- Table -->
@@ -286,17 +286,17 @@ const commentTarget = ref(null);
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-3 py-3 text-left">#</th>
-                            <th class="px-3 py-3 text-left">Transaction Name</th>
-                            <th class="px-3 py-3 text-left">Beneficiary</th>
-                            <th class="px-3 py-3 text-left">Source</th>
-                            <th class="px-3 py-3 text-left">Status</th>
-                            <th class="px-3 py-3 text-left">Bank Name</th>
-                            <th class="px-3 py-3 text-left">LC Code</th>
-                            <th class="px-3 py-3 text-left">LC Amount</th>
-                            <th class="px-3 py-3 text-left">Issuance Date</th>
-                            <th class="px-3 py-3 text-left">Due Date</th>
-                            <th class="px-3 py-3 text-left">Actions</th>
+                            <th class="px-3 py-3 text-start">#</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Transaction Name') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Beneficiary') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Source') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Status') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Bank Name') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('LC Code') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('LC Amount') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Issuance Date') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Due Date') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -316,10 +316,10 @@ const commentTarget = ref(null);
                             <td class="px-3 py-3">
                                 <div class="flex items-center gap-1.5 flex-wrap">
                                     <RecordLogButton subject="LetterOfCreditIssuance" :id="row.id" :company-id="company.id" />
-                                    <button v-if="row.has_comment" @click="commentTarget = row" class="cvr-action-btn" title="User Comment">💬</button>
-                                    <button v-if="permissions.canUpdate && row.is_running" @click="openExpenses(row)" class="cvr-action-btn" title="Expenses">💵</button>
-                                    <button v-if="permissions.canSettle" @click="openPay(row)" class="cvr-action-btn" title="Apply Payment">💰</button>
-                                    <button v-if="permissions.canSettle && row.is_paid" @click="openBackToRunning(row)" class="cvr-action-btn" title="Back To Running">↩️</button>
+                                    <button v-if="row.has_comment" @click="commentTarget = row" class="cvr-action-btn" :title="$t('User Comment')">💬</button>
+                                    <button v-if="permissions.canUpdate && row.is_running" @click="openExpenses(row)" class="cvr-action-btn" :title="$t('Expenses')">💵</button>
+                                    <button v-if="permissions.canSettle" @click="openPay(row)" class="cvr-action-btn" :title="$t('Apply Payment')">💰</button>
+                                    <button v-if="permissions.canSettle && row.is_paid" @click="openBackToRunning(row)" class="cvr-action-btn" :title="$t('Back To Running')">↩️</button>
 
                                     <!-- Client-requested (2026-08-11): once
                                          an LC is paid, Edit and Delete no
@@ -327,14 +327,14 @@ const commentTarget = ref(null);
                                          Running" (above) is the correct way
                                          to undo a payment before editing or
                                          removing it. -->
-                                    <Link v-if="permissions.canUpdate && !row.is_paid" :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</Link>
-                                    <button v-if="permissions.canDelete && !row.is_paid" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
+                                    <Link v-if="permissions.canUpdate && !row.is_paid" :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">{{ $t('Edit') }}</Link>
+                                    <button v-if="permissions.canDelete && !row.is_paid" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">{{ $t('Delete') }}</button>
                                 </div>
                             </td>
                         </tr>
                         <tr v-if="currentTab.rows.data.length === 0">
                             <td colspan="11" class="px-4 py-8 text-center cvr-text-muted">
-                                No LC Issuance records found.
+                                {{ $t('No LC Issuance records found.') }}
                             </td>
                         </tr>
                     </tbody>
@@ -362,23 +362,23 @@ const commentTarget = ref(null);
             <!-- Mark As Paid modal -->
             <div v-if="payTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-7xl max-h-[90vh] overflow-y-auto">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Do you want to pay this LC?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to pay this LC?') }}</h2>
                     <div class="cvr-form-grid-6-2-2-2 mb-3">
                         <div>
-                            <label class="cvr-form-label">Bank Name</label>
+                            <label class="cvr-form-label">{{ $t('Bank Name') }}</label>
                             <input disabled :value="payTarget.bank_name" class="cvr-input w-full  py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">LC Amount</label>
+                            <label class="cvr-form-label">{{ $t('LC Amount') }}</label>
                             <input disabled :value="payTarget.lc_amount_formatted" class="cvr-input w-full  py-2 rounded" />
                         </div>
                         
                             <div>
-                                <label class="cvr-form-label">Exchange Rate</label>
+                                <label class="cvr-form-label">{{ $t('Exchange Rate') }}</label>
                                 <input disabled :value="payTarget.lc_exchange_rate" class="cvr-input w-full  py-2 rounded" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">In Payment Currency</label>
+                                <label class="cvr-form-label">{{ $t('In Payment Currency') }}</label>
                                 <input disabled :value="payTarget.lc_amount_in_main_currency_formatted" class="cvr-input w-full py-2 rounded" />
                             </div>
                         
@@ -387,50 +387,50 @@ const commentTarget = ref(null);
                     <!-- Cash Cover -->
                     <div class="cvr-form-grid-6-2-2-2 mb-3">
                         <div>
-                            <label class="cvr-form-label">Cash Cover</label>
+                            <label class="cvr-form-label">{{ $t('Cash Cover') }}</label>
                             <input disabled value="Cash Cover" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Amount</label>
+                            <label class="cvr-form-label">{{ $t('Amount') }}</label>
                             <input disabled :value="`${payTarget.cash_cover_amount_formatted} ${payTarget.lc_cash_cover_currency?.toUpperCase()}`" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         
                             <div>
-                                <label class="cvr-form-label">Exchange Rate</label>
+                                <label class="cvr-form-label">{{ $t('Exchange Rate') }}</label>
                                 <input disabled :value="payTarget.cash_cover_exchange_rate" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">In Payment Currency</label>
-                                <input disabled :value="Math.round(payTarget.cash_cover_amount * payTarget.cash_cover_exchange_rate).toLocaleString()" class="cvr-input w-full px-3 py-2 rounded" />
+                                <label class="cvr-form-label">{{ $t('In Payment Currency') }}</label>
+                                <input disabled :value="Math.round(payTarget.cash_cover_amount * payTarget.cash_cover_exchange_rate).toLocaleString('en-EG')" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                         
                     </div>
 
                     <div class="cvr-form-grid-3-3-2-2-2 mb-3">
                         <div>
-                            <label class="cvr-form-label">Payment Date *</label>
+                            <label class="cvr-form-label">{{ $t('Payment Date') }} *</label>
                             <input v-model="payForm.payment_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Supplier Invoice</label>
+                            <label class="cvr-form-label">{{ $t('Supplier Invoice') }}</label>
                             <select v-model="payForm.supplier_invoice_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">None</option>
+                                <option value="">{{ $t('None') }}</option>
                                 <option v-for="inv in payTarget.supplier_invoices" :key="inv.id" :value="inv.id">{{ inv.invoice_number }}</option>
                             </select>
-                            <p class="text-xs cvr-text-muted mt-1">Only invoices for this beneficiary, in this LC's currency</p>
+                            <p class="text-xs cvr-text-muted mt-1">{{ $t('Only invoices for this beneficiary, in this LC\'s currency') }}</p>
                         </div>
                         
                             <div>
-                                <label class="cvr-form-label">Invoice Net Balance</label>
-                                <input disabled :value="selectedInvoice ? `${Number(selectedInvoice.net_balance).toLocaleString()} ${selectedInvoice.currency}` : 0" class="cvr-input w-full px-3 py-2 rounded" />
+                                <label class="cvr-form-label">{{ $t('Invoice Net Balance') }}</label>
+                                <input disabled :value="selectedInvoice ? `${Number(selectedInvoice.net_balance).toLocaleString('en-EG')} ${selectedInvoice.currency}` : 0" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Exchange Rate</label>
+                                <label class="cvr-form-label">{{ $t('Exchange Rate') }}</label>
                                 <input disabled :value="selectedInvoice ? selectedInvoice.exchange_rate : 0" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">NB In Main Currency</label>
-                                <input disabled :value="selectedInvoice ? Number(selectedInvoice.net_balance_in_main_currency).toLocaleString() : 0" class="cvr-input w-full px-3 py-2 rounded" />
+                                <label class="cvr-form-label">{{ $t('NB In Main Currency') }}</label>
+                                <input disabled :value="selectedInvoice ? Number(selectedInvoice.net_balance_in_main_currency).toLocaleString('en-EG') : 0" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                         
                        </div>
@@ -467,35 +467,35 @@ const commentTarget = ref(null);
                     </div>
 
                     <!-- Allocate Payment To Customer Contract -->
-                    <h3 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide m-4">Allocate Payment To Customer Contract</h3>
+                    <h3 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide m-4">{{ $t('Allocate Payment To Customer Contract') }}</h3>
                     <div class="overflow-x-auto mt-3 mb-2">
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-3 py-2 text-left">Customer</th>
-                                    <th class="px-3 py-2 text-left">Contract Name</th>
-                                    <th class="px-3 py-2 text-left">Contract Code</th>
-                                    <th class="px-3 py-2 text-left">Contract Amount</th>
-                                    <th class="px-3 py-2 text-left">Allocate Amount</th>
-                                    <th class="px-3 py-2 text-left"></th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Customer') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Contract Name') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Contract Code') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Contract Amount') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Allocate Amount') }}</th>
+                                    <th class="px-3 py-2 text-start"></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr v-for="row in allocationRows" :key="row._rowId" class="cvr-table-row">
                                     <td class="px-3 py-2 min-w-[10rem]">
                                         <select v-model="row.partner_id" @change="row.contract_id = ''" class="cvr-input px-2 py-1.5 rounded w-full">
-                                            <option value="">Select</option>
+                                            <option value="">{{ $t('Select') }}</option>
                                             <option v-for="c in customersWithContracts" :key="c.id" :value="c.id">{{ c.name }}</option>
                                         </select>
                                     </td>
                                     <td class="px-3 py-2 min-w-[10rem]">
                                         <select v-model="row.contract_id" class="cvr-input px-2 py-1.5 rounded w-full">
-                                            <option value="">Select</option>
+                                            <option value="">{{ $t('Select') }}</option>
                                             <option v-for="ct in contractsForCustomer(row.partner_id)" :key="ct.id" :value="ct.id">{{ ct.name }}</option>
                                         </select>
                                     </td>
                                     <td class="px-3 py-2"><input disabled :value="contractDetails(row)?.code ?? ''" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
-                                    <td class="px-3 py-2"><input disabled :value="(contractDetails(row)?.amount ?? 0).toLocaleString()" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
+                                    <td class="px-3 py-2"><input disabled :value="(contractDetails(row)?.amount ?? 0).toLocaleString('en-EG')" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
                                     <td class="px-3 py-2"><input v-model="row.allocation_amount" type="number" step="any" class="cvr-input px-2 py-1.5 rounded w-28" /></td>
                                     <td class="px-3 py-2">
                                         <button type="button" @click="removeAllocationRow(row._rowId)" class="cvr-btn-remove-row w-auto">🗑</button>
@@ -504,11 +504,11 @@ const commentTarget = ref(null);
                             </tbody>
                         </table>
                     </div>
-                    <button type="button" @click="addAllocationRow" class="cvr-btn-primary px-2 py-1 rounded text-xs mb-4">+ Add Row</button>
+                    <button type="button" @click="addAllocationRow" class="cvr-btn-primary px-2 py-1 rounded text-xs mb-4">{{ $t('+ Add Row') }}</button>
 
                     <div class="flex justify-end gap-2">
-                        <button @click="payTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="submitPay" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
+                        <button @click="payTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="submitPay" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Confirm') }}</button>
                     </div>
                 </div>
             </div>
@@ -516,20 +516,20 @@ const commentTarget = ref(null);
             <!-- Back To Running modal -->
             <div v-if="backToRunningTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-lg">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Do you want to cancel this LC payment?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to cancel this LC payment?') }}</h2>
                     <div class="cvr-form-grid-2 mb-4">
                         <div>
-                            <label class="cvr-form-label">Bank Name</label>
+                            <label class="cvr-form-label">{{ $t('Bank Name') }}</label>
                             <input disabled :value="backToRunningTarget.bank_name" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">LC Amount</label>
+                            <label class="cvr-form-label">{{ $t('LC Amount') }}</label>
                             <input disabled :value="backToRunningTarget.lc_amount_formatted" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
                     <div class="flex justify-end gap-2">
-                        <button @click="backToRunningTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="submitBackToRunning" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
+                        <button @click="backToRunningTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="submitBackToRunning" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Confirm') }}</button>
                     </div>
                 </div>
             </div>
@@ -540,25 +540,25 @@ const commentTarget = ref(null);
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">Expenses — {{ expensesTarget.transaction_name }}</h2>
                     <div class="cvr-form-grid-4 mb-4 items-end">
                         <div>
-                            <label class="cvr-form-label">Expense Name</label>
+                            <label class="cvr-form-label">{{ $t('Expense Name') }}</label>
                             <input v-model="newExpenseForm.expense_name" type="text" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Date *</label>
+                            <label class="cvr-form-label">{{ $t('Date') }} *</label>
                             <input v-model="newExpenseForm.date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Amount</label>
+                            <label class="cvr-form-label">{{ $t('Amount') }}</label>
                             <input v-model="newExpenseForm.amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Currency *</label>
+                            <label class="cvr-form-label">{{ $t('Currency') }} *</label>
                             <select v-model="newExpenseForm.currency" class="cvr-input w-full px-3 py-2 rounded">
                                 <option v-for="c in expensesTarget.bank_currencies" :key="c" :value="c">{{ c.toUpperCase() }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Exchange Rate</label>
+                            <label class="cvr-form-label">{{ $t('Exchange Rate') }}</label>
                             <input v-model="newExpenseForm.exchange_rate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
@@ -566,11 +566,11 @@ const commentTarget = ref(null);
                     <table class="min-w-full text-sm mb-4">
                         <thead class="cvr-table-head">
                             <tr>
-                                <th class="px-3 py-2 text-left">#</th>
-                                <th class="px-3 py-2 text-left">Expense Name</th>
-                                <th class="px-3 py-2 text-left">Date</th>
-                                <th class="px-3 py-2 text-left">Amount</th>
-                                <th class="px-3 py-2 text-left">Actions</th>
+                                <th class="px-3 py-2 text-start">#</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Expense Name') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Date') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Amount') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Actions') }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -581,20 +581,20 @@ const commentTarget = ref(null);
                                 <td class="px-3 py-2 cvr-num">{{ e.amount_formatted }}</td>
                                 <td class="px-3 py-2">
                                     <div class="flex items-center gap-2">
-                                        <button v-if="permissions.canUpdate" @click="openEditExpense(e)" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</button>
-                                        <button v-if="permissions.canUpdate" @click="confirmDeleteExpense(e)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
+                                        <button v-if="permissions.canUpdate" @click="openEditExpense(e)" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">{{ $t('Edit') }}</button>
+                                        <button v-if="permissions.canUpdate" @click="confirmDeleteExpense(e)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">{{ $t('Delete') }}</button>
                                     </div>
                                 </td>
                             </tr>
                             <tr v-if="expensesTarget.expenses.length === 0">
-                                <td colspan="5" class="px-3 py-6 text-center cvr-text-muted">No expenses yet.</td>
+                                <td colspan="5" class="px-3 py-6 text-center cvr-text-muted">{{ $t('No expenses yet.') }}</td>
                             </tr>
                         </tbody>
                     </table>
 
                     <div class="flex justify-end gap-2">
-                        <button @click="expensesTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="submitNewExpense" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
+                        <button @click="expensesTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="submitNewExpense" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Confirm') }}</button>
                     </div>
                 </div>
             </div>
@@ -602,32 +602,32 @@ const commentTarget = ref(null);
             <!-- Edit Expense modal -->
             <div v-if="editExpenseTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-2xl">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Edit Expense</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Edit Expense') }}</h2>
                     <div class="cvr-form-grid-3 mb-4">
                         <div>
-                            <label class="cvr-form-label">Expense Name</label>
+                            <label class="cvr-form-label">{{ $t('Expense Name') }}</label>
                             <input v-model="editExpenseForm.expense_name" type="text" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Date *</label>
+                            <label class="cvr-form-label">{{ $t('Date') }} *</label>
                             <input v-model="editExpenseForm.date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Amount</label>
+                            <label class="cvr-form-label">{{ $t('Amount') }}</label>
                             <input v-model="editExpenseForm.amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Currency *</label>
+                            <label class="cvr-form-label">{{ $t('Currency') }} *</label>
                             <input v-model="editExpenseForm.currency" type="text" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Exchange Rate</label>
+                            <label class="cvr-form-label">{{ $t('Exchange Rate') }}</label>
                             <input v-model="editExpenseForm.exchange_rate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
                     <div class="flex justify-end gap-2">
-                        <button @click="editExpenseTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="submitEditExpense" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
+                        <button @click="editExpenseTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="submitEditExpense" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Confirm') }}</button>
                     </div>
                 </div>
             </div>
@@ -635,10 +635,10 @@ const commentTarget = ref(null);
             <!-- Delete Expense confirmation -->
             <div v-if="deleteExpenseTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Do you want to delete this expense?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to delete this expense?') }}</h2>
                     <div class="flex justify-end gap-2">
-                        <button @click="deleteExpenseTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyExpense" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Delete</button>
+                        <button @click="deleteExpenseTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyExpense" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>
@@ -646,10 +646,10 @@ const commentTarget = ref(null);
             <!-- Delete confirmation -->
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Do you want to delete this item?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to delete this item?') }}</h2>
                     <div class="flex justify-end gap-2">
-                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Delete</button>
+                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>
@@ -658,8 +658,8 @@ const commentTarget = ref(null);
             <div v-if="commentTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-md">
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-lg font-medium cvr-text-primary">User Comment</h2>
-                        <button @click="commentTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
+                        <h2 class="text-lg font-medium cvr-text-primary">{{ $t('User Comment') }}</h2>
+                        <button @click="commentTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
                     </div>
                     <p class="cvr-text-secondary">{{ commentTarget.user_comment }}</p>
                 </div>

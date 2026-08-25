@@ -75,10 +75,10 @@ function destroyRow() {
     <AppLayout>
         <div class="p-6">
             <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm mb-3">
-                ← Back to Invoice Report
+                {{ $t('← Back to Invoice Report') }}
             </Link>
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Adjusted Due Date</h1>
-            <p class="text-sm cvr-text-muted mb-6">{{ editingHistory ? 'Editing the most recent adjustment' : 'Adjusted Collection Date Section' }}</p>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Adjusted Due Date') }}</h1>
+            <p class="text-sm cvr-text-muted mb-6">{{ editingHistory ? $t('Editing the most recent adjustment') : $t('Adjusted Collection Date Section') }}</p>
 
             <!-- Form -->
             <div class="cvr-card-bg cvr-border border rounded-lg p-4 mb-6">
@@ -88,32 +88,32 @@ function destroyRow() {
                         <input type="text" disabled :value="invoice.name" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">Invoice Number</label>
+                        <label class="cvr-form-label">{{ $t('Invoice Number') }}</label>
                         <input type="text" disabled :value="invoice.invoice_number" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">Invoice Due Date</label>
+                        <label class="cvr-form-label">{{ $t('Invoice Due Date') }}</label>
                         <input type="text" disabled :value="invoice.due_date_formatted" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">Invoice Net Balance</label>
+                        <label class="cvr-form-label">{{ $t('Invoice Net Balance') }}</label>
                         <input type="text" disabled :value="invoice.net_balance_formatted" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">Invoice Currency</label>
+                        <label class="cvr-form-label">{{ $t('Invoice Currency') }}</label>
                         <input type="text" disabled :value="invoice.currency" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">Adjusted Collection Date *</label>
+                        <label class="cvr-form-label">{{ $t('Adjusted Collection Date') }} *</label>
                         <input v-model="form.due_date" type="date" required class="cvr-input w-full px-3 py-2 rounded" />
                         <p v-if="form.errors.due_date" class="text-xs text-red-500 mt-1">{{ form.errors.due_date }}</p>
                     </div>
                 </div>
                 <button @click="submit" :disabled="form.processing" class="cvr-btn-primary px-4 py-1.5 rounded text-sm mt-4">
-                    {{ editingHistory ? 'Save Change' : 'Submit' }}
+                    {{ editingHistory ? $t('Save Change') : $t('Submit') }}
                 </button>
-                <Link v-if="editingHistory" :href="indexUrl" class="cvr-btn-secondary px-4 py-1.5 rounded border text-sm mt-4 ml-2 inline-block">
-                    Cancel
+                <Link v-if="editingHistory" :href="indexUrl" class="cvr-btn-secondary px-4 py-1.5 rounded border text-sm mt-4 ms-2 inline-block">
+                    {{ $t('Cancel') }}
                 </Link>
             </div>
 
@@ -123,10 +123,10 @@ function destroyRow() {
                     <thead class="cvr-table-head">
                         <tr>
                             <th class="px-4 py-3 text-center">#</th>
-                            <th class="px-4 py-3 text-center">Date</th>
-                            <th class="px-4 py-3 text-center">Days Count</th>
-                            <th class="px-4 py-3 text-right">Amount</th>
-                            <th class="px-4 py-3 text-center">Actions</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Date') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Days Count') }}</th>
+                            <th class="px-4 py-3 text-right">{{ $t('Amount') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -134,19 +134,19 @@ function destroyRow() {
                             <td class="px-4 py-3 text-center cvr-text-secondary">{{ i + 1 }}</td>
                             <td class="px-4 py-3 text-center cvr-text-primary">
                                 {{ row.due_date_formatted }}
-                                <span v-if="row.is_original" class="cvr-text-muted text-xs"> (Original Due Date)</span>
+                                <span v-if="row.is_original" class="cvr-text-muted text-xs"> {{ $t('(Original Due Date)') }}</span>
                             </td>
                             <td class="px-4 py-3 text-center cvr-num">{{ row.days_count ?? '-' }}</td>
                             <td class="px-4 py-3 text-right cvr-num">{{ row.amount_formatted }}</td>
                             <td class="px-4 py-3 text-center">
                                 <div v-if="row.is_last" class="flex items-center justify-center gap-2">
-                                    <Link :href="row.edit_url" class="cvr-action-btn" title="Edit">✎</Link>
-                                    <button v-if="can('adjusted_due_date.delete')" @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" title="Delete">🗑</button>
+                                    <Link :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✎</Link>
+                                    <button v-if="can('adjusted_due_date.delete')" @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" :title="$t('Delete')">🗑</button>
                                 </div>
                             </td>
                         </tr>
                         <tr v-if="dueDateHistories.length === 0">
-                            <td colspan="5" class="px-4 py-8 text-center cvr-text-muted">No due date adjustments yet.</td>
+                            <td colspan="5" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No due date adjustments yet.') }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -156,10 +156,10 @@ function destroyRow() {
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">Delete due date history {{ deleteTarget.due_date_formatted }}?</h2>
-                    <p class="text-sm cvr-text-muted mb-4">Are you sure you want to delete this item?</p>
+                    <p class="text-sm cvr-text-muted mb-4">{{ $t('Are you sure you want to delete this item?') }}</p>
                     <div class="flex justify-end gap-2">
-                        <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">Delete</button>
+                        <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Delete') }}</button>
                     </div>
                 </div>
             </div>

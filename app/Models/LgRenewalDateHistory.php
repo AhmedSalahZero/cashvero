@@ -88,6 +88,61 @@ class LgRenewalDateHistory extends Model
         $amount = $this->getFeesAmount();
         return number_format($amount) ;
     }
+    /**
+     * * الشروط اللي البنك غيرها عند التجديد ده
+     * * NULL معناها ان التجديد ما غيرش الشرط ده — مش انه بصفر
+     *
+     * @see \App\Support\LetterOfGuarantee\LgRenewalTerms
+     */
+    public function getCashCoverAmount()
+    {
+        return $this->cash_cover_amount;
+    }
+    public function getCashCoverAmountFormatted()
+    {
+        return is_null($this->getCashCoverAmount()) ? null : number_format($this->getCashCoverAmount());
+    }
+    public function getLgCommissionAmount()
+    {
+        return $this->lg_commission_amount;
+    }
+    public function getLgCommissionAmountFormatted()
+    {
+        return is_null($this->getLgCommissionAmount()) ? null : number_format($this->getLgCommissionAmount());
+    }
+    public function getMinLgCommissionFees()
+    {
+        return $this->min_lg_commission_fees;
+    }
+    /**
+     * * الـ cash cover اللي كان ساري قبل التجديد ده .. لو التجديد ما
+     * * غيرش الـ cash cover يبقى مفيش قيمة سابقة اصلا
+     */
+    public function getPreviousCashCoverAmount()
+    {
+        return $this->previous_cash_cover_amount;
+    }
+    /**
+     * * الفرق اللي اتخصم (او اترد) عند التجديد ده
+     */
+    public function getCashCoverDifference(): float
+    {
+        if (is_null($this->getCashCoverAmount())) {
+            return 0.0;
+        }
+
+        return round((float) $this->getCashCoverAmount() - (float) $this->getPreviousCashCoverAmount(), 2);
+    }
+    public function getCashCoverDifferenceFormatted(): ?string
+    {
+        $difference = $this->getCashCoverDifference();
+
+        return $difference == 0.0 ? null : number_format($difference);
+    }
+    public function cashCoverStatements():HasMany
+    {
+        return $this->hasMany(LetterOfGuaranteeCashCoverStatement::class, 'lg_renewal_date_history_id', 'id');
+    }
     public function commissionCurrentBankStatements():HasMany
     {
         return $this->hasMany(CurrentAccountBankStatement::class, 'lg_renewal_date_history_id', 'id');

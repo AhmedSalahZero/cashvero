@@ -106,25 +106,25 @@ function submit() {
 <template>
     <AppLayout>
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">LG & LC Statement</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('LG & LC Statement') }}</h1>
             <p class="text-sm cvr-text-muted mb-6">
-                A running-balance ledger for a Letter of Credit, Letter of Guarantee, or LC Overdraft, for a chosen date range.
+                {{ $t('A running-balance ledger for a Letter of Credit, Letter of Guarantee, or LC Overdraft, for a chosen date range.') }}
             </p>
 
             <div class="cvr-card-bg cvr-border border rounded-lg p-5">
                 <div class="cvr-form-grid-3 mb-5">
                     <div>
-                        <label class="cvr-form-label">Start Date *</label>
+                        <label class="cvr-form-label">{{ $t('Start Date') }} *</label>
                         <input v-model="startDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">End Date *</label>
+                        <label class="cvr-form-label">{{ $t('End Date') }} *</label>
                         <input v-model="endDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">Currency *</label>
+                        <label class="cvr-form-label">{{ $t('Currency') }} *</label>
                         <select v-model="currency" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="" disabled>Select currency</option>
+                            <option value="" disabled>{{ $t('Select currency') }}</option>
                             <option v-for="(label, code) in currencies" :key="code" :value="code">{{ String(label).toUpperCase() }}</option>
                         </select>
                     </div>
@@ -132,16 +132,16 @@ function submit() {
 
                 <div class="cvr-form-grid-2 mb-5">
                     <div>
-                        <label class="cvr-form-label">Bank *</label>
+                        <label class="cvr-form-label">{{ $t('Bank') }} *</label>
                         <select v-model="financialInstitutionId" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="" disabled>Select bank</option>
+                            <option value="" disabled>{{ $t('Select bank') }}</option>
                             <option v-for="bank in [...financialInstitutionBanks].sort((a, b) => a.name.localeCompare(b.name))" :key="bank.id" :value="bank.id">{{ bank.name }}</option>
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Report Type *</label>
+                        <label class="cvr-form-label">{{ $t('Report Type') }} *</label>
                         <select v-model="reportType" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="" disabled>Select report type</option>
+                            <option value="" disabled>{{ $t('Select report type') }}</option>
                             <option v-for="(label, key) in reportTypes" :key="key" :value="key">{{ label }}</option>
                         </select>
                     </div>
@@ -149,23 +149,23 @@ function submit() {
 
                 <div class="cvr-form-grid-3 mb-5">
                     <div v-if="needsSource">
-                        <label class="cvr-form-label">Source *</label>
+                        <label class="cvr-form-label">{{ $t('Source') }} *</label>
                         <select v-model="source" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="" disabled>Select</option>
+                            <option value="" disabled>{{ $t('Select') }}</option>
                             <option v-for="(label, key) in sourceOptions" :key="key" :value="key">{{ label }}</option>
                         </select>
                     </div>
                     <div v-if="needsType">
-                        <label class="cvr-form-label">Type *</label>
+                        <label class="cvr-form-label">{{ $t('Type') }} *</label>
                         <select v-model="type" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="" disabled>Select</option>
+                            <option value="" disabled>{{ $t('Select') }}</option>
                             <option v-for="(label, key) in typeOptions" :key="key" :value="key">{{ label }}</option>
                         </select>
                     </div>
                     <div v-if="isLcOverdraft">
-                        <label class="cvr-form-label">LC Facility *</label>
+                        <label class="cvr-form-label">{{ $t('LC Facility') }} *</label>
                         <select v-model="lcFacilityId" class="cvr-input w-full px-3 py-2 rounded" :disabled="loadingFacilities || Object.keys(lcFacilityOptions).length === 0">
-                            <option value="" disabled>{{ loadingFacilities ? 'Loading…' : (Object.keys(lcFacilityOptions).length ? 'Select' : 'Select a bank first') }}</option>
+                            <option value="" disabled>{{ loadingFacilities ? $t('Loading…') : (Object.keys(lcFacilityOptions).length ? $t('Select') : $t('Select a bank first')) }}</option>
                             <option v-for="(label, key) in lcFacilityOptions" :key="key" :value="key">{{ label }}</option>
                         </select>
                     </div>
@@ -177,17 +177,17 @@ function submit() {
                     class="cvr-btn-primary px-4 py-1.5 rounded text-sm"
                     :class="{ 'opacity-40 cursor-not-allowed': !canSubmit }"
                 >
-                    View Statement
+                    {{ $t('View Statement') }}
                 </button>
                 <ul v-if="!canSubmit" class="text-xs mt-2 space-y-0.5" style="color: var(--cvr-danger-text);">
-                    <li v-if="!startDate">— Start Date is not set.</li>
-                    <li v-if="!endDate">— End Date is not set.</li>
-                    <li v-if="!currency">— Currency is not selected.</li>
-                    <li v-if="!financialInstitutionId">— Bank is not selected.</li>
-                    <li v-if="!reportType">— Report Type is not selected.</li>
-                    <li v-if="needsSource && !source">— Source is not selected.</li>
-                    <li v-if="needsType && !type">— Type is not selected.</li>
-                    <li v-if="isLcOverdraft && !lcFacilityId">— LC Facility is not selected.</li>
+                    <li v-if="!startDate">{{ $t('— Start Date is not set.') }}</li>
+                    <li v-if="!endDate">{{ $t('— End Date is not set.') }}</li>
+                    <li v-if="!currency">{{ $t('— Currency is not selected.') }}</li>
+                    <li v-if="!financialInstitutionId">{{ $t('— Bank is not selected.') }}</li>
+                    <li v-if="!reportType">{{ $t('— Report Type is not selected.') }}</li>
+                    <li v-if="needsSource && !source">{{ $t('— Source is not selected.') }}</li>
+                    <li v-if="needsType && !type">{{ $t('— Type is not selected.') }}</li>
+                    <li v-if="isLcOverdraft && !lcFacilityId">{{ $t('— LC Facility is not selected.') }}</li>
                 </ul>
             </div>
         </div>

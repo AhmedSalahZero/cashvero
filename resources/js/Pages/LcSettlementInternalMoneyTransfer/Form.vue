@@ -125,64 +125,64 @@ function submit() {
         <div class="p-6 max-w-6xl mx-auto">
             <div class="flex items-center gap-3 mb-1">
                 <Link :href="urls.back" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                    ← Back to LC Settlement Internal Transfers
+                    {{ $t('← Back to LC Settlement Internal Transfers') }}
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-6">
-                {{ isEdit ? 'Edit' : 'Add' }} Bank To Letter Of Credit Internal Money Transfer
+                {{ isEdit ? $t('Edit') : $t('Add') }} Bank To Letter Of Credit Internal Money Transfer
             </h1>
 
             <FormErrorSummary />
 
             <form @submit.prevent="submit" class="space-y-6">
                 <div class="cvr-card-bg cvr-border border rounded-lg p-5">
-                    <h2 class="text-base font-medium cvr-text-primary mb-4">Bank To Letter Of Credit Transfer Information</h2>
+                    <h2 class="text-base font-medium cvr-text-primary mb-4">{{ $t('Bank To Letter Of Credit Transfer Information') }}</h2>
                     <div class="cvr-form-grid-3">
                         <div>
-                            <label class="cvr-form-label">Date *</label>
+                            <label class="cvr-form-label">{{ $t('Date') }} *</label>
                             <input v-model="transferDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errors.transfer_date" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.transfer_date }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">From Bank *</label>
+                            <label class="cvr-form-label">{{ $t('From Bank') }} *</label>
                             <select v-model="fromBankId" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="b in [...financialInstitutionBanks].sort((a, b) => a.name.localeCompare(b.name))" :key="b.id" :value="b.id">{{ b.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Currency *</label>
+                            <label class="cvr-form-label">{{ $t('Currency') }} *</label>
                             <select v-model="currency" class="cvr-input w-full px-3 py-2 rounded">
                                 <option v-for="c in currencies" :key="c.code" :value="c.code">{{ c.label }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">To Letter Of Credit Issuance *</label>
+                            <label class="cvr-form-label">{{ $t('To Letter Of Credit Issuance') }} *</label>
                             <select v-model="toLetterOfCreditIssuanceId" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="lc in lcIssuances" :key="lc.id" :value="lc.id">{{ lc.name }}</option>
                             </select>
                             <p v-if="errors.to_letter_of_credit_issuance_id" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.to_letter_of_credit_issuance_id }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Remaining Balance</label>
-                            <input disabled :value="Number(remainingBalance).toLocaleString()" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
+                            <label class="cvr-form-label">{{ $t('Remaining Balance') }}</label>
+                            <input disabled :value="Number(remainingBalance).toLocaleString('en-EG')" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">From Account Type *</label>
+                            <label class="cvr-form-label">{{ $t('From Account Type') }} *</label>
                             <select v-model="fromAccountTypeId" class="cvr-input w-full px-3 py-2 rounded">
                                 <option v-for="a in accountTypes" :key="a.id" :value="a.id">{{ a.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">From Account Number *</label>
+                            <label class="cvr-form-label">{{ $t('From Account Number') }} *</label>
                             <select v-model="fromAccountNumber" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="n in fromAccountNumbers" :key="n.value" :value="n.value">{{ n.label }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Amount *</label>
+                            <label class="cvr-form-label">{{ $t('Amount') }} *</label>
                             <input v-model="amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errors.amount" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.amount }}</p>
                         </div>
@@ -191,15 +191,15 @@ function submit() {
 
                 <!-- Interest -->
                 <div class="cvr-card-bg cvr-border border rounded-lg p-5">
-                    <h2 class="text-base font-medium cvr-text-primary mb-4">Interest</h2>
+                    <h2 class="text-base font-medium cvr-text-primary mb-4">{{ $t('Interest') }}</h2>
                     <div class="cvr-form-grid-3">
                         <div>
-                            <label class="cvr-form-label">Interest Amount</label>
+                            <label class="cvr-form-label">{{ $t('Interest Amount') }}</label>
                             <input v-model="interestAmount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errors.interest_amount" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.interest_amount }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Post Interest To</label>
+                            <label class="cvr-form-label">{{ $t('Post Interest To') }}</label>
                             <select v-model="interestDestination" class="cvr-input w-full px-3 py-2 rounded">
                                 <option v-for="d in interestDestinations" :key="d.value" :value="d.value">{{ d.title }}</option>
                             </select>
@@ -209,14 +209,14 @@ function submit() {
 
                 <!-- Comment -->
                 <div class="cvr-card-bg cvr-border border rounded-lg p-5">
-                    <label class="cvr-form-label">Comment</label>
+                    <label class="cvr-form-label">{{ $t('Comment') }}</label>
                     <textarea v-model="userComment" rows="2" class="cvr-input w-full px-3 py-2 rounded"></textarea>
                 </div>
 
                 <div class="flex justify-end gap-2">
-                    <Link :href="urls.back" class="cvr-btn-secondary px-4 py-2 rounded border">Cancel</Link>
+                    <Link :href="urls.back" class="cvr-btn-secondary px-4 py-2 rounded border">{{ $t('Cancel') }}</Link>
                     <button type="submit" :disabled="submitting" class="cvr-btn-primary px-4 py-2 rounded">
-                        {{ submitting ? 'Saving...' : 'Save' }}
+                        {{ submitting ? $t('Saving...') : $t('Save') }}
                     </button>
                 </div>
             </form>

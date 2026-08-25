@@ -138,41 +138,39 @@ function submit() {
     <AppLayout>
         <div class="p-6">
             <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm mb-4">
-                ← Back to Roles
+                {{ $t('← Back to Roles') }}
             </Link>
 
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">
-                {{ mode === 'edit' ? `Edit “${role.label}”` : 'New Role' }}
+                {{ mode === 'edit' ? `Edit “${role.label}”` : $t('New Role') }}
             </h1>
             <p class="text-sm cvr-text-muted mb-6 max-w-2xl">
-                Tick the actions a user created with this role should start with. This is a
-                <strong class="cvr-text-primary">template</strong> — saving it does not change any existing user, since
-                permissions are held per user. To change someone who already exists, edit them from the Users list.
+                {{ $t('Tick the actions a user created with this role should start with. This is a') }}
+                <strong class="cvr-text-primary">{{ $t('template') }}</strong> {{ $t('— saving it does not change any existing user, since permissions are held per user. To change someone who already exists, edit them from the Users list.') }}
             </p>
 
             <div v-if="isSuperAdminRole" class="cvr-card p-4 mb-6">
                 <p class="text-sm cvr-text-secondary">
-                    <strong class="cvr-text-primary">Super Admin holds every permission</strong> through a centralised bypass,
-                    so this template is always the full set. To limit someone, give them a different role.
+                    <strong class="cvr-text-primary">{{ $t('Super Admin holds every permission') }}</strong> {{ $t('through a centralised bypass, so this template is always the full set. To limit someone, give them a different role.') }}
                 </p>
             </div>
 
             <form @submit.prevent="submit" class="space-y-5">
                 <!-- ── Role name ── -->
                 <div class="cvr-card p-4">
-                    <label class="block text-sm font-medium cvr-text-primary mb-1.5">Role name</label>
+                    <label class="block text-sm font-medium cvr-text-primary mb-1.5">{{ $t('Role name') }}</label>
                     <input
                         v-model="name"
                         :disabled="nameLocked"
                         type="text"
-                        placeholder="branch-manager"
+                        :placeholder="$t('branch-manager')"
                         class="cvr-input w-full max-w-sm px-3 py-2 rounded border"
                         :class="{ 'opacity-60 cursor-not-allowed': nameLocked }"
                     />
                     <p v-if="nameLocked" class="text-xs cvr-text-muted mt-1.5">
-                        Built-in role names are fixed — application logic matches on them. Its permissions are still editable.
+                        {{ $t('Built-in role names are fixed — application logic matches on them. Its permissions are still editable.') }}
                     </p>
-                    <p v-else class="text-xs cvr-text-muted mt-1.5">Lowercase letters, numbers and hyphens.</p>
+                    <p v-else class="text-xs cvr-text-muted mt-1.5">{{ $t('Lowercase letters, numbers and hyphens.') }}</p>
                     <p v-if="errors.name" class="text-xs cvr-text-danger mt-1.5">{{ errors.name }}</p>
                 </div>
 
@@ -181,7 +179,7 @@ function submit() {
                     <input
                         v-model="search"
                         type="search"
-                        placeholder="Search modules and actions…"
+                        :placeholder="$t('Search modules and actions…')"
                         class="cvr-input flex-1 min-w-[14rem] px-3 py-2 rounded border"
                     />
                     <div class="flex items-center gap-2 flex-wrap">
@@ -191,8 +189,8 @@ function submit() {
                         <button type="button" @click="setMany(visibleKeys, false)" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
                             Clear {{ query ? 'shown' : 'all' }}
                         </button>
-                        <button type="button" @click="expandAll" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">Expand</button>
-                        <button type="button" @click="collapseAll" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">Collapse</button>
+                        <button type="button" @click="expandAll" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">{{ $t('Expand') }}</button>
+                        <button type="button" @click="collapseAll" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">{{ $t('Collapse') }}</button>
                     </div>
                     <span class="text-sm cvr-text-muted tabular-nums whitespace-nowrap">
                         {{ countSelected(totalKeys) }} / {{ totalKeys.length }} selected
@@ -275,13 +273,13 @@ function submit() {
                 </div>
 
                 <p v-if="!isSuperAdminEditor && !isSuperAdminRole" class="text-xs cvr-text-muted">
-                    Greyed-out actions are ones you do not hold yourself, so you cannot grant them.
+                    {{ $t('Greyed-out actions are ones you do not hold yourself, so you cannot grant them.') }}
                 </p>
 
                 <div class="flex justify-end gap-2">
-                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">Cancel</Link>
+                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">{{ $t('Cancel') }}</Link>
                     <button type="submit" :disabled="submitting" class="cvr-btn-primary px-4 py-2 rounded">
-                        {{ submitting ? 'Saving…' : (mode === 'edit' ? 'Save Template' : 'Create Template') }}
+                        {{ submitting ? $t('Saving…') : (mode === 'edit' ? $t('Save Template') : $t('Create Template')) }}
                     </button>
                 </div>
             </form>

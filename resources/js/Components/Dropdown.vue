@@ -17,10 +17,10 @@ import { ref, onBeforeUnmount, nextTick } from 'vue';
  * Usage:
  *   <Dropdown>
  *     <template #trigger="{ toggle }">
- *       <button @click="toggle" class="cvr-tag">Options ▾</button>
+ *       <button @click="toggle" class="cvr-tag">{{ $t('Options ▾') }}</button>
  *     </template>
  *     <template #content>
- *       <Link href="..." class="block px-3 py-2 text-xs cvr-nav-item">Item</Link>
+ *       <Link href="..." class="block px-3 py-2 text-xs cvr-nav-item">{{ $t('Item') }}</Link>
  *     </template>
  *   </Dropdown>
  */
@@ -42,16 +42,22 @@ const position = ref({ top: 0, left: 0 });
 async function toggle() {
     if (!open.value && triggerRef.value) {
         const rect = triggerRef.value.getBoundingClientRect();
+        const isRtl = document.documentElement.dir === 'rtl';
         position.value = {
             top: rect.bottom + window.scrollY + 4,
-            left: rect.left + window.scrollX,
+            left: isRtl
+                ? rect.right + window.scrollX - 200
+                : rect.left + window.scrollX,
         };
         open.value = true;
         await nextTick();
         if (menuRef.value) {
             const menuRect = menuRef.value.getBoundingClientRect();
-            if (menuRect.right > window.innerWidth) {
+            if (!isRtl && menuRect.right > window.innerWidth) {
                 position.value.left = rect.right + window.scrollX - menuRect.width;
+            }
+            if (isRtl && menuRect.left < 0) {
+                position.value.left = rect.left + window.scrollX;
             }
         }
         return;

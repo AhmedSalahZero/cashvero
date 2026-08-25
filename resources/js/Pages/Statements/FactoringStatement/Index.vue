@@ -99,52 +99,52 @@ function submit() {
 <template>
     <AppLayout>
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Factoring Statement</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Factoring Statement') }}</h1>
             <p class="text-sm cvr-text-muted mb-4">
-                A running-balance ledger for one factoring contract, for a chosen date range.
+                {{ $t('A running-balance ledger for one factoring contract, for a chosen date range.') }}
             </p>
 
             <!-- Tabs (Charges Statement isn't migrated yet — plain link) -->
             <div class="flex items-center gap-1 mb-5 border-b cvr-border">
                 <span class="px-4 py-2 text-sm font-medium border-b-2" style="border-color: var(--cvr-green-bright); color: var(--cvr-green-bright);">
-                    📄 Factoring Statement
+                    {{ $t('📄 Factoring Statement') }}
                 </span>
                 <a :href="urls.chargesStatementUrl" class="px-4 py-2 text-sm font-medium cvr-text-muted hover:cvr-text-primary">
-                    🧾 Factoring Charges Statement
+                    {{ $t('🧾 Factoring Charges Statement') }}
                 </a>
             </div>
 
             <div class="cvr-card-bg cvr-border border rounded-lg p-5">
                 <div class="cvr-form-grid-2 mb-5">
                     <div>
-                        <label class="cvr-form-label">Start Date *</label>
+                        <label class="cvr-form-label">{{ $t('Start Date') }} *</label>
                         <input v-model="startDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">End Date *</label>
+                        <label class="cvr-form-label">{{ $t('End Date') }} *</label>
                         <input v-model="endDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                 </div>
 
                 <div class="cvr-form-grid-3">
                     <div>
-                        <label class="cvr-form-label">Factoring Company *</label>
+                        <label class="cvr-form-label">{{ $t('Factoring Company') }} *</label>
                         <select v-model="factoringCompanyId" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="" disabled>Select</option>
+                            <option value="" disabled>{{ $t('Select') }}</option>
                             <option v-for="fc in factoringCompanies" :key="fc.id" :value="fc.id">{{ fc.name }}</option>
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Currency *</label>
+                        <label class="cvr-form-label">{{ $t('Currency') }} *</label>
                         <select v-model="currency" class="cvr-input w-full px-3 py-2 rounded" :disabled="loadingCurrencies || Object.keys(currencyOptions).length === 0">
-                            <option value="" disabled>{{ loadingCurrencies ? 'Loading…' : (Object.keys(currencyOptions).length ? 'Select' : 'Select a factoring company first') }}</option>
+                            <option value="" disabled>{{ loadingCurrencies ? $t('Loading…') : (Object.keys(currencyOptions).length ? $t('Select') : $t('Select a factoring company first')) }}</option>
                             <option v-for="(label, code) in currencyOptions" :key="code" :value="code">{{ String(label).toUpperCase() }}</option>
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Factoring Contract *</label>
+                        <label class="cvr-form-label">{{ $t('Factoring Contract') }} *</label>
                         <select v-model="factoringContractId" class="cvr-input w-full px-3 py-2 rounded" :disabled="loadingContracts || contractOptions.length === 0">
-                            <option value="" disabled>{{ loadingContracts ? 'Loading…' : (contractOptions.length ? 'Select' : 'Select a currency first') }}</option>
+                            <option value="" disabled>{{ loadingContracts ? $t('Loading…') : (contractOptions.length ? $t('Select') : $t('Select a currency first')) }}</option>
                             <option v-for="c in contractOptions" :key="c.id" :value="c.id">{{ c.label }}</option>
                         </select>
                     </div>
@@ -156,14 +156,14 @@ function submit() {
                     class="cvr-btn-primary px-4 py-1.5 rounded text-sm mt-5"
                     :class="{ 'opacity-40 cursor-not-allowed': !canSubmit }"
                 >
-                    View Statement
+                    {{ $t('View Statement') }}
                 </button>
                 <ul v-if="!canSubmit" class="text-xs mt-2 space-y-0.5" style="color: var(--cvr-danger-text);">
-                    <li v-if="!startDate">— Start Date is not set.</li>
-                    <li v-if="!endDate">— End Date is not set.</li>
-                    <li v-if="!factoringCompanyId">— Factoring Company is not selected.</li>
-                    <li v-if="!currency">— Currency is not selected.</li>
-                    <li v-if="!factoringContractId">— Factoring Contract is not selected.</li>
+                    <li v-if="!startDate">{{ $t('— Start Date is not set.') }}</li>
+                    <li v-if="!endDate">{{ $t('— End Date is not set.') }}</li>
+                    <li v-if="!factoringCompanyId">{{ $t('— Factoring Company is not selected.') }}</li>
+                    <li v-if="!currency">{{ $t('— Currency is not selected.') }}</li>
+                    <li v-if="!factoringContractId">{{ $t('— Factoring Contract is not selected.') }}</li>
                 </ul>
             </div>
         </div>

@@ -96,44 +96,44 @@ function submit() {
 
                 <div class="cvr-form-grid-4">
                     <div>
-                        <label class="cvr-form-label">Start Date</label>
+                        <label class="cvr-form-label">{{ $t('Start Date') }}</label>
                         <input v-model="form.start_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">End Date</label>
+                        <label class="cvr-form-label">{{ $t('End Date') }}</label>
                         <input v-model="form.end_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
 
                     <div v-if="businessUnits.length" class="relative">
-                        <label class="cvr-form-label">Business Unit</label>
-                        <MultiSelectDropdown v-model="form.business_units" :options="businessUnitOptions" placeholder="Select" />
+                        <label class="cvr-form-label">{{ $t('Business Unit') }}</label>
+                        <MultiSelectDropdown v-model="form.business_units" :options="businessUnitOptions" :placeholder="$t('Select')" />
                     </div>
 
                     <div v-if="salesPersons.length" class="relative">
-                        <label class="cvr-form-label">Sales Person</label>
-                        <MultiSelectDropdown v-model="form.sales_persons" :options="salesPersonOptions" placeholder="Select" />
+                        <label class="cvr-form-label">{{ $t('Sales Person') }}</label>
+                        <MultiSelectDropdown v-model="form.sales_persons" :options="salesPersonOptions" :placeholder="$t('Select')" />
                     </div>
 
                     <div v-if="businessSectors.length" class="relative">
-                        <label class="cvr-form-label">Business Sector</label>
-                        <MultiSelectDropdown v-model="form.business_sectors" :options="businessSectorOptions" placeholder="Select" />
+                        <label class="cvr-form-label">{{ $t('Business Sector') }}</label>
+                        <MultiSelectDropdown v-model="form.business_sectors" :options="businessSectorOptions" :placeholder="$t('Select')" />
                     </div>
 
                     <div>
-                        <label class="cvr-form-label">Currency *</label>
+                        <label class="cvr-form-label">{{ $t('Currency') }} *</label>
                         <select v-model="form.currency" @change="refreshOptions" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="" disabled>Select</option>
+                            <option value="" disabled>{{ $t('Select') }}</option>
                             <option v-for="c in currencyOptions" :key="c" :value="c">{{ c.toUpperCase() }}</option>
                         </select>
                     </div>
 
                     <div class="relative">
                         <label class="cvr-form-label">{{ customersOrSupplierText }} *</label>
-                        <MultiSelectDropdown v-model="form.clients" :options="clientNameOptions" placeholder="Select" />
+                        <MultiSelectDropdown v-model="form.clients" :options="clientNameOptions" :placeholder="$t('Select')" />
                     </div>
                 </div>
 
-                <button @click="submit" :disabled="form.processing" class="cvr-btn-primary px-4 py-1.5 rounded text-sm">Submit</button>
+                <button @click="submit" :disabled="form.processing" class="cvr-btn-primary px-4 py-1.5 rounded text-sm">{{ $t('Submit') }}</button>
             </div>
         </div>
     </AppLayout>

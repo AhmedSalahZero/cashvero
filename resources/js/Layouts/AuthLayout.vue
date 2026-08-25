@@ -23,6 +23,8 @@
  * prefix is unique to this auth flow and never used by the main
  * `cvr-` app styling.
  */
+import LanguageSwitcher from '@/Components/LanguageSwitcher.vue';
+
 const authModules = [
     { name: 'Dashboard' },
     { name: 'Overdrafts' },
@@ -68,26 +70,26 @@ const logoUrl = '/images/cashvero-logo.png';
                 </div>
                 <div>
                     <div class="zav-brand-name">CashVero</div>
-                    <div class="zav-brand-sub">Cash &amp; Banking Facilities</div>
+                    <div class="zav-brand-sub">{{ $t('Cash & Banking Facilities') }}</div>
                 </div>
             </div>
 
             <div class="zav-mid">
-                <p class="zav-eyebrow">Financial Intelligence &amp; Control</p>
+                <p class="zav-eyebrow">{{ $t('Financial Intelligence & Control') }}</p>
                 <h1 class="zav-headline">
-                    Beyond Transactions<br />
-                    <span class="zav-headline-accent">Insight That Drives Decisions</span>
+                    {{ $t('Beyond Transactions') }}<br />
+                    <span class="zav-headline-accent">{{ $t('Insight That Drives Decisions') }}</span>
                 </h1>
                 <p class="zav-tagline">
-                    Built for Finance Teams &amp; Treasury Managers<br />
-                    Monitor, Control &amp; Optimise.
+                    {{ $t('Built for Finance Teams & Treasury Managers') }}<br />
+                    {{ $t('Monitor, Control & Optimise.') }}
                 </p>
 
-                <p class="zav-modules-label">12 Active Modules</p>
+                <p class="zav-modules-label">{{ $t('12 Active Modules') }}</p>
                 <div class="zav-modules-grid">
                     <div v-for="module in authModules" :key="module.name" class="zav-mod" :class="{ 'zav-mod-gold': module.gold }">
                         <span class="zav-mod-dot" :class="{ 'zav-mod-dot-gold': module.gold }"></span>
-                        {{ module.name }}
+                        {{ $t(module.name) }}
                     </div>
                 </div>
             </div>
@@ -96,19 +98,22 @@ const logoUrl = '/images/cashvero-logo.png';
                 <div class="zav-stats">
                     <div v-for="stat in authStats" :key="stat.label">
                         <div class="zav-stat-num" :class="{ 'zav-stat-gold': stat.gold }">{{ stat.value }}</div>
-                        <div class="zav-stat-label">{{ stat.label }}</div>
+                        <div class="zav-stat-label">{{ $t(stat.label) }}</div>
                     </div>
                 </div>
                 <p class="zav-footer-left">
                     © {{ currentYear }} CashVero · Built by
-                    <span class="zav-footer-squad">SQUAD Business Consulting</span>
-                    · Cairo, Egypt
+                    <span class="zav-footer-squad">{{ $t('SQUAD Business Consulting') }}</span>
+                    {{ $t('· Cairo, Egypt') }}
                 </p>
             </div>
         </div>
 
         <!-- Right form panel -->
         <div class="zav-right">
+            <div class="zav-lang-switch">
+                <LanguageSwitcher />
+            </div>
             <div class="zav-logo-area">
                 <img :src="logoUrl" alt="CashVero" class="zav-logo-img" />
             </div>
@@ -282,13 +287,20 @@ const logoUrl = '/images/cashvero-logo.png';
 .zav-right {
     width: 100%;
     background-color: #0E1E34;
-    border-left: 1px solid #1B3558;
+    border-inline-start: 1px solid #1B3558;
     display: flex; flex-direction: column;
+    position: relative;
 }
 @media (min-width: 1024px) {
     .zav-right { width: 48%; }
 }
 
+.zav-lang-switch {
+    position: absolute;
+    top: 1rem;
+    inset-inline-end: 1rem;
+    z-index: 5;
+}
 .zav-logo-area {
     padding: 1rem 1.5rem 0.5rem;
     display: flex; align-items: center; justify-content: center;
@@ -373,9 +385,9 @@ const logoUrl = '/images/cashvero-logo.png';
 }
 .zav-forgot:hover { color: #1490A8; }
 .zav-input-wrap { position: relative; }
-.zav-input-pw { padding-right: 2.75rem; }
+.zav-input-pw { padding-inline-end: 2.75rem; }
 .zav-eye-btn {
-    position: absolute; right: 0.75rem; top: 50%;
+    position: absolute; inset-inline-end: 0.75rem; top: 50%;
     transform: translateY(-50%);
     background: transparent; border: none; cursor: pointer;
     color: #1B3558; transition: color 0.15s ease;
@@ -460,5 +472,5 @@ const logoUrl = '/images/cashvero-logo.png';
     border: 1px solid rgba(16, 185, 129, 0.35);
     color: #6ee7b7;
 }
-.zav-alert ul { margin: 0; padding-left: 1.1rem; }
+.zav-alert ul { margin: 0; padding-inline-start: 1.1rem; }
 </style>

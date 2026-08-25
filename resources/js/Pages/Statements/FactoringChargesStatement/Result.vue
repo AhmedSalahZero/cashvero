@@ -28,7 +28,7 @@ const props = defineProps({
 const rows = computed(() => props.paginator?.data || []);
 
 function formatAmount(value) {
-    return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return Number(value || 0).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function goToPage(url) {
@@ -41,28 +41,28 @@ function goToPage(url) {
     <AppLayout>
         <div class="p-6">
             <Link :href="urls.backUrl" class="text-sm cvr-text-muted hover:cvr-text-primary inline-flex items-center gap-1 mb-3">
-                ← Back to Factoring Charges Statement
+                {{ $t('← Back to Factoring Charges Statement') }}
             </Link>
 
             <!-- Tabs -->
             <div class="flex items-center gap-1 mb-4 border-b cvr-border">
                 <a :href="urls.statementUrl" class="px-4 py-2 text-sm font-medium cvr-text-muted hover:cvr-text-primary">
-                    📄 Factoring Statement
+                    {{ $t('📄 Factoring Statement') }}
                 </a>
                 <span class="px-4 py-2 text-sm font-medium border-b-2" style="border-color: var(--cvr-green-bright); color: var(--cvr-green-bright);">
-                    🧾 Factoring Charges Statement
+                    {{ $t('🧾 Factoring Charges Statement') }}
                 </span>
             </div>
 
             <div class="flex items-start justify-between flex-wrap gap-2 mb-1">
                 <h1 class="text-xl font-semibold cvr-text-primary">
-                    Factoring Charges Statement
+                    {{ $t('Factoring Charges Statement') }}
                     <span class="cvr-text-secondary font-normal">
                         — {{ factoringCompanyName }} · {{ contractLabel }} · {{ String(currency).toUpperCase() }} · {{ startDate }} — {{ endDate }}
                     </span>
                 </h1>
                 <a :href="urls.exportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
-                    ⬇️ Export to Excel
+                    {{ $t('⬇️ Export to Excel') }}
                 </a>
             </div>
             <p class="text-sm cvr-text-muted mb-6">{{ kpis.transactionCount }} charges in this date range.</p>
@@ -72,21 +72,21 @@ function goToPage(url) {
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-copper">💰</div>
                     <div>
-                        <p class="cvr-kpi-label">Total Charges</p>
+                        <p class="cvr-kpi-label">{{ $t('Total Charges') }}</p>
                         <p class="cvr-kpi-value cvr-num">{{ formatAmount(kpis.totalCharges) }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">🏁</div>
                     <div>
-                        <p class="cvr-kpi-label">Ending Running Total</p>
+                        <p class="cvr-kpi-label">{{ $t('Ending Running Total') }}</p>
                         <p class="cvr-kpi-value cvr-num-blue">{{ formatAmount(kpis.endingRunningTotal) }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-green">📋</div>
                     <div>
-                        <p class="cvr-kpi-label">Charges</p>
+                        <p class="cvr-kpi-label">{{ $t('Charges') }}</p>
                         <p class="cvr-kpi-value cvr-num-green">{{ kpis.transactionCount }}</p>
                     </div>
                 </div>
@@ -99,11 +99,11 @@ function goToPage(url) {
                         <thead class="cvr-table-head sticky top-0 z-10">
                             <tr>
                                 <th class="px-3 py-3 text-center">#</th>
-                                <th class="px-3 py-3 text-center">Date</th>
-                                <th class="px-3 py-3 text-left">Charge Type</th>
-                                <th class="px-3 py-3 text-right">Amount</th>
-                                <th class="px-3 py-3 text-right">Running Total</th>
-                                <th class="px-3 py-3 text-left min-w-[320px]">Comment</th>
+                                <th class="px-3 py-3 text-center">{{ $t('Date') }}</th>
+                                <th class="px-3 py-3 text-start">{{ $t('Charge Type') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Amount') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Running Total') }}</th>
+                                <th class="px-3 py-3 text-start min-w-[320px]">{{ $t('Comment') }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -112,15 +112,15 @@ function goToPage(url) {
                                     {{ (paginator.current_page - 1) * 50 + index + 1 }}
                                 </td>
                                 <td class="px-3 py-2.5 text-center cvr-text-secondary">{{ row.date }}</td>
-                                <td class="px-3 py-2.5 text-left cvr-text-primary">{{ row.charge_type }}</td>
+                                <td class="px-3 py-2.5 text-start cvr-text-primary">{{ row.charge_type }}</td>
                                 <td class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(row.amount) }}</td>
                                 <td class="px-3 py-2.5 text-right cvr-num-blue font-medium">{{ formatAmount(row.running_total) }}</td>
-                                <td class="px-3 py-2.5 text-left cvr-text-secondary">
+                                <td class="px-3 py-2.5 text-start cvr-text-secondary">
                                     <span class="block max-w-[400px] whitespace-normal">{{ row.comment }}</span>
                                 </td>
                             </tr>
                             <tr v-if="rows.length === 0">
-                                <td colspan="6" class="px-4 py-8 text-center cvr-text-muted">No charges found for this date range.</td>
+                                <td colspan="6" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No charges found for this date range.') }}</td>
                             </tr>
                         </tbody>
                     </table>

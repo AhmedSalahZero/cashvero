@@ -151,7 +151,7 @@ function destroyRow() {
                 </div>
                 <div :class="gridClass" class="items-end">
                     <div>
-                        <label class="cvr-form-label">Name <span class="text-red-500">*</span></label>
+                        <label class="cvr-form-label">{{ $t('Name') }} <span class="text-red-500">*</span></label>
                         <input
                             v-model="newName"
                             type="text"
@@ -177,7 +177,7 @@ function destroyRow() {
                         :disabled="addSubmitting || !newName.trim()"
                         class="cvr-btn-copper px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-60"
                     >
-                        {{ addSubmitting ? 'Adding…' : `+ Add ${itemLabel}` }}
+                        {{ addSubmitting ? $t('Adding…') : `+ Add ${itemLabel}` }}
                     </button>
                 </div>
             </div>
@@ -188,7 +188,7 @@ function destroyRow() {
                 <input
                     v-model="search"
                     type="text"
-                    placeholder="Search by name..."
+                    :placeholder="$t('Search by name...')"
                     class="bg-transparent outline-none text-sm w-full cvr-text-primary"
                 />
             </div>
@@ -198,9 +198,9 @@ function destroyRow() {
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-4 py-3 text-left">Name</th>
-                            <th v-for="f in extraFields" :key="f.key" class="px-4 py-3 text-left">{{ f.label }}</th>
-                            <th class="px-4 py-3 text-center">Control</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Name') }}</th>
+                            <th v-for="f in extraFields" :key="f.key" class="px-4 py-3 text-start">{{ f.label }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Control') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -213,8 +213,8 @@ function destroyRow() {
                             </td>
                             <td class="px-4 py-3 text-center">
                                 <div class="flex items-center justify-center gap-2">
-                                    <button v-if="permissions.canUpdate" @click="openEdit(row)" class="cvr-action-btn" title="Edit">✎</button>
-                                    <button v-if="permissions.canDelete" @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" title="Delete">🗑</button>
+                                    <button v-if="permissions.canUpdate" @click="openEdit(row)" class="cvr-action-btn" :title="$t('Edit')">✎</button>
+                                    <button v-if="permissions.canDelete" @click="confirmDelete(row)" class="cvr-action-btn cvr-action-btn-danger" :title="$t('Delete')">🗑</button>
                                 </div>
                             </td>
                         </tr>
@@ -230,7 +230,7 @@ function destroyRow() {
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">Edit {{ itemLabel }}</h2>
                     <div class="mb-3">
-                        <label class="cvr-form-label">Name <span class="text-red-500">*</span></label>
+                        <label class="cvr-form-label">{{ $t('Name') }} <span class="text-red-500">*</span></label>
                         <input v-model="editName" type="text" class="cvr-input w-full px-3 py-2 rounded-lg text-sm" @keyup.enter="submitEdit" />
                     </div>
                     <div v-for="f in extraFields" :key="f.key" class="mb-3">
@@ -239,9 +239,9 @@ function destroyRow() {
                     </div>
                     <p v-if="editError" class="text-xs mb-3" style="color: var(--cvr-danger-text);">{{ editError }}</p>
                     <div class="flex justify-end gap-2">
-                        <button @click="cancelEdit" class="cvr-btn-secondary px-3 py-1.5 rounded border">Cancel</button>
+                        <button @click="cancelEdit" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Cancel') }}</button>
                         <button @click="submitEdit" :disabled="editSubmitting || !editName.trim()" class="cvr-btn-copper px-3 py-1.5 rounded disabled:opacity-60">
-                            {{ editSubmitting ? 'Saving…' : 'Save' }}
+                            {{ editSubmitting ? $t('Saving…') : $t('Save') }}
                         </button>
                     </div>
                 </div>
@@ -252,8 +252,8 @@ function destroyRow() {
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">Delete "{{ deleteTarget.name }}"?</h2>
                     <div class="flex justify-end gap-2">
-                        <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Delete</button>
+                        <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>

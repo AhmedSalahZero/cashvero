@@ -15,8 +15,9 @@
  * migrated Inertia pages too, linked with <Link> below.
  */
 import { ref, computed, watch } from 'vue';
-import { Link } from '@inertiajs/vue3';
+import { Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { todayDate } from '@/composables/today';
 
 const props = defineProps({
     company: Object,
@@ -26,6 +27,10 @@ const props = defineProps({
     customersOrSupplierStatementText: String,
     mainFunctionalCurrency: String,
     currencyCards: Array, // [{ currency, total, rows, all_invoices_url, past_due_url, coming_dues_url, bulk_statement_url }]
+    /* Whether a NEW internal settlement can be started from this page.
+       False on Suppliers Balances — see BalancesController@index. */
+    canSettleInternally: { type: Boolean, default: false },
+    storeInternalSettlementUrl: String,
 });
 
 /* ── Tabs — one per currency, same shape as TimeOfDeposits' tabs.
@@ -99,15 +104,86 @@ const sumColumn = (rows, key) => rows.reduce((sum, r) => sum + Number(r[key] || 
 const totalsFor = rows => ({
     invoices: sumColumn(rows, 'invoices'),
     down_payments: sumColumn(rows, 'down_payments'),
+    internal_settlements: sumColumn(rows, 'internal_settlements'),
     net_balance: sumColumn(rows, 'net_balance'),
 });
 const tabTotals = computed(() => totalsFor(filteredRows.value));
 const pageTotals = computed(() => totalsFor(pagedRows.value));
 const isPaginated = computed(() => filteredRows.value.length > pageSize);
 
-// Number of columns after Net Balance (the report buttons) — used to pad
-// the footer rows so their cells line up with the header.
-const trailingColumns = computed(() => (activeCard.value?.currency !== 'main_currency' ? 2 : 1));
+// Number of columns after Net Balance (Statement Report, Internal
+// Settlements, Invoice Report) — used to pad the footer rows so their
+// cells line up with the header.
+const trailingColumns = computed(() => (activeCard.value?.currency !== 'main_currency' ? 3 : 2));
+
+/* ── Internal settlements ──────────────────────────────────────────
+   Offsetting a partner who is BOTH a customer and a supplier against
+   themselves: what they owe us as a customer is handed back to them
+   as a supplier instead of each side paying the other in full. See
+   App\Models\InternalSettlement.
+
+   The column sits between the two report buttons and is ALWAYS shown,
+   with a dash on the rows it cannot apply to. It was hidden entirely
+   when no partner in the tab was in both roles, which read as "the
+   feature is missing" on a company where nobody happens to be both —
+   a dash says "not applicable here", which is the true answer. */
+
+const settleTarget = ref(null);
+const settleForm = ref({ amount: '', settlement_date: todayDate(), user_comment: '' });
+const settleError = ref('');
+const settleSubmitting = ref(false);
+
+/* What is still offsettable on the open row. The server re-checks this
+   on save — the page's copy can be stale if someone else settled in
+   the meantime — but showing it here is what stops the user entering a
+   number that was never going to be accepted. */
+const settleMax = computed(() => Number(settleTarget.value?.net_balance || 0));
+
+function openSettle(row) {
+    settleTarget.value = row;
+    settleError.value = '';
+    settleForm.value = { amount: '', settlement_date: todayDate(), user_comment: '' };
+}
+
+function closeSettle() {
+    settleTarget.value = null;
+    settleError.value = '';
+}
+
+function submitSettle() {
+    const amount = Number(settleForm.value.amount);
+
+    if (!amount || amount <= 0) {
+        settleError.value = 'Enter an amount greater than zero.';
+        return;
+    }
+    if (amount > settleMax.value) {
+        settleError.value = `The amount cannot exceed the customer balance of ${formatAmount(settleMax.value)} ${settleTarget.value.currency}.`;
+        return;
+    }
+
+    settleSubmitting.value = true;
+    router.post(props.storeInternalSettlementUrl, {
+        partner_id: settleTarget.value.client_id,
+        currency: settleTarget.value.currency,
+        settlement_date: settleForm.value.settlement_date,
+        amount,
+        user_comment: settleForm.value.user_comment,
+    }, {
+        onFinish: () => { settleSubmitting.value = false; closeSettle(); },
+    });
+}
+
+/* Deleting the settlement row IS the reversal — both balances and both
+   statements are derived from it, so there is no compensating entry to
+   post. Confirmed inline rather than with a second modal on top of a
+   modal. */
+const settlementToDelete = ref(null);
+function destroySettlement() {
+    router.delete(settlementToDelete.value.delete_url, {
+        onFinish: () => { settlementToDelete.value = null; closeSettle(); },
+    });
+}
 
 // Switching currency or searching should always land back on page 1 —
 // otherwise "page 4" of one tab could silently show as an empty
@@ -150,7 +226,7 @@ function balanceColorVar(balance) {
 // report in system.veroanalysis.com, whose Blade has always rendered
 // these through number_format() with no decimals.
 function formatAmount(value) {
-    return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+    return Number(value || 0).toLocaleString('en-EG', { maximumFractionDigits: 0 });
 }
 </script>
 
@@ -170,9 +246,9 @@ function formatAmount(value) {
                         <p class="cvr-kpi-label">{{ currencyLabel(card.currency) }}</p>
                         <p class="cvr-kpi-value" :style="{ color: balanceColorVar(card.total) }">{{ formatAmount(card.total) }}</p>
                         <div v-if="card.all_invoices_url" class="flex gap-2 mt-2 flex-wrap">
-                            <Link :href="card.all_invoices_url" class="cvr-btn-secondary px-2 py-1 rounded border text-xs whitespace-nowrap">All Invoices</Link>
-                            <Link :href="card.coming_dues_url" class="cvr-btn-primary px-2 py-1 rounded text-xs whitespace-nowrap">Coming Dues</Link>
-                            <Link :href="card.past_due_url" class="cvr-btn-danger px-2 py-1 rounded border text-xs whitespace-nowrap">Past Due</Link>
+                            <Link :href="card.all_invoices_url" class="cvr-btn-secondary px-2 py-1 rounded border text-xs whitespace-nowrap">{{ $t('All Invoices') }}</Link>
+                            <Link :href="card.coming_dues_url" class="cvr-btn-primary px-2 py-1 rounded text-xs whitespace-nowrap">{{ $t('Coming Dues') }}</Link>
+                            <Link :href="card.past_due_url" class="cvr-btn-danger px-2 py-1 rounded border text-xs whitespace-nowrap">{{ $t('Past Due') }}</Link>
                         </div>
                     </div>
                 </div>
@@ -214,19 +290,20 @@ function formatAmount(value) {
                     <thead class="cvr-table-head">
                         <tr>
                             <th class="px-4 py-3 text-center">#</th>
-                            <th class="px-4 py-3 text-left">Name</th>
-                            <th class="px-4 py-3 text-center">Currency</th>
-                            <th class="px-4 py-3 text-right">Invoices</th>
-                            <th class="px-4 py-3 text-right">Down Payments</th>
-                            <th class="px-4 py-3 text-right">Net Balance</th>
-                            <th class="px-4 py-3 text-center">Statement Report</th>
-                            <th v-if="activeCard?.currency !== 'main_currency'" class="px-4 py-3 text-center">Invoice Report</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Name') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Currency') }}</th>
+                            <th class="px-4 py-3 text-right">{{ $t('Invoices') }}</th>
+                            <th class="px-4 py-3 text-right">{{ $t('Down Payments') }}</th>
+                            <th class="px-4 py-3 text-right">{{ $t('Net Balance') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Statement Report') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Internal Settlements') }}</th>
+                            <th v-if="activeCard?.currency !== 'main_currency'" class="px-4 py-3 text-center">{{ $t('Invoice Report') }}</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-for="(row, i) in pagedRows" :key="row.client_id" class="cvr-table-row">
                             <td class="px-4 py-3 text-center cvr-text-secondary">{{ (currentPage - 1) * pageSize + i + 1 }}</td>
-                            <td class="px-4 py-3 text-left cvr-text-primary">
+                            <td class="px-4 py-3 text-start cvr-text-primary">
                                 <span class="block truncate max-w-[280px]" :title="row.client_name">{{ row.client_name }}</span>
                             </td>
                             <td class="px-4 py-3 text-center cvr-text-secondary">{{ currencyLabel(row.currency) }}</td>
@@ -238,14 +315,33 @@ function formatAmount(value) {
                                     {{ customersOrSupplierStatementText }}
                                 </Link>
                             </td>
+                            <!--
+                                Internal settlement. A dash means it does not apply
+                                to this row — the partner is a customer only, so
+                                there is no supplier side of theirs to offset
+                                against. Where it does apply, whatever has already
+                                been offset is shown next to the button.
+                            -->
+                            <td class="px-4 py-3 text-center whitespace-nowrap">
+                                <template v-if="row.is_dual_role">
+                                    <span v-if="row.internal_settlements" class="cvr-num cvr-text-secondary me-2">{{ formatAmount(row.internal_settlements) }}</span>
+                                    <button
+                                        v-if="canSettleInternally && row.can_settle"
+                                        @click="openSettle(row)"
+                                        class="cvr-btn-secondary px-3 py-1 rounded border text-xs whitespace-nowrap"
+                                    >⇄ {{ $t('Settle') }}</button>
+                                    <span v-else-if="!row.internal_settlements" class="cvr-text-muted">—</span>
+                                </template>
+                                <span v-else class="cvr-text-muted">—</span>
+                            </td>
                             <td v-if="row.invoice_report_url" class="px-4 py-3 text-center">
                                 <Link :href="row.invoice_report_url" class="cvr-btn-copper px-3 py-1 rounded text-xs whitespace-nowrap">
-                                    Invoices Report
+                                    {{ $t('Invoices Report') }}
                                 </Link>
                             </td>
                         </tr>
                         <tr v-if="filteredRows.length === 0">
-                            <td :colspan="3 + 3 + trailingColumns" class="px-4 py-8 text-center cvr-text-muted">No balances found.</td>
+                            <td :colspan="3 + 3 + trailingColumns" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No balances found.') }}</td>
                         </tr>
                     </tbody>
 
@@ -259,7 +355,10 @@ function formatAmount(value) {
                             <td class="px-4 py-3 text-right font-medium cvr-text-secondary">{{ formatAmount(pageTotals.invoices) }}</td>
                             <td class="px-4 py-3 text-right font-medium cvr-text-secondary">{{ formatAmount(pageTotals.down_payments) }}</td>
                             <td class="px-4 py-3 text-right font-medium" :class="balanceClass(pageTotals.net_balance)">{{ formatAmount(pageTotals.net_balance) }}</td>
-                            <td :colspan="trailingColumns"></td>
+                            <!-- Statement Report column — nothing to total. -->
+                            <td></td>
+                            <td class="px-4 py-3 text-center font-medium cvr-text-secondary">{{ formatAmount(pageTotals.internal_settlements) }}</td>
+                            <td v-if="activeCard?.currency !== 'main_currency'"></td>
                         </tr>
                         <tr>
                             <td colspan="3" class="px-4 py-3 text-right font-semibold cvr-text-primary">
@@ -268,7 +367,9 @@ function formatAmount(value) {
                             <td class="px-4 py-3 text-right font-semibold cvr-text-primary">{{ formatAmount(tabTotals.invoices) }}</td>
                             <td class="px-4 py-3 text-right font-semibold cvr-text-primary">{{ formatAmount(tabTotals.down_payments) }}</td>
                             <td class="px-4 py-3 text-right font-semibold" :class="balanceClass(tabTotals.net_balance)">{{ formatAmount(tabTotals.net_balance) }}</td>
-                            <td :colspan="trailingColumns"></td>
+                            <td></td>
+                            <td class="px-4 py-3 text-center font-semibold cvr-text-primary">{{ formatAmount(tabTotals.internal_settlements) }}</td>
+                            <td v-if="activeCard?.currency !== 'main_currency'"></td>
                         </tr>
                     </tfoot>
                 </table>
@@ -286,16 +387,114 @@ function formatAmount(value) {
                         :disabled="currentPage === 1"
                         class="cvr-filter-pill"
                         :class="{ 'opacity-40 cursor-not-allowed': currentPage === 1 }"
-                    >‹ Prev</button>
+                    >{{ $t('‹ Prev') }}</button>
                     <span class="text-xs cvr-text-muted px-2">Page {{ currentPage }} of {{ totalPages }}</span>
                     <button
                         @click="goToPage(currentPage + 1)"
                         :disabled="currentPage === totalPages"
                         class="cvr-filter-pill"
                         :class="{ 'opacity-40 cursor-not-allowed': currentPage === totalPages }"
-                    >Next ›</button>
+                    >{{ $t('Next ›') }}</button>
                 </div>
             </div>
         </div>
+
+        <!--
+            Internal Settlement — offsetting a partner against themselves.
+
+            The balance is stated at the top and the input is capped by it,
+            because the whole decision the user is making is "how much of
+            what he owes me do I hand back to him as a supplier" — a number
+            that means nothing without the one it comes out of.
+        -->
+        <teleport to="body">
+            <div v-if="settleTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="closeSettle">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-lg max-h-[85vh] overflow-y-auto mx-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-medium cvr-text-primary">{{ $t('Internal Settlement') }}</h2>
+                        <button @click="closeSettle" class="cvr-action-btn" :title="$t('Close')">✕</button>
+                    </div>
+
+                    <p class="text-sm cvr-text-secondary mb-1">{{ settleTarget.client_name }}</p>
+                    <p class="text-xs cvr-text-muted mb-4">
+                        {{ $t('This partner is both a customer and a supplier. Settling moves the amount off both balances at once — they owe you less as a customer, and you owe them less as a supplier.') }}
+                    </p>
+
+                    <div class="cvr-card-bg cvr-border border rounded p-3 mb-4 flex items-center justify-between">
+                        <span class="text-sm cvr-text-secondary">{{ $t('Owed as a customer') }}</span>
+                        <span class="cvr-num font-medium" :class="balanceClass(settleMax)">
+                            {{ formatAmount(settleMax) }} {{ settleTarget.currency }}
+                        </span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="cvr-form-label">{{ $t('Amount To Settle') }}</label>
+                        <input
+                            v-model="settleForm.amount"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            :max="settleMax"
+                            class="cvr-input w-full px-3 py-2 rounded"
+                        />
+                        <p class="text-xs cvr-text-muted mt-1">{{ $t('Maximum') }}: {{ formatAmount(settleMax) }} {{ settleTarget.currency }}</p>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="cvr-form-label">{{ $t('Date') }}</label>
+                        <input v-model="settleForm.settlement_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="cvr-form-label">{{ $t('Comment') }}</label>
+                        <textarea v-model="settleForm.user_comment" rows="2" class="cvr-input w-full px-3 py-2 rounded"></textarea>
+                    </div>
+
+                    <p v-if="settleError" class="text-sm mb-3" style="color: var(--cvr-danger-text);">{{ settleError }}</p>
+
+                    <!-- What has already been settled on this balance, so the
+                         same offset does not get entered twice, and a wrong
+                         one can be taken back. -->
+                    <div v-if="settleTarget.settlements?.length" class="mb-4">
+                        <p class="text-xs cvr-text-muted mb-2">{{ $t('Already Settled') }}</p>
+                        <table class="w-full text-xs">
+                            <tbody>
+                                <tr v-for="settlement in settleTarget.settlements" :key="settlement.id" class="cvr-table-row">
+                                    <td class="py-1 pe-2 cvr-text-secondary whitespace-nowrap">{{ settlement.date_formatted }}</td>
+                                    <td class="py-1 pe-2 cvr-num cvr-text-primary">{{ formatAmount(settlement.amount) }}</td>
+                                    <td class="py-1 pe-2 cvr-text-muted">{{ settlement.user_comment }}</td>
+                                    <td class="py-1 text-end">
+                                        <button @click="settlementToDelete = settlement" class="cvr-action-btn" :title="$t('Delete')">🗑️</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2">
+                        <button @click="closeSettle" class="cvr-btn-secondary px-4 py-2 rounded border text-sm">{{ $t('Cancel') }}</button>
+                        <button
+                            @click="submitSettle"
+                            :disabled="settleSubmitting"
+                            class="cvr-btn-primary px-4 py-2 rounded text-sm"
+                            :class="{ 'opacity-50 cursor-not-allowed': settleSubmitting }"
+                        >{{ $t('Save') }}</button>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="settlementToDelete" class="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]" @click.self="settlementToDelete = null">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-md mx-4">
+                    <h2 class="text-lg font-medium cvr-text-primary mb-2">{{ $t('Delete Internal Settlement') }}</h2>
+                    <p class="text-sm cvr-text-secondary mb-4">
+                        {{ $t('Both balances go back to what they were before this settlement, and it disappears from both statements.') }}
+                    </p>
+                    <div class="flex items-center justify-end gap-2">
+                        <button @click="settlementToDelete = null" class="cvr-btn-secondary px-4 py-2 rounded border text-sm">{{ $t('Cancel') }}</button>
+                        <button @click="destroySettlement" class="cvr-btn-danger px-4 py-2 rounded text-sm">{{ $t('Delete') }}</button>
+                    </div>
+                </div>
+            </div>
+        </teleport>
     </AppLayout>
 </template>

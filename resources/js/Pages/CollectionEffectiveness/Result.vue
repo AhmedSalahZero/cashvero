@@ -49,7 +49,7 @@ function splitHeader(header) {
     <AppLayout>
         <div class="p-6">
             <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm mb-3">
-                ← Back to Filters
+                {{ $t('← Back to Filters') }}
             </Link>
             <h1 class="text-xl font-semibold cvr-text-primary mb-6">{{ reportName }}</h1>
 
@@ -58,31 +58,31 @@ function splitHeader(header) {
                     <thead>
                         <tr>
                             <th class="px-4 py-2 text-center cvr-table-head" style="min-width: 40px">#</th>
-                            <th class="px-4 py-2 text-left cvr-table-head" style="min-width: 220px">{{ customerOrSupplierNameText }}</th>
+                            <th class="px-4 py-2 text-start cvr-table-head" style="min-width: 220px">{{ customerOrSupplierNameText }}</th>
                             <th v-for="header in tableHeaders" :key="header" class="px-3 py-2 text-center cvr-table-head" style="min-width: 140px">
                                 <span class="text-xs">{{ splitHeader(header).start }}</span><br />
                                 <span class="text-xs">→ {{ splitHeader(header).end }}</span>
                             </th>
-                            <th v-if="isMonthlyReport" class="px-3 py-2 text-center cvr-table-head" style="min-width: 100px">Total</th>
+                            <th v-if="isMonthlyReport" class="px-3 py-2 text-center cvr-table-head" style="min-width: 100px">{{ $t('Total') }}</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-for="(row, i) in rows" :key="row.name" class="cvr-table-row">
                             <td class="px-4 py-2 text-center cvr-text-secondary">{{ i + 1 }}</td>
-                            <td class="px-4 py-2 text-left cvr-text-primary">
+                            <td class="px-4 py-2 text-start cvr-text-primary">
                                 <span class="block truncate max-w-[280px]" :title="row.name">{{ row.name }}</span>
                             </td>
                             <td v-for="header in tableHeaders" :key="header" class="px-3 py-2 text-center font-medium" :class="percentClass(row.values[header])">{{ formatPercent(row.values[header]) }}</td>
                             <td v-if="isMonthlyReport" class="px-3 py-2 text-center font-medium" :class="percentClass(row.total)">{{ formatPercent(row.total) }}</td>
                         </tr>
                         <tr v-if="rows.length === 0">
-                            <td :colspan="tableHeaders.length + (isMonthlyReport ? 3 : 2)" class="px-4 py-8 text-center cvr-text-muted">No data found.</td>
+                            <td :colspan="tableHeaders.length + (isMonthlyReport ? 3 : 2)" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No data found.') }}</td>
                         </tr>
                     </tbody>
                     <tfoot v-if="rows.length">
                         <tr class="font-semibold" style="background: var(--cvr-green-deep)">
                             <td class="px-4 py-2 text-center">-</td>
-                            <td class="px-4 py-2 text-left">All Company</td>
+                            <td class="px-4 py-2 text-start">{{ $t('All Company') }}</td>
                             <td v-for="header in tableHeaders" :key="header" class="px-3 py-2 text-center">{{ formatPercent(allCompanyRow.values[header]) }}</td>
                             <td v-if="isMonthlyReport" class="px-3 py-2 text-center">{{ formatPercent(allCompanyRow.total) }}</td>
                         </tr>

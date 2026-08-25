@@ -84,7 +84,7 @@ function labelFor(field, text) {
 
 <template>
     <div v-if="items.length" class="mb-4 px-4 py-3 rounded cvr-badge-overdue text-sm">
-        <p class="font-semibold mb-1">{{ title }}</p>
+        <p class="font-semibold mb-1">{{ $t(title) }}</p>
         <ul class="list-disc ps-5 space-y-0.5">
             <li v-for="item in items" :key="item.key">
                 <span v-if="item.label" class="font-medium">{{ item.label }}:</span>

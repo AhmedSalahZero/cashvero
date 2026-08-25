@@ -78,6 +78,7 @@ class CompanyImportService
         // FinancialInstitutionAccount columns whose names don't pluralize cleanly.
         'deducted_from_account_id' => 'financial_institution_accounts',
         'maturity_amount_added_to_account_id' => 'financial_institution_accounts',
+        'settlement_account_id' => 'financial_institution_accounts',
         'lg_fees_and_commission_account_id' => 'financial_institution_accounts',
         'lc_fees_and_commission_account_id' => 'financial_institution_accounts',
         'payment_account_number_id' => 'financial_institution_accounts',

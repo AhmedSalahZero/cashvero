@@ -290,11 +290,11 @@ function submit() {
         <div class="p-6">
             <div class="flex items-center gap-3 mb-1">
                 <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                    ← Back to LG Issuance
+                    {{ $t('← Back to LG Issuance') }}
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">
-                {{ isEdit ? 'Edit' : 'Add' }} LG Issuance — Via LG Facility
+                {{ isEdit ? $t('Edit') : $t('Add') }} LG Issuance — Via LG Facility
             </h1>
 
             <FormErrorSummary />
@@ -303,24 +303,24 @@ function submit() {
             <form @submit.prevent="submit" class="space-y-6">
                 <!-- Main Information -->
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Main Information</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Main Information') }}</h2>
                     <div class="cvr-form-grid-6-4-2">
                         <div>
-                            <label class="cvr-form-label">Bank Name *</label>
+                            <label class="cvr-form-label">{{ $t('Bank Name') }} *</label>
                             <select v-model="form.financial_institution_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="" disabled>Select</option>
+                                <option value="" disabled>{{ $t('Select') }}</option>
                                 <option v-for="b in financialInstitutionBanks" :key="b.id" :value="b.id">{{ b.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Transaction Name *</label>
+                            <label class="cvr-form-label">{{ $t('Transaction Name') }} *</label>
                             <input v-model="form.transaction_name" type="text" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('transaction_name')" class="text-xs mt-1 cvr-num-red">{{ errorFor('transaction_name') }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Issuance Type *</label>
+                            <label class="cvr-form-label">{{ $t('Issuance Type') }} *</label>
                             <select v-model="form.category_name" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="" disabled>Select</option>
+                                <option value="" disabled>{{ $t('Select') }}</option>
                                 <option v-for="(label, code) in lgCategories" :key="code" :value="code">{{ label }}</option>
                             </select>
                         </div>
@@ -330,42 +330,42 @@ function submit() {
                 <!-- Facility & Limits -->
                 <div class="cvr-card">
                     <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">
-                        LG Facility &amp; Limits
-                        <span v-if="lookupLoading" class="text-xs font-normal cvr-text-muted normal-case">(updating...)</span>
+                        {{ $t('LG Facility & Limits') }}
+                        <span v-if="lookupLoading" class="text-xs font-normal cvr-text-muted normal-case">{{ $t('(updating...)') }}</span>
                     </h2>
                     <div class="cvr-form-grid-3">
                         <div>
-                            <label class="cvr-form-label">LG Facility *</label>
+                            <label class="cvr-form-label">{{ $t('LG Facility') }} *</label>
                             <select v-model="form.lg_facility_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="" disabled>Select</option>
+                                <option value="" disabled>{{ $t('Select') }}</option>
                                 <option v-for="f in lgFacilitiesForBank" :key="f.id" :value="f.id">{{ f.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">LG Limit</label>
+                            <label class="cvr-form-label">{{ $t('LG Limit') }}</label>
                             <input disabled :value="form.limit" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Total LGs Outstanding Balance</label>
+                            <label class="cvr-form-label">{{ $t('Total LGs Outstanding Balance') }}</label>
                             <input disabled :value="form.total_lg_outstanding_balance" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Total LGs Room</label>
+                            <label class="cvr-form-label">{{ $t('Total LGs Room') }}</label>
                             <input disabled :value="form.total_lg_room" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">LG Type *</label>
+                            <label class="cvr-form-label">{{ $t('LG Type') }} *</label>
                             <select v-model="form.lg_type" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="" disabled>Select</option>
+                                <option value="" disabled>{{ $t('Select') }}</option>
                                 <option v-for="(label, code) in lgTypes" :key="code" :value="code">{{ label }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">LG Type Outstanding Balance</label>
+                            <label class="cvr-form-label">{{ $t('LG Type Outstanding Balance') }}</label>
                             <input disabled :value="form.lg_type_outstanding_balance" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">LG Code *</label>
+                            <label class="cvr-form-label">{{ $t('LG Code') }} *</label>
                             <input v-model="form.lg_code" type="text" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
@@ -373,26 +373,26 @@ function submit() {
 
                 <!-- Beneficiary & Reference -->
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Beneficiary &amp; Reference</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Beneficiary & Reference') }}</h2>
                     <div class="cvr-form-grid-3">
                         <div>
                             <div class="flex items-center justify-between">
-                                <label class="cvr-form-label">Customer / Beneficiary *</label>
+                                <label class="cvr-form-label">{{ $t('Customer / Beneficiary') }} *</label>
                                 <!-- <button type="button" @click="addingNewCustomer = !addingNewCustomer" class="text-xs cvr-text-blue">
-                                    {{ addingNewCustomer ? 'Pick existing' : '+ New' }}
+                                    {{ addingNewCustomer ? $t('Pick existing') : $t('+ New') }}
                                 </button> -->
                             </div>
                             <select v-if="!addingNewCustomer" v-model="form.partner_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="" disabled>Select</option>
+                                <option value="" disabled>{{ $t('Select') }}</option>
                                 <option v-for="c in customerOptions" :key="c.id" :value="c.id">{{ c.name }}</option>
                             </select>
-                            <input v-else v-model="newCustomerName" type="text" placeholder="Enter new customer name" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-else v-model="newCustomerName" type="text" :placeholder="$t('Enter new customer name')" class="cvr-input w-full px-3 py-2 rounded" />
                             <p class="text-xs cvr-text-muted mt-1">
-                                {{ form.lg_type === 'bid-bond' ? 'Bid Bond: showing all customers' : 'Showing only customers with an active contract' }}
+                                {{ form.lg_type === 'bid-bond' ? $t('Bid Bond: showing all customers') : $t('Showing only customers with an active contract') }}
                             </p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Transaction Reference *</label>
+                            <label class="cvr-form-label">{{ $t('Transaction Reference') }} *</label>
                             <input v-model="form.transaction_reference" type="text" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <!--
@@ -403,33 +403,33 @@ function submit() {
                             rule exactly (LgContractRequirement).
                         -->
                         <div v-if="!isBidBond">
-                            <label class="cvr-form-label">Contract <span v-if="contractIsRequired">*</span></label>
+                            <label class="cvr-form-label">{{ $t('Contract') }} <span v-if="contractIsRequired">*</span></label>
                             <select v-model="form.contract_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="" :disabled="contractIsRequired">{{ contractIsRequired ? 'Select' : 'None' }}</option>
+                                <option value="" :disabled="contractIsRequired">{{ contractIsRequired ? $t('Select') : $t('None') }}</option>
                                 <option v-for="c in contractsForCustomer" :key="c.id" :value="c.id">{{ c.name }}</option>
                             </select>
                             <p v-if="!contractIsRequired" class="text-xs mt-1 cvr-text-muted">
-                                Optional for this beneficiary — no customer contract is required.
+                                {{ $t('Optional for this beneficiary — no customer contract is required.') }}
                             </p>
                             <p v-if="errorFor('contract_id')" class="text-xs mt-1 cvr-num-red">{{ errorFor('contract_id') }}</p>
                         </div>
                         <div v-if="!isBidBond">
-                            <label class="cvr-form-label">SO <span v-if="contractIsRequired">*</span></label>
+                            <label class="cvr-form-label">{{ $t('SO') }} <span v-if="contractIsRequired">*</span></label>
                             <select v-model="form.purchase_order_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="" disabled>Select</option>
-                                <option value="all">All SOs</option>
+                                <option value="" disabled>{{ $t('Select') }}</option>
+                                <option value="all">{{ $t('All SOs') }}</option>
                                 <option v-for="po in purchaseOrdersForContract" :key="po.id" :value="po.id">{{ po.po_number }}</option>
                             </select>
                         </div>
                         <div v-if="!isBidBond">
-                            <label class="cvr-form-label">Sales Order Date *</label>
+                            <label class="cvr-form-label">{{ $t('Sales Order Date') }} *</label>
                             <input v-model="form.purchase_order_date" type="date" :disabled="isSpecificSoSelected" class="cvr-input w-full px-3 py-2 rounded" :class="{ 'opacity-70': isSpecificSoSelected }" />
                             <p class="text-xs cvr-text-muted mt-1">
-                                {{ isSpecificSoSelected ? 'Auto-filled from the selected SO' : 'Pick a date for this contract-wide LG' }}
+                                {{ isSpecificSoSelected ? $t('Auto-filled from the selected SO') : $t('Pick a date for this contract-wide LG') }}
                             </p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Transaction Date *</label>
+                            <label class="cvr-form-label">{{ $t('Transaction Date') }} *</label>
                             <input v-model="form.transaction_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
@@ -437,65 +437,65 @@ function submit() {
 
                 <!-- Dates & Amount -->
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Dates &amp; Amount</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Dates & Amount') }}</h2>
                     <div class="cvr-form-grid-4">
                         <div>
-                            <label class="cvr-form-label">Issuance Date *</label>
+                            <label class="cvr-form-label">{{ $t('Issuance Date') }} *</label>
                             <input v-model="form.issuance_date" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Renewal Date *</label>
+                            <label class="cvr-form-label">{{ $t('Renewal Date') }} *</label>
                             <input v-model="form.renewal_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">LG Duration (Months)</label>
+                            <label class="cvr-form-label">{{ $t('LG Duration (Months)') }}</label>
                             <input disabled :value="form.lg_duration_months" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
-                            <p class="text-xs cvr-text-muted mt-1">Rounded up — feeds commission calculations</p>
+                            <p class="text-xs cvr-text-muted mt-1">{{ $t('Rounded up — feeds commission calculations') }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">LG Amount *</label>
+                            <label class="cvr-form-label">{{ $t('LG Amount') }} *</label>
                             <input v-model="form.lg_amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('lg_amount')" class="text-xs mt-1 cvr-num-red">{{ errorFor('lg_amount') }}</p>
                             <p v-if="errorFor('lg_facility_room')" class="text-xs mt-1 cvr-num-red">{{ errorFor('lg_facility_room') }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">LG Currency</label>
+                            <label class="cvr-form-label">{{ $t('LG Currency') }}</label>
                             <input disabled :value="form.lg_currency?.toUpperCase()" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
-                            <p class="text-xs cvr-text-muted mt-1">Set automatically from the selected LG Facility's currency</p>
+                            <p class="text-xs cvr-text-muted mt-1">{{ $t('Set automatically from the selected LG Facility\'s currency') }}</p>
                         </div>
                     </div>
                 </div>
 
                 <!-- Cash Cover & Commission -->
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Cash Cover &amp; Commission</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Cash Cover & Commission') }}</h2>
                     <div class="cvr-form-grid-4">
                         <div>
-                            <label class="cvr-form-label">Cash Cover Rate (%) *</label>
+                            <label class="cvr-form-label">{{ $t('Cash Cover Rate (%)') }} *</label>
                             <input v-model="form.cash_cover_rate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Cash Cover Amount</label>
+                            <label class="cvr-form-label">{{ $t('Cash Cover Amount') }}</label>
                             <input disabled :value="form.cash_cover_amount" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">LG Commission Rate (%) *</label>
+                            <label class="cvr-form-label">{{ $t('LG Commission Rate (%)') }} *</label>
                             <input v-model="form.lg_commission_rate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">LG Commission Amount</label>
+                            <label class="cvr-form-label">{{ $t('LG Commission Amount') }}</label>
                             <input disabled :value="form.lg_commission_amount" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Min LG Commission Fees</label>
+                            <label class="cvr-form-label">{{ $t('Min LG Commission Fees') }}</label>
                             <input disabled :value="form.min_lg_commission_fees" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Issuance Fees *</label>
+                            <label class="cvr-form-label">{{ $t('Issuance Fees') }} *</label>
                             <input v-model="form.issuance_fees" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Commission Interval *</label>
+                            <label class="cvr-form-label">{{ $t('Commission Interval') }} *</label>
                             <select v-model="form.lg_commission_interval" class="cvr-input w-full px-3 py-2 rounded">
                                 <option v-for="(label, code) in commissionIntervals" :key="code" :value="code">{{ label }}</option>
                             </select>
@@ -505,54 +505,54 @@ function submit() {
 
                 <!-- Accounts -->
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Accounts</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Accounts') }}</h2>
                     <div class="cvr-form-grid-4">
                         <div>
-                            <label class="cvr-form-label">Cash Cover From Account Type *</label>
+                            <label class="cvr-form-label">{{ $t('Cash Cover From Account Type') }} *</label>
                             <select v-model="form.cash_cover_deducted_from_account_type" class="cvr-input w-full px-3 py-2 rounded">
                                 <option v-for="t in cashCoverAccountTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Cash Cover Deducted From Account #</label>
+                            <label class="cvr-form-label">{{ $t('Cash Cover Deducted From Account #') }}</label>
                             <select v-model="form.cash_cover_deducted_from_account_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="a in cashCoverAccountOptions" :key="a.id" :value="a.id">{{ a.account_number }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Amount</label>
+                            <label class="cvr-form-label">{{ $t('Amount') }}</label>
                             <input disabled :value="selectedCashCoverAccount?.amount ?? 0" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
-                            <p class="text-xs cvr-text-muted mt-1">TD/CD deposit amount, or the current account's last known balance</p>
+                            <p class="text-xs cvr-text-muted mt-1">{{ $t('TD/CD deposit amount, or the current account\'s last known balance') }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Fees &amp; Commission Account Type *</label>
+                            <label class="cvr-form-label">{{ $t('Fees & Commission Account Type') }} *</label>
                             <select v-model="form.lg_fees_and_commission_account_type" class="cvr-input w-full px-3 py-2 rounded">
                                 <option v-for="t in feesAccountTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Deducted From Account # (Fees &amp; Commission) *</label>
+                            <label class="cvr-form-label">{{ $t('Deducted From Account # (Fees & Commission)') }} *</label>
                             <select v-model="form.lg_fees_and_commission_account_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="" disabled>Select</option>
+                                <option value="" disabled>{{ $t('Select') }}</option>
                                 <option v-for="a in feesAccountOptions" :key="a.id" :value="a.id">{{ a.account_number }} ({{ a.currency?.toUpperCase() }})</option>
                             </select>
-                            <p v-if="errorFor('lg_fees_and_commission_account_id')" class="text-xs mt-1 cvr-num-red">{{ errorFor('lg_fees_and_commission_account_id') }}</p>
+                            <p v-if="errorFor('lg_fees_and_commission_account_id')" class="text-xs mt-1 cvr-num-red">{{ errorFor($t('lg_fees_and_commission_account_id')) }}</p>
                         </div>
                     </div>
-                    <p class="text-xs cvr-text-muted mt-3">Both account dropdowns only show accounts belonging to the selected Bank Name above.</p>
+                    <p class="text-xs cvr-text-muted mt-3">{{ $t('Both account dropdowns only show accounts belonging to the selected Bank Name above.') }}</p>
                 </div>
 
                 <!-- User Comment -->
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">User Comment</h2>
-                    <textarea v-model="form.user_comment" rows="3" class="cvr-input w-full px-3 py-2 rounded" placeholder="Comment"></textarea>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('User Comment') }}</h2>
+                    <textarea v-model="form.user_comment" rows="3" class="cvr-input w-full px-3 py-2 rounded" :placeholder="$t('Comment')"></textarea>
                 </div>
 
                 <div class="flex justify-end gap-2">
-                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">Cancel</Link>
+                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">{{ $t('Cancel') }}</Link>
                     <button type="submit" :disabled="submitting" class="cvr-btn-primary px-4 py-2 rounded">
-                        {{ submitting ? 'Saving...' : 'Save' }}
+                        {{ submitting ? $t('Saving...') : $t('Save') }}
                     </button>
                 </div>
             </form>

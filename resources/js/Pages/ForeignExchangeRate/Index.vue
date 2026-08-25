@@ -129,10 +129,10 @@ function destroyRow() {
 <template>
     <AppLayout>
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Foreign Exchange Rate</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Foreign Exchange Rate') }}</h1>
             <p class="text-sm cvr-text-blue mb-6">
                 Main functional currency: {{ mainFunctionalCurrency }}
-                <span v-if="hasOdooIntegration"> — rates also sync automatically from Odoo</span>
+                <span v-if="hasOdooIntegration"> {{ $t('— rates also sync automatically from Odoo') }}</span>
             </p>
 
             <!-- Currency tabs -->
@@ -151,34 +151,34 @@ function destroyRow() {
             <!-- Add / Edit Rate form -->
             <div class="cvr-card mb-6">
                 <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">
-                    {{ isEditing ? 'Edit Exchange Rate' : 'Foreign Exchange Rates Section' }}
+                    {{ isEditing ? $t('Edit Exchange Rate') : $t('Foreign Exchange Rates Section') }}
                 </h2>
                 <form @submit.prevent="submitForm" class="flex flex-wrap items-end gap-3">
                     <div>
-                        <label class="cvr-form-label">Date</label>
+                        <label class="cvr-form-label">{{ $t('Date') }}</label>
                         <input v-model="form.date" type="date" :max="new Date().toISOString().slice(0, 10)" class="cvr-input px-3 py-2 rounded w-48" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">From Currency</label>
+                        <label class="cvr-form-label">{{ $t('From Currency') }}</label>
                         <select v-model="form.from_currency" class="cvr-input px-3 py-2 rounded w-32">
                             <option v-for="(label, code) in currencies" :key="code" :value="code">{{ label }}</option>
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">To Currency</label>
+                        <label class="cvr-form-label">{{ $t('To Currency') }}</label>
                         <select v-model="form.to_currency" class="cvr-input px-3 py-2 rounded w-32">
                             <option v-for="(label, code) in currencies" :key="code" :value="code">{{ label }}</option>
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Exchange Rate</label>
+                        <label class="cvr-form-label">{{ $t('Exchange Rate') }}</label>
                         <input v-model="form.exchange_rate" type="number" step="0.0001" min="0" class="cvr-input px-3 py-2 rounded w-32" />
                     </div>
                     <button type="submit" :disabled="submitting" class="cvr-btn-primary px-4 py-2 rounded">
-                        {{ submitting ? 'Saving...' : 'Save' }}
+                        {{ submitting ? $t('Saving...') : $t('Save') }}
                     </button>
                     <button v-if="isEditing" type="button" @click="cancelEdit" class="cvr-btn-secondary px-4 py-2 rounded border">
-                        Cancel
+                        {{ $t('Cancel') }}
                     </button>
                 </form>
             </div>
@@ -186,24 +186,24 @@ function destroyRow() {
             <!-- Filters -->
             <div class="flex flex-wrap items-end gap-3 mb-4">
                 <div>
-                    <label class="cvr-form-label">Search In</label>
+                    <label class="cvr-form-label">{{ $t('Search In') }}</label>
                     <select v-model="searchField" class="cvr-input px-3 py-2 rounded w-48">
                         <option v-for="(label, field) in searchFieldOptions" :key="field" :value="field">{{ label }}</option>
                     </select>
                 </div>
                 <div>
-                    <label class="cvr-form-label">Value</label>
-                    <input v-model="searchValue" type="text" placeholder="Search..." class="cvr-input px-3 py-2 rounded w-32" />
+                    <label class="cvr-form-label">{{ $t('Value') }}</label>
+                    <input v-model="searchValue" type="text" :placeholder="$t('Search...')" class="cvr-input px-3 py-2 rounded w-32" />
                 </div>
                 <div>
-                    <label class="cvr-form-label">Start Date</label>
+                    <label class="cvr-form-label">{{ $t('Start Date') }}</label>
                     <input v-model="dateFilters.startDate" type="date" class="cvr-input px-3 py-2 rounded" />
                 </div>
                 <div>
-                    <label class="cvr-form-label">End Date</label>
+                    <label class="cvr-form-label">{{ $t('End Date') }}</label>
                     <input v-model="dateFilters.endDate" type="date" class="cvr-input px-3 py-2 rounded" />
                 </div>
-                <button @click="applyDateFilter" class="cvr-btn-secondary px-4 py-2 rounded border">Apply</button>
+                <button @click="applyDateFilter" class="cvr-btn-secondary px-4 py-2 rounded border">{{ $t('Apply') }}</button>
             </div>
 
             <!-- Table -->
@@ -211,13 +211,13 @@ function destroyRow() {
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-4 py-3 text-left">#</th>
-                            <th class="px-4 py-3 text-left">Date</th>
-                            <th class="px-4 py-3 text-left">From Currency</th>
-                            <th class="px-4 py-3 text-left">To Currency</th>
-                            <th class="px-4 py-3 text-left">Exchange Rate</th>
-                            <th class="px-4 py-3 text-left">Reciprocal Exchange Rate</th>
-                            <th v-if="canUpdate || canDelete" class="px-4 py-3 text-left">Actions</th>
+                            <th class="px-4 py-3 text-start">#</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Date') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('From Currency') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('To Currency') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Exchange Rate') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Reciprocal Exchange Rate') }}</th>
+                            <th v-if="canUpdate || canDelete" class="px-4 py-3 text-start">{{ $t('Actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -231,13 +231,13 @@ function destroyRow() {
                             <td v-if="canUpdate || canDelete" class="px-4 py-3">
                                 <div v-if="rate.is_editable" class="flex items-center gap-2">
                                     <RecordLogButton subject="ForeignExchangeRate" :id="rate.id" :company-id="company.id" />
-                                    <a :href="rate.edit_url" class="cvr-action-btn" title="Edit">✏️</a>
-                                    <button @click="confirmDelete(rate)" class="cvr-action-btn" title="Delete">🗑️</button>
+                                    <a :href="rate.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</a>
+                                    <button @click="confirmDelete(rate)" class="cvr-action-btn" :title="$t('Delete')">🗑️</button>
                                 </div>
                             </td>
                         </tr>
                         <tr v-if="rates.data.length === 0">
-                            <td colspan="7" class="px-4 py-8 text-center cvr-text-muted">No exchange rates found for this currency.</td>
+                            <td colspan="7" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No exchange rates found for this currency.') }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -264,10 +264,10 @@ function destroyRow() {
             <!-- Delete confirmation -->
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Delete this exchange rate?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Delete this exchange rate?') }}</h2>
                     <div class="flex justify-end gap-2">
-                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Delete</button>
+                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>

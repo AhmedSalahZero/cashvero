@@ -105,10 +105,10 @@ function submit() {
         <div class="p-6">
             <div class="flex items-center gap-3 mb-6">
                 <Link :href="listUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                    ← Back to Banks
+                    {{ $t('← Back to Banks') }}
                 </Link>
                 <h1 class="text-xl font-semibold cvr-text-primary">
-                    {{ isEditMode ? 'Edit Financial Institution' : 'Add Financial Institution' }}
+                    {{ isEditMode ? $t('Edit Financial Institution') : $t('Add Financial Institution') }}
                 </h1>
             </div>
 
@@ -117,24 +117,24 @@ function submit() {
             <form @submit.prevent="submit" class="space-y-6">
                 <!-- Institution details -->
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Financial Institution Type</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Financial Institution Type') }}</h2>
                     <div class="cvr-form-grid-8-2-2">
                         <div>
-                            <label class="cvr-form-label">Select Bank *</label>
+                            <label class="cvr-form-label">{{ $t('Select Bank') }} *</label>
                             <select v-model="form.bank_id" required class="cvr-select w-full px-3 py-2 rounded">
-                                <option value="" disabled>Select...</option>
+                                <option value="" disabled>{{ $t('Select...') }}</option>
                                 <option v-for="(bankName, bankId) in banks" :key="bankId" :value="bankId">
                                     {{ bankName }}
                                 </option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Branch Name *</label>
-                            <input v-model="form.branch_name" required type="text" class="cvr-input w-full px-3 py-2 rounded" placeholder="Branch Name" />
+                            <label class="cvr-form-label">{{ $t('Branch Name') }} *</label>
+                            <input v-model="form.branch_name" required type="text" class="cvr-input w-full px-3 py-2 rounded" :placeholder="$t('Branch Name')" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Company Account Number *</label>
-                            <input v-model="form.company_account_number" required type="text" class="cvr-input w-full px-3 py-2 rounded" placeholder="Company Account Number" />
+                            <label class="cvr-form-label">{{ $t('Company Account Number') }} *</label>
+                            <input v-model="form.company_account_number" required type="text" class="cvr-input w-full px-3 py-2 rounded" :placeholder="$t('Company Account Number')" />
                         </div>
                     </div>
                 </div>
@@ -142,16 +142,16 @@ function submit() {
                 <!-- Initial accounts repeater — create mode only -->
                 <div v-if="!isEditMode" class="cvr-card">
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide">Initial Bank Accounts</h2>
+                        <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide">{{ $t('Initial Bank Accounts') }}</h2>
                         <button type="button" @click="addAccountRow" class="cvr-btn-primary px-3 py-1.5 rounded text-sm">
-                            + Add Account
+                            {{ $t('+ Add Account') }}
                         </button>
                     </div>
 
                     <div v-for="(row, index) in accounts" :key="row._rowId" class="cvr-border border rounded-lg p-4 mb-3">
                         <div class="cvr-form-grid-4">
                             <div>
-                                <label class="cvr-form-label">Account Number *</label>
+                                <label class="cvr-form-label">{{ $t('Account Number') }} *</label>
                                 <input
                                     v-model="row.account_number"
                                     required
@@ -165,19 +165,19 @@ function submit() {
                                 </p>
                             </div>
                             <div v-if="hasOdooIntegration">
-                                <label class="cvr-form-label">Odoo Code *</label>
+                                <label class="cvr-form-label">{{ $t('Odoo Code') }} *</label>
                                 <input v-model="row.odoo_code" required type="text" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">IBAN</label>
+                                <label class="cvr-form-label">{{ $t('IBAN') }}</label>
                                 <input v-model="row.iban" type="text" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Balance Amount *</label>
+                                <label class="cvr-form-label">{{ $t('Balance Amount') }} *</label>
                                 <input v-model.number="row.balance_amount" required type="number" step="0.01" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Balance Date</label>
+                                <label class="cvr-form-label">{{ $t('Balance Date') }}</label>
                                 <input
                                     v-model="row.balance_date"
                                     type="date"
@@ -190,22 +190,22 @@ function submit() {
                                 </p>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Currency *</label>
+                                <label class="cvr-form-label">{{ $t('Currency') }} *</label>
                                 <select v-model="row.currency" required class="cvr-select w-full px-2 py-1.5 rounded text-sm">
-                                    <option value="" disabled>Select</option>
+                                    <option value="" disabled>{{ $t('Select') }}</option>
                                     <option v-for="(label, code) in currencies" :key="code" :value="code">{{ label }}</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Exchange Rate *</label>
+                                <label class="cvr-form-label">{{ $t('Exchange Rate') }} *</label>
                                 <input v-model.number="row.exchange_rate" required type="number" step="0.0001" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Interest Rate *</label>
+                                <label class="cvr-form-label">{{ $t('Interest Rate') }} *</label>
                                 <input v-model.number="row.interest_rate" required type="number" step="0.01" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Min Balance *</label>
+                                <label class="cvr-form-label">{{ $t('Min Balance') }} *</label>
                                 <input v-model.number="row.min_balance" required type="number" step="0.01" class="cvr-input w-full px-2 py-1.5 rounded text-sm" />
                             </div>
                             <ShareholderOwnershipFields
@@ -218,7 +218,7 @@ function submit() {
                         </div>
                         <div class="flex justify-end mt-3" v-if="accounts.length > 1">
                             <button type="button" @click="removeAccountRow(row._rowId)" class="cvr-btn-remove-row">
-                                🗑 Remove Account
+                                {{ $t('🗑 Remove Account') }}
                             </button>
                         </div>
                     </div>
@@ -226,9 +226,9 @@ function submit() {
 
                 <!-- Submit -->
                 <div class="flex justify-end gap-2">
-                    <Link :href="listUrl" class="cvr-btn-secondary px-4 py-2 rounded border">Cancel</Link>
+                    <Link :href="listUrl" class="cvr-btn-secondary px-4 py-2 rounded border">{{ $t('Cancel') }}</Link>
                     <button type="submit" :disabled="submitting" class="cvr-btn-primary px-4 py-2 rounded disabled:opacity-50">
-                        {{ submitting ? 'Saving...' : (isEditMode ? 'Update' : 'Save') }}
+                        {{ submitting ? $t('Saving...') : (isEditMode ? $t('Update') : $t('Save')) }}
                     </button>
                 </div>
             </form>

@@ -32,15 +32,12 @@ class LgIssuanceIndexFilterTest extends TestCase
             'odoo_db_name' => null,
         ]);
 
-        Schema::table('letter_of_guarantee_issuances', function ($table) {
-            $table->string('transaction_name')->nullable();
-            $table->string('lg_code')->nullable();
-            $table->date('issuance_date')->nullable();
-            // The LG's customer/beneficiary — what "Search By → Customer
-            // Name" resolves through.
-            $table->unsignedBigInteger('partner_id')->nullable();
-        });
-
+        /**
+         * transaction_name, lg_code, issuance_date and partner_id —
+         * the LG's customer/beneficiary, what "Search By → Customer
+         * Name" resolves through — all come from LgSchemaFixture now,
+         * so this used to add them here and no longer needs to.
+         */
         Schema::dropIfExists('partners');
         Schema::create('partners', function ($table) {
             $table->bigIncrements('id');

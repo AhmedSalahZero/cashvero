@@ -38,7 +38,7 @@ const subtitle = computed(() => {
 });
 
 function formatAmount(value) {
-    return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return Number(value || 0).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 // Status column only makes sense when 'All' is picked — for every other
@@ -66,16 +66,16 @@ function goToPage(url) {
     <AppLayout>
         <div class="p-6">
             <Link :href="urls.backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                ← Back to LG By Bank Name
+                {{ $t('← Back to LG By Bank Name') }}
             </Link>
 
             <div class="flex items-start justify-between flex-wrap gap-2 mb-1">
                 <h1 class="text-xl font-semibold cvr-text-primary">
-                    LG Report By Bank Name
+                    {{ $t('LG Report By Bank Name') }}
                     <span class="cvr-text-secondary font-normal">— {{ subtitle }} · {{ String(currency).toUpperCase() }}</span>
                 </h1>
                 <a :href="urls.exportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
-                    ⬇️ Export to Excel
+                    {{ $t('⬇️ Export to Excel') }}
                 </a>
             </div>
             <p class="text-sm cvr-text-muted mb-6">{{ kpis.transactionCount }} Letters of Guarantee.</p>
@@ -85,21 +85,21 @@ function goToPage(url) {
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">📜</div>
                     <div>
-                        <p class="cvr-kpi-label">Total Amount</p>
+                        <p class="cvr-kpi-label">{{ $t('Total Amount') }}</p>
                         <p class="cvr-kpi-value cvr-num-blue">{{ formatAmount(kpis.totalLgAmount) }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-green">🛡️</div>
                     <div>
-                        <p class="cvr-kpi-label">Total Cash Cover</p>
+                        <p class="cvr-kpi-label">{{ $t('Total Cash Cover') }}</p>
                         <p class="cvr-kpi-value cvr-num-green">{{ formatAmount(kpis.totalCashCoverAmount) }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-copper">📋</div>
                     <div>
-                        <p class="cvr-kpi-label">Letters of Guarantee</p>
+                        <p class="cvr-kpi-label">{{ $t('Letters of Guarantee') }}</p>
                         <p class="cvr-kpi-value cvr-num">{{ kpis.transactionCount }}</p>
                     </div>
                 </div>
@@ -112,17 +112,17 @@ function goToPage(url) {
                         <thead class="cvr-table-head sticky top-0 z-10">
                             <tr>
                                 <th class="px-3 py-3 text-center">#</th>
-                                <th class="px-3 py-3 text-left">Bank Name</th>
-                                <th class="px-3 py-3 text-left">Beneficiary Name</th>
-                                <th class="px-3 py-3 text-left">LG Type</th>
-                                <th class="px-3 py-3 text-left">Transaction Name</th>
-                                <th class="px-3 py-3 text-center">LG Code</th>
-                                <th class="px-3 py-3 text-left">Source</th>
-                                <th v-if="showStatusColumn" class="px-3 py-3 text-center">Status</th>
-                                <th class="px-3 py-3 text-right">Amount</th>
-                                <th class="px-3 py-3 text-center">Renewal Date</th>
-                                <th class="px-3 py-3 text-right">Cash Cover</th>
-                                <th class="px-3 py-3 text-right">Commission Rate %</th>
+                                <th class="px-3 py-3 text-start">{{ $t('Bank Name') }}</th>
+                                <th class="px-3 py-3 text-start">{{ $t('Beneficiary Name') }}</th>
+                                <th class="px-3 py-3 text-start">{{ $t('LG Type') }}</th>
+                                <th class="px-3 py-3 text-start">{{ $t('Transaction Name') }}</th>
+                                <th class="px-3 py-3 text-center">{{ $t('LG Code') }}</th>
+                                <th class="px-3 py-3 text-start">{{ $t('Source') }}</th>
+                                <th v-if="showStatusColumn" class="px-3 py-3 text-center">{{ $t('Status') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Amount') }}</th>
+                                <th class="px-3 py-3 text-center">{{ $t('Renewal Date') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Cash Cover') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Commission Rate %') }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -130,12 +130,12 @@ function goToPage(url) {
                                 <td class="px-3 py-2.5 text-center cvr-text-secondary">
                                     {{ (paginator.current_page - 1) * 50 + index + 1 }}
                                 </td>
-                                <td class="px-3 py-2.5 text-left cvr-text-primary">{{ row.financialInstitutionName }}</td>
-                                <td class="px-3 py-2.5 text-left cvr-text-secondary">{{ row.partnerName }}</td>
-                                <td class="px-3 py-2.5 text-left cvr-text-secondary">{{ row.lgType }}</td>
-                                <td class="px-3 py-2.5 text-left cvr-text-secondary">{{ row.transactionName }}</td>
+                                <td class="px-3 py-2.5 text-start cvr-text-primary">{{ row.financialInstitutionName }}</td>
+                                <td class="px-3 py-2.5 text-start cvr-text-secondary">{{ row.partnerName }}</td>
+                                <td class="px-3 py-2.5 text-start cvr-text-secondary">{{ row.lgType }}</td>
+                                <td class="px-3 py-2.5 text-start cvr-text-secondary">{{ row.transactionName }}</td>
                                 <td class="px-3 py-2.5 text-center cvr-text-secondary">{{ row.lgCode }}</td>
-                                <td class="px-3 py-2.5 text-left cvr-text-secondary">{{ row.source }}</td>
+                                <td class="px-3 py-2.5 text-start cvr-text-secondary">{{ row.source }}</td>
                                 <td v-if="showStatusColumn" class="px-3 py-2.5 text-center" :class="rowStatusClass(row)">{{ rowStatusLabel(row) }}</td>
                                 <td class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(row.lgAmount) }}</td>
                                 <td class="px-3 py-2.5 text-center" :class="row.renewalDate === 'cancelled' ? 'cvr-num-red font-medium' : 'cvr-text-secondary'">{{ row.renewalDate }}</td>
@@ -143,7 +143,7 @@ function goToPage(url) {
                                 <td class="px-3 py-2.5 text-right cvr-num">{{ row.lgCommissionRate }}</td>
                             </tr>
                             <tr v-if="rows.length === 0">
-                                <td :colspan="showStatusColumn ? 12 : 11" class="px-4 py-8 text-center cvr-text-muted">No Letters of Guarantee found for these filters.</td>
+                                <td :colspan="showStatusColumn ? 12 : 11" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No Letters of Guarantee found for these filters.') }}</td>
                             </tr>
                         </tbody>
                     </table>

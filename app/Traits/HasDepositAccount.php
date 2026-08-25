@@ -9,6 +9,8 @@ use App\Models\TimeOfDeposit;
 use App\OdooSetting;
 use App\Services\Api\CashExpenseOdooService;
 use App\Services\Api\TimeOrCertificateOfDepositOdooService;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Collection;
 
 trait HasDepositAccount
 {
@@ -43,12 +45,61 @@ trait HasDepositAccount
 	{
 		return is_null($this->deducted_from_account_id) || $this->deducted_from_account_id ==0 ;
 	}
-	public function handleTdOrCdStoreDepositForOdoo(bool $isBreakOrApplyDeposit)
+	/**
+	 * * حساب التسوية اللي اليوزر بيختاره من بوب اب الاستحقاق او الكسر
+	 */
+	public function getSettlementAccountId():?int
+	{
+		return $this->settlement_account_id ? (int)$this->settlement_account_id : null ;
+	}
+	public function settlementAccount():BelongsTo
+	{
+		return $this->belongsTo(FinancialInstitutionAccount::class,'settlement_account_id','id');
+	}
+	public function getSettlementAccountNumber()
+	{
+		return $this->settlementAccount ? $this->settlementAccount->getAccountNumber() : null ;
+	}
+	/**
+	 * * الحساب الجاري اللي الوديعة بترجع عليه وقت الاستحقاق او الكسر
+	 * * لو اليوزر اختار حساب تسوية بنستعمله ، وغير كده بنرجع لحساب الخصم الاصلي
+	 * * واللي بيبقى فاضي لما الوديعة تكون
+	 * * opening balance
+	 */
+	public function getSettlementOrDeductedFromAccountId():?int
+	{
+		return $this->getSettlementAccountId() ?: $this->getDeductedFromAccountId() ;
+	}
+	/**
+	 * * الحسابات اللي ينفع تتختار كحساب تسوية : حسابات جارية في نفس البنك
+	 * * وبنفس عملة الوديعة ، مع الحساب المختار حاليا حتى لو اتقفل
+	 * * ( نفس القاعدة المستخدمة في فورمة الانشاء )
+	 */
+	public function getSettlementAccountOptions($accounts = null):Collection
+	{
+		$accounts = $accounts ?: $this->financialInstitution->accounts ;
+		$currentAccountId = $this->getSettlementOrDeductedFromAccountId() ;
+		return $accounts->filter(function(FinancialInstitutionAccount $account) use ($currentAccountId){
+			$isSameCurrency = 0 === strcasecmp((string)$account->getCurrency() , (string)$this->getCurrency()) ;
+			return $isSameCurrency && ((bool)$account->is_active || (int)$account->getId() === $currentAccountId) ;
+		})->values();
+	}
+	public function isEligibleSettlementAccount($accountId,$accounts = null):bool
+	{
+		$accountId = (int)$accountId ;
+		if(!$accountId){
+			return false ;
+		}
+		return $this->getSettlementAccountOptions($accounts)->contains(function(FinancialInstitutionAccount $account) use ($accountId){
+			return (int)$account->getId() === $accountId ;
+		});
+	}
+	public function handleTdOrCdStoreDepositForOdoo(bool $isBreakOrApplyDeposit,string $odooDate = null)
 	{
 		
 		$company = $this->company ; 
 		$isOpeningBalance = $this->isOpeningBalance(); 
-		$date = $this->getStartDate();
+		$date = $odooDate?:$this->getStartDate();
 		$this->deleteOdooRelations($isBreakOrApplyDeposit);
 		if($company->hasOdooIntegrationCredentials() && $company->withinIntegrationDate($date) && (! $isOpeningBalance || $isBreakOrApplyDeposit) ){
 			$this->handleTdOrCdStoreDepositWithoutJournalForOdoo($isBreakOrApplyDeposit);
@@ -62,6 +113,19 @@ trait HasDepositAccount
 		
 		$company = $this->company ; 
 		// $isOpeningBalance = $this->isOpeningBalance();
+		/**
+		 * * وقت الاستحقاق او الكسر بنستعمل حساب التسوية اللي اليوزر اختاره
+		 * * علشان الوديعة اللي اتسجلت
+		 * * opening balance
+		 * * مالهاش
+		 * * deducted_from_account_id
+		 */
+		$fromAccountId = $isBreakOrApplyDeposit ? $this->getSettlementOrDeductedFromAccountId() : $this->getDeductedFromAccountId() ;
+		$fromAccount = $fromAccountId ? FinancialInstitutionAccount::find($fromAccountId) : null ;
+		if(!$fromAccount){
+			return ;
+		}
+		$fromAccountNumber = $fromAccount->getAccountNumber();
 		$this->deleteOdooRelations($isBreakOrApplyDeposit);
 		// if($company->hasOdooIntegrationCredentials() && !$isOpeningBalance){
 			$referenceColumnName = $isBreakOrApplyDeposit ? 'inbound_break_odoo_reference' : 'inbound_odoo_reference';
@@ -80,7 +144,6 @@ trait HasDepositAccount
 			$currencyName = $this->getCurrency();
 			$date = $isBreakOrApplyDeposit ?  $this->getDepositDateOrBreakDate() : $this->getStartDate();
 			$odooCurrencyId = Currency::getOdooId($currencyName);
-			$fromAccountNumber = FinancialInstitutionAccount::find($this->deducted_from_account_id)->getAccountNumber();
 			$fromJournalId = $fromFinancialInstitution->getJournalIdForAccount($fromAccountTypeId,$fromAccountNumber);
 			 $fromOdooId = $fromFinancialInstitution->getOdooIdForAccount($fromAccountTypeId,$fromAccountNumber);
 			$toOdooId = $fromFinancialInstitution->getOdooIdForAccount($toAccountTypeId,$toAccountNumber);

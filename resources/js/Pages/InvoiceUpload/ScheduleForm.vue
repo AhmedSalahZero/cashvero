@@ -100,7 +100,7 @@ function submit() {
             <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm mb-3">
                 ← Back to {{ modelDisplayName }} Table
             </Link>
-            <h1 class="text-xl font-semibold cvr-text-primary mb-6">{{ modelDisplayName }} {{ isEdit ? '— Edit' : '— Create' }}</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-6">{{ modelDisplayName }} {{ isEdit ? $t('— Edit') : $t('— Create') }}</h1>
 
             <div class="cvr-card-bg cvr-border border rounded-lg p-4">
                 <div class="cvr-form-grid-2">
@@ -108,12 +108,12 @@ function submit() {
                         <label class="cvr-form-label">{{ f.label }}</label>
 
                         <select v-if="f.type === 'bank_select'" v-model="form[f.field]" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="">Select</option>
+                            <option value="">{{ $t('Select') }}</option>
                             <option v-for="bank in f.options" :key="bank" :value="bank">{{ bank }}</option>
                         </select>
 
                         <select v-else-if="f.type === 'account_number_select'" v-model="form[f.field]" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="">Select</option>
+                            <option value="">{{ $t('Select') }}</option>
                             <option v-for="acc in accountNumberOptions" :key="acc" :value="acc">{{ acc }}</option>
                         </select>
 
@@ -122,7 +122,7 @@ function submit() {
                         <p v-if="form.errors[f.field]" class="text-xs text-red-500 mt-1">{{ form.errors[f.field] }}</p>
                     </div>
                 </div>
-                <button @click="submit" :disabled="form.processing" class="cvr-btn-primary px-4 py-1.5 rounded text-sm mt-4">Save</button>
+                <button @click="submit" :disabled="form.processing" class="cvr-btn-primary px-4 py-1.5 rounded text-sm mt-4">{{ $t('Save') }}</button>
             </div>
         </div>
     </AppLayout>

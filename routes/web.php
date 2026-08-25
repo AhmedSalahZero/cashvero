@@ -28,15 +28,15 @@ use Mcamara\LaravelLocalization\Facades\LaravelLocalization;
 |
 */
 
-Route::middleware([])->group(function () {
-    Auth::routes();
-    
-    Route::group(
-        [
-            'prefix' => LaravelLocalization::setLocale(),
-            'middleware' => ['localeSessionRedirect', 'localizationRedirect', 'localeViewPath', 'auth', 'checkIfAccountExpired']
-        ],
-        function () {
+Route::group(
+    [
+        'prefix' => LaravelLocalization::setLocale(),
+        'middleware' => ['localeSessionRedirect', 'localizationRedirect', 'localeViewPath'],
+    ],
+    function () {
+        Auth::routes();
+
+        Route::middleware(['auth', 'checkIfAccountExpired'])->group(function () {
     
             Route::post('remove-user', [RemoveUsercontroller::class, '__invoke'])->name('remove.user');
             Route::post('remove-company', [RemoveCompanyController::class, '__invoke'])->name('remove.company');
@@ -710,6 +710,13 @@ Route::middleware([])->group(function () {
                     Route::get('/customer-balances/invoices-statement-report/{partnerId}/{currency}/{modelType}', 'CustomerInvoiceDashboardController@showInvoiceStatementReport')->name('view.invoice.statement.report');
                     Route::get('/customer-balances/invoices-statement-report/{partnerId}/{currency}/{modelType}/export', 'CustomerInvoiceDashboardController@exportInvoiceStatementReport')->name('export.invoice.statement.report');
                     Route::get('/customer-balances/total-net-balance-details/{currency}/{modelType}', 'BalancesController@showTotalNetBalanceDetailsReport')->name('show.total.net.balance.in');
+                    /**
+                     * Internal settlement — offsets a partner who is
+                     * both a customer and a supplier against themselves.
+                     * See App\Models\InternalSettlement.
+                     */
+                    Route::post('/customer-balances/internal-settlement', 'BalancesController@storeInternalSettlement')->name('store.internal.settlement');
+                    Route::delete('/customer-balances/internal-settlement/{internalSettlement}', 'BalancesController@destroyInternalSettlement')->name('delete.internal.settlement');
                     // Route::get('collection-effectiveness-index-report',[]);
                     Route::get('get-contract-name-for-customer-or-supplier', 'getProjectsForCustomerOrSupplierController@handle')->name('get.projects.for.customer.or.supplier');
                     Route::get('get-po-or-so-for-contract', 'getPoOrSoFromContractController@handle')->name('get.po.or.so.from.contract');
@@ -823,6 +830,14 @@ Route::middleware([])->group(function () {
                     Route::get('cash-expense/create/{model?}', 'CashExpenseController@create')->name('create.cash.expense');
                     Route::post('cash-expense/create', 'CashExpenseController@store')->name('store.cash.expense');
                     Route::get('cash-expense/edit/{cashExpense}', 'CashExpenseController@edit')->name('edit.cash.expense');
+                    /**
+                     * "Copy" — opens the CREATE form pre-filled from an
+                     * existing expense, ready to save as a new one. It
+                     * writes nothing itself, so it is gated by
+                     * cash_expense.create (what it leads to), not by
+                     * .view or .update.
+                     */
+                    Route::get('cash-expense/copy/{cashExpense}', 'CashExpenseController@copy')->name('copy.cash.expense');
                    
                     Route::put('cash-expense/update/{cashExpense}', 'CashExpenseController@update')->name('update.cash.expense');
                     Route::delete('cash-expense/delete/{cashExpense}', 'CashExpenseController@destroy')->name('delete.cash.expense');
@@ -875,8 +890,7 @@ Route::middleware([])->group(function () {
                 Route::get('fieldsToBeExported/{model}/{view}', 'ExportTable@customizedTableField')->name('table.fields.selection.view');
                 Route::post('fieldsToBeExportedSave/{model}/{modelName}', 'ExportTable@customizedTableFieldSave')->name('table.fields.selection.save');
             });
-        }
-    );
+        });
 });
 
 Route::delete('deleteMultiRowsFromCaching/{company}/{modelName}', [DeleteMultiRowsFromCaching::class, '__invoke'])->name('deleteMultiRowsFromCaching');

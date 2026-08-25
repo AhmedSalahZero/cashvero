@@ -80,10 +80,10 @@ function destroyRow() {
         <div class="p-6">
             <div class="flex items-center gap-3 mb-1">
                 <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                    ← Back to Time Of Deposit
+                    {{ $t('← Back to Time Of Deposit') }}
                 </Link>
             </div>
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Renewal Date History</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Renewal Date History') }}</h1>
             <p class="text-sm cvr-text-muted mb-6">
                 {{ timeOfDeposit.financial_institution_name }} · {{ timeOfDeposit.account_number }}
                 ({{ timeOfDeposit.currency?.toUpperCase() }})
@@ -94,57 +94,57 @@ function destroyRow() {
                  add a renewal until the current term is done). -->
             <div v-if="canShowForm" class="cvr-card mb-6">
                 <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">
-                    {{ isEdit ? 'Edit Renewal' : 'Adjusted Renewal Date' }}
+                    {{ isEdit ? $t('Edit Renewal') : $t('Adjusted Renewal Date') }}
                 </h2>
                 <FormErrorSummary />
                 <form @submit.prevent="submit" class="space-y-4">
                     <div class="cvr-form-grid-4">
                         <div>
-                            <label class="cvr-form-label">Financial Institution</label>
+                            <label class="cvr-form-label">{{ $t('Financial Institution') }}</label>
                             <input disabled :value="timeOfDeposit.financial_institution_name" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Account Number</label>
+                            <label class="cvr-form-label">{{ $t('Account Number') }}</label>
                             <input disabled :value="timeOfDeposit.account_number" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Currency</label>
+                            <label class="cvr-form-label">{{ $t('Currency') }}</label>
                             <input disabled :value="timeOfDeposit.currency" class="cvr-input w-full px-3 py-2 rounded uppercase" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Current Interest Rate</label>
+                            <label class="cvr-form-label">{{ $t('Current Interest Rate') }}</label>
                             <input disabled :value="timeOfDeposit.interest_rate_formatted" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
 
                         <div>
-                            <label class="cvr-form-label">Interest Amount</label>
+                            <label class="cvr-form-label">{{ $t('Interest Amount') }}</label>
                             <input v-model="form.interest_amount" type="text" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Expiry Date</label>
+                            <label class="cvr-form-label">{{ $t('Expiry Date') }}</label>
                             <input v-model="form.expiry_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('expiry_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('expiry_date') }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">New Interest Rate (%)</label>
+                            <label class="cvr-form-label">{{ $t('New Interest Rate (%)') }}</label>
                             <input v-model="form.interest_rate" type="number" step="0.01" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">New Renewal Date *</label>
+                            <label class="cvr-form-label">{{ $t('New Renewal Date') }} *</label>
                             <input v-model="form.renewal_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('renewal_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('renewal_date') }}</p>
                         </div>
                     </div>
                     <div class="flex justify-end gap-2">
-                        <Link :href="indexUrl" class="cvr-btn-secondary px-4 py-2 rounded border">Cancel</Link>
+                        <Link :href="indexUrl" class="cvr-btn-secondary px-4 py-2 rounded border">{{ $t('Cancel') }}</Link>
                         <button v-if="can('time_of_deposit.renew')" type="submit" :disabled="submitting" class="cvr-btn-primary px-4 py-2 rounded">
-                            {{ submitting ? 'Saving...' : 'Save' }}
+                            {{ submitting ? $t('Saving...') : $t('Save') }}
                         </button>
                     </div>
                 </form>
             </div>
             <div v-else class="mb-6 px-4 py-3 rounded cvr-badge-pending text-sm">
-                This Time Of Deposit hasn't reached its end date yet — a new renewal can only be added once it's expired.
+                {{ $t('This Time Of Deposit hasn\'t reached its end date yet — a new renewal can only be added once it\'s expired.') }}
             </div>
 
             <!-- History table -->
@@ -152,10 +152,10 @@ function destroyRow() {
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-4 py-3 text-left">#</th>
-                            <th class="px-4 py-3 text-left">Date</th>
-                            <th class="px-4 py-3 text-left">Days Count</th>
-                            <th class="px-4 py-3 text-left">Actions</th>
+                            <th class="px-4 py-3 text-start">#</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Date') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Days Count') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -163,7 +163,7 @@ function destroyRow() {
                             <td class="px-4 py-3 cvr-text-secondary">{{ index + 1 }}</td>
                             <td class="px-4 py-3 whitespace-nowrap cvr-text-primary">
                                 {{ row.renewal_date_formatted }}
-                                <span v-if="row.is_original" class="cvr-text-muted text-xs"> (Original Renewal Date)</span>
+                                <span v-if="row.is_original" class="cvr-text-muted text-xs"> {{ $t('(Original Renewal Date)') }}</span>
                             </td>
                             <td class="px-4 py-3 cvr-text-secondary">{{ row.days_count ?? '-' }}</td>
                             <td class="px-4 py-3">
@@ -171,17 +171,17 @@ function destroyRow() {
                                      matches the original exactly. -->
                                 <div v-if="row.is_last" class="flex items-center gap-2">
                                     <Link :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">
-                                        Edit
+                                        {{ $t('Edit') }}
                                     </Link>
                                     <button v-if="can('time_of_deposit.renew')" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">
-                                        Delete
+                                        {{ $t('Delete') }}
                                     </button>
                                 </div>
                             </td>
                         </tr>
                         <tr v-if="rows.length === 0">
                             <td colspan="4" class="px-4 py-8 text-center cvr-text-muted">
-                                No renewal history yet.
+                                {{ $t('No renewal history yet.') }}
                             </td>
                         </tr>
                     </tbody>
@@ -194,8 +194,8 @@ function destroyRow() {
                         Delete Renewal Date History {{ deleteTarget.renewal_date_formatted }}?
                     </h2>
                     <div class="flex justify-end gap-2">
-                        <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Delete</button>
+                        <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>

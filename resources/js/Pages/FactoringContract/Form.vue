@@ -3,6 +3,8 @@ import { ref, computed, watch } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import FormErrorSummary from '@/Components/FormErrorSummary.vue';
+import { useI18n } from 'vue-i18n';
+const { t } = useI18n();
 
 const props = defineProps({
     mode: String, // 'create' | 'edit'
@@ -76,7 +78,7 @@ function addBreakdownRow() {
 }
 function removeBreakdownRow(index) {
     if (breakdowns.value.length <= 1) return;
-    if (!confirm('Are you sure you want to delete this element?')) return;
+    if (!confirm(t('Are you sure you want to delete this element?'))) return;
     breakdowns.value.splice(index, 1);
 }
 
@@ -132,11 +134,11 @@ function submit() {
         <div class="p-6">
             <div class="flex items-center gap-3 mb-1">
                 <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                    ← Back to Factoring Contracts
+                    {{ $t('← Back to Factoring Contracts') }}
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">
-                {{ isEdit ? 'Edit' : 'Add' }} Factoring Contract
+                {{ isEdit ? $t('Edit') : $t('Add') }} Factoring Contract
             </h1>
             <p class="text-sm cvr-text-muted mb-6">{{ factoringCompany.name }}</p>
 
@@ -145,33 +147,33 @@ function submit() {
             <form @submit.prevent="submit" class="space-y-6">
                 <!-- Contract Main Information -->
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Contract Main Information</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Contract Main Information') }}</h2>
                     <div class="cvr-form-grid-3">
                         <div>
-                            <label class="cvr-form-label">Factoring Company Name</label>
+                            <label class="cvr-form-label">{{ $t('Factoring Company Name') }}</label>
                             <input disabled :value="factoringCompany.name" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Contract Start Date *</label>
+                            <label class="cvr-form-label">{{ $t('Contract Start Date') }} *</label>
                             <input v-model="form.contract_start_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
-                            <p v-if="errorFor('contract_start_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('contract_start_date') }}</p>
+                            <p v-if="errorFor('contract_start_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor($t('contract_start_date')) }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Contract End Date *</label>
+                            <label class="cvr-form-label">{{ $t('Contract End Date') }} *</label>
                             <input v-model="form.contract_end_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('contract_end_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('contract_end_date') }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Recourse Type *</label>
+                            <label class="cvr-form-label">{{ $t('Recourse Type') }} *</label>
                             <select v-model="form.recourse_type" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="" disabled>Select</option>
+                                <option value="" disabled>{{ $t('Select') }}</option>
                                 <option v-for="(label, code) in recourseTypes" :key="code" :value="code">{{ label }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Select Currency *</label>
+                            <label class="cvr-form-label">{{ $t('Select Currency') }} *</label>
                             <select v-model="form.currency" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="" disabled>Select</option>
+                                <option value="" disabled>{{ $t('Select') }}</option>
                                 <option v-for="(label, code) in currencies" :key="code" :value="code">{{ label }}</option>
                             </select>
                         </div>
@@ -180,19 +182,19 @@ function submit() {
 
                 <!-- Terms & Conditions -->
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Terms &amp; Conditions</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Terms & Conditions') }}</h2>
                     <div class="cvr-form-grid-3">
                         <div>
-                            <label class="cvr-form-label">Limit *</label>
+                            <label class="cvr-form-label">{{ $t('Limit') }} *</label>
                             <input v-model="form.limit" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('limit')" class="text-xs mt-1 cvr-num-red">{{ errorFor('limit') }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Outstanding Balance *</label>
+                            <label class="cvr-form-label">{{ $t('Outstanding Balance') }} *</label>
                             <input v-model="form.outstanding_balance" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Balance Date *</label>
+                            <label class="cvr-form-label">{{ $t('Balance Date') }} *</label>
                             <input v-model="form.balance_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
 
@@ -215,19 +217,19 @@ function submit() {
                             </div>
                         </template>
                         <p v-else class="text-xs cvr-text-muted col-span-3">
-                            Borrowing/Margin/Interest/Min Interest Rate can only be set when the contract is created — matches the original (no edit-rate feature for this model).
+                            {{ $t('Borrowing/Margin/Interest/Min Interest Rate can only be set when the contract is created — matches the original (no edit-rate feature for this model).') }}
                         </p>
 
                         <div>
-                            <label class="cvr-form-label">Highest Debt Balance Rate (%) *</label>
+                            <label class="cvr-form-label">{{ $t('Highest Debt Balance Rate (%)') }} *</label>
                             <input v-model="form.highest_debt_balance_rate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Admin Fees Rate (%) *</label>
+                            <label class="cvr-form-label">{{ $t('Admin Fees Rate (%)') }} *</label>
                             <input v-model="form.admin_fees_rate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Settled Max Within (Days) *</label>
+                            <label class="cvr-form-label">{{ $t('Settled Max Within (Days)') }} *</label>
                             <input v-model="form.to_be_setteled_max_within_days" type="number" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
@@ -235,40 +237,40 @@ function submit() {
 
                 <!-- Outstanding Breakdown -->
                 <div v-if="showBreakdown" class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Outstanding Breakdown</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Outstanding Breakdown') }}</h2>
                     <p class="text-xs cvr-text-muted mb-3">
-                        The amounts below must add up to the Outstanding Balance above, and each settlement date must be on or after the Contract Start Date.
+                        {{ $t('The amounts below must add up to the Outstanding Balance above, and each settlement date must be on or after the Contract Start Date.') }}
                     </p>
                     <div v-for="(row, index) in breakdowns" :key="row.key" class="flex items-end gap-3 mb-3">
                         <div class="w-40">
-                            <label class="cvr-form-label">Amount</label>
+                            <label class="cvr-form-label">{{ $t('Amount') }}</label>
                             <input v-model="row.amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div class="w-48">
-                            <label class="cvr-form-label">Settlement Date</label>
+                            <label class="cvr-form-label">{{ $t('Settlement Date') }}</label>
                             <input v-model="row.settlement_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <button type="button" @click="removeBreakdownRow(index)" class="cvr-btn-danger px-2 py-2 rounded border text-xs">✕</button>
                     </div>
-                    <button type="button" @click="addBreakdownRow" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm mb-3">+ Add</button>
+                    <button type="button" @click="addBreakdownRow" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm mb-3">{{ $t('+ Add') }}</button>
 
                     <p class="text-sm">
-                        Total: <strong :class="breakdownTotalMismatch ? 'cvr-num-red' : 'cvr-num'">{{ breakdownTotal }}</strong>
+                        {{ $t('Total:') }} <strong :class="breakdownTotalMismatch ? 'cvr-num-red' : 'cvr-num'">{{ breakdownTotal }}</strong>
                         <span class="cvr-text-muted"> / {{ form.outstanding_balance }}</span>
                     </p>
                     <p v-if="breakdownTotalMismatch" class="text-xs cvr-num-red mt-1">
-                        Repeater Outstanding Balance Must Be Equal To Total Outstanding Balance
+                        {{ $t('Repeater Outstanding Balance Must Be Equal To Total Outstanding Balance') }}
                     </p>
                     <p v-if="breakdownDateTooEarly" class="text-xs cvr-num-red mt-1">
-                        Settlement Dates Must Be Greater Than Or Equal Contract Start Date
+                        {{ $t('Settlement Dates Must Be Greater Than Or Equal Contract Start Date') }}
                     </p>
-                    <p v-if="errorFor('outstanding_breakdowns')" class="text-xs cvr-num-red mt-1">{{ errorFor('outstanding_breakdowns') }}</p>
+                    <p v-if="errorFor('outstanding_breakdowns')" class="text-xs cvr-num-red mt-1">{{ errorFor($t('outstanding_breakdowns')) }}</p>
                 </div>
 
                 <div class="flex justify-end gap-2">
-                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">Cancel</Link>
+                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">{{ $t('Cancel') }}</Link>
                     <button type="submit" :disabled="submitting" class="cvr-btn-primary px-4 py-2 rounded">
-                        {{ submitting ? 'Saving...' : 'Save' }}
+                        {{ submitting ? $t('Saving...') : $t('Save') }}
                     </button>
                 </div>
             </form>

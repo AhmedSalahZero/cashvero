@@ -65,33 +65,33 @@ function submit() {
 <template>
     <AppLayout>
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Cash Expense Statement</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Cash Expense Statement') }}</h1>
             <p class="text-sm cvr-text-muted mb-6">
-                A transaction-by-transaction list of cash expenses, for a chosen date range, currency, and category.
+                {{ $t('A transaction-by-transaction list of cash expenses, for a chosen date range, currency, and category.') }}
             </p>
 
             <div class="cvr-card-bg cvr-border border rounded-lg p-5">
                 <div class="cvr-form-grid-3 mb-5">
                     <div>
-                        <label class="cvr-form-label">Start Date *</label>
+                        <label class="cvr-form-label">{{ $t('Start Date') }} *</label>
                         <input v-model="startDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">End Date *</label>
+                        <label class="cvr-form-label">{{ $t('End Date') }} *</label>
                         <input v-model="endDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">Currency *</label>
+                        <label class="cvr-form-label">{{ $t('Currency') }} *</label>
                         <select v-model="currency" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="" disabled>Select currency</option>
+                            <option value="" disabled>{{ $t('Select currency') }}</option>
                             <option v-for="(label, code) in currencies" :key="code" :value="code">{{ String(label).toUpperCase() }}</option>
                         </select>
                     </div>
                 </div>
 
                 <div class="max-w-xl">
-                    <label class="cvr-form-label">Categories * <span class="cvr-text-muted font-normal">(pick one or more)</span></label>
-                    <MultiSelectDropdown v-model="selectedSubCategoryIds" :options="subCategoryOptions" placeholder="Select categories" />
+                    <label class="cvr-form-label">{{ $t('Categories') }} * <span class="cvr-text-muted font-normal">{{ $t('(pick one or more)') }}</span></label>
+                    <MultiSelectDropdown v-model="selectedSubCategoryIds" :options="subCategoryOptions" :placeholder="$t('Select categories')" />
                 </div>
 
                 <button
@@ -100,13 +100,13 @@ function submit() {
                     class="cvr-btn-primary px-4 py-1.5 rounded text-sm mt-5"
                     :class="{ 'opacity-40 cursor-not-allowed': !canSubmit }"
                 >
-                    View Statement
+                    {{ $t('View Statement') }}
                 </button>
                 <ul v-if="!canSubmit" class="text-xs mt-2 space-y-0.5" style="color: var(--cvr-danger-text);">
-                    <li v-if="!startDate">— Start Date is not set.</li>
-                    <li v-if="!endDate">— End Date is not set.</li>
-                    <li v-if="!currency">— Currency is not selected.</li>
-                    <li v-if="selectedSubCategoryIds.length === 0">— No category is selected yet (open the Categories dropdown and pick at least one, or Select All).</li>
+                    <li v-if="!startDate">{{ $t('— Start Date is not set.') }}</li>
+                    <li v-if="!endDate">{{ $t('— End Date is not set.') }}</li>
+                    <li v-if="!currency">{{ $t('— Currency is not selected.') }}</li>
+                    <li v-if="selectedSubCategoryIds.length === 0">{{ $t('— No category is selected yet (open the Categories dropdown and pick at least one, or Select All).') }}</li>
                 </ul>
             </div>
         </div>

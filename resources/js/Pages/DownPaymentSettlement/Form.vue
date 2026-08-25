@@ -83,11 +83,11 @@ function submit() {
         <div class="p-6 max-w-7xl mx-auto">
             <div class="flex items-center gap-3 mb-1">
                 <Link :href="urls.back" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                    ← Back to Down Payments
+                    {{ $t('← Back to Down Payments') }}
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-6">
-                {{ contractName ? `Settlement Using Contract Down Payment [${contractName}]` : 'Settlement Using Down Payment' }}
+                {{ contractName ? `Settlement Using Contract Down Payment [${contractName}]` : $t('Settlement Using Down Payment') }}
             </h1>
 
             <div v-if="errorMessages.length" class="mb-4 px-4 py-3 rounded cvr-badge-overdue text-sm">
@@ -97,7 +97,7 @@ function submit() {
             <form @submit.prevent="submit" class="space-y-6">
                 <div class="cvr-card-bg cvr-border border rounded-lg p-5">
                     <h2 class="text-base font-medium cvr-text-primary mb-4">
-                        {{ contractName ? `Settlement Using Contract Down Payment [${contractName}]` : 'Settlement Using Down Payment' }}
+                        {{ contractName ? `Settlement Using Contract Down Payment [${contractName}]` : $t('Settlement Using Down Payment') }}
                     </h2>
                     <div class="cvr-form-grid-4">
                         <div>
@@ -105,15 +105,15 @@ function submit() {
                             <input disabled :value="partnerName" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Down Payment Amount</label>
+                            <label class="cvr-form-label">{{ $t('Down Payment Amount') }}</label>
                             <input disabled :value="downPaymentAmountFormatted" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Currency *</label>
+                            <label class="cvr-form-label">{{ $t('Currency') }} *</label>
                             <input disabled :value="currency?.toUpperCase()" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Settlement Date</label>
+                            <label class="cvr-form-label">{{ $t('Settlement Date') }}</label>
                             <input v-model="settlementDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errors.settlement_date" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.settlement_date }}</p>
                         </div>
@@ -121,28 +121,28 @@ function submit() {
                 </div>
 
                 <div class="cvr-card-bg cvr-border border rounded-lg p-5">
-                    <h2 class="text-base font-medium cvr-text-primary mb-4">Settlement Information</h2>
+                    <h2 class="text-base font-medium cvr-text-primary mb-4">{{ $t('Settlement Information') }}</h2>
 
                     <div v-if="rows.length === 0" class="text-sm cvr-text-muted py-6 text-center">
-                        No open invoices found for this customer in this currency.
+                        {{ $t('No open invoices found for this customer in this currency.') }}
                     </div>
 
                     <div v-for="row in rows" :key="row.invoice_id" class="border-b cvr-border pb-4 mb-4 last:border-0 last:pb-0 last:mb-0">
                         <div class="mb-3 max-w-sm" v-if="hasProjectNameColumn">
-                            <label class="cvr-form-label">Project Name</label>
+                            <label class="cvr-form-label">{{ $t('Project Name') }}</label>
                             <input disabled :value="row.project_name" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div class="cvr-form-grid-3 mb-3">
                             <div>
-                                <label class="cvr-form-label">Invoice Number</label>
+                                <label class="cvr-form-label">{{ $t('Invoice Number') }}</label>
                                 <input disabled :value="row.invoice_number" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Invoice Date</label>
+                                <label class="cvr-form-label">{{ $t('Invoice Date') }}</label>
                                 <input disabled :value="row.invoice_date_formatted" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Due Date</label>
+                                <label class="cvr-form-label">{{ $t('Due Date') }}</label>
                                 <input disabled :value="row.invoice_due_date_formatted" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                             </div>
                         </div>
@@ -152,22 +152,22 @@ function submit() {
                                 <input disabled :value="row.net_invoice_amount_formatted" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Collected Amount</label>
+                                <label class="cvr-form-label">{{ $t('Collected Amount') }}</label>
                                 <input disabled :value="row.collected_amount_formatted" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Net Balance</label>
+                                <label class="cvr-form-label">{{ $t('Net Balance') }}</label>
                                 <input disabled :value="row.net_balance_formatted" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Settlement Amount *</label>
+                                <label class="cvr-form-label">{{ $t('Settlement Amount') }} *</label>
                                 <input v-model="row.settlement_amount" type="number" step="any" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                                 <p v-if="errors[`settlements.${rows.indexOf(row)}.settlement_amount`]" class="text-xs mt-1" style="color: var(--cvr-danger-text)">
                                     {{ errors[`settlements.${rows.indexOf(row)}.settlement_amount`] }}
                                 </p>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Withhold Amount *</label>
+                                <label class="cvr-form-label">{{ $t('Withhold Amount') }} *</label>
                                 <input v-model="row.withhold_amount" type="number" step="any" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                         </div>
@@ -176,18 +176,18 @@ function submit() {
                     <hr v-if="rows.length" class="cvr-border my-4" />
 
                     <p v-if="rows.length" class="text-sm">
-                        Total Settlement: <strong :class="totalExceedsDownPayment ? 'cvr-num-red' : 'cvr-num'">{{ totalSettlementAmount.toLocaleString() }}</strong>
+                        {{ $t('Total Settlement:') }} <strong :class="totalExceedsDownPayment ? 'cvr-num-red' : 'cvr-num'">{{ totalSettlementAmount.toLocaleString('en-EG') }}</strong>
                         <span class="cvr-text-muted"> / {{ downPaymentAmountFormatted }}</span>
                     </p>
                     <p v-if="totalExceedsDownPayment" class="text-xs cvr-num-red mt-1">
-                        Total Settlements Must Be Equal Or Less Than Down Payment Amount
+                        {{ $t('Total Settlements Must Be Equal Or Less Than Down Payment Amount') }}
                     </p>
                 </div>
 
                 <div class="flex justify-end gap-2">
-                    <Link :href="urls.back" class="cvr-btn-secondary px-4 py-2 rounded border">Cancel</Link>
+                    <Link :href="urls.back" class="cvr-btn-secondary px-4 py-2 rounded border">{{ $t('Cancel') }}</Link>
                     <button type="submit" :disabled="submitting || rows.length === 0" class="cvr-btn-primary px-4 py-2 rounded">
-                        {{ submitting ? 'Saving...' : 'Save' }}
+                        {{ submitting ? $t('Saving...') : $t('Save') }}
                     </button>
                 </div>
             </form>

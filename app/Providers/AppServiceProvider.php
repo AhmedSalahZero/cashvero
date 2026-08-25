@@ -45,7 +45,6 @@ class AppServiceProvider extends ServiceProvider
 		if ($this->app->environment('production')) {
 			URL::forceScheme('https');
 		}
-
 		app()->singleton('currentCompany', fn () => resolveCompanyFromRequest());
 		\PhpOffice\PhpSpreadsheet\Shared\Font::setAutoSizeMethod(Font::AUTOSIZE_METHOD_EXACT);
 		require_once storage_path('dompdf/vendor/autoload.php');

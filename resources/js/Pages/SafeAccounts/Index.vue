@@ -32,16 +32,16 @@ function destroyRow() {
 <template>
     <AppLayout :nav-urls="navUrls">
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Safe Accounts</h1>
-            <p class="text-sm cvr-text-blue mb-6">Safe Table</p>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Safe Accounts') }}</h1>
+            <p class="text-sm cvr-text-blue mb-6">{{ $t('Safe Table') }}</p>
 
             <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
                 <div class="cvr-search-bar flex items-center gap-2 px-3 py-1.5 w-64">
                     <span class="cvr-text-muted text-sm">🔍</span>
-                    <input v-model="search" type="text" placeholder="Search by name..." class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
+                    <input v-model="search" type="text" :placeholder="$t('Search by name...')" class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
                 </div>
                 <Link v-if="canCreate" :href="createUrl" class="cvr-btn-copper px-3 py-1.5 rounded text-sm inline-flex items-center gap-1">
-                    + Safe
+                    {{ $t('+ Safe') }}
                 </Link>
             </div>
 
@@ -49,10 +49,10 @@ function destroyRow() {
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-3 py-3 text-left">#</th>
-                            <th class="px-3 py-3 text-left">Name</th>
-                            <th class="px-3 py-3 text-left">Currency</th>
-                            <th v-if="canUpdate || canDelete" class="px-3 py-3 text-left">Control</th>
+                            <th class="px-3 py-3 text-start">#</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Name') }}</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Currency') }}</th>
+                            <th v-if="canUpdate || canDelete" class="px-3 py-3 text-start">{{ $t('Control') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -63,14 +63,14 @@ function destroyRow() {
                             <td v-if="canUpdate || canDelete" class="px-3 py-3">
                                 <div class="flex items-center gap-1.5">
                                     <RecordLogButton subject="Branch" :id="row.id" :company-id="company.id" />
-                                    <Link v-if="canUpdate" :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</Link>
-                                    <button v-if="canDelete" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
+                                    <Link v-if="canUpdate" :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">{{ $t('Edit') }}</Link>
+                                    <button v-if="canDelete" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">{{ $t('Delete') }}</button>
                                 </div>
                             </td>
                         </tr>
                         <tr v-if="filteredRows.length === 0">
                             <td :colspan="canUpdate || canDelete ? 4 : 3" class="px-4 py-8 text-center cvr-text-muted">
-                                No Safe Account records found.
+                                {{ $t('No Safe Account records found.') }}
                             </td>
                         </tr>
                     </tbody>
@@ -79,10 +79,10 @@ function destroyRow() {
 
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Do you want to delete this item?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to delete this item?') }}</h2>
                     <div class="flex justify-end gap-2">
-                        <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Delete</button>
+                        <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>

@@ -77,7 +77,7 @@ const summaryText = computed(() => {
         <button
             type="button"
             @click="toggleOpen"
-            class="cvr-input w-full px-3 py-2 rounded flex items-center justify-between text-left gap-2"
+            class="cvr-input w-full px-3 py-2 rounded flex items-center justify-between text-start gap-2"
         >
             <span class="truncate text-sm" :class="modelValue.length ? 'cvr-text-primary' : 'cvr-text-placeholder'">{{ summaryText }}</span>
             <span class="cvr-text-muted text-xs shrink-0 transition-transform" :class="{ 'rotate-180': open }">▾</span>
@@ -89,8 +89,8 @@ const summaryText = computed(() => {
             style="max-height: 280px"
         >
             <div class="flex items-center justify-between gap-2 px-3 py-2 border-b cvr-border shrink-0">
-                <button type="button" @click="selectAll" class="text-xs font-medium" style="color: var(--cvr-green-bright)">Select All</button>
-                <button type="button" @click="deselectAll" class="text-xs font-medium cvr-text-muted hover:cvr-text-primary">Deselect All</button>
+                <button type="button" @click="selectAll" class="text-xs font-medium" style="color: var(--cvr-green-bright)">{{ $t('Select All') }}</button>
+                <button type="button" @click="deselectAll" class="text-xs font-medium cvr-text-muted hover:cvr-text-primary">{{ $t('Deselect All') }}</button>
             </div>
             <div class="overflow-y-auto py-1">
                 <label
@@ -106,7 +106,7 @@ const summaryText = computed(() => {
                     />
                     <span class="truncate">{{ opt.label }}</span>
                 </label>
-                <p v-if="!options.length" class="px-3 py-4 text-xs cvr-text-muted text-center">No options</p>
+                <p v-if="!options.length" class="px-3 py-4 text-xs cvr-text-muted text-center">{{ $t('No options') }}</p>
             </div>
         </div>
     </div>

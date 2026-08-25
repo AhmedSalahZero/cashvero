@@ -573,14 +573,14 @@ function submit() {
     <AppLayout>
         <div class="p-6">
             <Link :href="urls.index" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm mb-3">
-                ← Back to Money Payment
+                {{ $t('← Back to Money Payment') }}
             </Link>
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ isEdit ? 'Edit Money Payment' : 'Money Payment' }}</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ isEdit ? $t('Edit Money Payment') : $t('Money Payment') }}</h1>
             <p class="text-sm cvr-text-blue mb-6">{{ company.name }}</p>
 
             <p v-if="warningMessage" class="cvr-badge cvr-badge-pending px-3 py-2 rounded mb-4 block">{{ warningMessage }}</p>
             <div v-if="errorMessages.length" class="cvr-border rounded-lg p-3 mb-4 text-sm" style="border-color: var(--cvr-danger-text); background: var(--cvr-bg-card-alt)">
-                <p class="font-medium mb-1" style="color: var(--cvr-danger-text)">Couldn't save — please fix the following:</p>
+                <p class="font-medium mb-1" style="color: var(--cvr-danger-text)">{{ $t('Couldn\'t save — please fix the following:') }}</p>
                 <ul class="list-disc list-inside" style="color: var(--cvr-danger-text)">
                     <li v-for="(msg, i) in errorMessages" :key="i">{{ msg }}</li>
                 </ul>
@@ -588,43 +588,43 @@ function submit() {
 
             <!-- Header -->
             <div class="cvr-card-bg cvr-border border rounded-lg p-5 mb-5">
-                <h2 class="text-base font-medium cvr-text-primary mb-4">Money Payment</h2>
+                <h2 class="text-base font-medium cvr-text-primary mb-4">{{ $t('Money Payment') }}</h2>
                 <div :class="partnerType === 'is_supplier' ? 'cvr-form-grid-2-2-1-4-1-2' : 'cvr-form-grid-2-2-5-1-3'">
                     <div>
-                        <label class="cvr-form-label">Payment Date *</label>
+                        <label class="cvr-form-label">{{ $t('Payment Date') }} *</label>
                         <input v-model="deliveryDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                         <p v-if="errors.delivery_date" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.delivery_date }}</p>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Partner Type *</label>
+                        <label class="cvr-form-label">{{ $t('Partner Type') }} *</label>
                         <select v-model="partnerType" class="cvr-input w-full px-3 py-2 rounded">
                             <option v-for="t in partnerTypes" :key="t.value" :value="t.value">{{ t.label }}</option>
                         </select>
                     </div>
                     <div v-if="partnerType === 'is_supplier'">
-                        <label class="cvr-form-label">Invoice Currency*</label>
+                        <label class="cvr-form-label">{{ $t('Invoice Currency*') }}</label>
                         <select v-model="invoiceCurrency" class="cvr-input w-full px-3 py-2 rounded">
                             <option v-for="c in currencies" :key="c.code" :value="c.code">{{ c.label }}</option>
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Name *</label>
+                        <label class="cvr-form-label">{{ $t('Name') }} *</label>
                         <select v-model="supplierId" class="cvr-input w-full px-3 py-2 rounded">
                             <option v-for="s in suppliersList" :key="s.id" :value="s.id">{{ s.name }}</option>
                         </select>
                         <p v-if="errors.supplier_id" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.supplier_id }}</p>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Pay Currency *</label>
+                        <label class="cvr-form-label">{{ $t('Pay Currency') }} *</label>
                         <select v-model="paymentCurrency" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="">Select</option>
+                            <option value="">{{ $t('Select') }}</option>
                             <option v-for="c in currencies" :key="c.code" :value="c.code">{{ c.label }}</option>
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Money Type *</label>
+                        <label class="cvr-form-label">{{ $t('Money Type') }} *</label>
                         <select v-model="moneyType" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="">Select</option>
+                            <option value="">{{ $t('Select') }}</option>
                             <option v-for="t in moneyTypes" :key="t.value" :value="t.value">{{ t.label }}</option>
                         </select>
                         <p v-if="errors.type" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.type }}</p>
@@ -632,9 +632,9 @@ function submit() {
                 </div>
                 <div v-if="partnerType !== 'is_supplier'" class="mt-4">
                     <div class="cvr-field-narrow">
-                        <label class="cvr-form-label">Transaction *</label>
+                        <label class="cvr-form-label">{{ $t('Transaction') }} *</label>
                         <select v-model="transactionType" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="">Select</option>
+                            <option value="">{{ $t('Select') }}</option>
                             <option v-for="opt in transactionTypeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
                         </select>
                     </div>
@@ -644,14 +644,14 @@ function submit() {
             <!-- Cash Payment -->
             <div v-if="moneyType === 'cash_payment'" class="cvr-card-bg cvr-border border rounded-lg p-5 mb-5">
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-base font-medium cvr-text-primary">Cash Payment Information</h2>
-                    <div v-if="cashPaymentBalance !== null" class="text-sm cvr-text-secondary">Balance: <span class="cvr-num">{{ Number(cashPaymentBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span></div>
+                    <h2 class="text-base font-medium cvr-text-primary">{{ $t('Cash Payment Information') }}</h2>
+                    <div v-if="cashPaymentBalance !== null" class="text-sm cvr-text-secondary">{{ $t('Balance:') }} <span class="cvr-num">{{ Number(cashPaymentBalance).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span></div>
                 </div>
                 <div class="cvr-form-grid-6-3-3">
                     <div>
-                        <label class="cvr-form-label">Paying Branch *</label>
+                        <label class="cvr-form-label">{{ $t('Paying Branch') }} *</label>
                         <select v-model="cashPayment.deliveryBranchId" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="-1">Select Branch</option>
+                            <option value="-1">{{ $t('Select Branch') }}</option>
                             <option v-for="b in branchesList" :key="b.id" :value="b.id">{{ b.name }}</option>
                         </select>
                     </div>
@@ -660,14 +660,14 @@ function submit() {
                         <input v-model="paidAmount" type="number" step="any" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">Receipt Number *</label>
+                        <label class="cvr-form-label">{{ $t('Receipt Number') }} *</label>
                         <input v-model="cashPayment.receiptNumber" type="text" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                 </div>
                 <div v-if="showExchangeRateFields" class="cvr-form-grid-2-narrow mt-4">
                     <div>
-                        <label class="cvr-form-label">Exchange Rate *</label>
-                        <input v-model="exchangeRateInput" @blur="onExchangeRateBlur" type="text" inputmode="decimal" placeholder="e.g. 50 or 1/50" class="cvr-input w-full px-3 py-2 rounded" />
+                        <label class="cvr-form-label">{{ $t('Exchange Rate') }} *</label>
+                        <input v-model="exchangeRateInput" @blur="onExchangeRateBlur" type="text" inputmode="decimal" :placeholder="$t('e.g. 50 or 1/50')" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
                         <label class="cvr-form-label">Amount In Invoice Currency [{{ invoiceCurrency }}]</label>
@@ -679,32 +679,32 @@ function submit() {
             <!-- Payable Cheque -->
             <div v-if="moneyType === 'payable_cheque'" class="cvr-card-bg cvr-border border rounded-lg p-5 mb-5">
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-base font-medium cvr-text-primary">Payable Cheque Information</h2>
-                    <div v-if="payableChequeBalance !== null" class="text-sm cvr-text-secondary">Balance: <span class="cvr-num">{{ Number(payableChequeBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span></div>
-                    <div v-if="payableChequeNetBalance !== null" class="text-sm cvr-text-secondary">Net Balance: <span class="cvr-num">{{ Number(payableChequeNetBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span></div>
+                    <h2 class="text-base font-medium cvr-text-primary">{{ $t('Payable Cheque Information') }}</h2>
+                    <div v-if="payableChequeBalance !== null" class="text-sm cvr-text-secondary">{{ $t('Balance:') }} <span class="cvr-num">{{ Number(payableChequeBalance).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span></div>
+                    <div v-if="payableChequeNetBalance !== null" class="text-sm cvr-text-secondary">{{ $t('Net Balance:') }} <span class="cvr-num">{{ Number(payableChequeNetBalance).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span></div>
                 </div>
                 <div class="cvr-form-grid-6-2-2-2">
                     <div>
-                        <label class="cvr-form-label">Payment Bank *</label>
+                        <label class="cvr-form-label">{{ $t('Payment Bank') }} *</label>
                         <select v-model="payableCheque.deliveryBankId" class="cvr-input w-full px-3 py-2 rounded">
                             <option v-for="b in [...financialInstitutionBanks].sort((a, b) => a.name.localeCompare(b.name))" :key="b.id" :value="b.id">{{ b.name }}</option>
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Account Type *</label>
+                        <label class="cvr-form-label">{{ $t('Account Type') }} *</label>
                         <select v-model="payableCheque.accountTypeId" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="">Select</option>
+                            <option value="">{{ $t('Select') }}</option>
                             <option v-for="t in accountTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
                         </select>
-                        <p v-if="errors['account_type.payable_cheque']" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors['account_type.payable_cheque'] }}</p>
+                        <p v-if="errors['account_type.payable_cheque']" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors[$t('account_type.payable_cheque')] }}</p>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Account Number *</label>
+                        <label class="cvr-form-label">{{ $t('Account Number') }} *</label>
                         <select v-model="payableCheque.accountNumber" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="">Select</option>
+                            <option value="">{{ $t('Select') }}</option>
                             <option v-for="n in payableChequeAccountNumbers" :key="n.value" :value="n.value">{{ n.label }}</option>
                         </select>
-                        <p v-if="errors['account_number.payable_cheque']" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors['account_number.payable_cheque'] }}</p>
+                        <p v-if="errors['account_number.payable_cheque']" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors[$t('account_number.payable_cheque')] }}</p>
                     </div>
                     <div>
                         <label class="cvr-form-label">Cheque Amount [{{ paymentCurrency }}] *</label>
@@ -713,12 +713,12 @@ function submit() {
                 </div>
                 <div class="cvr-form-grid-3 mt-4">
                     <div>
-                        <label class="cvr-form-label">Due Date *</label>
+                        <label class="cvr-form-label">{{ $t('Due Date') }} *</label>
                         <input v-model="payableCheque.dueDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         <p v-if="errors.due_date" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.due_date }}</p>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Cheque Number *</label>
+                        <label class="cvr-form-label">{{ $t('Cheque Number') }} *</label>
                         <input v-model="payableCheque.chequeNumber" type="text" class="cvr-input w-full px-3 py-2 rounded" />
                         <p v-if="errors.cheque_number" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.cheque_number }}</p>
                     </div>
@@ -740,32 +740,32 @@ function submit() {
             <!-- Outgoing Transfer -->
             <div v-if="moneyType === 'outgoing-transfer'" class="cvr-card-bg cvr-border border rounded-lg p-5 mb-5">
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-base font-medium cvr-text-primary">Outgoing Transfer Information</h2>
-                    <div v-if="outgoingTransferBalance !== null" class="text-sm cvr-text-secondary">Balance: <span class="cvr-num">{{ Number(outgoingTransferBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span></div>
-                    <div v-if="outgoingTransferNetBalance !== null" class="text-sm cvr-text-secondary">Net Balance: <span class="cvr-num">{{ Number(outgoingTransferNetBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span></div>
+                    <h2 class="text-base font-medium cvr-text-primary">{{ $t('Outgoing Transfer Information') }}</h2>
+                    <div v-if="outgoingTransferBalance !== null" class="text-sm cvr-text-secondary">{{ $t('Balance:') }} <span class="cvr-num">{{ Number(outgoingTransferBalance).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span></div>
+                    <div v-if="outgoingTransferNetBalance !== null" class="text-sm cvr-text-secondary">{{ $t('Net Balance:') }} <span class="cvr-num">{{ Number(outgoingTransferNetBalance).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span></div>
                 </div>
                 <div class="cvr-form-grid-6-2-2-2">
                     <div>
-                        <label class="cvr-form-label">Payment Bank *</label>
+                        <label class="cvr-form-label">{{ $t('Payment Bank') }} *</label>
                         <select v-model="outgoingTransfer.deliveryBankId" class="cvr-input w-full px-3 py-2 rounded">
                             <option v-for="b in [...financialInstitutionBanks].sort((a, b) => a.name.localeCompare(b.name))" :key="b.id" :value="b.id">{{ b.name }}</option>
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Account Type *</label>
+                        <label class="cvr-form-label">{{ $t('Account Type') }} *</label>
                         <select v-model="outgoingTransfer.accountTypeId" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="">Select</option>
+                            <option value="">{{ $t('Select') }}</option>
                             <option v-for="t in accountTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
                         </select>
-                        <p v-if="errors['account_type.outgoing-transfer']" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors['account_type.outgoing-transfer'] }}</p>
+                        <p v-if="errors['account_type.outgoing-transfer']" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors[$t('account_type.outgoing-transfer')] }}</p>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Account Number *</label>
+                        <label class="cvr-form-label">{{ $t('Account Number') }} *</label>
                         <select v-model="outgoingTransfer.accountNumber" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="">Select</option>
+                            <option value="">{{ $t('Select') }}</option>
                             <option v-for="n in outgoingTransferAccountNumbers" :key="n.value" :value="n.value">{{ n.label }}</option>
                         </select>
-                        <p v-if="errors['account_number.outgoing-transfer']" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors['account_number.outgoing-transfer'] }}</p>
+                        <p v-if="errors['account_number.outgoing-transfer']" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors[$t('account_number.outgoing-transfer')] }}</p>
                     </div>
                     <div>
                         <label class="cvr-form-label">Transfer Amount [{{ paymentCurrency }}] *</label>
@@ -774,8 +774,8 @@ function submit() {
                 </div>
                 <div v-if="showExchangeRateFields" class="cvr-form-grid-2-narrow mt-4">
                     <div>
-                        <label class="cvr-form-label">Exchange Rate *</label>
-                        <input v-model="exchangeRateInput" @blur="onExchangeRateBlur" type="text" inputmode="decimal" placeholder="e.g. 50 or 1/50" class="cvr-input w-full px-3 py-2 rounded" />
+                        <label class="cvr-form-label">{{ $t('Exchange Rate') }} *</label>
+                        <input v-model="exchangeRateInput" @blur="onExchangeRateBlur" type="text" inputmode="decimal" :placeholder="$t('e.g. 50 or 1/50')" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
                         <label class="cvr-form-label">Amount In Invoice Currency [{{ invoiceCurrency }}]</label>
@@ -787,31 +787,31 @@ function submit() {
             <!-- Through Leasing -->
             <div v-if="moneyType === 'leasing_payment'" class="cvr-card-bg cvr-border border rounded-lg p-5 mb-5">
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-base font-medium cvr-text-primary">Leasing Information</h2>
+                    <h2 class="text-base font-medium cvr-text-primary">{{ $t('Leasing Information') }}</h2>
                     <div v-if="selectedLeasingContract" class="text-sm cvr-text-secondary">
-                        Available: <span class="cvr-num">{{ Number(selectedLeasingContract.available_room).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
-                        <span class="cvr-text-muted"> / {{ Number(selectedLeasingContract.limit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
+                        {{ $t('Available:') }} <span class="cvr-num">{{ Number(selectedLeasingContract.available_room).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
+                        <span class="cvr-text-muted"> / {{ Number(selectedLeasingContract.limit).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
                     </div>
                 </div>
                 <p class="text-xs cvr-text-muted mb-4">
-                    The leasing company pays the supplier directly out of the contract — your own bank accounts are not touched.
+                    {{ $t('The leasing company pays the supplier directly out of the contract — your own bank accounts are not touched.') }}
                 </p>
                 <div class="cvr-form-grid-6-3-3">
                     <div>
-                        <label class="cvr-form-label">Leasing Company *</label>
+                        <label class="cvr-form-label">{{ $t('Leasing Company') }} *</label>
                         <select v-model="leasing.leasingCompanyId" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="">Select</option>
+                            <option value="">{{ $t('Select') }}</option>
                             <option v-for="c in [...leasingCompanies].sort((a, b) => a.name.localeCompare(b.name))" :key="c.id" :value="c.id">{{ c.name }}</option>
                         </select>
-                        <p v-if="errors['leasing_company_id']" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors['leasing_company_id'] }}</p>
+                        <p v-if="errors['leasing_company_id']" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors[$t('leasing_company_id')] }}</p>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Contract Name *</label>
+                        <label class="cvr-form-label">{{ $t('Contract Name') }} *</label>
                         <select v-model="leasing.leasingContractId" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="">Select</option>
+                            <option value="">{{ $t('Select') }}</option>
                             <option v-for="c in leasingContracts" :key="c.id" :value="c.id">{{ c.name }}</option>
                         </select>
-                        <p v-if="errors['leasing_contract_id']" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors['leasing_contract_id'] }}</p>
+                        <p v-if="errors['leasing_contract_id']" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors[$t('leasing_contract_id')] }}</p>
                         <p v-else-if="leasing.leasingCompanyId && leasingContracts.length === 0" class="text-xs cvr-text-muted mt-1">
                             This leasing company has no running contract in {{ paymentCurrency }}.
                         </p>
@@ -823,8 +823,8 @@ function submit() {
                 </div>
                 <div v-if="showExchangeRateFields" class="cvr-form-grid-2-narrow mt-4">
                     <div>
-                        <label class="cvr-form-label">Exchange Rate *</label>
-                        <input v-model="exchangeRateInput" @blur="onExchangeRateBlur" type="text" inputmode="decimal" placeholder="e.g. 50 or 1/50" class="cvr-input w-full px-3 py-2 rounded" />
+                        <label class="cvr-form-label">{{ $t('Exchange Rate') }} *</label>
+                        <input v-model="exchangeRateInput" @blur="onExchangeRateBlur" type="text" inputmode="decimal" :placeholder="$t('e.g. 50 or 1/50')" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
                         <label class="cvr-form-label">Amount In Invoice Currency [{{ invoiceCurrency }}]</label>
@@ -835,11 +835,11 @@ function submit() {
 
             <!-- Settlement Information -->
             <div v-if="showSettlementCard" class="cvr-card-bg cvr-border border rounded-lg p-5 mb-5">
-                <h2 class="text-base font-medium cvr-text-primary mb-4">Settlement Information</h2>
+                <h2 class="text-base font-medium cvr-text-primary mb-4">{{ $t('Settlement Information') }}</h2>
 
-                <div v-if="!supplierId" class="text-sm cvr-text-muted mb-4">Select a supplier to see their open invoices.</div>
+                <div v-if="!supplierId" class="text-sm cvr-text-muted mb-4">{{ $t('Select a supplier to see their open invoices.') }}</div>
                 <div v-else-if="invoicesFetchFailed" class="cvr-border rounded-lg p-3 mb-4 text-sm" style="border-color: var(--cvr-danger-text); background: var(--cvr-bg-card-alt)">
-                    <p style="color: var(--cvr-danger-text)">Couldn't load invoices for this supplier — please try again, or reload the page.</p>
+                    <p style="color: var(--cvr-danger-text)">{{ $t('Couldn\'t load invoices for this supplier — please try again, or reload the page.') }}</p>
                 </div>
                 <div v-else-if="invoices.length === 0 && supplierInvoiceCurrencies.length && !supplierInvoiceCurrencies.includes(invoiceCurrency)" class="text-sm cvr-text-muted mb-4">
                     This supplier has no open invoices in {{ invoiceCurrency }}. They do have invoices in: {{ supplierInvoiceCurrencies.join(', ') }} — try switching Invoice Currency above.
@@ -851,15 +851,15 @@ function submit() {
                 <div v-for="inv in invoices" :key="inv.id" class="cvr-border border rounded-lg p-4 mb-3">
                     <div class="cvr-form-grid-6-2-2-2 mb-3">
                         <div>
-                            <label class="cvr-form-label">Invoice Number</label>
+                            <label class="cvr-form-label">{{ $t('Invoice Number') }}</label>
                             <input :value="inv.invoice_number" disabled class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Invoice Date</label>
+                            <label class="cvr-form-label">{{ $t('Invoice Date') }}</label>
                             <input :value="inv.invoice_date" disabled class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Due Date</label>
+                            <label class="cvr-form-label">{{ $t('Due Date') }}</label>
                             <input :value="inv.invoice_due_date" disabled class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
@@ -869,20 +869,20 @@ function submit() {
                     </div>
                     <div class="cvr-form-grid-4">
                         <div>
-                            <label class="cvr-form-label">Paid Amount</label>
+                            <label class="cvr-form-label">{{ $t('Paid Amount') }}</label>
                             <input :value="formatMoney(inv.paid_amount)" disabled class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Net Balance</label>
+                            <label class="cvr-form-label">{{ $t('Net Balance') }}</label>
                             <input :value="formatMoney(inv.net_balance)" readonly class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Settlement Amount *</label>
+                            <label class="cvr-form-label">{{ $t('Settlement Amount') }} *</label>
                             <input v-model.number="inv.settlement_amount" type="number" step="any" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errors[`settlements.${inv.id}.settlement_amount`]" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors[`settlements.${inv.id}.settlement_amount`] }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Withhold Amount</label>
+                            <label class="cvr-form-label">{{ $t('Withhold Amount') }}</label>
                             <input v-model.number="inv.withhold_amount" type="number" step="any" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
@@ -891,12 +891,12 @@ function submit() {
                 <hr class="my-4 cvr-border" />
 
                 <div v-if="showDownPaymentPicker" class="mb-4">
-                    <h3 class="text-sm font-medium cvr-text-primary mb-3">Choose Contract For Down Payment</h3>
+                    <h3 class="text-sm font-medium cvr-text-primary mb-3">{{ $t('Choose Contract For Down Payment') }}</h3>
                     <div class="cvr-form-grid-3 mb-3">
                         <div>
-                            <label class="cvr-form-label">Contract</label>
+                            <label class="cvr-form-label">{{ $t('Contract') }}</label>
                             <select v-model="contractId" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="general-down">General Down Payment</option>
+                                <option value="general-down">{{ $t('General Down Payment') }}</option>
                                 <option v-for="c in contracts" :key="c.id" :value="c.id">{{ c.name }}</option>
                             </select>
                             <p v-if="errors.contract_id" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.contract_id }}</p>
@@ -904,7 +904,7 @@ function submit() {
                     </div>
                     <div v-for="po in purchaseOrders" :key="po.id" class="cvr-form-grid-3 mb-2">
                         <div>
-                            <label class="cvr-form-label">PO Number</label>
+                            <label class="cvr-form-label">{{ $t('PO Number') }}</label>
                             <input :value="po.po_number" disabled class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
@@ -936,13 +936,13 @@ function submit() {
 
             <!-- Comment -->
             <div class="cvr-card-bg cvr-border border rounded-lg p-5 mb-5">
-                <label class="cvr-form-label">Comment</label>
+                <label class="cvr-form-label">{{ $t('Comment') }}</label>
                 <textarea v-model="userComment" rows="2" class="cvr-input w-full px-3 py-2 rounded"></textarea>
             </div>
 
             <div class="flex justify-end gap-2">
-                <Link :href="urls.index" class="cvr-btn-secondary px-4 py-2 rounded border">Cancel</Link>
-                <button @click="submit" class="cvr-btn-primary px-4 py-2 rounded">{{ isEdit ? 'Update' : 'Save' }}</button>
+                <Link :href="urls.index" class="cvr-btn-secondary px-4 py-2 rounded border">{{ $t('Cancel') }}</Link>
+                <button @click="submit" class="cvr-btn-primary px-4 py-2 rounded">{{ isEdit ? $t('Update') : $t('Save') }}</button>
             </div>
 
         </div>

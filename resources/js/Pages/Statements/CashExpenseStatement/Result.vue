@@ -34,7 +34,7 @@ const props = defineProps({
 const rows = computed(() => props.paginator?.data || []);
 
 function formatAmount(value) {
-    return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return Number(value || 0).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function goToPage(url) {
@@ -47,16 +47,16 @@ function goToPage(url) {
     <AppLayout>
         <div class="p-6">
             <Link :href="urls.backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                ← Back to Cash Expense Statement
+                {{ $t('← Back to Cash Expense Statement') }}
             </Link>
 
             <div class="flex items-start justify-between flex-wrap gap-2 mb-1">
                 <h1 class="text-xl font-semibold cvr-text-primary">
-                    Cash Expense Statement
+                    {{ $t('Cash Expense Statement') }}
                     <span class="cvr-text-secondary font-normal">— {{ String(currency).toUpperCase() }}</span>
                 </h1>
                 <a :href="urls.exportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
-                    ⬇️ Export to Excel
+                    {{ $t('⬇️ Export to Excel') }}
                 </a>
             </div>
             <p class="text-sm cvr-text-muted mb-6">{{ kpis.transactionCount }} transactions in this date range.</p>
@@ -66,14 +66,14 @@ function goToPage(url) {
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-copper">💳</div>
                     <div>
-                        <p class="cvr-kpi-label">Total Paid Amount</p>
+                        <p class="cvr-kpi-label">{{ $t('Total Paid Amount') }}</p>
                         <p class="cvr-kpi-value cvr-num">{{ formatAmount(kpis.totalPaidAmount) }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-green">📋</div>
                     <div>
-                        <p class="cvr-kpi-label">Transactions</p>
+                        <p class="cvr-kpi-label">{{ $t('Transactions') }}</p>
                         <p class="cvr-kpi-value cvr-num-green">{{ kpis.transactionCount }}</p>
                     </div>
                 </div>
@@ -86,16 +86,16 @@ function goToPage(url) {
                         <thead class="cvr-table-head sticky top-0 z-10">
                             <tr>
                                 <th class="px-3 py-3 text-center">#</th>
-                                <th class="px-3 py-3 text-center">Date</th>
-                                <th class="px-3 py-3 text-left">Main Category</th>
-                                <th class="px-3 py-3 text-left">Sub Category</th>
-                                <th class="px-3 py-3 text-left">Currency</th>
-                                <th class="px-3 py-3 text-right">Paid Amount</th>
+                                <th class="px-3 py-3 text-center">{{ $t('Date') }}</th>
+                                <th class="px-3 py-3 text-start">{{ $t('Main Category') }}</th>
+                                <th class="px-3 py-3 text-start">{{ $t('Sub Category') }}</th>
+                                <th class="px-3 py-3 text-start">{{ $t('Currency') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Paid Amount') }}</th>
                                 <template v-if="!isMainCurrency">
                                     <th class="px-3 py-3 text-right">Exchange Rate</th>
                                     <th class="px-3 py-3 text-right">Equivalent In Main Currency</th>
                                 </template>
-                                <th class="px-3 py-3 text-left min-w-[240px]">Comment</th>
+                                <th class="px-3 py-3 text-start min-w-[240px]">{{ $t('Comment') }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -104,21 +104,21 @@ function goToPage(url) {
                                     {{ (paginator.current_page - 1) * 50 + index + 1 }}
                                 </td>
                                 <td class="px-3 py-2.5 text-center cvr-text-secondary">{{ row.date }}</td>
-                                <td class="px-3 py-2.5 text-left cvr-text-primary">{{ row.mainCategoryName }}</td>
-                                <td class="px-3 py-2.5 text-left cvr-text-secondary">{{ row.subCategoryName }}</td>
-                                <td class="px-3 py-2.5 text-left cvr-text-secondary">{{ row.currency }}</td>
+                                <td class="px-3 py-2.5 text-start cvr-text-primary">{{ row.mainCategoryName }}</td>
+                                <td class="px-3 py-2.5 text-start cvr-text-secondary">{{ row.subCategoryName }}</td>
+                                <td class="px-3 py-2.5 text-start cvr-text-secondary">{{ row.currency }}</td>
                                 <td class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(row.paidAmount) }}</td>
                                 <template v-if="!isMainCurrency">
                                     <td class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(row.exchangeRate) }}</td>
                                     <td class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(row.equivalentInMainCurrency) }}</td>
                                 </template>
-                                <td class="px-3 py-2.5 text-left cvr-text-secondary">
+                                <td class="px-3 py-2.5 text-start cvr-text-secondary">
                                     <span class="block max-w-[320px] whitespace-normal">{{ row.comment }}</span>
                                     <span v-if="row.userComment" class="block max-w-[320px] whitespace-normal cvr-text-muted text-xs mt-0.5">{{ row.userComment }}</span>
                                 </td>
                             </tr>
                             <tr v-if="rows.length === 0">
-                                <td :colspan="isMainCurrency ? 7 : 9" class="px-4 py-8 text-center cvr-text-muted">No expenses found for this date range.</td>
+                                <td :colspan="isMainCurrency ? 7 : 9" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No expenses found for this date range.') }}</td>
                             </tr>
                         </tbody>
                     </table>

@@ -36,7 +36,7 @@ function toggleGroup(partnerId) {
 }
 
 function formatAmount(value) {
-    return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return Number(value || 0).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function endBalanceColorVar(balance) {
@@ -55,20 +55,20 @@ function goToPage(url) {
     <AppLayout>
         <div class="p-6">
             <Link :href="urls.backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                ← Back to Partner Statement
+                {{ $t('← Back to Partner Statement') }}
             </Link>
 
             <div class="flex items-start justify-between flex-wrap gap-2 mb-1">
                 <h1 class="text-xl font-semibold cvr-text-primary">
-                    Partners Statements
+                    {{ $t('Partners Statements') }}
                     <span class="cvr-text-secondary font-normal">— {{ String(currency).toUpperCase() }}</span>
                 </h1>
                 <a :href="urls.exportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
-                    ⬇️ Export to Excel
+                    {{ $t('⬇️ Export to Excel') }}
                 </a>
             </div>
             <p class="text-sm cvr-text-muted mb-6">
-                Just a note: partners without any transactions won't appear in this report.
+                {{ $t('Just a note: partners without any transactions won\'t appear in this report.') }}
             </p>
 
             <!-- KPI row -->
@@ -76,28 +76,28 @@ function goToPage(url) {
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">👥</div>
                     <div>
-                        <p class="cvr-kpi-label">Partners</p>
+                        <p class="cvr-kpi-label">{{ $t('Partners') }}</p>
                         <p class="cvr-kpi-value cvr-num-blue">{{ kpis.partnerCount }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-green">⬆️</div>
                     <div>
-                        <p class="cvr-kpi-label">Total Debit</p>
+                        <p class="cvr-kpi-label">{{ $t('Total Debit') }}</p>
                         <p class="cvr-kpi-value cvr-num-green">{{ formatAmount(kpis.totalDebit) }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-copper">⬇️</div>
                     <div>
-                        <p class="cvr-kpi-label">Total Credit</p>
+                        <p class="cvr-kpi-label">{{ $t('Total Credit') }}</p>
                         <p class="cvr-kpi-value cvr-num">{{ formatAmount(kpis.totalCredit) }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">🏁</div>
                     <div>
-                        <p class="cvr-kpi-label">Total Ending Balance</p>
+                        <p class="cvr-kpi-label">{{ $t('Total Ending Balance') }}</p>
                         <p class="cvr-kpi-value cvr-num-blue">{{ formatAmount(kpis.totalEndBalance) }}</p>
                     </div>
                 </div>
@@ -108,11 +108,11 @@ function goToPage(url) {
                 <div v-for="group in groups" :key="group.partnerId" class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
                     <button
                         @click="toggleGroup(group.partnerId)"
-                        class="w-full flex items-center justify-between px-4 py-3 text-left"
+                        class="w-full flex items-center justify-between px-4 py-3 text-start"
                         style="background-color: var(--cvr-bg-surface);"
                     >
                         <span class="font-semibold cvr-text-primary">{{ group.partnerName }}</span>
-                        <span class="cvr-text-muted text-xs">{{ isCollapsed(group.partnerId) ? '▸ Show' : '▾ Hide' }} ({{ group.rows.length }})</span>
+                        <span class="cvr-text-muted text-xs">{{ isCollapsed(group.partnerId) ? $t('▸ Show') : $t('▾ Hide') }} ({{ group.rows.length }})</span>
                     </button>
 
                     <div v-show="!isCollapsed(group.partnerId)" class="overflow-auto cvr-table-scroll" style="max-height: 150vh;">
@@ -120,12 +120,12 @@ function goToPage(url) {
                             <thead class="cvr-table-head sticky top-0 z-10">
                                 <tr>
                                     <th class="px-3 py-2.5 text-center">#</th>
-                                    <th class="px-3 py-2.5 text-center">Date</th>
-                                    <th class="px-3 py-2.5 text-right">Beginning Balance</th>
-                                    <th class="px-3 py-2.5 text-right">Debit</th>
-                                    <th class="px-3 py-2.5 text-right">Credit</th>
-                                    <th class="px-3 py-2.5 text-right">End Balance</th>
-                                    <th class="px-3 py-2.5 text-left min-w-[240px]">Comment</th>
+                                    <th class="px-3 py-2.5 text-center">{{ $t('Date') }}</th>
+                                    <th class="px-3 py-2.5 text-right">{{ $t('Beginning Balance') }}</th>
+                                    <th class="px-3 py-2.5 text-right">{{ $t('Debit') }}</th>
+                                    <th class="px-3 py-2.5 text-right">{{ $t('Credit') }}</th>
+                                    <th class="px-3 py-2.5 text-right">{{ $t('End Balance') }}</th>
+                                    <th class="px-3 py-2.5 text-start min-w-[240px]">{{ $t('Comment') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -136,7 +136,7 @@ function goToPage(url) {
                                     <td class="px-3 py-2 text-right cvr-num">{{ formatAmount(row.debit) }}</td>
                                     <td class="px-3 py-2 text-right cvr-num">{{ formatAmount(row.credit) }}</td>
                                     <td class="px-3 py-2 text-right font-medium" :style="{ color: endBalanceColorVar(row.endBalance) }">{{ formatAmount(row.endBalance) }}</td>
-                                    <td class="px-3 py-2 text-left cvr-text-secondary">
+                                    <td class="px-3 py-2 text-start cvr-text-secondary">
                                         <span class="block max-w-[320px] whitespace-normal">{{ row.comment }}</span>
                                         <span v-if="row.userComment" class="block max-w-[320px] whitespace-normal cvr-text-muted text-xs mt-0.5">{{ row.userComment }}</span>
                                     </td>
@@ -147,7 +147,7 @@ function goToPage(url) {
                 </div>
 
                 <div v-if="groups.length === 0" class="cvr-card-bg cvr-border border rounded-lg px-4 py-8 text-center cvr-text-muted">
-                    No movements found for this date range.
+                    {{ $t('No movements found for this date range.') }}
                 </div>
             </div>
 

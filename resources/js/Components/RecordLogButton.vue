@@ -90,17 +90,17 @@ function dotClass(event) {
                         {{ subjectLabel || title }}
                         <span class="cvr-text-muted text-sm">#{{ id }}</span>
                     </h2>
-                    <button @click="close" class="cvr-action-btn" title="Close">✕</button>
+                    <button @click="close" class="cvr-action-btn" :title="$t('Close')">✕</button>
                 </div>
 
-                <div v-if="loading" class="py-10 text-center cvr-text-muted text-sm">Loading…</div>
+                <div v-if="loading" class="py-10 text-center cvr-text-muted text-sm">{{ $t('Loading…') }}</div>
 
                 <div v-else-if="error" class="py-10 text-center text-sm" style="color: var(--cvr-danger-text);">
                     {{ error }}
                 </div>
 
                 <div v-else-if="entries.length === 0" class="py-10 text-center cvr-text-muted text-sm">
-                    Nothing has been recorded for this item yet.
+                    {{ $t('Nothing has been recorded for this item yet.') }}
                 </div>
 
                 <div v-else class="overflow-y-auto flex-1 -mx-1 px-1">

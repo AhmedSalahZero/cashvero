@@ -30,7 +30,7 @@ const props = defineProps({
 const rows = computed(() => props.paginator?.data || []);
 
 function formatAmount(value) {
-    return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return Number(value || 0).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /* Balance (outstanding amount) coloring: amber while still owed,
@@ -52,7 +52,7 @@ function goToPage(page) {
     <AppLayout>
         <div class="p-6">
             <Link :href="urls.backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                ← Back to Withdrawal Statement
+                {{ $t('← Back to Withdrawal Statement') }}
             </Link>
 
             <div class="flex items-start justify-between flex-wrap gap-2 mb-1">
@@ -60,7 +60,7 @@ function goToPage(page) {
                     {{ tableNameFormatted }} Withdrawals Settlement Report
                 </h1>
                 <a :href="urls.exportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
-                    ⬇️ Export to Excel
+                    {{ $t('⬇️ Export to Excel') }}
                 </a>
             </div>
             <p class="text-sm cvr-text-muted mb-6">{{ kpis.transactionCount }} withdrawals in this date range.</p>
@@ -70,21 +70,21 @@ function goToPage(page) {
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">💸</div>
                     <div>
-                        <p class="cvr-kpi-label">Total Withdrawal Amount</p>
+                        <p class="cvr-kpi-label">{{ $t('Total Withdrawal Amount') }}</p>
                         <p class="cvr-kpi-value cvr-num-blue">{{ formatAmount(kpis.totalWithdrawalAmount) }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-green">✅</div>
                     <div>
-                        <p class="cvr-kpi-label">Total Settlement Amount</p>
+                        <p class="cvr-kpi-label">{{ $t('Total Settlement Amount') }}</p>
                         <p class="cvr-kpi-value cvr-num-green">{{ formatAmount(kpis.totalSettlementAmount) }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-copper">⏳</div>
                     <div>
-                        <p class="cvr-kpi-label">Total Outstanding Balance</p>
+                        <p class="cvr-kpi-label">{{ $t('Total Outstanding Balance') }}</p>
                         <p class="cvr-kpi-value cvr-num-amber">{{ formatAmount(kpis.totalOutstandingBalance) }}</p>
                     </div>
                 </div>
@@ -97,14 +97,14 @@ function goToPage(page) {
                         <thead class="cvr-table-head sticky top-0 z-10">
                             <tr>
                                 <th class="px-3 py-3 text-center">#</th>
-                                <th class="px-3 py-3 text-left">Bank Name</th>
-                                <th class="px-3 py-3 text-left">Account Type</th>
-                                <th class="px-3 py-3 text-center">Account Number</th>
-                                <th class="px-3 py-3 text-center">Withdrawal Date</th>
-                                <th class="px-3 py-3 text-right">Withdrawal Amount</th>
-                                <th class="px-3 py-3 text-right">Settlement Amount</th>
-                                <th class="px-3 py-3 text-right">Balance</th>
-                                <th class="px-3 py-3 text-center">Due Date</th>
+                                <th class="px-3 py-3 text-start">{{ $t('Bank Name') }}</th>
+                                <th class="px-3 py-3 text-start">{{ $t('Account Type') }}</th>
+                                <th class="px-3 py-3 text-center">{{ $t('Account Number') }}</th>
+                                <th class="px-3 py-3 text-center">{{ $t('Withdrawal Date') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Withdrawal Amount') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Settlement Amount') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Balance') }}</th>
+                                <th class="px-3 py-3 text-center">{{ $t('Due Date') }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -112,8 +112,8 @@ function goToPage(page) {
                                 <td class="px-3 py-2.5 text-center cvr-text-secondary">
                                     {{ (paginator.current_page - 1) * 50 + index + 1 }}
                                 </td>
-                                <td class="px-3 py-2.5 text-left cvr-text-primary">{{ row.bankName }}</td>
-                                <td class="px-3 py-2.5 text-left cvr-text-secondary">{{ row.accountType }}</td>
+                                <td class="px-3 py-2.5 text-start cvr-text-primary">{{ row.bankName }}</td>
+                                <td class="px-3 py-2.5 text-start cvr-text-secondary">{{ row.accountType }}</td>
                                 <td class="px-3 py-2.5 text-center cvr-text-secondary">{{ row.accountNumber }}</td>
                                 <td class="px-3 py-2.5 text-center cvr-text-secondary">{{ row.withdrawalDate }}</td>
                                 <td class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(row.withdrawalAmount) }}</td>
@@ -122,7 +122,7 @@ function goToPage(page) {
                                 <td class="px-3 py-2.5 text-center cvr-text-secondary">{{ row.dueDate }}</td>
                             </tr>
                             <tr v-if="rows.length === 0">
-                                <td colspan="9" class="px-4 py-8 text-center cvr-text-muted">No withdrawals found for this date range.</td>
+                                <td colspan="9" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No withdrawals found for this date range.') }}</td>
                             </tr>
                         </tbody>
                     </table>

@@ -106,75 +106,75 @@ const visibleSettlements = computed(() =>
         <div class="p-6">
             <div class="flex items-center gap-3 mb-1">
                 <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                    ← Back To Loan Schedule
+                    {{ $t('← Back To Loan Schedule') }}
                 </Link>
             </div>
-            <h1 class="text-xl font-semibold cvr-text-primary mb-6">Loan Schedule Payment</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-6">{{ $t('Loan Schedule Payment') }}</h1>
 
             <form @submit.prevent="submit" class="space-y-6">
                 <!-- Read-only installment info -->
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Loan Schedule Payment</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Loan Schedule Payment') }}</h2>
                     <div class="cvr-form-grid-3 mb-3">
                         <div>
-                            <label class="cvr-form-label">Loan Name</label>
+                            <label class="cvr-form-label">{{ $t('Loan Name') }}</label>
                             <input disabled :value="loanSchedule.medium_term_loan_name" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Installment Due Date</label>
+                            <label class="cvr-form-label">{{ $t('Installment Due Date') }}</label>
                             <input disabled :value="loanSchedule.date_formatted" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Currency</label>
+                            <label class="cvr-form-label">{{ $t('Currency') }}</label>
                             <input disabled :value="loanSchedule.currency" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Beginning Balance</label>
+                            <label class="cvr-form-label">{{ $t('Beginning Balance') }}</label>
                             <input disabled :value="loanSchedule.beginning_balance_formatted" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Schedule Payment</label>
+                            <label class="cvr-form-label">{{ $t('Schedule Payment') }}</label>
                             <input disabled :value="loanSchedule.schedule_payment_formatted" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Interest Amount</label>
+                            <label class="cvr-form-label">{{ $t('Interest Amount') }}</label>
                             <input disabled :value="loanSchedule.interest_amount_formatted" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Principle Amount</label>
+                            <label class="cvr-form-label">{{ $t('Principle Amount') }}</label>
                             <input disabled :value="loanSchedule.principle_amount_formatted" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">End Balance</label>
+                            <label class="cvr-form-label">{{ $t('End Balance') }}</label>
                             <input disabled :value="loanSchedule.end_balance_formatted" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
                     <div class="cvr-form-grid-4 items-end">
                         <div>
-                            <label class="cvr-form-label">Settlement Date *</label>
+                            <label class="cvr-form-label">{{ $t('Settlement Date') }} *</label>
                             <input v-model="form.date" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Settlement Amount</label>
+                            <label class="cvr-form-label">{{ $t('Settlement Amount') }}</label>
                             <input v-model="form.amount" type="number" step="0.01" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Current Account *</label>
+                            <label class="cvr-form-label">{{ $t('Current Account') }} *</label>
                             <select v-model="form.current_account_number" class="cvr-input w-full px-3 py-2 rounded">
                                 <option v-for="acc in currentAccounts" :key="acc.value" :value="acc.value">{{ acc.label }}</option>
                             </select>
                             <p class="text-xs cvr-text-muted mt-1">
-                                Available Balance <span v-if="balanceDateLabel">[ {{ balanceDateLabel }} ]</span>
-                                <span v-if="balanceLoading">(updating...)</span>
+                                {{ $t('Available Balance') }} <span v-if="balanceDateLabel">[ {{ balanceDateLabel }} ]</span>
+                                <span v-if="balanceLoading">{{ $t('(updating...)') }}</span>
                                 <strong v-else-if="availableBalance !== null">: {{ availableBalance }}</strong>
                                 <span v-else>: -</span>
                             </p>
                         </div>
                         <div class="flex gap-2">
                             <button v-if="canManage()" type="submit" :disabled="submitting" class="cvr-btn-primary px-4 py-2 rounded">
-                                {{ submitting ? 'Saving...' : 'Save' }}
+                                {{ submitting ? $t('Saving...') : $t('Save') }}
                             </button>
-                            <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">Back To Loan Schedule</Link>
+                            <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">{{ $t('Back To Loan Schedule') }}</Link>
                         </div>
                     </div>
                 </div>
@@ -182,15 +182,15 @@ const visibleSettlements = computed(() =>
 
             <!-- Settlement history -->
             <div class="cvr-card mt-6">
-                <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Settlement History</h2>
+                <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Settlement History') }}</h2>
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-3 py-2 text-left">#</th>
-                            <th class="px-3 py-2 text-left">Date</th>
-                            <th class="px-3 py-2 text-left">Account Number</th>
-                            <th class="px-3 py-2 text-left">Amount</th>
-                            <th class="px-3 py-2 text-left">Actions</th>
+                            <th class="px-3 py-2 text-start">#</th>
+                            <th class="px-3 py-2 text-start">{{ $t('Date') }}</th>
+                            <th class="px-3 py-2 text-start">{{ $t('Account Number') }}</th>
+                            <th class="px-3 py-2 text-start">{{ $t('Amount') }}</th>
+                            <th class="px-3 py-2 text-start">{{ $t('Actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -203,13 +203,13 @@ const visibleSettlements = computed(() =>
                                 <!-- Only the LAST settlement is editable/deletable —
                                      confirmed from the original's @if($loop->last) guard. -->
                                 <div v-if="s.id === lastSettlementId" class="flex items-center gap-2">
-                                    <Link v-if="canManage()" :href="s.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">Edit</Link>
-                                    <button v-if="canManage()" @click="confirmDelete(s)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">Delete</button>
+                                    <Link v-if="canManage()" :href="s.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">{{ $t('Edit') }}</Link>
+                                    <button v-if="canManage()" @click="confirmDelete(s)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">{{ $t('Delete') }}</button>
                                 </div>
                             </td>
                         </tr>
                         <tr v-if="visibleSettlements.length === 0">
-                            <td colspan="5" class="px-3 py-6 text-center cvr-text-muted">No settlements yet.</td>
+                            <td colspan="5" class="px-3 py-6 text-center cvr-text-muted">{{ $t('No settlements yet.') }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -217,10 +217,10 @@ const visibleSettlements = computed(() =>
 
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Delete this settlement?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Delete this settlement?') }}</h2>
                     <div class="flex justify-end gap-2">
-                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">Confirm Delete</button>
+                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>

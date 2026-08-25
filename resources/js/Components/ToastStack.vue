@@ -48,7 +48,7 @@ const emit = defineEmits(['dismiss']);
 </script>
 
 <template>
-    <div class="fixed right-4 z-50 flex flex-col gap-2 w-full max-w-sm pointer-events-none" style="top: calc(var(--cvr-header-height) + 1rem);">
+    <div class="fixed end-4 z-50 flex flex-col gap-2 w-full max-w-sm pointer-events-none" style="top: calc(var(--cvr-header-height) + 1rem);">
         <TransitionGroup name="cvr-toast">
             <div
                 v-for="toast in toasts"

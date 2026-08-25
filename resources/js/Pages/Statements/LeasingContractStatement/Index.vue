@@ -134,62 +134,61 @@ function submit() {
 <template>
     <AppLayout :nav-urls="navUrls">
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Leasing Contract Statement</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Leasing Contract Statement') }}</h1>
             <p class="text-sm cvr-text-muted mb-4">
-                The installment breakdown of one leasing contract — interest and principle, due against paid —
-                and the ledger of the supplier payments the leasing company made out of it.
+                {{ $t('The installment breakdown of one leasing contract — interest and principle, due against paid — and the ledger of the supplier payments the leasing company made out of it.') }}
             </p>
 
             <div class="cvr-card-bg cvr-border border rounded-lg p-5">
                 <div class="cvr-form-grid-2 mb-5">
                     <div>
-                        <label class="cvr-form-label">Start Date *</label>
+                        <label class="cvr-form-label">{{ $t('Start Date') }} *</label>
                         <input v-model="startDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">End Date *</label>
+                        <label class="cvr-form-label">{{ $t('End Date') }} *</label>
                         <input v-model="endDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         <p class="text-xs cvr-text-muted mt-1">
-                            Future dates are allowed — installments still to come live there.
+                            {{ $t('Future dates are allowed — installments still to come live there.') }}
                         </p>
                     </div>
                 </div>
 
                 <div class="cvr-form-grid-3">
                     <div>
-                        <label class="cvr-form-label">Leasing Company *</label>
+                        <label class="cvr-form-label">{{ $t('Leasing Company') }} *</label>
                         <select v-model="leasingCompanyId" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="" disabled>Select</option>
+                            <option value="" disabled>{{ $t('Select') }}</option>
                             <option v-for="lc in leasingCompanies" :key="lc.id" :value="lc.id">{{ lc.name }}</option>
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Currency *</label>
+                        <label class="cvr-form-label">{{ $t('Currency') }} *</label>
                         <select
                             v-model="currency"
                             class="cvr-input w-full px-3 py-2 rounded"
                             :disabled="loadingCurrencies || Object.keys(currencyOptions).length === 0"
                         >
                             <option value="" disabled>
-                                {{ loadingCurrencies ? 'Loading…' : (Object.keys(currencyOptions).length ? 'Select' : 'Select a leasing company first') }}
+                                {{ loadingCurrencies ? $t('Loading…') : (Object.keys(currencyOptions).length ? $t('Select') : $t('Select a leasing company first')) }}
                             </option>
                             <option v-for="(label, code) in currencyOptions" :key="code" :value="code">{{ String(label).toUpperCase() }}</option>
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Contract Name *</label>
+                        <label class="cvr-form-label">{{ $t('Contract Name') }} *</label>
                         <select
                             v-model="leasingContractId"
                             class="cvr-input w-full px-3 py-2 rounded"
                             :disabled="loadingContracts || contractOptions.length === 0"
                         >
                             <option value="" disabled>
-                                {{ loadingContracts ? 'Loading…' : (contractOptions.length ? 'Select' : 'Select a currency first') }}
+                                {{ loadingContracts ? $t('Loading…') : (contractOptions.length ? $t('Select') : $t('Select a currency first')) }}
                             </option>
                             <option v-for="c in contractOptions" :key="c.id" :value="c.id">{{ c.label }}</option>
                         </select>
                         <p v-if="currency && !loadingContracts && contractOptions.length === 0" class="text-xs cvr-text-muted mt-1">
-                            No contract in this currency runs within the selected dates.
+                            {{ $t('No contract in this currency runs within the selected dates.') }}
                         </p>
                     </div>
                 </div>
@@ -200,20 +199,20 @@ function submit() {
                     class="cvr-btn-primary px-4 py-1.5 rounded text-sm mt-5"
                     :class="{ 'opacity-40 cursor-not-allowed': !canSubmit || rangeIsBackwards }"
                 >
-                    View Statement
+                    {{ $t('View Statement') }}
                 </button>
                 <ul v-if="!canSubmit || rangeIsBackwards" class="text-xs mt-2 space-y-0.5" style="color: var(--cvr-danger-text);">
-                    <li v-if="!startDate">— Start Date is not set.</li>
-                    <li v-if="!endDate">— End Date is not set.</li>
-                    <li v-if="rangeIsBackwards">— Start Date is after End Date.</li>
-                    <li v-if="!leasingCompanyId">— Leasing Company is not selected.</li>
-                    <li v-if="!currency">— Currency is not selected.</li>
-                    <li v-if="!leasingContractId">— Contract Name is not selected.</li>
+                    <li v-if="!startDate">{{ $t('— Start Date is not set.') }}</li>
+                    <li v-if="!endDate">{{ $t('— End Date is not set.') }}</li>
+                    <li v-if="rangeIsBackwards">{{ $t('— Start Date is after End Date.') }}</li>
+                    <li v-if="!leasingCompanyId">{{ $t('— Leasing Company is not selected.') }}</li>
+                    <li v-if="!currency">{{ $t('— Currency is not selected.') }}</li>
+                    <li v-if="!leasingContractId">{{ $t('— Contract Name is not selected.') }}</li>
                 </ul>
             </div>
 
             <div v-if="leasingCompanies.length === 0" class="cvr-card p-8 text-center cvr-text-muted mt-4">
-                No leasing companies yet — add one under Financial Institutions first.
+                {{ $t('No leasing companies yet — add one under Financial Institutions first.') }}
             </div>
         </div>
     </AppLayout>

@@ -173,53 +173,53 @@ function destroyRow() {
         <div class="p-6 mx-auto">
             <div class="flex items-center justify-between mb-6">
                 <div>
-                    <h1 class="text-xl font-semibold cvr-text-primary mb-1">Factoring With Recourse</h1>
-                    <p class="text-sm cvr-text-muted">Factoring Transactions</p>
+                    <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Factoring With Recourse') }}</h1>
+                    <p class="text-sm cvr-text-muted">{{ $t('Factoring Transactions') }}</p>
                 </div>
                 <Link v-if="canCreate" :href="urls.create" class="cvr-btn-primary px-4 py-2 rounded text-sm">
-                    + Create New
+                    {{ $t('+ Create New') }}
                 </Link>
             </div>
 
             <div class="flex flex-wrap items-end gap-3 mb-4">
                 <div>
-                    <label class="cvr-form-label">Search By</label>
+                    <label class="cvr-form-label">{{ $t('Search By') }}</label>
                     <select v-model="search.field" class="cvr-input px-3 py-2 rounded">
                         <option v-for="(label, field) in searchFields" :key="field" :value="field">{{ label }}</option>
                     </select>
                 </div>
                 <div class="cvr-search-bar flex items-center gap-2 px-3 py-1.5 w-64">
                     <span class="cvr-text-muted text-sm">🔍</span>
-                    <input v-model="search.value" @keyup.enter="applySearch" type="text" placeholder="Search..." class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
+                    <input v-model="search.value" @keyup.enter="applySearch" type="text" :placeholder="$t('Search...')" class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
                 </div>
                 <div>
-                    <label class="cvr-form-label">From</label>
+                    <label class="cvr-form-label">{{ $t('From') }}</label>
                     <input v-model="search.from" type="date" class="cvr-input px-3 py-2 rounded" />
                 </div>
                 <div>
-                    <label class="cvr-form-label">To</label>
+                    <label class="cvr-form-label">{{ $t('To') }}</label>
                     <input v-model="search.to" type="date" class="cvr-input px-3 py-2 rounded" />
                 </div>
-                <button @click="applySearch" class="cvr-btn-secondary px-3 py-2 rounded border text-sm">Search</button>
-                <button @click="resetSearch" class="cvr-btn-secondary px-3 py-2 rounded border text-sm">Reset</button>
+                <button @click="applySearch" class="cvr-btn-secondary px-3 py-2 rounded border text-sm">{{ $t('Search') }}</button>
+                <button @click="resetSearch" class="cvr-btn-secondary px-3 py-2 rounded border text-sm">{{ $t('Reset') }}</button>
             </div>
 
             <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-4 py-3 text-left">#</th>
-                            <th class="px-4 py-3 text-left">Factoring Date</th>
-                            <th class="px-4 py-3 text-left">Factoring Company</th>
-                            <th class="px-4 py-3 text-left">Customer</th>
-                            <th class="px-4 py-3 text-left">Invoice Number</th>
-                            <th class="px-4 py-3 text-left">Currency</th>
-                            <th class="px-4 py-3 text-left">Factoring Amount</th>
-                            <th class="px-4 py-3 text-left">Received Amount</th>
-                            <th class="px-4 py-3 text-left">Status</th>
-                            <th class="px-4 py-3 text-left">Bank</th>
-                            <th class="px-4 py-3 text-left">Account Number</th>
-                            <th class="px-4 py-3 text-left">Control</th>
+                            <th class="px-4 py-3 text-start">#</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Factoring Date') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Factoring Company') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Customer') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Invoice Number') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Currency') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Factoring Amount') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Received Amount') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Status') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Bank') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Account Number') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Control') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -230,8 +230,8 @@ function destroyRow() {
                             <td class="px-4 py-3">{{ row.customer_name }}</td>
                             <td class="px-4 py-3">{{ row.invoice_number }}</td>
                             <td class="px-4 py-3 uppercase">{{ row.invoice_currency }}</td>
-                            <td class="px-4 py-3 cvr-num">{{ Number(row.factoring_amount).toLocaleString() }}</td>
-                            <td class="px-4 py-3 cvr-num">{{ Number(row.received_amount).toLocaleString() }}</td>
+                            <td class="px-4 py-3 cvr-num">{{ Number(row.factoring_amount).toLocaleString('en-EG') }}</td>
+                            <td class="px-4 py-3 cvr-num">{{ Number(row.received_amount).toLocaleString('en-EG') }}</td>
                             <td class="px-4 py-3">
                                 <template v-if="row.is_collected">
                                     <span class="cvr-badge cvr-badge-active">Collected</span>
@@ -241,27 +241,27 @@ function destroyRow() {
                                     <span class="cvr-badge cvr-badge-overdue">Rejected</span>
                                     <div v-if="row.rejection_date" class="text-xs cvr-text-muted mt-1">{{ row.rejection_date }}</div>
                                     <div v-if="row.uncollected_invoice_charges > 0" class="text-xs cvr-text-muted mt-1">
-                                        Uncollected Invoices Charges: {{ Number(row.uncollected_invoice_charges).toLocaleString() }}
+                                        Uncollected Invoices Charges: {{ Number(row.uncollected_invoice_charges).toLocaleString('en-EG') }}
                                     </div>
                                 </template>
-                                <span v-else class="cvr-badge cvr-badge-pending">Pending</span>
+                                <span v-else class="cvr-badge cvr-badge-pending">{{ $t('Pending') }}</span>
                             </td>
                             <td class="px-4 py-3">{{ row.financial_institution_name }}</td>
                             <td class="px-4 py-3">{{ row.account_number_label || row.account_number }}</td>
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-1">
                                     <RecordLogButton subject="FactoringTransaction" :id="row.id" :company-id="company.id" />
-                                    <Link v-if="canUpdate && row.is_pending" :href="row.edit_url" class="cvr-action-btn" title="Edit">✏️</Link>
-                                    <button v-if="canAct && row.is_pending" @click="openCollect(row)" class="cvr-action-btn" title="Collect">✅</button>
-                                    <button v-if="canAct && row.is_pending" @click="openReject(row)" class="cvr-action-btn-danger cvr-action-btn" title="Reject">✖️</button>
-                                    <button v-if="canAct && row.is_collected" @click="revertCollectTarget = row" class="cvr-action-btn" title="Revert Collection">↩️</button>
-                                    <button v-if="canAct && row.is_rejected" @click="revertRejectTarget = row" class="cvr-action-btn" title="Revert Rejection">↩️</button>
-                                    <button v-if="canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Delete">🗑️</button>
+                                    <Link v-if="canUpdate && row.is_pending" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</Link>
+                                    <button v-if="canAct && row.is_pending" @click="openCollect(row)" class="cvr-action-btn" :title="$t('Collect')">✅</button>
+                                    <button v-if="canAct && row.is_pending" @click="openReject(row)" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Reject')">✖️</button>
+                                    <button v-if="canAct && row.is_collected" @click="revertCollectTarget = row" class="cvr-action-btn" :title="$t('Revert Collection')">↩️</button>
+                                    <button v-if="canAct && row.is_rejected" @click="revertRejectTarget = row" class="cvr-action-btn" :title="$t('Revert Rejection')">↩️</button>
+                                    <button v-if="canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Delete')">🗑️</button>
                                 </div>
                             </td>
                         </tr>
                         <tr v-if="rows.length === 0">
-                            <td colspan="12" class="px-4 py-8 text-center cvr-text-muted">No records found.</td>
+                            <td colspan="12" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No records found.') }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -272,43 +272,43 @@ function destroyRow() {
             <!-- Collect modal -->
             <div v-if="collectTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-md">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Collect</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Collect') }}</h2>
                     <div v-if="collectTarget.difference_amount > 0" class="mb-4 px-4 py-3 rounded cvr-badge-pending text-sm">
-                        <strong>Difference Amount:</strong> {{ Number(collectTarget.difference_amount).toLocaleString() }}
+                        <strong>{{ $t('Difference Amount:') }}</strong> {{ Number(collectTarget.difference_amount).toLocaleString('en-EG') }}
                         <span class="uppercase">{{ collectTarget.invoice_currency }}</span>
-                        <div class="text-xs mt-1">Confirm that you have received this amount from the factoring company.</div>
+                        <div class="text-xs mt-1">{{ $t('Confirm that you have received this amount from the factoring company.') }}</div>
                     </div>
                     <div class="space-y-3">
                         <div>
-                            <label class="cvr-form-label">Collection Date *</label>
+                            <label class="cvr-form-label">{{ $t('Collection Date') }} *</label>
                             <input v-model="collectForm.collection_date" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errors.collection_date" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.collection_date }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Bank *</label>
+                            <label class="cvr-form-label">{{ $t('Bank') }} *</label>
                             <select v-model="collectForm.financial_institution_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="b in [...financialInstitutionBanks].sort((a, b) => a.name.localeCompare(b.name))" :key="b.id" :value="b.id">{{ b.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Account Type *</label>
+                            <label class="cvr-form-label">{{ $t('Account Type') }} *</label>
                             <select v-model="collectForm.account_type_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="a in accountTypes" :key="a.id" :value="a.id">{{ a.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Account Number *</label>
+                            <label class="cvr-form-label">{{ $t('Account Number') }} *</label>
                             <select v-model="collectForm.account_number" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="n in collectAccountNumbers" :key="n.value" :value="n.value">{{ n.label }}</option>
                             </select>
                         </div>
                     </div>
                     <div class="flex justify-end gap-2 mt-5">
-                        <button @click="collectTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="submitCollect" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm</button>
+                        <button @click="collectTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="submitCollect" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Confirm') }}</button>
                     </div>
                 </div>
             </div>
@@ -316,47 +316,47 @@ function destroyRow() {
             <!-- Reject modal -->
             <div v-if="rejectTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-md">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Rejected</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Rejected') }}</h2>
                     <div class="mb-4 px-4 py-3 rounded cvr-badge-pending text-sm">
-                        <strong>Factoring Amount:</strong> {{ Number(rejectTarget.factoring_amount).toLocaleString() }}
+                        <strong>{{ $t('Factoring Amount:') }}</strong> {{ Number(rejectTarget.factoring_amount).toLocaleString('en-EG') }}
                         <span class="uppercase">{{ rejectTarget.invoice_currency }}</span>
-                        <div class="text-xs mt-1">Confirm payment to the factoring company because the customer did not pay.</div>
+                        <div class="text-xs mt-1">{{ $t('Confirm payment to the factoring company because the customer did not pay.') }}</div>
                     </div>
                     <div class="space-y-3">
                         <div>
-                            <label class="cvr-form-label">Uncollected Invoices Charges</label>
+                            <label class="cvr-form-label">{{ $t('Uncollected Invoices Charges') }}</label>
                             <input v-model="rejectForm.uncollected_invoice_charges" type="number" step="any" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Date *</label>
+                            <label class="cvr-form-label">{{ $t('Date') }} *</label>
                             <input v-model="rejectForm.rejection_date" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errors.rejection_date" class="text-xs mt-1" style="color: var(--cvr-danger-text)">{{ errors.rejection_date }}</p>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Bank *</label>
+                            <label class="cvr-form-label">{{ $t('Bank') }} *</label>
                             <select v-model="rejectForm.financial_institution_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="b in financialInstitutionBanks" :key="b.id" :value="b.id">{{ b.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Account Type *</label>
+                            <label class="cvr-form-label">{{ $t('Account Type') }} *</label>
                             <select v-model="rejectForm.account_type_id" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="a in accountTypes" :key="a.id" :value="a.id">{{ a.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Account Number *</label>
+                            <label class="cvr-form-label">{{ $t('Account Number') }} *</label>
                             <select v-model="rejectForm.account_number" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="n in rejectAccountNumbers" :key="n.value" :value="n.value">{{ n.label }}</option>
                             </select>
                         </div>
                     </div>
                     <div class="flex justify-end gap-2 mt-5">
-                        <button @click="rejectTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="submitReject" class="cvr-btn-danger px-3 py-1.5 rounded">Confirm</button>
+                        <button @click="rejectTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="submitReject" class="cvr-btn-danger px-3 py-1.5 rounded">{{ $t('Confirm') }}</button>
                     </div>
                 </div>
             </div>
@@ -364,11 +364,11 @@ function destroyRow() {
             <!-- Revert Collection confirmation -->
             <div v-if="revertCollectTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Revert Collection</h2>
-                    <p class="text-sm cvr-text-muted mb-4">Do you want to revert the collection, remove the settlement, and restore the invoice to pending?</p>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Revert Collection') }}</h2>
+                    <p class="text-sm cvr-text-muted mb-4">{{ $t('Do you want to revert the collection, remove the settlement, and restore the invoice to pending?') }}</p>
                     <div class="flex justify-end gap-2">
-                        <button @click="revertCollectTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="submitRevertCollect" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm Reset</button>
+                        <button @click="revertCollectTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="submitRevertCollect" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Confirm Reset') }}</button>
                     </div>
                 </div>
             </div>
@@ -376,11 +376,11 @@ function destroyRow() {
             <!-- Revert Rejection confirmation -->
             <div v-if="revertRejectTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Revert Rejection</h2>
-                    <p class="text-sm cvr-text-muted mb-4">Do you want to revert the rejection and remove the related bank and factoring statement entries?</p>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Revert Rejection') }}</h2>
+                    <p class="text-sm cvr-text-muted mb-4">{{ $t('Do you want to revert the rejection and remove the related bank and factoring statement entries?') }}</p>
                     <div class="flex justify-end gap-2">
-                        <button @click="revertRejectTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="submitRevertReject" class="cvr-btn-primary px-3 py-1.5 rounded">Confirm Reset</button>
+                        <button @click="revertRejectTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="submitRevertReject" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Confirm Reset') }}</button>
                     </div>
                 </div>
             </div>
@@ -388,10 +388,10 @@ function destroyRow() {
             <!-- Delete confirmation -->
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Do you want to delete this item?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to delete this item?') }}</h2>
                     <div class="flex justify-end gap-2">
-                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded">Confirm Delete</button>
+                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded">{{ $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>

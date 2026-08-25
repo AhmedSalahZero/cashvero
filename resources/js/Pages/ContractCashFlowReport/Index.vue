@@ -41,7 +41,7 @@ async function onPartnerChange() {
 
 function fmtAmount(c) {
     if (!c) return '0';
-    const amount = Number(c.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const amount = Number(c.amount || 0).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     return `${amount} ${(c.currency || '').toUpperCase()}`;
 }
 
@@ -85,51 +85,51 @@ function destroyReport() {
 <template>
     <AppLayout>
         <div class="p-6 max-w-7xl mx-auto">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-6">Contract Cash Flow Report</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-6">{{ $t('Contract Cash Flow Report') }}</h1>
 
             <div class="cvr-card-bg cvr-border border rounded-lg p-5 mb-6">
                 <form @submit.prevent="submit" class="space-y-4">
                     <div class="cvr-form-grid-4">
                         <div>
-                            <label class="cvr-form-label">Customer *</label>
+                            <label class="cvr-form-label">{{ $t('Customer') }} *</label>
                             <select v-model="partnerId" @change="onPartnerChange" required class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
+                                <option value="">{{ $t('Select') }}</option>
                                 <option v-for="p in clientsWithContracts" :key="p.id" :value="p.id">{{ p.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Contract *</label>
+                            <label class="cvr-form-label">{{ $t('Contract') }} *</label>
                             <select v-model="contractId" required :disabled="!partnerId || loadingContracts" class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">{{ loadingContracts ? 'Loading…' : 'Select' }}</option>
+                                <option value="">{{ loadingContracts ? $t('Loading…') : $t('Select') }}</option>
                                 <option v-for="c in contracts" :key="c.id" :value="c.id">{{ c.name }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Contract Code</label>
+                            <label class="cvr-form-label">{{ $t('Contract Code') }}</label>
                             <input :value="selectedContract?.code || ''" disabled class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Contract Amount</label>
+                            <label class="cvr-form-label">{{ $t('Contract Amount') }}</label>
                             <input :value="fmtAmount(selectedContract)" disabled class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                     </div>
 
                     <div class="cvr-form-grid-4">
                         <div>
-                            <label class="cvr-form-label">Contract Start Date</label>
+                            <label class="cvr-form-label">{{ $t('Contract Start Date') }}</label>
                             <input :value="selectedContract?.start_date || ''" type="date" disabled class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Contract End Date</label>
+                            <label class="cvr-form-label">{{ $t('Contract End Date') }}</label>
                             <input :value="selectedContract?.end_date || ''" type="date" disabled class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Report Interval *</label>
+                            <label class="cvr-form-label">{{ $t('Report Interval') }} *</label>
                             <select v-model="reportInterval" required class="cvr-input w-full px-3 py-2 rounded">
-                                <option value="">Select</option>
-                                <option value="daily">Daily</option>
-                                <option value="weekly">Weekly</option>
-                                <option value="monthly">Monthly</option>
+                                <option value="">{{ $t('Select') }}</option>
+                                <option value="daily">{{ $t('Daily') }}</option>
+                                <option value="weekly">{{ $t('Weekly') }}</option>
+                                <option value="monthly">{{ $t('Monthly') }}</option>
                             </select>
                         </div>
                         <div></div>
@@ -137,36 +137,36 @@ function destroyReport() {
 
                     <div class="cvr-form-grid-2">
                         <div>
-                            <label class="cvr-form-label">Report Start Date *</label>
+                            <label class="cvr-form-label">{{ $t('Report Start Date') }} *</label>
                             <input v-model="startDate" type="date" required class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Report End Date *</label>
+                            <label class="cvr-form-label">{{ $t('Report End Date') }} *</label>
                             <input v-model="endDate" type="date" required class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
 
                     <p class="text-sm" style="color: var(--cvr-danger-text)">
-                        Note: the date of Today must be included within the report duration.
+                        {{ $t('Note: the date of Today must be included within the report duration.') }}
                     </p>
 
                     <div class="cvr-form-grid-3 items-end">
                         <div class="flex items-center gap-2">
                             <input id="reset_report" v-model="resetReport" type="checkbox" class="cursor-pointer" />
-                            <label for="reset_report" class="cvr-form-label mb-0">Reset [Past Dues & Other Projected Cash In &amp; Out]</label>
+                            <label for="reset_report" class="cvr-form-label mb-0">{{ $t('Reset [Past Dues & Other Projected Cash In & Out]') }}</label>
                         </div>
                         <div class="flex items-center gap-2">
                             <input id="save_report" v-model="saveReport" type="checkbox" class="cursor-pointer" />
-                            <label for="save_report" class="cvr-form-label mb-0">Do You Want To Save Report</label>
+                            <label for="save_report" class="cvr-form-label mb-0">{{ $t('Do You Want To Save Report') }}</label>
                         </div>
                         <div v-if="saveReport">
-                            <label class="cvr-form-label">Report Name</label>
+                            <label class="cvr-form-label">{{ $t('Report Name') }}</label>
                             <input v-model="reportName" type="text" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
 
                     <div class="flex justify-end">
-                        <button type="submit" :disabled="!contractId" class="cvr-btn-primary px-4 py-2 rounded disabled:opacity-50">View Report</button>
+                        <button type="submit" :disabled="!contractId" class="cvr-btn-primary px-4 py-2 rounded disabled:opacity-50">{{ $t('View Report') }}</button>
                     </div>
                 </form>
             </div>
@@ -175,12 +175,12 @@ function destroyReport() {
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
                         <tr>
-                            <th class="px-4 py-3 text-left">#</th>
-                            <th class="px-4 py-3 text-left">Report Name</th>
-                            <th class="px-4 py-3 text-left">Report Interval</th>
-                            <th class="px-4 py-3 text-left">Start Date</th>
-                            <th class="px-4 py-3 text-left">End Date</th>
-                            <th class="px-4 py-3 text-left">Actions</th>
+                            <th class="px-4 py-3 text-start">#</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Report Name') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Report Interval') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Start Date') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('End Date') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -192,13 +192,13 @@ function destroyReport() {
                             <td class="px-4 py-3">{{ r.end_date_formatted }}</td>
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-1">
-                                    <Link :href="r.view_url" class="cvr-action-btn" title="View">✏️</Link>
-                                    <button v-if="can('cash_flow_report.delete')" @click="deleteTarget = r" class="cvr-action-btn-danger cvr-action-btn" title="Delete">🗑️</button>
+                                    <Link :href="r.view_url" class="cvr-action-btn" :title="$t('View')">✏️</Link>
+                                    <button v-if="can('cash_flow_report.delete')" @click="deleteTarget = r" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Delete')">🗑️</button>
                                 </div>
                             </td>
                         </tr>
                         <tr v-if="savedReports.length === 0">
-                            <td colspan="6" class="px-4 py-8 text-center cvr-text-muted">No saved reports yet.</td>
+                            <td colspan="6" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No saved reports yet.') }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -208,10 +208,10 @@ function destroyReport() {
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">Delete Cashflow Report {{ deleteTarget.name }}</h2>
-                    <p class="text-sm cvr-text-muted mb-4">Are you sure you want to delete this item?</p>
+                    <p class="text-sm cvr-text-muted mb-4">{{ $t('Are you sure you want to delete this item?') }}</p>
                     <div class="flex justify-end gap-2">
-                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">Close</button>
-                        <button @click="destroyReport" class="cvr-btn-danger px-3 py-1.5 rounded">Delete</button>
+                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="destroyReport" class="cvr-btn-danger px-3 py-1.5 rounded">{{ $t('Delete') }}</button>
                     </div>
                 </div>
             </div>

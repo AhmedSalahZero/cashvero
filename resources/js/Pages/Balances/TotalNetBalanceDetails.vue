@@ -36,7 +36,7 @@ function statusBadgeClass(status) {
     <AppLayout>
         <div class="p-6">
             <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm mb-3">
-                ← Back to Balances
+                {{ $t('← Back to Balances') }}
             </Link>
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">
                 {{ reportTitle }}
@@ -49,20 +49,20 @@ function statusBadgeClass(status) {
                     <thead class="cvr-table-head">
                         <tr>
                             <th class="px-4 py-3 text-center">#</th>
-                            <th class="px-4 py-3 text-left">{{ clientNameText }}</th>
-                            <th class="px-4 py-3 text-center">Invoice Number</th>
-                            <th class="px-4 py-3 text-center">Invoice Date</th>
-                            <th class="px-4 py-3 text-center">Currency</th>
-                            <th class="px-4 py-3 text-right">Net Balance</th>
-                            <th class="px-4 py-3 text-center">Invoice Due Date</th>
-                            <th class="px-4 py-3 text-center">Status</th>
-                            <th class="px-4 py-3 text-center">Actions</th>
+                            <th class="px-4 py-3 text-start">{{ clientNameText }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Invoice Number') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Invoice Date') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Currency') }}</th>
+                            <th class="px-4 py-3 text-right">{{ $t('Net Balance') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Invoice Due Date') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Status') }}</th>
+                            <th class="px-4 py-3 text-center">{{ $t('Actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-for="(row, i) in invoicesBalances" :key="row.id" class="cvr-table-row">
                             <td class="px-4 py-3 text-center cvr-text-secondary">{{ i + 1 }}</td>
-                            <td class="px-4 py-3 text-left cvr-text-primary">
+                            <td class="px-4 py-3 text-start cvr-text-primary">
                                 <span class="block truncate max-w-[280px]" :title="row.client_name">{{ row.client_name }}</span>
                             </td>
                             <td class="px-4 py-3 text-center cvr-text-secondary">{{ row.invoice_number }}</td>
@@ -80,7 +80,7 @@ function statusBadgeClass(status) {
                             </td>
                         </tr>
                         <tr v-if="invoicesBalances.length === 0">
-                            <td colspan="9" class="px-4 py-8 text-center cvr-text-muted">No invoices found.</td>
+                            <td colspan="9" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No invoices found.') }}</td>
                         </tr>
                     </tbody>
                 </table>

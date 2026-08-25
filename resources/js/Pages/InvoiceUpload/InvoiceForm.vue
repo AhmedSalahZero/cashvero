@@ -133,8 +133,8 @@ function submit() {
             <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm mb-3">
                 ← Back to {{ modelDisplayName }} Table
             </Link>
-            <h1 class="text-xl font-semibold cvr-text-primary mb-6">{{ modelDisplayName }} {{ isEdit ? '— Edit' : '— Create' }}</h1>
-            <p v-if="!isEdit" class="text-sm cvr-text-muted -mt-4 mb-6">If you can't find your customer or supplier in the dropdown, create them first from the Partners section.</p>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-6">{{ modelDisplayName }} {{ isEdit ? $t('— Edit') : $t('— Create') }}</h1>
+            <p v-if="!isEdit" class="text-sm cvr-text-muted -mt-4 mb-6">{{ $t('If you can\'t find your customer or supplier in the dropdown, create them first from the Partners section.') }}</p>
 
             <div class="cvr-card-bg cvr-border border rounded-lg p-4">
                 <div class="cvr-form-grid-4">
@@ -142,22 +142,22 @@ function submit() {
                         <label class="cvr-form-label">{{ f.label }}</label>
 
                         <select v-if="f.type === 'customer_select' || f.type === 'supplier_select'" v-model="form[f.field]" @change="onCustomerOrSupplierChange" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="">Select</option>
+                            <option value="">{{ $t('Select') }}</option>
                             <option v-for="(name, id) in f.options" :key="id" :value="id">{{ name }}</option>
                         </select>
 
                         <select v-else-if="f.type === 'business_sector_select'" v-model="form[f.field]" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="">Select</option>
+                            <option value="">{{ $t('Select') }}</option>
                             <option v-for="(name, id) in f.options" :key="id" :value="id">{{ name }}</option>
                         </select>
 
                         <select v-else-if="f.type === 'project_select'" v-model="form[f.field]" @change="onProjectChange" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="">Select</option>
+                            <option value="">{{ $t('Select') }}</option>
                             <option v-for="p in projectOptions" :key="p.id" :value="p.id">{{ p.name }}</option>
                         </select>
 
                         <select v-else-if="f.type === 'sales_order_select' || f.type === 'purchase_order_select'" v-model="form[f.field]" @change="onOrderChange" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="">Select</option>
+                            <option value="">{{ $t('Select') }}</option>
                             <option v-for="o in orderOptions" :key="o.id" :value="o.id">{{ o.number }}</option>
                         </select>
 
@@ -166,7 +166,7 @@ function submit() {
                         <p v-if="form.errors[f.field]" class="text-xs text-red-500 mt-1">{{ form.errors[f.field] }}</p>
                     </div>
                 </div>
-                <button @click="submit" :disabled="form.processing" class="cvr-btn-primary px-4 py-1.5 rounded text-sm mt-4">Save</button>
+                <button @click="submit" :disabled="form.processing" class="cvr-btn-primary px-4 py-1.5 rounded text-sm mt-4">{{ $t('Save') }}</button>
             </div>
         </div>
     </AppLayout>

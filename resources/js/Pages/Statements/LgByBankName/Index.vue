@@ -89,26 +89,26 @@ function submit() {
 <template>
     <AppLayout>
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">LG By Bank Name</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('LG By Bank Name') }}</h1>
             <p class="text-sm cvr-text-muted mb-6">
-                Letters of Guarantee for one or more banks, filtered by status.
+                {{ $t('Letters of Guarantee for one or more banks, filtered by status.') }}
             </p>
 
             <div class="cvr-card-bg cvr-border border rounded-lg p-5">
                 <div class="cvr-form-grid-3 mb-5">
                     <div>
-                        <label class="cvr-form-label">Status *</label>
+                        <label class="cvr-form-label">{{ $t('Status') }} *</label>
                         <select v-model="status" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="running">Running</option>
-                            <option value="expired">Expired</option>
-                            <option value="cancelled">Cancelled</option>
-                            <option value="all">All</option>
+                            <option value="running">{{ $t('Running') }}</option>
+                            <option value="expired">{{ $t('Expired') }}</option>
+                            <option value="cancelled">{{ $t('Cancelled') }}</option>
+                            <option value="all">{{ $t('All') }}</option>
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Currency *</label>
+                        <label class="cvr-form-label">{{ $t('Currency') }} *</label>
                         <select v-model="currency" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="" disabled>Select currency</option>
+                            <option value="" disabled>{{ $t('Select currency') }}</option>
                             <option v-for="(label, code) in currencies" :key="code" :value="code">{{ String(label).toUpperCase() }}</option>
                         </select>
                     </div>
@@ -116,14 +116,14 @@ function submit() {
                         <label class="cvr-form-label">{{ dateLabel }}</label>
                         <input v-model="startDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         <p class="text-xs mt-1 cvr-text-muted">
-                            {{ status === 'cancelled' ? 'Cancelled LGs from this date through today.' : 'Every Running and Expired LG, plus Cancelled LGs from this date through today.' }}
+                            {{ status === 'cancelled' ? $t('Cancelled LGs from this date through today.') : $t('Every Running and Expired LG, plus Cancelled LGs from this date through today.') }}
                         </p>
                     </div>
                 </div>
 
                 <div class="max-w-xl">
                     <label class="cvr-form-label">
-                        Bank * <span class="cvr-text-muted font-normal">(pick one or more)</span>
+                        {{ $t('Bank') }} * <span class="cvr-text-muted font-normal">{{ $t('(pick one or more)') }}</span>
                     </label>
                     <MultiSelectDropdown
                         v-model="selectedBankIds"
@@ -132,7 +132,7 @@ function submit() {
                     />
                     <p v-if="loadError" class="text-xs mt-1" style="color: var(--cvr-danger-text);">{{ loadError }}</p>
                     <p v-else-if="currency && !loadingBanks && bankOptions.length === 0" class="text-xs cvr-text-muted mt-1">
-                        No banks with LGs in this currency yet.
+                        {{ $t('No banks with LGs in this currency yet.') }}
                     </p>
                 </div>
 
@@ -142,12 +142,12 @@ function submit() {
                     class="cvr-btn-primary px-4 py-1.5 rounded text-sm mt-5"
                     :class="{ 'opacity-40 cursor-not-allowed': !canSubmit }"
                 >
-                    View Report
+                    {{ $t('View Report') }}
                 </button>
                 <ul v-if="!canSubmit" class="text-xs mt-2 space-y-0.5" style="color: var(--cvr-danger-text);">
-                    <li v-if="needsDate && !startDate">— {{ status === 'cancelled' ? 'Cancelled From Date' : 'From Date' }} is not set.</li>
-                    <li v-if="!currency">— Currency is not selected.</li>
-                    <li v-if="selectedBankIds.length === 0">— No bank is selected yet (open the dropdown and pick at least one, or Select All).</li>
+                    <li v-if="needsDate && !startDate">— {{ status === 'cancelled' ? $t('Cancelled From Date') : $t('From Date') }} is not set.</li>
+                    <li v-if="!currency">{{ $t('— Currency is not selected.') }}</li>
+                    <li v-if="selectedBankIds.length === 0">{{ $t('— No bank is selected yet (open the dropdown and pick at least one, or Select All).') }}</li>
                 </ul>
             </div>
         </div>

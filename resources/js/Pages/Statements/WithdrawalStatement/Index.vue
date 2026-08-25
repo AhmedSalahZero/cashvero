@@ -72,39 +72,39 @@ function submit() {
 <template>
     <AppLayout>
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Withdrawal Statement</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Withdrawal Statement') }}</h1>
             <p class="text-sm cvr-text-muted mb-6">
-                Overdraft withdrawals and how much of each is still outstanding, for a chosen date range.
+                {{ $t('Overdraft withdrawals and how much of each is still outstanding, for a chosen date range.') }}
             </p>
 
             <div class="cvr-card-bg cvr-border border rounded-lg p-5">
                 <div class="cvr-form-grid-4 mb-5">
                     <div>
-                        <label class="cvr-form-label">Start Date *</label>
+                        <label class="cvr-form-label">{{ $t('Start Date') }} *</label>
                         <input v-model="startDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">End Date *</label>
+                        <label class="cvr-form-label">{{ $t('End Date') }} *</label>
                         <input v-model="endDate" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">Account Type *</label>
+                        <label class="cvr-form-label">{{ $t('Account Type') }} *</label>
                         <select v-model="accountTypeId" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="" disabled>Select account type</option>
+                            <option value="" disabled>{{ $t('Select account type') }}</option>
                             <option v-for="type in accountTypes" :key="type.id" :value="type.id">{{ type.name }}</option>
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Currency *</label>
+                        <label class="cvr-form-label">{{ $t('Currency') }} *</label>
                         <select v-model="currency" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="" disabled>Select currency</option>
+                            <option value="" disabled>{{ $t('Select currency') }}</option>
                             <option v-for="(label, code) in currencies" :key="code" :value="code">{{ String(label).toUpperCase() }}</option>
                         </select>
                     </div>
                 </div>
 
                 <div class="max-w-xl mb-5">
-                    <label class="cvr-form-label">Banks * <span class="cvr-text-muted font-normal">(pick one or more)</span></label>
+                    <label class="cvr-form-label">{{ $t('Banks') }} * <span class="cvr-text-muted font-normal">{{ $t('(pick one or more)') }}</span></label>
                     <MultiSelectDropdown
                         v-model="selectedBankIds"
                         :options="bankOptions"
@@ -112,7 +112,7 @@ function submit() {
                     />
                     <p v-if="loadError" class="text-xs mt-1" style="color: var(--cvr-danger-text);">{{ loadError }}</p>
                     <p v-else-if="accountTypeId && !loadingBanks && bankOptions.length === 0" class="text-xs mt-1 cvr-text-muted">
-                        No banks have this account type.
+                        {{ $t('No banks have this account type.') }}
                     </p>
                 </div>
 
@@ -122,14 +122,14 @@ function submit() {
                     class="cvr-btn-primary px-4 py-1.5 rounded text-sm"
                     :class="{ 'opacity-40 cursor-not-allowed': !canSubmit }"
                 >
-                    View Statement
+                    {{ $t('View Statement') }}
                 </button>
                 <ul v-if="!canSubmit" class="text-xs mt-2 space-y-0.5" style="color: var(--cvr-danger-text);">
-                    <li v-if="!startDate">— Start Date is not set.</li>
-                    <li v-if="!endDate">— End Date is not set.</li>
-                    <li v-if="!accountTypeId">— Account Type is not selected.</li>
-                    <li v-if="!currency">— Currency is not selected.</li>
-                    <li v-if="accountTypeId && selectedBankIds.length === 0">— No bank is selected yet (open the Banks dropdown and pick at least one, or Select All).</li>
+                    <li v-if="!startDate">{{ $t('— Start Date is not set.') }}</li>
+                    <li v-if="!endDate">{{ $t('— End Date is not set.') }}</li>
+                    <li v-if="!accountTypeId">{{ $t('— Account Type is not selected.') }}</li>
+                    <li v-if="!currency">{{ $t('— Currency is not selected.') }}</li>
+                    <li v-if="accountTypeId && selectedBankIds.length === 0">{{ $t('— No bank is selected yet (open the Banks dropdown and pick at least one, or Select All).') }}</li>
                 </ul>
             </div>
         </div>

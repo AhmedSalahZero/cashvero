@@ -12,7 +12,14 @@ trait HasLetterOfGuaranteeCashCoverStatements
 	 * * سواء كانت كاش استيتمنت او بانك استيتمنت علي حسب نوع الحساب او الحركة يعني
 	 */
 
-	public function handleLetterOfGuaranteeCashCoverStatement(int $financialInstitutionId , string $source  , ?int $lgFacilityId,string $lgType,$companyId,string $date,$beginningBalance,$debit , $credit,string $currencyName ,int $lgAdvancedPaymentHistoryId = 0, $type =null)
+	/**
+	 * * $lgRenewalDateHistoryId اتضاف علشان التجديد بقى يقدر يغير الـ
+	 * * cash cover .. الفرق بيتسجل هنا وبيفضل مربوط بصف التجديد اللي
+	 * * جابه علشان لو التجديد اتعدل او اتحذف نعرف نشيله لوحده من غير ما
+	 * * نلمس الـ cash cover الاصلي بتاع الاصدار
+	 * * @see \App\Support\LetterOfGuarantee\LgRenewalTerms
+	 */
+	public function handleLetterOfGuaranteeCashCoverStatement(int $financialInstitutionId , string $source  , ?int $lgFacilityId,string $lgType,$companyId,string $date,$beginningBalance,$debit , $credit,string $currencyName ,int $lgAdvancedPaymentHistoryId = 0, $type =null, ?int $lgRenewalDateHistoryId = null)
 	{
 		$data = [
 			'type'=>$type , // beginning-balance for example
@@ -21,6 +28,7 @@ trait HasLetterOfGuaranteeCashCoverStatements
 			'financial_institution_id'=>$financialInstitutionId,
 			'lg_type'=>$lgType ,
 			'lg_advanced_payment_history_id'=>$lgAdvancedPaymentHistoryId,
+			'lg_renewal_date_history_id'=>$lgRenewalDateHistoryId,
 			'currency'=>$currencyName ,
 			'company_id'=>$companyId ,
 			'beginning_balance'=>$beginningBalance,

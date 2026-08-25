@@ -40,9 +40,9 @@ const showPasswordConfirmation = ref(false);
 </script>
 
 <template>
-    <Head title="Reset Password — CashVero" />
+    <Head :title="$t('Reset Password — CashVero')" />
     <AuthLayout>
-        <Link :href="loginUrl" class="zav-back-link">← Back to sign in</Link>
+        <Link :href="loginUrl" class="zav-back-link">{{ $t('← Back to sign in') }}</Link>
 
         <div v-if="Object.keys(form.errors).length" class="zav-alert zav-alert-danger" role="alert">
             <ul>
@@ -51,14 +51,14 @@ const showPasswordConfirmation = ref(false);
         </div>
 
         <div class="zav-form-header">
-            <h2 class="zav-welcome">Set a new password</h2>
+            <h2 class="zav-welcome">{{ $t('Set a new password') }}</h2>
             <div class="zav-welcome-line"></div>
-            <p class="zav-welcome-sub">Choose a new password for your account</p>
+            <p class="zav-welcome-sub">{{ $t('Choose a new password for your account') }}</p>
         </div>
 
         <form class="zav-form" @submit.prevent="submit">
             <div class="zav-field">
-                <label class="zav-label" for="email">Email Address</label>
+                <label class="zav-label" for="email">{{ $t('Email Address') }}</label>
                 <input
                     id="email"
                     v-model="form.email"
@@ -70,7 +70,7 @@ const showPasswordConfirmation = ref(false);
             </div>
 
             <div class="zav-field">
-                <label class="zav-label" for="password">New Password</label>
+                <label class="zav-label" for="password">{{ $t('New Password') }}</label>
                 <div class="zav-input-wrap">
                     <input
                         id="password"
@@ -97,7 +97,7 @@ const showPasswordConfirmation = ref(false);
             </div>
 
             <div class="zav-field">
-                <label class="zav-label" for="password_confirmation">Confirm New Password</label>
+                <label class="zav-label" for="password_confirmation">{{ $t('Confirm New Password') }}</label>
                 <div class="zav-input-wrap">
                     <input
                         id="password_confirmation"
@@ -123,7 +123,7 @@ const showPasswordConfirmation = ref(false);
             </div>
 
             <button type="submit" class="zav-btn-submit" :disabled="form.processing">
-                {{ form.processing ? 'Resetting…' : 'Reset Password' }}
+                {{ form.processing ? $t('Resetting…') : $t('Reset Password') }}
             </button>
         </form>
     </AuthLayout>

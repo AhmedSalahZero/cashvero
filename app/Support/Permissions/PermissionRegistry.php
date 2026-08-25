@@ -297,6 +297,19 @@ class PermissionRegistry
                 'view' => ['view customer balances'],
                 'update' => ['view customer balances'],
                 'export' => ['view customer balances'],
+                /**
+                 * Recording an internal settlement — offsetting a
+                 * partner's customer balance against their own supplier
+                 * balance. See App\Models\InternalSettlement.
+                 *
+                 * Aliased to 'view customer balances' like every other
+                 * action on this module, so enforcement day does not
+                 * lock out the people who run these balances today. It
+                 * is still its own key, so a role can be denied it
+                 * while keeping read access — worth doing, since unlike
+                 * the rest of this module it WRITES.
+                 */
+                'settle' => ['customer_balance.settle', 'view customer balances'],
             ],
         ],
         'customer_aging' => [

@@ -49,7 +49,7 @@ const showPassword = ref(false);
 </script>
 
 <template>
-    <Head title="Sign In — CashVero" />
+    <Head :title="$t('Sign In — CashVero')" />
     <AuthLayout>
         <div v-if="status" class="zav-alert zav-alert-success" role="alert">{{ status }}</div>
         <div v-if="expiredLogin" class="zav-alert zav-alert-danger" role="alert">{{ expiredLogin }}</div>
@@ -60,14 +60,14 @@ const showPassword = ref(false);
         </div>
 
         <div class="zav-form-header">
-            <h2 class="zav-welcome">Welcome back</h2>
+            <h2 class="zav-welcome">{{ $t('Welcome back') }}</h2>
             <div class="zav-welcome-line"></div>
-            <p class="zav-welcome-sub">Sign in to your workspace to continue</p>
+            <p class="zav-welcome-sub">{{ $t('Sign in to your workspace to continue') }}</p>
         </div>
 
         <form class="zav-form" @submit.prevent="submit">
             <div class="zav-field">
-                <label class="zav-label" for="email">Email Address</label>
+                <label class="zav-label" for="email">{{ $t('Email Address') }}</label>
                 <input
                     id="email"
                     v-model="form.email"
@@ -83,8 +83,8 @@ const showPassword = ref(false);
 
             <div class="zav-field">
                 <div class="zav-pw-label-row">
-                    <label class="zav-label" for="password">Password</label>
-                    <Link :href="passwordRequestUrl" class="zav-forgot">Forgot password?</Link>
+                    <label class="zav-label" for="password">{{ $t('Password') }}</label>
+                    <Link :href="passwordRequestUrl" class="zav-forgot">{{ $t('Forgot password?') }}</Link>
                 </div>
                 <div class="zav-input-wrap">
                     <input
@@ -116,23 +116,23 @@ const showPassword = ref(false);
                         <polyline points="20 6 9 17 4 12" />
                     </svg>
                 </div>
-                <span class="zav-remember-text">Remember me for 30 days</span>
+                <span class="zav-remember-text">{{ $t('Remember me for 30 days') }}</span>
             </div>
 
             <button type="submit" class="zav-btn-submit" :disabled="form.processing">
-                {{ form.processing ? 'Signing In…' : 'Sign In to CashVero' }}
+                {{ form.processing ? $t('Signing In…') : $t('Sign In to CashVero') }}
             </button>
         </form>
 
         <div class="zav-access-note">
             <div class="zav-access-divider">
                 <span class="zav-access-line"></span>
-                <span class="zav-access-text">invitation only</span>
+                <span class="zav-access-text">{{ $t('invitation only') }}</span>
                 <span class="zav-access-line"></span>
             </div>
             <p class="zav-access-copy">
-                Access is by invitation only.<br />
-                Contact your administrator if you need access.
+                {{ $t('Access is by invitation only.') }}<br />
+                {{ $t('Contact your administrator if you need access.') }}
             </p>
         </div>
     </AuthLayout>

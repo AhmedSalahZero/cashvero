@@ -94,7 +94,7 @@ function submit() {
         <div class="p-6">
             <div class="flex items-center gap-3 mb-6">
                 <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                    ← Back to Companies
+                    {{ $t('← Back to Companies') }}
                 </Link>
             </div>
 
@@ -103,7 +103,7 @@ function submit() {
             <form @submit.prevent="submit" class="space-y-6" enctype="multipart/form-data">
                 <!-- Sections -->
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Sections</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Sections') }}</h2>
                     <div class="cvr-form-grid-2">
                         <div v-for="lang in languages" :key="lang.code">
                             <label class="cvr-form-label">Company Name {{ lang.name }} *</label>
@@ -115,10 +115,10 @@ function submit() {
 
                 <!-- Company Information -->
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Company Information</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Company Information') }}</h2>
                     <div class="cvr-form-grid-3">
                         <div>
-                            <label class="cvr-form-label">Systems *</label>
+                            <label class="cvr-form-label">{{ $t('Systems') }} *</label>
                             <div class="space-y-1">
                                 <label v-for="sys in systemOptions" :key="sys" class="flex items-center gap-2">
                                     <input
@@ -131,22 +131,22 @@ function submit() {
                             </div>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Main Functional Currency *</label>
+                            <label class="cvr-form-label">{{ $t('Main Functional Currency') }} *</label>
                             <select v-model="form.main_functional_currency" class="cvr-input w-full px-3 py-2 rounded">
                                 <option v-for="(label, code) in currencies" :key="code" :value="code">{{ label }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Company Image</label>
+                            <label class="cvr-form-label">{{ $t('Company Image') }}</label>
                             <input type="file" @change="onImageChange" class="cvr-input w-full px-3 py-2 rounded" />
-                            <img v-if="model?.image_url" :src="model.image_url" class="w-20 h-20 object-cover rounded mt-2" alt="current image" />
+                            <img v-if="model?.image_url" :src="model.image_url" class="w-20 h-20 object-cover rounded mt-2" :alt="$t('current image')" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Opening Balance Date *</label>
+                            <label class="cvr-form-label">{{ $t('Opening Balance Date') }} *</label>
                             <input v-model="form.opening_balance_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
-                            <p v-if="errorFor('opening_balance_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('opening_balance_date') }}</p>
+                            <p v-if="errorFor('opening_balance_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor($t('opening_balance_date')) }}</p>
                             <p class="text-xs mt-1 cvr-text-muted">
-                                This is the reference date for all opening balances (Safe, Customers, Suppliers) and the earliest allowed balance date on any bank account for this company.
+                                {{ $t('This is the reference date for all opening balances (Safe, Customers, Suppliers) and the earliest allowed balance date on any bank account for this company.') }}
                             </p>
                         </div>
                     </div>
@@ -154,18 +154,18 @@ function submit() {
 
                 <!-- Odoo Integration -->
                 <div class="cvr-card">
-                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">Odoo Integration</h2>
+                    <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Odoo Integration') }}</h2>
                     <div class="cvr-form-grid-3 mb-4">
                         <div>
-                            <label class="cvr-form-label">Database URL</label>
-                            <input v-model="form.odoo_db_url" type="text" placeholder="Odoo Database URL" class="cvr-input w-full px-3 py-2 rounded" />
+                            <label class="cvr-form-label">{{ $t('Database URL') }}</label>
+                            <input v-model="form.odoo_db_url" type="text" :placeholder="$t('Odoo Database URL')" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Database Name</label>
-                            <input v-model="form.odoo_db_name" type="text" placeholder="Odoo Database Name" class="cvr-input w-full px-3 py-2 rounded" />
+                            <label class="cvr-form-label">{{ $t('Database Name') }}</label>
+                            <input v-model="form.odoo_db_name" type="text" :placeholder="$t('Odoo Database Name')" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Integration Start Date</label>
+                            <label class="cvr-form-label">{{ $t('Integration Start Date') }}</label>
                             <input v-model="form.odoo_integration_start_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
@@ -173,28 +173,28 @@ function submit() {
                     <!-- Per-user Odoo credentials — edit mode only, and
                          only when the company already has users. -->
                     <div v-if="isEdit && userCredentials.length" class="space-y-3">
-                        <h3 class="text-xs font-semibold cvr-text-muted uppercase tracking-wide">Per-User Odoo Credentials</h3>
+                        <h3 class="text-xs font-semibold cvr-text-muted uppercase tracking-wide">{{ $t('Per-User Odoo Credentials') }}</h3>
                         <div v-for="u in userCredentials" :key="u.id" class="cvr-form-grid-3">
                             <div>
-                                <label class="cvr-form-label">User</label>
+                                <label class="cvr-form-label">{{ $t('User') }}</label>
                                 <input disabled :value="u.name" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">User Name</label>
-                                <input v-model="u.odoo_username" type="text" placeholder="Odoo User Name" class="cvr-input w-full px-3 py-2 rounded" />
+                                <label class="cvr-form-label">{{ $t('User Name') }}</label>
+                                <input v-model="u.odoo_username" type="text" :placeholder="$t('Odoo User Name')" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Password / API Key</label>
-                                <input v-model="u.odoo_db_password" type="text" placeholder="Odoo Database Password / API Key" class="cvr-input w-full px-3 py-2 rounded" />
+                                <label class="cvr-form-label">{{ $t('Password / API Key') }}</label>
+                                <input v-model="u.odoo_db_password" type="text" :placeholder="$t('Odoo Database Password / API Key')" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="flex justify-end gap-2">
-                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">Cancel</Link>
+                    <Link :href="backUrl" class="cvr-btn-secondary px-4 py-2 rounded border">{{ $t('Cancel') }}</Link>
                     <button type="submit" :disabled="submitting" class="cvr-btn-primary px-4 py-2 rounded">
-                        {{ submitting ? 'Saving...' : 'Save' }}
+                        {{ submitting ? $t('Saving...') : $t('Save') }}
                     </button>
                 </div>
             </form>
