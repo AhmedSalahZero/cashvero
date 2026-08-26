@@ -52,7 +52,7 @@ function fmt(amount) {
 
             <template v-else>
                 <p class="text-sm cvr-text-secondary mt-4 mb-6">
-                    As of <span class="cvr-text-primary font-medium">{{ date }}</span>
+                    {{ $t('As of') }} <span class="cvr-text-primary font-medium">{{ date }}</span>
                 </p>
 
                 <!-- KPI row -->
@@ -60,28 +60,28 @@ function fmt(amount) {
                     <div class="cvr-kpi-card">
                         <div class="cvr-kpi-icon cvr-kpi-icon-green">🗄️</div>
                         <div>
-                            <p class="cvr-kpi-label">Cash In Safe Entries</p>
+                            <p class="cvr-kpi-label">{{ $t('Cash In Safe Entries') }}</p>
                             <p class="cvr-kpi-value">{{ cashInSafe.length }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card">
                         <div class="cvr-kpi-icon cvr-kpi-icon-blue">📄</div>
                         <div>
-                            <p class="cvr-kpi-label">Cheques In Safe</p>
+                            <p class="cvr-kpi-label">{{ $t('Cheques In Safe') }}</p>
                             <p class="cvr-kpi-value">{{ chequesInSafe.length }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card">
                         <div class="cvr-kpi-icon cvr-kpi-icon-copper">⏳</div>
                         <div>
-                            <p class="cvr-kpi-label">Cheques Under Collection</p>
+                            <p class="cvr-kpi-label">{{ $t('Cheques Under Collection') }}</p>
                             <p class="cvr-kpi-value">{{ chequesUnderCollection.length }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card">
                         <div class="cvr-kpi-icon cvr-kpi-icon-blue">💸</div>
                         <div>
-                            <p class="cvr-kpi-label">Payable Cheques</p>
+                            <p class="cvr-kpi-label">{{ $t('Payable Cheques') }}</p>
                             <p class="cvr-kpi-value">{{ payableCheques.length }}</p>
                         </div>
                     </div>
@@ -89,15 +89,15 @@ function fmt(amount) {
 
                 <!-- Cash In Safe -->
                 <div class="mb-8">
-                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary mb-3">Cash In Safe</h2>
+                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary mb-3">{{ $t('Cash In Safe') }}</h2>
                     <div class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto">
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-4 py-3 text-start">Branch</th>
-                                    <th class="px-4 py-3 text-start">Currency</th>
-                                    <th class="px-4 py-3 text-right">Amount</th>
-                                    <th class="px-4 py-3 text-right">Exchange Rate</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Branch') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Currency') }}</th>
+                                    <th class="px-4 py-3 text-right">{{ $t('Amount') }}</th>
+                                    <th class="px-4 py-3 text-right">{{ $t('Exchange Rate') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -108,7 +108,7 @@ function fmt(amount) {
                                     <td class="px-4 py-3 text-right cvr-num">{{ row.exchange_rate }}</td>
                                 </tr>
                                 <tr v-if="cashInSafe.length === 0">
-                                    <td colspan="4" class="px-4 py-6 text-center cvr-text-muted">No cash in safe entries.</td>
+                                    <td colspan="4" class="px-4 py-6 text-center cvr-text-muted">{{ $t('No cash in safe entries.') }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -117,17 +117,17 @@ function fmt(amount) {
 
                 <!-- Cheques In Safe -->
                 <div class="mb-8">
-                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary mb-3">Cheques In Safe</h2>
+                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary mb-3">{{ $t('Cheques In Safe') }}</h2>
                     <div class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto">
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-4 py-3 text-start">Customer</th>
-                                    <th class="px-4 py-3 text-start">Cheque #</th>
-                                    <th class="px-4 py-3 text-start">Drawee Bank</th>
-                                    <th class="px-4 py-3 text-start">Currency</th>
-                                    <th class="px-4 py-3 text-right">Amount</th>
-                                    <th class="px-4 py-3 text-start">Due Date</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Customer') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Cheque #') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Drawee Bank') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Currency') }}</th>
+                                    <th class="px-4 py-3 text-right">{{ $t('Amount') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Due Date') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -140,7 +140,7 @@ function fmt(amount) {
                                     <td class="px-4 py-3 cvr-text-secondary">{{ row.due_date || '—' }}</td>
                                 </tr>
                                 <tr v-if="chequesInSafe.length === 0">
-                                    <td colspan="6" class="px-4 py-6 text-center cvr-text-muted">No cheques in safe.</td>
+                                    <td colspan="6" class="px-4 py-6 text-center cvr-text-muted">{{ $t('No cheques in safe.') }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -149,20 +149,20 @@ function fmt(amount) {
 
                 <!-- Cheques Under Collection -->
                 <div class="mb-8">
-                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary mb-3">Cheques Under Collection</h2>
+                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary mb-3">{{ $t('Cheques Under Collection') }}</h2>
                     <div class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto">
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-4 py-3 text-start">Customer</th>
-                                    <th class="px-4 py-3 text-start">Cheque #</th>
-                                    <th class="px-4 py-3 text-start">Drawee Bank</th>
-                                    <th class="px-4 py-3 text-start">Currency</th>
-                                    <th class="px-4 py-3 text-right">Amount</th>
-                                    <th class="px-4 py-3 text-start">Due Date</th>
-                                    <th class="px-4 py-3 text-start">Deposit Date</th>
-                                    <th class="px-4 py-3 text-start">Account Type</th>
-                                    <th class="px-4 py-3 text-start">Account Number</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Customer') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Cheque #') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Drawee Bank') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Currency') }}</th>
+                                    <th class="px-4 py-3 text-right">{{ $t('Amount') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Due Date') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Deposit Date') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Account Type') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Account Number') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -178,7 +178,7 @@ function fmt(amount) {
                                     <td class="px-4 py-3 cvr-text-secondary">{{ row.account_number || '—' }}</td>
                                 </tr>
                                 <tr v-if="chequesUnderCollection.length === 0">
-                                    <td colspan="9" class="px-4 py-6 text-center cvr-text-muted">No cheques under collection.</td>
+                                    <td colspan="9" class="px-4 py-6 text-center cvr-text-muted">{{ $t('No cheques under collection.') }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -187,19 +187,19 @@ function fmt(amount) {
 
                 <!-- Payable Cheques -->
                 <div class="mb-4">
-                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary mb-3">Payable Cheques</h2>
+                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary mb-3">{{ $t('Payable Cheques') }}</h2>
                     <div class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto">
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-4 py-3 text-start">Supplier</th>
-                                    <th class="px-4 py-3 text-start">Cheque #</th>
-                                    <th class="px-4 py-3 text-start">Delivery Bank</th>
-                                    <th class="px-4 py-3 text-start">Currency</th>
-                                    <th class="px-4 py-3 text-right">Amount</th>
-                                    <th class="px-4 py-3 text-start">Due Date</th>
-                                    <th class="px-4 py-3 text-start">Account Type</th>
-                                    <th class="px-4 py-3 text-start">Account Number</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Supplier') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Cheque #') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Delivery Bank') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Currency') }}</th>
+                                    <th class="px-4 py-3 text-right">{{ $t('Amount') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Due Date') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Account Type') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Account Number') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -214,7 +214,7 @@ function fmt(amount) {
                                     <td class="px-4 py-3 cvr-text-secondary">{{ row.account_number || '—' }}</td>
                                 </tr>
                                 <tr v-if="payableCheques.length === 0">
-                                    <td colspan="8" class="px-4 py-6 text-center cvr-text-muted">No payable cheques.</td>
+                                    <td colspan="8" class="px-4 py-6 text-center cvr-text-muted">{{ $t('No payable cheques.') }}</td>
                                 </tr>
                             </tbody>
                         </table>

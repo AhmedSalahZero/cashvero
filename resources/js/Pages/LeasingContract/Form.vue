@@ -98,7 +98,7 @@ function deleteSchedule() {
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">
-                {{ isEdit ? $t('Edit') : $t('Add') }} Leasing Contract
+                {{ isEdit ? $t('Edit') : $t('Add') }} {{ $t('Leasing Contract') }}
             </h1>
             <p class="text-sm cvr-text-muted mb-6">{{ leasingCompany.name }}</p>
 

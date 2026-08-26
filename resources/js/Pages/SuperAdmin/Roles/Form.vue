@@ -184,16 +184,16 @@ function submit() {
                     />
                     <div class="flex items-center gap-2 flex-wrap">
                         <button type="button" @click="setMany(visibleKeys, true)" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
-                            Select {{ query ? 'shown' : 'all' }}
+                            {{ $t('Select') }} {{ query ? 'shown' : 'all' }}
                         </button>
                         <button type="button" @click="setMany(visibleKeys, false)" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
-                            Clear {{ query ? 'shown' : 'all' }}
+                            {{ $t('Clear') }} {{ query ? 'shown' : 'all' }}
                         </button>
                         <button type="button" @click="expandAll" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">{{ $t('Expand') }}</button>
                         <button type="button" @click="collapseAll" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">{{ $t('Collapse') }}</button>
                     </div>
                     <span class="text-sm cvr-text-muted tabular-nums whitespace-nowrap">
-                        {{ countSelected(totalKeys) }} / {{ totalKeys.length }} selected
+                        {{ countSelected(totalKeys) }} / {{ totalKeys.length }} {{ $t('selected') }}
                     </span>
                 </div>
 
@@ -268,7 +268,7 @@ function submit() {
                     </div>
 
                     <div v-if="filteredTree.length === 0" class="cvr-card p-8 text-center cvr-text-muted">
-                        Nothing matches “{{ search }}”.
+                        {{ $t('Nothing matches “') }}{{ search }}”.
                     </div>
                 </div>
 

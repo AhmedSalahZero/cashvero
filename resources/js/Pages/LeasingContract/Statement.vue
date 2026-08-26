@@ -77,8 +77,7 @@ const hasPeriod = computed(() => Boolean(props.period?.start_formatted || props.
                 </span>
             </h1>
             <p class="text-sm cvr-text-muted mb-6">
-                {{ kpis.transactionCount }} movement{{ kpis.transactionCount === 1 ? '' : 's' }}<template v-if="hasPeriod"> between {{ period.start_formatted || '…' }} and {{ period.end_formatted || '…' }}</template>.
-                Contract runs {{ contract.start_date_formatted }} → {{ contract.end_date_formatted }} at {{ contract.interest_rate_formatted }}.
+                {{ kpis.transactionCount }} {{ $t('movement') }}{{ kpis.transactionCount === 1 ? '' : 's' }}<template v-if="hasPeriod"> {{ $t('between') }} {{ period.start_formatted || '…' }} {{ $t('and') }} {{ period.end_formatted || '…' }}</template>{{ $t('. Contract runs') }} {{ contract.start_date_formatted }} → {{ contract.end_date_formatted }} {{ $t('at') }} {{ contract.interest_rate_formatted }}.
             </p>
 
             <!-- KPI row — computed over the whole period, not the page -->
@@ -116,7 +115,7 @@ const hasPeriod = computed(() => Boolean(props.period?.start_formatted || props.
                     <div>
                         <p class="cvr-kpi-label">{{ $t('Available Room') }}</p>
                         <p class="cvr-kpi-value cvr-num-green">{{ fmt(kpis.availableRoom) }}</p>
-                        <p class="text-xs cvr-text-muted">of {{ fmt(contract.limit) }} limit</p>
+                        <p class="text-xs cvr-text-muted">{{ $t('of') }} {{ fmt(contract.limit) }} {{ $t('limit') }}</p>
                     </div>
                 </div>
             </div>
@@ -159,9 +158,9 @@ const hasPeriod = computed(() => Boolean(props.period?.start_formatted || props.
                             </tr>
                             <tr v-if="ledger.length === 0">
                                 <td colspan="10" class="px-4 py-8 text-center cvr-text-muted">
-                                    <template v-if="hasPeriod">No movements found for this date range.</template>
+                                    <template v-if="hasPeriod">{{ $t('No movements found for this date range.') }}</template>
                                     <template v-else>
-                                        Nothing has been paid out of this contract yet — the full limit of {{ fmt(contract.limit) }} is available.
+                                        {{ $t('Nothing has been paid out of this contract yet — the full limit of') }} {{ fmt(contract.limit) }} {{ $t('is available.') }}
                                     </template>
                                 </td>
                             </tr>

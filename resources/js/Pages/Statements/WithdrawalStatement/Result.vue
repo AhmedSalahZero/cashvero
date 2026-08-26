@@ -57,13 +57,13 @@ function goToPage(page) {
 
             <div class="flex items-start justify-between flex-wrap gap-2 mb-1">
                 <h1 class="text-xl font-semibold cvr-text-primary">
-                    {{ tableNameFormatted }} Withdrawals Settlement Report
+                    {{ tableNameFormatted }} {{ $t('Withdrawals Settlement Report') }}
                 </h1>
                 <a :href="urls.exportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
                     {{ $t('⬇️ Export to Excel') }}
                 </a>
             </div>
-            <p class="text-sm cvr-text-muted mb-6">{{ kpis.transactionCount }} withdrawals in this date range.</p>
+            <p class="text-sm cvr-text-muted mb-6">{{ kpis.transactionCount }} {{ $t('withdrawals in this date range.') }}</p>
 
             <!-- KPI row -->
             <div class="cvr-kpi-row mb-6">

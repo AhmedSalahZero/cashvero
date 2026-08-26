@@ -206,18 +206,18 @@ function submit() {
         <div class="p-6 mx-auto">
             <div class="flex items-center gap-3 mb-1">
                 <Link :href="urls.back" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                    ← Back to {{ pageTitle }}
+                    {{ $t('← Back to') }} {{ $t(pageTitle) }}
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-6">
-                {{ isEdit ? $t('Edit') : $t('Create') }} {{ pageTitle }}
+                {{ isEdit ? $t('Edit') : $t('Create') }} {{ $t(pageTitle) }}
             </h1>
 
             <FormErrorSummary />
 
             <form @submit.prevent="submit" class="space-y-6">
                 <div class="cvr-card-bg cvr-border border rounded-lg p-5">
-                    <h2 class="text-base font-medium cvr-text-primary mb-4">{{ pageTitle }}</h2>
+                    <h2 class="text-base font-medium cvr-text-primary mb-4">{{ $t(pageTitle) }}</h2>
                     <div class="cvr-form-grid-3">
                         <div>
                             <label class="cvr-form-label">{{ $t('Factoring Date') }} *</label>

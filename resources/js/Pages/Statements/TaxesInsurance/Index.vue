@@ -111,20 +111,20 @@ function fmt(value) {
 
             <template v-if="hasResults">
                 <div class="cvr-card-bg cvr-border border rounded-lg p-4 mb-4 flex items-center justify-between">
-                    <span class="text-sm cvr-text-muted">{{ rows.length }} payment{{ rows.length === 1 ? '' : 's' }}</span>
-                    <span class="text-sm cvr-text-primary font-medium">Total Paid: <span class="cvr-num">{{ fmt(totalAmount) }}</span></span>
+                    <span class="text-sm cvr-text-muted">{{ rows.length }} {{ $t('payment') }}{{ rows.length === 1 ? '' : 's' }}</span>
+                    <span class="text-sm cvr-text-primary font-medium">{{ $t('Total Paid:') }} <span class="cvr-num">{{ fmt(totalAmount) }}</span></span>
                 </div>
 
                 <div class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto">
                     <table class="min-w-full text-sm">
                         <thead class="cvr-table-head">
                             <tr>
-                                <th class="px-3 py-2 text-start">Date</th>
-                                <th class="px-3 py-2 text-start">Currency</th>
-                                <th class="px-3 py-2 text-start">Paid To</th>
-                                <th class="px-3 py-2 text-right">Amount</th>
-                                <th class="px-3 py-2 text-right">Accumulated Amount</th>
-                                <th class="px-3 py-2 text-start">Comment</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Date') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Currency') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Paid To') }}</th>
+                                <th class="px-3 py-2 text-right">{{ $t('Amount') }}</th>
+                                <th class="px-3 py-2 text-right">{{ $t('Accumulated Amount') }}</th>
+                                <th class="px-3 py-2 text-start">{{ $t('Comment') }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -139,7 +139,7 @@ function fmt(value) {
                                 </td>
                             </tr>
                             <tr v-if="rows.length === 0">
-                                <td colspan="6" class="px-4 py-8 text-center cvr-text-muted">No payments found for this filter.</td>
+                                <td colspan="6" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No payments found for this filter.') }}</td>
                             </tr>
                         </tbody>
                     </table>

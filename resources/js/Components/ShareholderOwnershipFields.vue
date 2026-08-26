@@ -64,20 +64,20 @@ const hasNoShareholders = computed(() => props.shareholders.length === 0);
 <template>
     <template v-if="canManage">
         <div>
-            <label class="cvr-form-label">Account Owner *</label>
+            <label class="cvr-form-label">{{ $t('Account Owner *') }}</label>
             <select
                 :value="ownerValue"
                 :disabled="disabled"
                 @change="onOwnerChange"
                 class="cvr-select w-full px-2 py-1.5 rounded text-sm"
             >
-                <option value="company">Company</option>
-                <option value="shareholder">Shareholder</option>
+                <option value="company">{{ $t('Company') }}</option>
+                <option value="shareholder">{{ $t('Shareholder') }}</option>
             </select>
         </div>
 
         <div v-if="isShareholderAccount">
-            <label class="cvr-form-label">Shareholder *</label>
+            <label class="cvr-form-label">{{ $t('Shareholder *') }}</label>
             <select
                 :value="shareholderPartnerId ?? ''"
                 :disabled="disabled || hasNoShareholders"
@@ -86,13 +86,13 @@ const hasNoShareholders = computed(() => props.shareholders.length === 0);
                 :class="{ 'border-2': ownerError }"
                 :style="ownerError ? { borderColor: 'var(--cvr-danger)' } : {}"
             >
-                <option value="" disabled>Select</option>
+                <option value="" disabled>{{ $t('Select') }}</option>
                 <option v-for="shareholder in shareholders" :key="shareholder.id" :value="shareholder.id">
                     {{ shareholder.name }}
                 </option>
             </select>
             <p v-if="hasNoShareholders" class="text-xs mt-1 cvr-text-muted">
-                No shareholders exist for this company yet — add one from the Partners screen first.
+                {{ $t('No shareholders exist for this company yet — add one from the Partners screen first.') }}
             </p>
             <p v-else-if="ownerError" class="text-xs mt-1" style="color: var(--cvr-danger-text);">
                 {{ ownerError }}

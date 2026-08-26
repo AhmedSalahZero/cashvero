@@ -148,7 +148,7 @@ function submit() {
                         </div>
                         <div class="cvr-form-grid-5">
                             <div>
-                                <label class="cvr-form-label">Invoice Amount [{{ row.currency }}]</label>
+                                <label class="cvr-form-label">{{ $t('Invoice Amount [') }}{{ row.currency }}]</label>
                                 <input disabled :value="row.net_invoice_amount_formatted" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                             </div>
                             <div>

@@ -27,7 +27,7 @@ function formatAmount(value) {
     <AppLayout>
         <div class="p-6">
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('LG & LC Facilities') }}</h1>
-            <p class="text-sm cvr-text-blue mb-6">Every Letter of Guarantee and Letter of Credit facility across every bank for {{ company.name }}</p>
+            <p class="text-sm cvr-text-blue mb-6">{{ $t('Every Letter of Guarantee and Letter of Credit facility across every bank for') }} {{ company.name }}</p>
 
             <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
                 <div class="cvr-search-bar flex items-center gap-2 px-3 py-1.5 w-72">

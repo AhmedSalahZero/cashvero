@@ -183,34 +183,34 @@ function tableRows(section) {
 
             <template v-for="section in facilitySections" :key="section.key">
                 <template v-if="section.canShow">
-                    <div class="cvr-section-heading"><h2>{{ section.label }} [{{ activeCurrency }}]</h2></div>
+                    <div class="cvr-section-heading"><h2>{{ $t(section.label) }} [{{ activeCurrency }}]</h2></div>
 
                     <div class="cvr-kpi-row-4 mb-6">
                         <div class="cvr-kpi-card cursor-pointer" @click="openLimitDetails(section.key)">
                             <div class="cvr-kpi-icon cvr-kpi-icon-blue">🎯</div>
-                            <div><p class="cvr-kpi-label">Limit</p><p class="cvr-kpi-value cvr-num-blue">{{ fmt(reportFor(section.key).limit) }}</p></div>
+                            <div><p class="cvr-kpi-label">{{ $t('Limit') }}</p><p class="cvr-kpi-value cvr-num-blue">{{ fmt(reportFor(section.key).limit) }}</p></div>
                         </div>
                         <div class="cvr-kpi-card">
                             <div class="cvr-kpi-icon cvr-kpi-icon-copper">📉</div>
-                            <div><p class="cvr-kpi-label">Outstanding Balance</p><p class="cvr-kpi-value cvr-num-amber">{{ fmt(reportFor(section.key).outstanding_balance) }}</p></div>
+                            <div><p class="cvr-kpi-label">{{ $t('Outstanding Balance') }}</p><p class="cvr-kpi-value cvr-num-amber">{{ fmt(reportFor(section.key).outstanding_balance) }}</p></div>
                         </div>
                         <div class="cvr-kpi-card">
                             <div class="cvr-kpi-icon cvr-kpi-icon-green">✅</div>
-                            <div><p class="cvr-kpi-label">Available Room</p><p class="cvr-kpi-value cvr-num-green">{{ fmt(reportFor(section.key).room) }}</p></div>
+                            <div><p class="cvr-kpi-label">{{ $t('Available Room') }}</p><p class="cvr-kpi-value cvr-num-green">{{ fmt(reportFor(section.key).room) }}</p></div>
                         </div>
                         <div class="cvr-kpi-card">
                             <div class="cvr-kpi-icon cvr-kpi-icon-copper">🛡</div>
-                            <div><p class="cvr-kpi-label">Cash Cover</p><p class="cvr-kpi-value cvr-num">{{ fmt(reportFor(section.key).cash_cover) }}</p></div>
+                            <div><p class="cvr-kpi-label">{{ $t('Cash Cover') }}</p><p class="cvr-kpi-value cvr-num">{{ fmt(reportFor(section.key).cash_cover) }}</p></div>
                         </div>
                     </div>
 
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                         <div class="cvr-chart-card" :style="{ borderTopColor: `var(${section.accent})` }">
-                            <h4 class="text-sm font-semibold cvr-text-primary mb-2">Outstanding per Type</h4>
+                            <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ $t('Outstanding per Type') }}</h4>
                             <DonutChart3D :data="typeChartData(section)" :colors="['--cvr-blue', '--cvr-green-bright', '--cvr-copper-bright', '--cvr-num-amber']" />
                         </div>
                         <div class="cvr-chart-card" :style="{ borderTopColor: `var(${section.accent})` }">
-                            <h4 class="text-sm font-semibold cvr-text-primary mb-2">Outstanding per Financial Institution</h4>
+                            <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ $t('Outstanding per Financial Institution') }}</h4>
                             <DonutChart3D :data="institutionChartData(section)" :colors="['--cvr-copper-bright', '--cvr-blue', '--cvr-green-bright', '--cvr-num-amber', '--cvr-num-red']" />
                         </div>
                     </div>
@@ -220,14 +220,14 @@ function tableRows(section) {
                             <thead class="cvr-table-head">
                                 <tr>
                                     <th class="px-4 py-2 text-start">#</th>
-                                    <th class="px-4 py-2 text-start">Financial Institution</th>
-                                    <th class="px-4 py-2 text-start">Type</th>
-                                    <th class="px-4 py-2 text-start">Source</th>
-                                    <th class="px-4 py-2 text-start">Status</th>
-                                    <th v-if="section.key === 'lg'" class="px-4 py-2 text-right">Count</th>
-                                    <th v-if="section.key === 'lc'" class="px-4 py-2 text-right">Limit</th>
-                                    <th class="px-4 py-2 text-right">Outstanding</th>
-                                    <th class="px-4 py-2 text-right">Cash Cover</th>
+                                    <th class="px-4 py-2 text-start">{{ $t('Financial Institution') }}</th>
+                                    <th class="px-4 py-2 text-start">{{ $t('Type') }}</th>
+                                    <th class="px-4 py-2 text-start">{{ $t('Source') }}</th>
+                                    <th class="px-4 py-2 text-start">{{ $t('Status') }}</th>
+                                    <th v-if="section.key === 'lg'" class="px-4 py-2 text-right">{{ $t('Count') }}</th>
+                                    <th v-if="section.key === 'lc'" class="px-4 py-2 text-right">{{ $t('Limit') }}</th>
+                                    <th class="px-4 py-2 text-right">{{ $t('Outstanding') }}</th>
+                                    <th class="px-4 py-2 text-right">{{ $t('Cash Cover') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -250,7 +250,7 @@ function tableRows(section) {
                                     <td class="px-4 py-2 text-right cvr-num">{{ fmt(row.cash_cover) }}</td>
                                 </tr>
                                 <tr v-if="!tableRows(section).length">
-                                    <td colspan="8" class="px-4 py-8 text-center cvr-text-muted">No {{ section.label.toLowerCase() }} outstanding for {{ activeCurrency }}.</td>
+                                    <td colspan="8" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No') }} {{ section.label.toLowerCase() }} {{ $t('outstanding for') }} {{ activeCurrency }}.</td>
                                 </tr>
                             </tbody>
                         </table>

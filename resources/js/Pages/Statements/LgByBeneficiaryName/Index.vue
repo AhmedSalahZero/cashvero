@@ -142,7 +142,7 @@ function submit() {
                     {{ $t('View Report') }}
                 </button>
                 <ul v-if="!canSubmit" class="text-xs mt-2 space-y-0.5" style="color: var(--cvr-danger-text);">
-                    <li v-if="needsDate && !startDate">— {{ status === 'cancelled' ? $t('Cancelled From Date') : $t('From Date') }} is not set.</li>
+                    <li v-if="needsDate && !startDate">— {{ status === 'cancelled' ? $t('Cancelled From Date') : $t('From Date') }} {{ $t('is not set.') }}</li>
                     <li v-if="!currency">{{ $t('— Currency is not selected.') }}</li>
                     <li v-if="selectedBeneficiaryIds.length === 0">{{ $t('— No beneficiary is selected yet (open the dropdown and pick at least one, or Select All).') }}</li>
                 </ul>

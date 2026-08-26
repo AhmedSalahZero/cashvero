@@ -240,11 +240,11 @@ function submitUnmarkAsPaid() {
                 </div>
                 <template v-else>
                     <div>
-                        <label class="cvr-form-label">From</label>
+                        <label class="cvr-form-label">{{ $t('From') }}</label>
                         <input v-model="filterFrom" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">To</label>
+                        <label class="cvr-form-label">{{ $t('To') }}</label>
                         <input v-model="filterTo" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                 </template>
@@ -262,7 +262,7 @@ function submitUnmarkAsPaid() {
                     class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm"
                     :class="{ 'opacity-40 cursor-not-allowed': !selectedIds.length }"
                 >
-                    📖 Batch Mark As Paid ({{ selectedIds.length }})
+                    {{ $t('📖 Batch Mark As Paid (') }}{{ selectedIds.length }})
                 </button>
             </div>
 
@@ -278,39 +278,39 @@ function submitUnmarkAsPaid() {
                             <th class="px-4 py-3 text-start">{{ $t('Payment Date') }}</th>
 
                             <template v-if="activeTab === 'payable_cheque'">
-                                <th class="px-4 py-3 text-start">Cheque Number</th>
-                                <th class="px-4 py-3 text-start">Cheque Amount</th>
-                                <th class="px-4 py-3 text-start">Currency</th>
-                                <th class="px-8 py-3 text-start">Payment Bank</th>
-                                <th class="px-4 py-3 text-start">Account Type</th>
-                                <th class="px-4 py-3 text-start">Account No</th>
-                                <th class="px-4 py-3 text-start">Due Date</th>
-                                <th class="px-4 py-3 text-start">Due After Days</th>
-                                <th class="px-4 py-3 text-start">Status</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Cheque Number') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Cheque Amount') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Currency') }}</th>
+                                <th class="px-8 py-3 text-start">{{ $t('Payment Bank') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Account Type') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Account No') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Due Date') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Due After Days') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Status') }}</th>
                             </template>
 
                             <template v-else-if="activeTab === 'outgoing-transfer'">
-                                <th class="px-4 py-3 text-start">Payment Bank</th>
-                                <th class="px-4 py-3 text-start">Transfer Amount</th>
-                                <th class="px-4 py-3 text-start">Currency</th>
-                                <th class="px-4 py-3 text-start">Account Type</th>
-                                <th class="px-4 py-3 text-start">Account Number</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Payment Bank') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Transfer Amount') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Currency') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Account Type') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Account Number') }}</th>
                             </template>
 
                             <template v-else-if="activeTab === 'cash_payment'">
-                                <th class="px-4 py-3 text-start">Branch</th>
-                                <th class="px-4 py-3 text-start">Payment Amount</th>
-                                <th class="px-4 py-3 text-start">Currency</th>
-                                <th class="px-4 py-3 text-start">Receipt Number</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Branch') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Payment Amount') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Currency') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Receipt Number') }}</th>
                             </template>
 
                             <!-- No bank / account type / account number here:
                                  the leasing company is the paying party. -->
                             <template v-else-if="activeTab === 'leasing_payment'">
-                                <th class="px-4 py-3 text-start">Leasing Company</th>
-                                <th class="px-4 py-3 text-start">Contract Name</th>
-                                <th class="px-4 py-3 text-start">Paid Amount</th>
-                                <th class="px-4 py-3 text-start">Currency</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Leasing Company') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Contract Name') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Paid Amount') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Currency') }}</th>
                             </template>
 
                             <th class="px-4 py-3 text-start">{{ $t('Control') }}</th>
@@ -371,16 +371,16 @@ function submitUnmarkAsPaid() {
                                     <button v-if="row.is_fully_integrated_with_odoo" @click="integratedTarget = row" class="cvr-action-btn" :title="$t('Fully Integrated')">👍</button>
 
                                     <template v-if="activeTab === 'payable_cheque'">
-                                        <Link v-if="!row.is_open_balance" :href="row.edit_url" class="cvr-action-btn" title="Edit Cheque">✏️</Link>
-                                        <button v-if="permissions.canMarkAsPaid && row.is_due && !row.is_paid" @click="openMarkAsPaid(row)" class="cvr-action-btn" title="Mark As Paid">🏦</button>
-                                        <button v-if="permissions.canMarkAsPaid && row.is_paid" @click="unmarkTarget = row" class="cvr-action-btn" title="Mark As Unpaid">↩️</button>
-                                        <button v-if="!row.is_open_balance && permissions.canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Delete">🗑️</button>
+                                        <Link v-if="!row.is_open_balance" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit Cheque')">✏️</Link>
+                                        <button v-if="permissions.canMarkAsPaid && row.is_due && !row.is_paid" @click="openMarkAsPaid(row)" class="cvr-action-btn" :title="$t('Mark As Paid')">🏦</button>
+                                        <button v-if="permissions.canMarkAsPaid && row.is_paid" @click="unmarkTarget = row" class="cvr-action-btn" :title="$t('Mark As Unpaid')">↩️</button>
+                                        <button v-if="!row.is_open_balance && permissions.canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Delete')">🗑️</button>
                                     </template>
 
                                     <template v-else>
                                         <template v-if="!row.is_open_balance">
-                                            <Link v-if="permissions.canUpdate" :href="row.edit_url" class="cvr-action-btn" title="Edit">✏️</Link>
-                                            <button v-if="permissions.canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Delete">🗑️</button>
+                                            <Link v-if="permissions.canUpdate" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</Link>
+                                            <button v-if="permissions.canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Delete')">🗑️</button>
                                         </template>
                                     </template>
                                 </div>
@@ -458,7 +458,7 @@ function submitUnmarkAsPaid() {
             <div v-if="markPaidTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">
-                        Mark {{ markPaidTarget.ids.length > 1 ? $t('these cheques') : $t('this cheque') }} as paid?
+                        {{ $t('Mark') }} {{ markPaidTarget.ids.length > 1 ? $t('these cheques') : $t('this cheque') }} {{ $t('as paid?') }}
                     </h2>
                     <div class="mb-4">
                         <label class="cvr-form-label">{{ $t('Actual Payment Date') }} *</label>

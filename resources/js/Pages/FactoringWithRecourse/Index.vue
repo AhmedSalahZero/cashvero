@@ -234,14 +234,14 @@ function destroyRow() {
                             <td class="px-4 py-3 cvr-num">{{ Number(row.received_amount).toLocaleString('en-EG') }}</td>
                             <td class="px-4 py-3">
                                 <template v-if="row.is_collected">
-                                    <span class="cvr-badge cvr-badge-active">Collected</span>
+                                    <span class="cvr-badge cvr-badge-active">{{ $t('Collected') }}</span>
                                     <div v-if="row.collection_date" class="text-xs cvr-text-muted mt-1">{{ row.collection_date }}</div>
                                 </template>
                                 <template v-else-if="row.is_rejected">
-                                    <span class="cvr-badge cvr-badge-overdue">Rejected</span>
+                                    <span class="cvr-badge cvr-badge-overdue">{{ $t('Rejected') }}</span>
                                     <div v-if="row.rejection_date" class="text-xs cvr-text-muted mt-1">{{ row.rejection_date }}</div>
                                     <div v-if="row.uncollected_invoice_charges > 0" class="text-xs cvr-text-muted mt-1">
-                                        Uncollected Invoices Charges: {{ Number(row.uncollected_invoice_charges).toLocaleString('en-EG') }}
+                                        {{ $t('Uncollected Invoices Charges:') }} {{ Number(row.uncollected_invoice_charges).toLocaleString('en-EG') }}
                                     </div>
                                 </template>
                                 <span v-else class="cvr-badge cvr-badge-pending">{{ $t('Pending') }}</span>

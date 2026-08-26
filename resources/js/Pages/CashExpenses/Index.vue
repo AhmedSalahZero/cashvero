@@ -119,8 +119,8 @@ function destroyRow() {
                                 <td class="px-4 py-3 text-center" @click.stop>
                                     <div class="flex items-center justify-center gap-2">
                                         <RecordLogButton subject="CashExpenseCategory" :id="category.id" :company-id="company.id" />
-                                        <Link v-if="permissions.canUpdate" :href="category.edit_url" class="cvr-action-btn" title="Edit">✎</Link>
-                                        <button v-if="permissions.canDelete" @click="confirmDelete(category)" class="cvr-action-btn cvr-action-btn-danger" title="Delete">🗑</button>
+                                        <Link v-if="permissions.canUpdate" :href="category.edit_url" class="cvr-action-btn" :title="$t('Edit')">✎</Link>
+                                        <button v-if="permissions.canDelete" @click="confirmDelete(category)" class="cvr-action-btn cvr-action-btn-danger" :title="$t('Delete')">🗑</button>
                                     </div>
                                 </td>
                             </tr>
@@ -145,8 +145,8 @@ function destroyRow() {
             <!-- Delete confirmation -->
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-2">Delete "{{ deleteTarget.name }}"?</h2>
-                    <p class="text-sm cvr-text-muted mb-4">This will also remove its {{ deleteTarget.items.length }} expense item(s).</p>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-2">{{ $t('Delete "') }}{{ deleteTarget.name }}"?</h2>
+                    <p class="text-sm cvr-text-muted mb-4">{{ $t('This will also remove its') }} {{ deleteTarget.items.length }} {{ $t('expense item(s).') }}</p>
                     <div class="flex justify-end gap-2">
                         <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
                         <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>

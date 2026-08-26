@@ -68,7 +68,7 @@ function submit() {
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-6">
-                {{ isEdit ? $t('Edit') : $t('Add') }} Safe
+                {{ isEdit ? $t('Edit') : $t('Add') }} {{ $t('Safe') }}
             </h1>
 
             <form @submit.prevent="submit" class="space-y-6">

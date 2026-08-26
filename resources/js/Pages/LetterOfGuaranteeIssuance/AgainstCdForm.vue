@@ -233,7 +233,7 @@ function submit() {
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">
-                {{ isEdit ? $t('Edit') : $t('Add') }} LG Issuance — Against CD
+                {{ isEdit ? $t('Edit') : $t('Add') }} {{ $t('LG Issuance — Against CD') }}
             </h1>
 
             <FormErrorSummary />

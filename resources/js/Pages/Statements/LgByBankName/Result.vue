@@ -78,7 +78,7 @@ function goToPage(url) {
                     {{ $t('⬇️ Export to Excel') }}
                 </a>
             </div>
-            <p class="text-sm cvr-text-muted mb-6">{{ kpis.transactionCount }} Letters of Guarantee.</p>
+            <p class="text-sm cvr-text-muted mb-6">{{ kpis.transactionCount }} {{ $t('Letters of Guarantee.') }}</p>
 
             <!-- KPI row -->
             <div class="cvr-kpi-row mb-6">

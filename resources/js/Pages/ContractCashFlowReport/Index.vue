@@ -207,7 +207,7 @@ function destroyReport() {
             <!-- Delete confirmation -->
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Delete Cashflow Report {{ deleteTarget.name }}</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Delete Cashflow Report') }} {{ deleteTarget.name }}</h2>
                     <p class="text-sm cvr-text-muted mb-4">{{ $t('Are you sure you want to delete this item?') }}</p>
                     <div class="flex justify-end gap-2">
                         <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>

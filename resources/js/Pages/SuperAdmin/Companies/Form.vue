@@ -106,7 +106,7 @@ function submit() {
                     <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Sections') }}</h2>
                     <div class="cvr-form-grid-2">
                         <div v-for="lang in languages" :key="lang.code">
-                            <label class="cvr-form-label">Company Name {{ lang.name }} *</label>
+                            <label class="cvr-form-label">{{ $t('Company Name') }} {{ $t(lang.name) }} *</label>
                             <input v-model="form.name[lang.code]" type="text" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor(`name.${lang.code}`)" class="text-xs mt-1 cvr-num-red">{{ errorFor(`name.${lang.code}`) }}</p>
                         </div>

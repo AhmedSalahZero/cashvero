@@ -164,7 +164,7 @@ function submit() {
         {{ $t('← Back to Users') }}
       </Link>
 
-      <h1 class="text-xl font-semibold cvr-text-primary mb-1">Permissions for {{ user.name }}</h1>
+      <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Permissions for') }} {{ user.name }}</h1>
       <p class="text-sm cvr-text-muted mb-1">{{ user.email }}</p>
       <p class="text-sm cvr-text-muted mb-6">
         {{ $t('Role:') }}
@@ -196,13 +196,13 @@ function submit() {
               type="button"
               @click="setMany(visibleKeys, true)"
               class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
-              Select {{ query ? 'shown' : 'all' }}
+              {{ $t('Select') }} {{ query ? 'shown' : 'all' }}
             </button>
             <button
               type="button"
               @click="setMany(visibleKeys, false)"
               class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
-              Clear {{ query ? 'shown' : 'all' }}
+              {{ $t('Clear') }} {{ query ? 'shown' : 'all' }}
             </button>
             <button
               type="button"
@@ -218,7 +218,7 @@ function submit() {
             </button>
           </div>
           <span class="text-sm cvr-text-muted tabular-nums whitespace-nowrap">
-            {{ countSelected(totalKeys) }} / {{ totalKeys.length }} selected
+            {{ countSelected(totalKeys) }} / {{ totalKeys.length }} {{ $t('selected') }}
           </span>
         </div>
 
@@ -326,7 +326,7 @@ function submit() {
           <div
             v-if="filteredTree.length === 0"
             class="cvr-card p-8 text-center cvr-text-muted">
-            Nothing matches “{{ search }}”.
+            {{ $t('Nothing matches “') }}{{ search }}”.
           </div>
         </div>
 

@@ -234,7 +234,7 @@ const odooErrorTarget = ref(null);
 
             <!-- Pagination -->
             <div v-if="currentTab.last_page > 1" class="flex items-center justify-between mt-4 text-sm">
-                <p class="cvr-text-muted">{{ currentTab.total }} total records</p>
+                <p class="cvr-text-muted">{{ currentTab.total }} {{ $t('total records') }}</p>
                 <div class="flex items-center gap-2">
                     <button
                         v-for="p in currentTab.last_page"
@@ -302,7 +302,7 @@ const odooErrorTarget = ref(null);
             <div v-if="advancedPaymentTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-3xl">
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">
-                        Amount To Be Decreased — {{ advancedPaymentTarget.transaction_name }}
+                        {{ $t('Amount To Be Decreased —') }} {{ advancedPaymentTarget.transaction_name }}
                     </h2>
                     <div class="cvr-form-grid-4 mb-4 items-end">
                         <div>

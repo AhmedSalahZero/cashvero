@@ -23,9 +23,9 @@ defineProps({
     <AppLayout>
         <div class="p-6">
             <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm mb-3">
-                ← Back to {{ modelDisplayName }} Import
+                {{ $t('← Back to') }} {{ modelDisplayName }} {{ $t('Import') }}
             </Link>
-            <h1 class="text-xl font-semibold cvr-text-primary mb-6">{{ modelDisplayName }} — Failed Rows</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-6">{{ modelDisplayName }} {{ $t('— Failed Rows') }}</h1>
 
             <div class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto">
                 <table class="min-w-full text-sm">

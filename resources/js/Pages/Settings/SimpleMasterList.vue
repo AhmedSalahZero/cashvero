@@ -129,15 +129,15 @@ function destroyRow() {
 <template>
     <AppLayout>
         <div class="p-6 max-w-5xl mx-auto">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ title }}</h1>
-            <p class="text-sm cvr-text-muted mb-6">{{ subtitle }}</p>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t(title) }}</h1>
+            <p class="text-sm cvr-text-muted mb-6">{{ $t(subtitle) }}</p>
 
             <!-- KPI -->
             <div class="cvr-kpi-row mb-6">
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">🗂️</div>
                     <div>
-                        <p class="cvr-kpi-label">Total {{ title }}</p>
+                        <p class="cvr-kpi-label">{{ $t('Total') }} {{ $t(title) }}</p>
                         <p class="cvr-kpi-value">{{ items.length }}</p>
                     </div>
                 </div>
@@ -147,7 +147,7 @@ function destroyRow() {
             <div class="cvr-card mb-6">
                 <div class="flex items-center gap-2 mb-3">
                     <span class="text-base">➕</span>
-                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">Add {{ itemLabel }}</h2>
+                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary">{{ $t('Add') }} {{ $t(itemLabel) }}</h2>
                 </div>
                 <div :class="gridClass" class="items-end">
                     <div>
@@ -155,7 +155,7 @@ function destroyRow() {
                         <input
                             v-model="newName"
                             type="text"
-                            :placeholder="`e.g. New ${itemLabel}`"
+                            :placeholder="`${$t('e.g. New')} ${$t(itemLabel)}`"
                             class="cvr-input w-full px-3 py-2 rounded-lg text-sm"
                             @keyup.enter="newName.trim() && submitAdd()"
                         />
@@ -177,7 +177,7 @@ function destroyRow() {
                         :disabled="addSubmitting || !newName.trim()"
                         class="cvr-btn-copper px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-60"
                     >
-                        {{ addSubmitting ? $t('Adding…') : `+ Add ${itemLabel}` }}
+                        {{ addSubmitting ? $t('Adding…') : `${$t('+ Add')} ${$t(itemLabel)}` }}
                     </button>
                 </div>
             </div>
@@ -219,7 +219,7 @@ function destroyRow() {
                             </td>
                         </tr>
                         <tr v-if="filteredItems.length === 0">
-                            <td :colspan="2 + extraFields.length" class="px-4 py-8 text-center cvr-text-muted">No {{ title.toLowerCase() }} found.</td>
+                            <td :colspan="2 + extraFields.length" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No') }} {{ $t(title) }} {{ $t('found.') }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -228,7 +228,7 @@ function destroyRow() {
             <!-- Edit modal -->
             <div v-if="editTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Edit {{ itemLabel }}</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Edit') }} {{ $t(itemLabel) }}</h2>
                     <div class="mb-3">
                         <label class="cvr-form-label">{{ $t('Name') }} <span class="text-red-500">*</span></label>
                         <input v-model="editName" type="text" class="cvr-input w-full px-3 py-2 rounded-lg text-sm" @keyup.enter="submitEdit" />
@@ -250,7 +250,7 @@ function destroyRow() {
             <!-- Delete confirmation -->
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Delete "{{ deleteTarget.name }}"?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Delete "') }}{{ deleteTarget.name }}"?</h2>
                     <div class="flex justify-end gap-2">
                         <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
                         <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>

@@ -196,12 +196,12 @@ function destroyRow() {
                             <td class="px-4 py-3 cvr-num">{{ Number(row.received_amount).toLocaleString('en-EG') }}</td>
                             <td class="px-4 py-3">
                                 <template v-if="row.is_settled">
-                                    <span class="cvr-badge cvr-badge-active">Settled</span>
+                                    <span class="cvr-badge cvr-badge-active">{{ $t('Settled') }}</span>
                                     <div v-if="row.settled_at" class="text-xs cvr-text-muted mt-1">{{ row.settled_at }}</div>
                                 </template>
                                 <span v-else class="cvr-badge cvr-badge-pending">{{ $t('Pending') }}</span>
                                 <div v-if="row.is_difference_received" class="text-xs cvr-text-muted mt-1">
-                                    Difference Received: {{ Number(row.difference_received_amount).toLocaleString('en-EG') }}
+                                    {{ $t('Difference Received:') }} {{ Number(row.difference_received_amount).toLocaleString('en-EG') }}
                                 </div>
                             </td>
                             <td class="px-4 py-3">{{ row.financial_institution_name }}</td>

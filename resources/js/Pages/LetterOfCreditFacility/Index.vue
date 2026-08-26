@@ -160,7 +160,7 @@ function submitRenew() {
                     @click="activeMainTab = 'archived'"
                     class="px-4 py-2 text-sm font-medium border-b-2 -mb-px"
                     :class="activeMainTab === 'archived' ? 'border-current cvr-text-primary' : 'border-transparent cvr-text-muted'"
-                >Archived Facilities ({{ archivedRows.length }})</button>
+                >{{ $t('Archived Facilities (') }}{{ archivedRows.length }})</button>
             </div>
 
             <div v-if="activeMainTab === 'facilities'">
@@ -248,25 +248,25 @@ function submitRenew() {
                                         <div class="flex items-center justify-between mb-2">
                                             <p class="text-xs cvr-text-muted">
                                                 <strong>{{ chapter.is_original ? 'Original' : 'Renewal' }}</strong>
-                                                — {{ chapter.effective_date_formatted }} to {{ chapter.contract_end_date_formatted }}
-                                                — Limit: {{ chapter.limit_formatted }}
-                                                — Borrowing {{ chapter.borrowing_rate }}% + Margin {{ chapter.bank_margin_rate }}% = Interest {{ chapter.interest_rate }}%
+                                                — {{ chapter.effective_date_formatted }} {{ $t('to') }} {{ chapter.contract_end_date_formatted }}
+                                                {{ $t('— Limit:') }} {{ chapter.limit_formatted }}
+                                                {{ $t('— Borrowing') }} {{ chapter.borrowing_rate }}{{ $t('% + Margin') }} {{ chapter.bank_margin_rate }}{{ $t('% = Interest') }} {{ chapter.interest_rate }}%
                                             </p>
                                             <button
                                                 v-if="cIndex === row.terms_history.length - 1 && !chapter.is_original"
                                                 @click.stop="confirmDeleteRenewal(row)"
                                                 class="cvr-btn-danger px-2 py-1 rounded border text-xs"
-                                                title="Undo this renewal — reverts the facility to its previous chapter's terms"
-                                            >Delete This Renewal</button>
+                                                :title="$t('Undo this renewal — reverts the facility to its previous chapter\'s terms')"
+                                            >{{ $t('Delete This Renewal') }}</button>
                                         </div>
                                         <table class="w-full text-xs border rounded overflow-hidden">
                                             <thead class="cvr-table-head">
                                                 <tr>
-                                                    <th class="px-3 py-2 text-start">LC Type</th>
-                                                    <th class="px-3 py-2 text-start">Cash Cover Rate</th>
-                                                    <th class="px-3 py-2 text-start">Commission Rate</th>
-                                                    <th class="px-3 py-2 text-start">Min Commission Fees</th>
-                                                    <th class="px-3 py-2 text-start">Issuance Fees</th>
+                                                    <th class="px-3 py-2 text-start">{{ $t('LC Type') }}</th>
+                                                    <th class="px-3 py-2 text-start">{{ $t('Cash Cover Rate') }}</th>
+                                                    <th class="px-3 py-2 text-start">{{ $t('Commission Rate') }}</th>
+                                                    <th class="px-3 py-2 text-start">{{ $t('Min Commission Fees') }}</th>
+                                                    <th class="px-3 py-2 text-start">{{ $t('Issuance Fees') }}</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -319,7 +319,7 @@ function submitRenew() {
             <!-- Renew Facility modal -->
             <div v-if="renewTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-1">Renew Facility — {{ renewTarget.name }}</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-1">{{ $t('Renew Facility —') }} {{ renewTarget.name }}</h2>
                     <p class="text-xs cvr-text-muted mb-4">
                         {{ $t('Leave a field blank to keep it unchanged from the current terms. Nothing dated before the effective date is ever recalculated — past LCs keep whatever rate was in force when they were issued. Provide the full new Term & Conditions matrix below; it applies to any LC issued from the effective date onward.') }}
                     </p>

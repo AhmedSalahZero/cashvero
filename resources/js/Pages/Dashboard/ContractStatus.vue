@@ -259,7 +259,7 @@ function fmtPct(value) {
                 </div>
                 <button type="button" class="cvr-btn-primary px-3 py-1.5 rounded border text-sm" @click="applyPeriod">{{ $t('Apply') }}</button>
                 <button v-if="!isDefaultPeriod" type="button" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm" @click="resetPeriod">
-                    Last {{ defaultPeriodYears }} Years
+                    {{ $t('Last') }} {{ defaultPeriodYears }} {{ $t('Years') }}
                 </button>
 
                 <a :href="exportHref" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
@@ -386,7 +386,7 @@ function fmtPct(value) {
             </div>
 
             <!-- Company-wide, in the company's own currency -->
-            <div v-if="currencies?.length" class="cvr-section-heading"><h2>Company Total [{{ mainCurrency }}]</h2></div>
+            <div v-if="currencies?.length" class="cvr-section-heading"><h2>{{ $t('Company Total [') }}{{ mainCurrency }}]</h2></div>
             <div v-if="currencies?.length" class="cvr-kpi-row-4 mb-2">
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">Σ</div>
@@ -426,8 +426,8 @@ function fmtPct(value) {
             <p v-if="currencies?.length" class="text-xs cvr-text-muted mb-6">
                 {{ $t('Invoice figures use each invoice\'s own recorded rate.') }}
                 <span v-if="mainCurrencyTotals?.value_unconvertible_count">
-                    ⚠ Contract Value excludes
-                    {{ mainCurrencyTotals.value_unconvertible_count }} contract(s) with no usable exchange rate — see Data Quality below.
+                    {{ $t('⚠ Contract Value excludes') }}
+                    {{ mainCurrencyTotals.value_unconvertible_count }} {{ $t('contract(s) with no usable exchange rate — see Data Quality below.') }}
                 </span>
             </p>
 
@@ -448,33 +448,33 @@ function fmtPct(value) {
 
             <template v-if="activeCurrency">
                 <!-- Value row -->
-                <div class="cvr-section-heading"><h2>Contract Billing [{{ activeCurrency }}]</h2></div>
+                <div class="cvr-section-heading"><h2>{{ $t('Contract Billing [') }}{{ activeCurrency }}]</h2></div>
                 <div class="cvr-kpi-row-4 mb-6">
                     <div class="cvr-kpi-card cursor-pointer" @click="toggleDetail('value')">
                         <div class="cvr-kpi-icon cvr-kpi-icon-blue">📄</div>
                         <div>
-                            <p class="cvr-kpi-label">Contract Value</p>
+                            <p class="cvr-kpi-label">{{ $t('Contract Value') }}</p>
                             <p class="cvr-kpi-value cvr-num-blue">{{ fmt(currencyKpis.value) }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card cursor-pointer" @click="toggleDetail('invoiced')">
                         <div class="cvr-kpi-icon cvr-kpi-icon-green">⬆</div>
                         <div>
-                            <p class="cvr-kpi-label">Invoiced</p>
+                            <p class="cvr-kpi-label">{{ $t('Invoiced') }}</p>
                             <p class="cvr-kpi-value cvr-num-green">{{ fmt(currencyKpis.invoiced) }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card cursor-pointer" @click="toggleDetail('remaining')">
                         <div class="cvr-kpi-icon cvr-kpi-icon-copper">⏳</div>
                         <div>
-                            <p class="cvr-kpi-label">Remaining to Invoice</p>
+                            <p class="cvr-kpi-label">{{ $t('Remaining to Invoice') }}</p>
                             <p class="cvr-kpi-value cvr-num-amber">{{ fmt(currencyKpis.remaining) }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card">
                         <div class="cvr-kpi-icon cvr-kpi-icon-blue">%</div>
                         <div>
-                            <p class="cvr-kpi-label">Utilization</p>
+                            <p class="cvr-kpi-label">{{ $t('Utilization') }}</p>
                             <p class="cvr-kpi-value cvr-num">{{ fmtPct(currencyKpis.utilization) }}</p>
                         </div>
                     </div>
@@ -486,20 +486,20 @@ function fmtPct(value) {
                 >
                     <div class="px-4 py-3 border-b cvr-border flex items-center justify-between">
                         <h3 class="text-sm font-semibold cvr-text-primary">{{ detailTitle }}</h3>
-                        <button type="button" class="text-xs cvr-text-muted" @click="openDetail = null">Close</button>
+                        <button type="button" class="text-xs cvr-text-muted" @click="openDetail = null">{{ $t('Close') }}</button>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-3 py-2 text-start">Customer</th>
-                                    <th class="px-3 py-2 text-start">Code</th>
-                                    <th class="px-3 py-2 text-start">Name</th>
-                                    <th class="px-3 py-2 text-right">Value</th>
-                                    <th class="px-3 py-2 text-right">Invoiced</th>
-                                    <th class="px-3 py-2 text-right">Remaining</th>
-                                    <th class="px-3 py-2 text-center">End Date</th>
-                                    <th class="px-3 py-2 text-center">Status</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Customer') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Code') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Name') }}</th>
+                                    <th class="px-3 py-2 text-right">{{ $t('Value') }}</th>
+                                    <th class="px-3 py-2 text-right">{{ $t('Invoiced') }}</th>
+                                    <th class="px-3 py-2 text-right">{{ $t('Remaining') }}</th>
+                                    <th class="px-3 py-2 text-center">{{ $t('End Date') }}</th>
+                                    <th class="px-3 py-2 text-center">{{ $t('Status') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -514,7 +514,7 @@ function fmtPct(value) {
                                     <td class="px-3 py-2 text-center cvr-text-secondary">{{ row.status_label }}</td>
                                 </tr>
                                 <tr v-if="!detailRows.length">
-                                    <td colspan="8" class="px-4 py-8 text-center cvr-text-muted">No contracts in this currency.</td>
+                                    <td colspan="8" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No contracts in this currency.') }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -528,33 +528,33 @@ function fmtPct(value) {
                     themselves. Mixing the two is what made the old row
                     impossible to balance.
                 -->
-                <div class="cvr-section-heading"><h2>Collections [{{ activeCurrency }}] — including tax</h2></div>
+                <div class="cvr-section-heading"><h2>{{ $t('Collections [') }}{{ activeCurrency }}{{ $t('] — including tax') }}</h2></div>
                 <div class="cvr-kpi-row-4 mb-2">
                     <div class="cvr-kpi-card">
                         <div class="cvr-kpi-icon cvr-kpi-icon-blue">🧾</div>
                         <div>
-                            <p class="cvr-kpi-label">Billed (incl. tax)</p>
+                            <p class="cvr-kpi-label">{{ $t('Billed (incl. tax)') }}</p>
                             <p class="cvr-kpi-value cvr-num-blue">{{ fmt(currencyKpis.billed) }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card">
                         <div class="cvr-kpi-icon cvr-kpi-icon-green">✅</div>
                         <div>
-                            <p class="cvr-kpi-label">Collected</p>
+                            <p class="cvr-kpi-label">{{ $t('Collected') }}</p>
                             <p class="cvr-kpi-value cvr-num-green">{{ fmt(currencyKpis.collected) }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card">
                         <div class="cvr-kpi-icon cvr-kpi-icon-copper">💳</div>
                         <div>
-                            <p class="cvr-kpi-label">Uncollected AR</p>
+                            <p class="cvr-kpi-label">{{ $t('Uncollected AR') }}</p>
                             <p class="cvr-kpi-value cvr-num-amber">{{ fmt(currencyKpis.uncollected) }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card">
                         <div class="cvr-kpi-icon cvr-kpi-icon-blue">%</div>
                         <div>
-                            <p class="cvr-kpi-label">Collection Rate</p>
+                            <p class="cvr-kpi-label">{{ $t('Collection Rate') }}</p>
                             <p class="cvr-kpi-value cvr-num">{{ fmtPct(currencyKpis.collection_rate) }}</p>
                         </div>
                     </div>
@@ -566,75 +566,75 @@ function fmtPct(value) {
                     is what made 10 perfectly good invoices look broken.
                 -->
                 <p class="text-xs cvr-text-muted mb-6">
-                    Billed − Collected − Withheld ({{ fmt(currencyKpis.withheld) }}) − Deductions ({{ fmt(currencyKpis.deductions) }}) = Uncollected.
+                    {{ $t('Billed − Collected − Withheld (') }}{{ fmt(currencyKpis.withheld) }}{{ $t(') − Deductions (') }}{{ fmt(currencyKpis.deductions) }}{{ $t(') = Uncollected.') }}
                     <span v-if="Math.abs(Number(currencyKpis.reconciliation_gap || 0)) > 0.01" class="cvr-num-amber">
-                        ⚠ Off by {{ fmt(currencyKpis.reconciliation_gap) }} — the invoice rows themselves do not add up; see Data Quality below.
+                        {{ $t('⚠ Off by') }} {{ fmt(currencyKpis.reconciliation_gap) }} {{ $t('— the invoice rows themselves do not add up; see Data Quality below.') }}
                     </span>
                 </p>
 
                 <!-- What happened during the period, not where things stand -->
                 <div class="cvr-section-heading">
-                    <h2>In This Period [{{ activeCurrency }}] — {{ startDateFormatted }} → {{ endDateFormatted }}</h2>
+                    <h2>{{ $t('In This Period [') }}{{ activeCurrency }}] — {{ startDateFormatted }} → {{ endDateFormatted }}</h2>
                 </div>
                 <div class="cvr-kpi-row-4 mb-6">
                     <div class="cvr-kpi-card">
                         <div class="cvr-kpi-icon cvr-kpi-icon-blue">🧾</div>
                         <div>
-                            <p class="cvr-kpi-label">Invoices Raised</p>
+                            <p class="cvr-kpi-label">{{ $t('Invoices Raised') }}</p>
                             <p class="cvr-kpi-value cvr-num-blue">{{ periodKpis.invoice_count }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card">
                         <div class="cvr-kpi-icon cvr-kpi-icon-blue">⬆</div>
                         <div>
-                            <p class="cvr-kpi-label">Invoiced (excl. tax)</p>
+                            <p class="cvr-kpi-label">{{ $t('Invoiced (excl. tax)') }}</p>
                             <p class="cvr-kpi-value cvr-num-blue">{{ fmt(periodKpis.invoiced) }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card">
                         <div class="cvr-kpi-icon cvr-kpi-icon-green">✅</div>
                         <div>
-                            <p class="cvr-kpi-label">Collected</p>
+                            <p class="cvr-kpi-label">{{ $t('Collected') }}</p>
                             <p class="cvr-kpi-value cvr-num-green">{{ fmt(periodKpis.collected) }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card">
                         <div class="cvr-kpi-icon cvr-kpi-icon-copper">🏛</div>
                         <div>
-                            <p class="cvr-kpi-label">Withheld At Source</p>
+                            <p class="cvr-kpi-label">{{ $t('Withheld At Source') }}</p>
                             <p class="cvr-kpi-value cvr-num-amber">{{ fmt(periodKpis.withheld) }}</p>
                         </div>
                     </div>
                 </div>
 
                 <!-- Alerts -->
-                <div class="cvr-section-heading"><h2>Alerts</h2></div>
+                <div class="cvr-section-heading"><h2>{{ $t('Alerts') }}</h2></div>
                 <div class="cvr-kpi-row-4 mb-6">
                     <div class="cvr-kpi-card cursor-pointer" @click="toggleAlert('past_end_date')">
                         <div class="cvr-kpi-icon cvr-kpi-icon-copper">⚠</div>
                         <div>
-                            <p class="cvr-kpi-label">Past End Date (Still Open)</p>
+                            <p class="cvr-kpi-label">{{ $t('Past End Date (Still Open)') }}</p>
                             <p class="cvr-kpi-value cvr-num-amber">{{ alerts?.past_end_date_count ?? 0 }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card cursor-pointer" @click="toggleAlert('ending_soon')">
                         <div class="cvr-kpi-icon cvr-kpi-icon-blue">📅</div>
                         <div>
-                            <p class="cvr-kpi-label">Ending Within {{ nearExpiryDays }} Days</p>
+                            <p class="cvr-kpi-label">{{ $t('Ending Within') }} {{ nearExpiryDays }} {{ $t('Days') }}</p>
                             <p class="cvr-kpi-value cvr-num-blue">{{ alerts?.ending_soon_count ?? 0 }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card cursor-pointer" @click="toggleAlert('not_invoiced')">
                         <div class="cvr-kpi-icon cvr-kpi-icon-blue">◌</div>
                         <div>
-                            <p class="cvr-kpi-label">No Invoices Raised (Running &amp; Expired)</p>
+                            <p class="cvr-kpi-label">{{ $t('No Invoices Raised (Running & Expired)') }}</p>
                             <p class="cvr-kpi-value cvr-num">{{ alerts?.not_invoiced_count ?? 0 }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card cursor-pointer" @click="toggleAlert('over_billed')">
                         <div class="cvr-kpi-icon cvr-kpi-icon-copper">⚠</div>
                         <div>
-                            <p class="cvr-kpi-label">Over-Billed</p>
+                            <p class="cvr-kpi-label">{{ $t('Over-Billed') }}</p>
                             <p class="cvr-kpi-value cvr-num-amber">{{ alerts?.over_billed_count ?? 0 }}</p>
                         </div>
                     </div>
@@ -652,20 +652,20 @@ function fmtPct(value) {
                 >
                     <div class="px-4 py-3 border-b cvr-border flex items-center justify-between">
                         <h3 class="text-sm font-semibold cvr-text-primary">{{ alertTitle }}</h3>
-                        <button type="button" class="text-xs cvr-text-muted" @click="openAlert = null">Close</button>
+                        <button type="button" class="text-xs cvr-text-muted" @click="openAlert = null">{{ $t('Close') }}</button>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-3 py-2 text-start">Customer</th>
-                                    <th class="px-3 py-2 text-start">Code</th>
-                                    <th class="px-3 py-2 text-center">Currency</th>
-                                    <th class="px-3 py-2 text-right">Value</th>
-                                    <th class="px-3 py-2 text-right">Remaining</th>
-                                    <th class="px-3 py-2 text-center">Invoices</th>
-                                    <th class="px-3 py-2 text-center">End Date</th>
-                                    <th class="px-3 py-2 text-center">Status</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Customer') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Code') }}</th>
+                                    <th class="px-3 py-2 text-center">{{ $t('Currency') }}</th>
+                                    <th class="px-3 py-2 text-right">{{ $t('Value') }}</th>
+                                    <th class="px-3 py-2 text-right">{{ $t('Remaining') }}</th>
+                                    <th class="px-3 py-2 text-center">{{ $t('Invoices') }}</th>
+                                    <th class="px-3 py-2 text-center">{{ $t('End Date') }}</th>
+                                    <th class="px-3 py-2 text-center">{{ $t('Status') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -680,7 +680,7 @@ function fmtPct(value) {
                                     <td class="px-3 py-2 text-center cvr-text-secondary">{{ row.status_label }}</td>
                                 </tr>
                                 <tr v-if="!alertRows.length">
-                                    <td colspan="8" class="px-4 py-8 text-center cvr-text-muted">No contracts in this alert.</td>
+                                    <td colspan="8" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No contracts in this alert.') }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -691,17 +691,17 @@ function fmtPct(value) {
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                     <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
                         <div class="px-4 py-3 border-b cvr-border">
-                            <h3 class="text-sm font-semibold cvr-text-primary">Top 10 Customers by Value [{{ activeCurrency }}]</h3>
+                            <h3 class="text-sm font-semibold cvr-text-primary">{{ $t('Top 10 Customers by Value [') }}{{ activeCurrency }}]</h3>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="min-w-full text-sm">
                                 <thead class="cvr-table-head">
                                     <tr>
-                                        <th class="px-3 py-2 text-start">Customer</th>
-                                        <th class="px-3 py-2 text-center">Contracts</th>
-                                        <th class="px-3 py-2 text-right">Value</th>
-                                        <th class="px-3 py-2 text-right">Invoiced</th>
-                                        <th class="px-3 py-2 text-right">Remaining</th>
+                                        <th class="px-3 py-2 text-start">{{ $t('Customer') }}</th>
+                                        <th class="px-3 py-2 text-center">{{ $t('Contracts') }}</th>
+                                        <th class="px-3 py-2 text-right">{{ $t('Value') }}</th>
+                                        <th class="px-3 py-2 text-right">{{ $t('Invoiced') }}</th>
+                                        <th class="px-3 py-2 text-right">{{ $t('Remaining') }}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -713,7 +713,7 @@ function fmtPct(value) {
                                         <td class="px-3 py-2 text-right cvr-num">{{ fmt(row.remaining) }}</td>
                                     </tr>
                                     <tr v-if="!topValueRows.length">
-                                        <td colspan="5" class="px-4 py-8 text-center cvr-text-muted">No data.</td>
+                                        <td colspan="5" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No data.') }}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -722,17 +722,17 @@ function fmtPct(value) {
 
                     <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
                         <div class="px-4 py-3 border-b cvr-border">
-                            <h3 class="text-sm font-semibold cvr-text-primary">Top 10 by Remaining to Invoice [{{ activeCurrency }}]</h3>
+                            <h3 class="text-sm font-semibold cvr-text-primary">{{ $t('Top 10 by Remaining to Invoice [') }}{{ activeCurrency }}]</h3>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="min-w-full text-sm">
                                 <thead class="cvr-table-head">
                                     <tr>
-                                        <th class="px-3 py-2 text-start">Customer</th>
-                                        <th class="px-3 py-2 text-center">Contracts</th>
-                                        <th class="px-3 py-2 text-right">Value</th>
-                                        <th class="px-3 py-2 text-right">Invoiced</th>
-                                        <th class="px-3 py-2 text-right">Remaining</th>
+                                        <th class="px-3 py-2 text-start">{{ $t('Customer') }}</th>
+                                        <th class="px-3 py-2 text-center">{{ $t('Contracts') }}</th>
+                                        <th class="px-3 py-2 text-right">{{ $t('Value') }}</th>
+                                        <th class="px-3 py-2 text-right">{{ $t('Invoiced') }}</th>
+                                        <th class="px-3 py-2 text-right">{{ $t('Remaining') }}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -744,7 +744,7 @@ function fmtPct(value) {
                                         <td class="px-3 py-2 text-right cvr-num">{{ fmt(row.remaining) }}</td>
                                     </tr>
                                     <tr v-if="!topRemainingRows.length">
-                                        <td colspan="5" class="px-4 py-8 text-center cvr-text-muted">No data.</td>
+                                        <td colspan="5" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No data.') }}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -764,10 +764,10 @@ function fmtPct(value) {
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-3 py-2 text-start">Bucket</th>
-                                    <th class="px-3 py-2 text-center">Invoices</th>
-                                    <th class="px-3 py-2 text-right">Uncollected</th>
-                                    <th class="px-3 py-2 text-start" style="width: 40%;">Share</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Bucket') }}</th>
+                                    <th class="px-3 py-2 text-center">{{ $t('Invoices') }}</th>
+                                    <th class="px-3 py-2 text-right">{{ $t('Uncollected') }}</th>
+                                    <th class="px-3 py-2 text-start" style="width: 40%;">{{ $t('Share') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -789,11 +789,11 @@ function fmtPct(value) {
                                     </td>
                                 </tr>
                                 <tr class="cvr-table-row font-semibold">
-                                    <td class="px-3 py-2 cvr-text-primary">Total Uncollected</td>
+                                    <td class="px-3 py-2 cvr-text-primary">{{ $t('Total Uncollected') }}</td>
                                     <td class="px-3 py-2 text-center cvr-text-secondary">{{ agingRow?.total?.invoice_count ?? 0 }}</td>
                                     <td class="px-3 py-2 text-right cvr-num">{{ fmt(agingRow?.total?.amount) }}</td>
                                     <td class="px-3 py-2 cvr-text-muted text-xs">
-                                        Overdue: {{ fmt(agingRow?.overdue_total?.amount) }}
+                                        {{ $t('Overdue:') }} {{ fmt(agingRow?.overdue_total?.amount) }}
                                     </td>
                                 </tr>
                             </tbody>
@@ -801,7 +801,7 @@ function fmtPct(value) {
                     </div>
                 </div>
                 <p class="text-xs cvr-text-muted mb-6">
-                    The buckets add up to Uncollected AR above ({{ fmt(currencyKpis.uncollected) }}).
+                    {{ $t('The buckets add up to Uncollected AR above (') }}{{ fmt(currencyKpis.uncollected) }}).
                 </p>
 
                 <!--
@@ -811,18 +811,18 @@ function fmtPct(value) {
                     not the same as a zero.
                 -->
                 <div class="cvr-section-heading">
-                    <h2>Monthly Trend [{{ activeCurrency }}] — {{ startDateFormatted }} → {{ endDateFormatted }}</h2>
+                    <h2>{{ $t('Monthly Trend [') }}{{ activeCurrency }}] — {{ startDateFormatted }} → {{ endDateFormatted }}</h2>
                 </div>
                 <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden mb-6">
                     <div class="overflow-x-auto">
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-3 py-2 text-start">Month</th>
-                                    <th class="px-3 py-2 text-center">Invoices</th>
-                                    <th class="px-3 py-2 text-right">Invoiced</th>
-                                    <th class="px-3 py-2 text-right">Collected</th>
-                                    <th class="px-3 py-2 text-start" style="width: 35%;">Invoiced vs Collected</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Month') }}</th>
+                                    <th class="px-3 py-2 text-center">{{ $t('Invoices') }}</th>
+                                    <th class="px-3 py-2 text-right">{{ $t('Invoiced') }}</th>
+                                    <th class="px-3 py-2 text-right">{{ $t('Collected') }}</th>
+                                    <th class="px-3 py-2 text-start" style="width: 35%;">{{ $t('Invoiced vs Collected') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -841,7 +841,7 @@ function fmtPct(value) {
                                     </td>
                                 </tr>
                                 <tr v-if="!trendRows.length">
-                                    <td colspan="5" class="px-4 py-8 text-center cvr-text-muted">No invoices in this window.</td>
+                                    <td colspan="5" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No invoices in this window.') }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -852,17 +852,17 @@ function fmtPct(value) {
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                     <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
                         <div class="px-4 py-3 border-b cvr-border">
-                            <h3 class="text-sm font-semibold cvr-text-primary">Top 10 Customers by Contract Count [{{ activeCurrency }}]</h3>
+                            <h3 class="text-sm font-semibold cvr-text-primary">{{ $t('Top 10 Customers by Contract Count [') }}{{ activeCurrency }}]</h3>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="min-w-full text-sm">
                                 <thead class="cvr-table-head">
                                     <tr>
-                                        <th class="px-3 py-2 text-start">Customer</th>
-                                        <th class="px-3 py-2 text-center">Contracts</th>
-                                        <th class="px-3 py-2 text-right">Value</th>
-                                        <th class="px-3 py-2 text-right">Invoiced</th>
-                                        <th class="px-3 py-2 text-right">Remaining</th>
+                                        <th class="px-3 py-2 text-start">{{ $t('Customer') }}</th>
+                                        <th class="px-3 py-2 text-center">{{ $t('Contracts') }}</th>
+                                        <th class="px-3 py-2 text-right">{{ $t('Value') }}</th>
+                                        <th class="px-3 py-2 text-right">{{ $t('Invoiced') }}</th>
+                                        <th class="px-3 py-2 text-right">{{ $t('Remaining') }}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -874,7 +874,7 @@ function fmtPct(value) {
                                         <td class="px-3 py-2 text-right cvr-num">{{ fmt(row.remaining) }}</td>
                                     </tr>
                                     <tr v-if="!topCountRows.length">
-                                        <td colspan="5" class="px-4 py-8 text-center cvr-text-muted">No data.</td>
+                                        <td colspan="5" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No data.') }}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -883,16 +883,16 @@ function fmtPct(value) {
 
                     <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
                         <div class="px-4 py-3 border-b cvr-border">
-                            <h3 class="text-sm font-semibold cvr-text-primary">Top 10 by Uncollected AR [{{ activeCurrency }}]</h3>
+                            <h3 class="text-sm font-semibold cvr-text-primary">{{ $t('Top 10 by Uncollected AR [') }}{{ activeCurrency }}]</h3>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="min-w-full text-sm">
                                 <thead class="cvr-table-head">
                                     <tr>
-                                        <th class="px-3 py-2 text-start">Customer</th>
-                                        <th class="px-3 py-2 text-center">Contracts</th>
-                                        <th class="px-3 py-2 text-right">Collected</th>
-                                        <th class="px-3 py-2 text-right">Uncollected</th>
+                                        <th class="px-3 py-2 text-start">{{ $t('Customer') }}</th>
+                                        <th class="px-3 py-2 text-center">{{ $t('Contracts') }}</th>
+                                        <th class="px-3 py-2 text-right">{{ $t('Collected') }}</th>
+                                        <th class="px-3 py-2 text-right">{{ $t('Uncollected') }}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -903,7 +903,7 @@ function fmtPct(value) {
                                         <td class="px-3 py-2 text-right cvr-num-amber">{{ fmt(row.uncollected) }}</td>
                                     </tr>
                                     <tr v-if="!topUncollectedRows.length">
-                                        <td colspan="4" class="px-4 py-8 text-center cvr-text-muted">No data.</td>
+                                        <td colspan="4" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No data.') }}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -918,33 +918,33 @@ function fmtPct(value) {
                 go and fix.
             -->
             <template v-if="showDataQuality">
-                <div class="cvr-section-heading"><h2>Data Quality</h2></div>
+                <div class="cvr-section-heading"><h2>{{ $t('Data Quality') }}</h2></div>
                 <div class="cvr-kpi-row-4 mb-4">
                     <div class="cvr-kpi-card cursor-pointer" @click="toggleQuality('mismatch')">
                         <div class="cvr-kpi-icon cvr-kpi-icon-copper">⇄</div>
                         <div>
-                            <p class="cvr-kpi-label">Invoices In Another Currency</p>
+                            <p class="cvr-kpi-label">{{ $t('Invoices In Another Currency') }}</p>
                             <p class="cvr-kpi-value cvr-num-amber">{{ dataQuality?.mismatched_currency_count ?? 0 }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card cursor-pointer" @click="toggleQuality('rate')">
                         <div class="cvr-kpi-icon cvr-kpi-icon-copper">💱</div>
                         <div>
-                            <p class="cvr-kpi-label">No Usable Exchange Rate</p>
+                            <p class="cvr-kpi-label">{{ $t('No Usable Exchange Rate') }}</p>
                             <p class="cvr-kpi-value cvr-num-amber">{{ dataQuality?.exchange_rate_issue_count ?? 0 }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card cursor-pointer" @click="toggleQuality('unbalanced')">
                         <div class="cvr-kpi-icon cvr-kpi-icon-copper">≠</div>
                         <div>
-                            <p class="cvr-kpi-label">Invoices That Don't Add Up</p>
+                            <p class="cvr-kpi-label">{{ $t('Invoices That Don\'t Add Up') }}</p>
                             <p class="cvr-kpi-value cvr-num-amber">{{ dataQuality?.unbalanced_invoice_count ?? 0 }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card cursor-pointer" @click="toggleQuality('nocode')">
                         <div class="cvr-kpi-icon cvr-kpi-icon-copper">#</div>
                         <div>
-                            <p class="cvr-kpi-label">Contracts Without A Code</p>
+                            <p class="cvr-kpi-label">{{ $t('Contracts Without A Code') }}</p>
                             <p class="cvr-kpi-value cvr-num-amber">{{ dataQuality?.contracts_without_code_count ?? 0 }}</p>
                         </div>
                     </div>
@@ -952,18 +952,18 @@ function fmtPct(value) {
 
                 <div v-if="openQuality === 'mismatch'" class="cvr-card-bg cvr-border border rounded-lg overflow-hidden mb-6">
                     <div class="px-4 py-3 border-b cvr-border flex items-center justify-between">
-                        <h3 class="text-sm font-semibold cvr-text-primary">Invoices posted against a contract in another currency — excluded from every total above</h3>
-                        <button type="button" class="text-xs cvr-text-muted" @click="openQuality = null">Close</button>
+                        <h3 class="text-sm font-semibold cvr-text-primary">{{ $t('Invoices posted against a contract in another currency — excluded from every total above') }}</h3>
+                        <button type="button" class="text-xs cvr-text-muted" @click="openQuality = null">{{ $t('Close') }}</button>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-3 py-2 text-start">Contract</th>
-                                    <th class="px-3 py-2 text-center">Contract Currency</th>
-                                    <th class="px-3 py-2 text-start">Invoice #</th>
-                                    <th class="px-3 py-2 text-center">Invoice Currency</th>
-                                    <th class="px-3 py-2 text-right">Invoice Amount</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Contract') }}</th>
+                                    <th class="px-3 py-2 text-center">{{ $t('Contract Currency') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Invoice #') }}</th>
+                                    <th class="px-3 py-2 text-center">{{ $t('Invoice Currency') }}</th>
+                                    <th class="px-3 py-2 text-right">{{ $t('Invoice Amount') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -975,7 +975,7 @@ function fmtPct(value) {
                                     <td class="px-3 py-2 text-right cvr-num">{{ fmt(row.invoice_amount) }}</td>
                                 </tr>
                                 <tr v-if="!(dataQuality?.mismatched_currency_invoices || []).length">
-                                    <td colspan="5" class="px-4 py-8 text-center cvr-text-muted">None.</td>
+                                    <td colspan="5" class="px-4 py-8 text-center cvr-text-muted">{{ $t('None.') }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -984,18 +984,18 @@ function fmtPct(value) {
 
                 <div v-if="openQuality === 'rate'" class="cvr-card-bg cvr-border border rounded-lg overflow-hidden mb-6">
                     <div class="px-4 py-3 border-b cvr-border flex items-center justify-between">
-                        <h3 class="text-sm font-semibold cvr-text-primary">Contracts left out of the {{ mainCurrency }} Contract Value total</h3>
-                        <button type="button" class="text-xs cvr-text-muted" @click="openQuality = null">Close</button>
+                        <h3 class="text-sm font-semibold cvr-text-primary">{{ $t('Contracts left out of the') }} {{ mainCurrency }} {{ $t('Contract Value total') }}</h3>
+                        <button type="button" class="text-xs cvr-text-muted" @click="openQuality = null">{{ $t('Close') }}</button>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-3 py-2 text-start">Customer</th>
-                                    <th class="px-3 py-2 text-start">Code</th>
-                                    <th class="px-3 py-2 text-center">Currency</th>
-                                    <th class="px-3 py-2 text-right">Value</th>
-                                    <th class="px-3 py-2 text-right">Exchange Rate</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Customer') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Code') }}</th>
+                                    <th class="px-3 py-2 text-center">{{ $t('Currency') }}</th>
+                                    <th class="px-3 py-2 text-right">{{ $t('Value') }}</th>
+                                    <th class="px-3 py-2 text-right">{{ $t('Exchange Rate') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1007,7 +1007,7 @@ function fmtPct(value) {
                                     <td class="px-3 py-2 text-right cvr-num-amber">{{ fmt(row.exchange_rate) }}</td>
                                 </tr>
                                 <tr v-if="!(dataQuality?.exchange_rate_issues || []).length">
-                                    <td colspan="5" class="px-4 py-8 text-center cvr-text-muted">None.</td>
+                                    <td colspan="5" class="px-4 py-8 text-center cvr-text-muted">{{ $t('None.') }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -1016,20 +1016,20 @@ function fmtPct(value) {
 
                 <div v-if="openQuality === 'unbalanced'" class="cvr-card-bg cvr-border border rounded-lg overflow-hidden mb-6">
                     <div class="px-4 py-3 border-b cvr-border flex items-center justify-between">
-                        <h3 class="text-sm font-semibold cvr-text-primary">Invoices where Billed − Collected − Deductions ≠ Uncollected</h3>
-                        <button type="button" class="text-xs cvr-text-muted" @click="openQuality = null">Close</button>
+                        <h3 class="text-sm font-semibold cvr-text-primary">{{ $t('Invoices where Billed − Collected − Deductions ≠ Uncollected') }}</h3>
+                        <button type="button" class="text-xs cvr-text-muted" @click="openQuality = null">{{ $t('Close') }}</button>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-3 py-2 text-start">Contract</th>
-                                    <th class="px-3 py-2 text-start">Invoice #</th>
-                                    <th class="px-3 py-2 text-right">Billed</th>
-                                    <th class="px-3 py-2 text-right">Collected</th>
-                                    <th class="px-3 py-2 text-right">Deductions</th>
-                                    <th class="px-3 py-2 text-right">Uncollected</th>
-                                    <th class="px-3 py-2 text-right">Gap</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Contract') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Invoice #') }}</th>
+                                    <th class="px-3 py-2 text-right">{{ $t('Billed') }}</th>
+                                    <th class="px-3 py-2 text-right">{{ $t('Collected') }}</th>
+                                    <th class="px-3 py-2 text-right">{{ $t('Deductions') }}</th>
+                                    <th class="px-3 py-2 text-right">{{ $t('Uncollected') }}</th>
+                                    <th class="px-3 py-2 text-right">{{ $t('Gap') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1045,7 +1045,7 @@ function fmtPct(value) {
                                     </td>
                                 </tr>
                                 <tr v-if="!(dataQuality?.unbalanced_invoices || []).length">
-                                    <td colspan="7" class="px-4 py-8 text-center cvr-text-muted">None.</td>
+                                    <td colspan="7" class="px-4 py-8 text-center cvr-text-muted">{{ $t('None.') }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -1054,17 +1054,17 @@ function fmtPct(value) {
 
                 <div v-if="openQuality === 'nocode'" class="cvr-card-bg cvr-border border rounded-lg overflow-hidden mb-6">
                     <div class="px-4 py-3 border-b cvr-border flex items-center justify-between">
-                        <h3 class="text-sm font-semibold cvr-text-primary">Contracts with no code — no invoice can be matched to them</h3>
-                        <button type="button" class="text-xs cvr-text-muted" @click="openQuality = null">Close</button>
+                        <h3 class="text-sm font-semibold cvr-text-primary">{{ $t('Contracts with no code — no invoice can be matched to them') }}</h3>
+                        <button type="button" class="text-xs cvr-text-muted" @click="openQuality = null">{{ $t('Close') }}</button>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-3 py-2 text-start">Customer</th>
-                                    <th class="px-3 py-2 text-start">Name</th>
-                                    <th class="px-3 py-2 text-center">Currency</th>
-                                    <th class="px-3 py-2 text-right">Value</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Customer') }}</th>
+                                    <th class="px-3 py-2 text-start">{{ $t('Name') }}</th>
+                                    <th class="px-3 py-2 text-center">{{ $t('Currency') }}</th>
+                                    <th class="px-3 py-2 text-right">{{ $t('Value') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1075,7 +1075,7 @@ function fmtPct(value) {
                                     <td class="px-3 py-2 text-right cvr-num">{{ fmt(row.amount) }}</td>
                                 </tr>
                                 <tr v-if="!(dataQuality?.contracts_without_code || []).length">
-                                    <td colspan="4" class="px-4 py-8 text-center cvr-text-muted">None.</td>
+                                    <td colspan="4" class="px-4 py-8 text-center cvr-text-muted">{{ $t('None.') }}</td>
                                 </tr>
                             </tbody>
                         </table>

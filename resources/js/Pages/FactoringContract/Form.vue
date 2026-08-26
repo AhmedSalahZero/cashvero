@@ -138,7 +138,7 @@ function submit() {
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">
-                {{ isEdit ? $t('Edit') : $t('Add') }} Factoring Contract
+                {{ isEdit ? $t('Edit') : $t('Add') }} {{ $t('Factoring Contract') }}
             </h1>
             <p class="text-sm cvr-text-muted mb-6">{{ factoringCompany.name }}</p>
 
@@ -200,19 +200,19 @@ function submit() {
 
                         <template v-if="!isEdit">
                             <div>
-                                <label class="cvr-form-label">Borrowing Rate (%) *</label>
+                                <label class="cvr-form-label">{{ $t('Borrowing Rate (%) *') }}</label>
                                 <input v-model="form.borrowing_rate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Bank Margin Rate (%) *</label>
+                                <label class="cvr-form-label">{{ $t('Bank Margin Rate (%) *') }}</label>
                                 <input v-model="form.margin_rate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Interest Rate (%)</label>
+                                <label class="cvr-form-label">{{ $t('Interest Rate (%)') }}</label>
                                 <input disabled :value="interestRate" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Min Interest Rate (%) *</label>
+                                <label class="cvr-form-label">{{ $t('Min Interest Rate (%) *') }}</label>
                                 <input v-model="form.min_interest_rate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                         </template>

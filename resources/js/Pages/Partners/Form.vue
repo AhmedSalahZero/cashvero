@@ -143,7 +143,7 @@ function submit() {
                         style="border-width: 1px;"
                     >
                         <span>{{ opt.icon }}</span>
-                        <span>{{ opt.label }}</span>
+                        <span>{{ $t(opt.label) }}</span>
                         <span v-if="form[opt.key]" class="text-xs">✓</span>
                     </button>
                 </div>

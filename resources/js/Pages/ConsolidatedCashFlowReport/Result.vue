@@ -120,17 +120,17 @@ const accumulatedTotal = computed(() => {
                                 </td>
                             </tr>
                             <tr class="cvr-table-row cvr-summary-row">
-                                <td class="px-2 py-2 whitespace-nowrap">Total Cash Inflow</td>
+                                <td class="px-2 py-2 whitespace-nowrap">{{ $t('Total Cash Inflow') }}</td>
                                 <td v-for="wk in weekKeys" :key="wk" class="px-2 py-2 text-center cvr-num whitespace-nowrap">{{ fmt(block.cash_inflow?.[wk]) }}</td>
                                 <td class="px-2 py-2 text-center cvr-num font-semibold whitespace-nowrap">{{ fmt(rowTotal(block.cash_inflow)) }}</td>
                             </tr>
                             <tr class="cvr-table-row cvr-summary-row">
-                                <td class="px-2 py-2 whitespace-nowrap">Total Cash Outflow</td>
+                                <td class="px-2 py-2 whitespace-nowrap">{{ $t('Total Cash Outflow') }}</td>
                                 <td v-for="wk in weekKeys" :key="wk" class="px-2 py-2 text-center cvr-num whitespace-nowrap">{{ fmt(block.cash_outflow?.[wk]) }}</td>
                                 <td class="px-2 py-2 text-center cvr-num font-semibold whitespace-nowrap">{{ fmt(rowTotal(block.cash_outflow)) }}</td>
                             </tr>
                             <tr class="cvr-table-row cvr-summary-row">
-                                <td class="px-2 py-2 whitespace-nowrap font-medium">Net Cash (+/-)</td>
+                                <td class="px-2 py-2 whitespace-nowrap font-medium">{{ $t('Net Cash (+/-)') }}</td>
                                 <td v-for="wk in weekKeys" :key="wk" class="px-2 py-2 text-center font-medium whitespace-nowrap" :class="netClass(block.net_cash?.[wk])">{{ fmt(block.net_cash?.[wk]) }}</td>
                                 <td class="px-2 py-2 text-center font-semibold whitespace-nowrap" :class="netClass(rowTotal(block.net_cash))">{{ fmt(rowTotal(block.net_cash)) }}</td>
                             </tr>

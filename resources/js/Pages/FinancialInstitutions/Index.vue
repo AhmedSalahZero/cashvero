@@ -131,7 +131,7 @@ function destroyRow() {
                         class="cvr-filter-pill"
                         :class="{ 'cvr-filter-pill-active': activeTab === tab.key }"
                     >
-                        {{ tab.label }}
+                        {{ $t(tab.label) }}
                     </button>
                 </div>
 
@@ -196,13 +196,13 @@ function destroyRow() {
                                     <Dropdown>
                                         <template #trigger="{ toggle }">
                                             <button @click="toggle" class="cvr-tag inline-flex items-center gap-1 px-2 py-1 text-xs whitespace-nowrap">
-                                                Add Debit Accounts ▾
+                                                {{ $t('Add Debit Accounts ▾') }}
                                             </button>
                                         </template>
                                         <template #content>
-                                            <Link v-if="permissions.create" :href="row.add_current_account_url" class="block px-3 py-2 text-xs cvr-dropdown-item whitespace-nowrap">Add Current Account</Link>
-                                            <Link v-if="permissions.view_time_of_deposit" :href="row.view_time_of_deposit_url" class="block px-3 py-2 text-xs cvr-dropdown-item whitespace-nowrap">Time Deposit "TDs"</Link>
-                                            <Link v-if="permissions.view_certificate_of_deposit" :href="row.view_certificates_of_deposit_url" class="block px-3 py-2 text-xs cvr-dropdown-item whitespace-nowrap">Certificate Of Deposit "CDs"</Link>
+                                            <Link v-if="permissions.create" :href="row.add_current_account_url" class="block px-3 py-2 text-xs cvr-dropdown-item whitespace-nowrap">{{ $t('Add Current Account') }}</Link>
+                                            <Link v-if="permissions.view_time_of_deposit" :href="row.view_time_of_deposit_url" class="block px-3 py-2 text-xs cvr-dropdown-item whitespace-nowrap">{{ $t('Time Deposit "TDs"') }}</Link>
+                                            <Link v-if="permissions.view_certificate_of_deposit" :href="row.view_certificates_of_deposit_url" class="block px-3 py-2 text-xs cvr-dropdown-item whitespace-nowrap">{{ $t('Certificate Of Deposit "CDs"') }}</Link>
                                         </template>
                                     </Dropdown>
 
@@ -210,17 +210,17 @@ function destroyRow() {
                                     <Dropdown>
                                         <template #trigger="{ toggle }">
                                             <button @click="toggle" class="cvr-tag-copper inline-flex items-center gap-1 px-2 py-1 text-xs rounded whitespace-nowrap">
-                                                Add Credit Facilities ▾
+                                                {{ $t('Add Credit Facilities ▾') }}
                                             </button>
                                         </template>
                                         <template #content>
-                                            <Link v-if="permissions.view_fully_secured_overdraft" :href="row.view_fully_secured_overdraft_url" class="block px-3 py-2 text-xs cvr-dropdown-item whitespace-nowrap">Fully Secured Overdraft</Link>
-                                            <Link v-if="permissions.view_clean_overdraft" :href="row.view_clean_overdraft_url" class="block px-3 py-2 text-xs cvr-dropdown-item whitespace-nowrap">Clean Overdraft</Link>
-                                            <Link v-if="permissions.view_overdraft_against_commercial_paper" :href="row.view_overdraft_against_commercial_paper_url" class="block px-3 py-2 text-xs cvr-dropdown-item whitespace-nowrap">Overdraft Against Commercial Papers</Link>
-                                            <Link v-if="permissions.view_overdraft_against_assignment_of_contract" :href="row.view_overdraft_against_assignment_of_contract_url" class="block px-3 py-2 text-xs cvr-dropdown-item whitespace-nowrap">Overdraft Against Contracts Assignment</Link>
-                                            <Link v-if="permissions.view_letter_of_guarantee_issuance" :href="row.view_letter_of_guarantee_facility_url" class="block px-3 py-2 text-xs cvr-dropdown-item whitespace-nowrap">Letter Of Guarantee</Link>
-                                            <Link v-if="permissions.view_letter_of_credit_facility" :href="row.view_letter_of_credit_facility_url" class="block px-3 py-2 text-xs cvr-dropdown-item whitespace-nowrap">Letter Of Credit</Link>
-                                            <Link v-if="permissions.view_medium_term_loan" :href="row.view_medium_term_loans_url" class="block px-3 py-2 text-xs cvr-dropdown-item whitespace-nowrap">Medium Term Loans</Link>
+                                            <Link v-if="permissions.view_fully_secured_overdraft" :href="row.view_fully_secured_overdraft_url" class="block px-3 py-2 text-xs cvr-dropdown-item whitespace-nowrap">{{ $t('Fully Secured Overdraft') }}</Link>
+                                            <Link v-if="permissions.view_clean_overdraft" :href="row.view_clean_overdraft_url" class="block px-3 py-2 text-xs cvr-dropdown-item whitespace-nowrap">{{ $t('Clean Overdraft') }}</Link>
+                                            <Link v-if="permissions.view_overdraft_against_commercial_paper" :href="row.view_overdraft_against_commercial_paper_url" class="block px-3 py-2 text-xs cvr-dropdown-item whitespace-nowrap">{{ $t('Overdraft Against Commercial Papers') }}</Link>
+                                            <Link v-if="permissions.view_overdraft_against_assignment_of_contract" :href="row.view_overdraft_against_assignment_of_contract_url" class="block px-3 py-2 text-xs cvr-dropdown-item whitespace-nowrap">{{ $t('Overdraft Against Contracts Assignment') }}</Link>
+                                            <Link v-if="permissions.view_letter_of_guarantee_issuance" :href="row.view_letter_of_guarantee_facility_url" class="block px-3 py-2 text-xs cvr-dropdown-item whitespace-nowrap">{{ $t('Letter Of Guarantee') }}</Link>
+                                            <Link v-if="permissions.view_letter_of_credit_facility" :href="row.view_letter_of_credit_facility_url" class="block px-3 py-2 text-xs cvr-dropdown-item whitespace-nowrap">{{ $t('Letter Of Credit') }}</Link>
+                                            <Link v-if="permissions.view_medium_term_loan" :href="row.view_medium_term_loans_url" class="block px-3 py-2 text-xs cvr-dropdown-item whitespace-nowrap">{{ $t('Medium Term Loans') }}</Link>
                                         </template>
                                     </Dropdown>
                                 </div>

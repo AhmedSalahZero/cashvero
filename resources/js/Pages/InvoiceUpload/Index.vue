@@ -195,7 +195,7 @@ function destroyAll() {
     <AppLayout>
         <div class="p-6">
             <div class="flex items-center justify-between flex-wrap gap-3 mb-1">
-                <h1 class="text-xl font-semibold cvr-text-primary">{{ modelDisplayName }} Table</h1>
+                <h1 class="text-xl font-semibold cvr-text-primary">{{ modelDisplayName }} {{ $t('Table') }}</h1>
                 <div class="flex items-center gap-2 flex-wrap">
                     <Link v-if="canUpload && !companyHasOdoo" :href="createUrl" class="cvr-btn-primary px-3 py-1.5 rounded text-sm whitespace-nowrap">{{ $t('+ Create') }}</Link>
                     <Link v-if="canUpload" :href="importUrl" class="cvr-btn-primary px-3 py-1.5 rounded text-sm whitespace-nowrap">{{ $t('Upload Data') }}</Link>
@@ -211,7 +211,7 @@ function destroyAll() {
                     </button>
                 </div>
             </div>
-            <p class="text-sm cvr-text-muted mb-6">{{ pagination.total }} record(s)</p>
+            <p class="text-sm cvr-text-muted mb-6">{{ pagination.total }} {{ $t('record(s)') }}</p>
 
             <div v-if="isProcessing && !pollGaveUp" class="mb-4 px-4 py-3 rounded cvr-card-bg cvr-border border text-sm flex items-center gap-2">
                 <span class="animate-spin inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full"></span>
@@ -308,7 +308,7 @@ function destroyAll() {
 
             <!-- Pagination -->
             <div v-if="pagination.last_page > 1" class="flex items-center justify-between mt-4">
-                <p class="text-xs cvr-text-muted">Page {{ pagination.current_page }} of {{ pagination.last_page }}</p>
+                <p class="text-xs cvr-text-muted">{{ $t('Page') }} {{ pagination.current_page }} {{ $t('of') }} {{ pagination.last_page }}</p>
                 <div class="flex items-center gap-1">
                     <button @click="goToPage(pagination.current_page - 1)" :disabled="pagination.current_page === 1" class="cvr-filter-pill" :class="{ 'opacity-40 cursor-not-allowed': pagination.current_page === 1 }">{{ $t('‹ Prev') }}</button>
                     <button @click="goToPage(pagination.current_page + 1)" :disabled="pagination.current_page === pagination.last_page" class="cvr-filter-pill" :class="{ 'opacity-40 cursor-not-allowed': pagination.current_page === pagination.last_page }">{{ $t('Next ›') }}</button>
@@ -336,7 +336,7 @@ function destroyAll() {
             <div v-if="confirmingDeleteAll" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-md">
                     <h2 class="text-lg font-medium cvr-text-primary mb-3">
-                        Delete all {{ totalRows }} {{ modelDisplayName }} record(s)?
+                        {{ $t('Delete all') }} {{ totalRows }} {{ modelDisplayName }} {{ $t('record(s)?') }}
                     </h2>
                     <p class="text-sm cvr-text-muted mb-2">{{ $t('This action cannot be undone.') }}</p>
                     <p class="text-sm cvr-num-amber mb-4">

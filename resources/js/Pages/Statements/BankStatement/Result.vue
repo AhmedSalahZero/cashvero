@@ -159,7 +159,7 @@ function submitInterest() {
                     </Link>
                 </div>
             </div>
-            <p class="text-sm cvr-text-muted mb-6">{{ kpis.transactionCount }} transactions in this date range.</p>
+            <p class="text-sm cvr-text-muted mb-6">{{ kpis.transactionCount }} {{ $t('transactions in this date range.') }}</p>
 
             <!-- KPI row -->
             <div class="cvr-kpi-row mb-6">
@@ -293,7 +293,7 @@ function submitInterest() {
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Confirm End-of-Month Interest Date & Amount') }}</h2>
                     <div class="space-y-3">
                         <div>
-                            <label class="cvr-form-label">Amount ({{ interestIsCredit ? $t('Credit') : $t('Debit') }})</label>
+                            <label class="cvr-form-label">{{ $t('Amount (') }}{{ interestIsCredit ? $t('Credit') : $t('Debit') }})</label>
                             <input v-model.number="interestAmount" type="number" step="0.01" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>

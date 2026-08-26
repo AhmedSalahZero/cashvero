@@ -174,7 +174,7 @@ function submit() {
     <AppLayout>
         <div class="p-6">
             <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm mb-3">
-                ← Back to {{ modelDisplayName }} Table
+                {{ $t('← Back to') }} {{ modelDisplayName }} {{ $t('Table') }}
             </Link>
             <h1 class="text-xl font-semibold cvr-text-primary mb-6">{{ modelDisplayName }} {{ isEdit ? $t('— Edit') : $t('— Create') }}</h1>
             <p v-if="!isEdit" class="text-sm cvr-text-muted -mt-4 mb-6">{{ $t('If you can\'t find your customer or supplier in the dropdown, create them first from the Partners section.') }}</p>

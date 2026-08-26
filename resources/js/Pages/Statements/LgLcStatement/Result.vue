@@ -66,7 +66,7 @@ function goToPage(url) {
                     {{ $t('⬇️ Export to Excel') }}
                 </a>
             </div>
-            <p class="text-sm cvr-text-muted mb-6">{{ kpis.transactionCount }} transactions in this date range.</p>
+            <p class="text-sm cvr-text-muted mb-6">{{ kpis.transactionCount }} {{ $t('transactions in this date range.') }}</p>
 
             <!-- KPI row -->
             <div class="cvr-kpi-row mb-6">

@@ -59,7 +59,7 @@ function goToPage(url) {
                     {{ $t('⬇️ Export to Excel') }}
                 </a>
             </div>
-            <p class="text-sm cvr-text-muted mb-6">{{ kpis.transactionCount }} transactions in this date range.</p>
+            <p class="text-sm cvr-text-muted mb-6">{{ kpis.transactionCount }} {{ $t('transactions in this date range.') }}</p>
 
             <!-- KPI row -->
             <div class="cvr-kpi-row mb-6">
@@ -92,8 +92,8 @@ function goToPage(url) {
                                 <th class="px-3 py-3 text-start">{{ $t('Currency') }}</th>
                                 <th class="px-3 py-3 text-right">{{ $t('Paid Amount') }}</th>
                                 <template v-if="!isMainCurrency">
-                                    <th class="px-3 py-3 text-right">Exchange Rate</th>
-                                    <th class="px-3 py-3 text-right">Equivalent In Main Currency</th>
+                                    <th class="px-3 py-3 text-right">{{ $t('Exchange Rate') }}</th>
+                                    <th class="px-3 py-3 text-right">{{ $t('Equivalent In Main Currency') }}</th>
                                 </template>
                                 <th class="px-3 py-3 text-start min-w-[240px]">{{ $t('Comment') }}</th>
                             </tr>

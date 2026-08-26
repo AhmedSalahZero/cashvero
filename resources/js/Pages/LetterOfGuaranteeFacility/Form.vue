@@ -109,7 +109,7 @@ function submit() {
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">
-                {{ isEdit ? $t('Edit') : $t('Add') }} LG Facility
+                {{ isEdit ? $t('Edit') : $t('Add') }} {{ $t('LG Facility') }}
             </h1>
             <p class="text-sm cvr-text-muted mb-6">{{ financialInstitution.name }}</p>
 

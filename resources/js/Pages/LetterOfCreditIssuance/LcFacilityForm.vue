@@ -331,7 +331,7 @@ function submit() {
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">
-                {{ isEdit ? $t('Edit') : $t('Add') }} LC Issuance — Via LC Facility
+                {{ isEdit ? $t('Edit') : $t('Add') }} {{ $t('LC Issuance — Via LC Facility') }}
             </h1>
 
             <FormErrorSummary />
@@ -493,7 +493,7 @@ function submit() {
                             <select v-model="form.lc_cash_cover_currency" class="cvr-input w-full px-3 py-2 rounded">
                                 <option v-for="code in cashCoverCurrencyOptions" :key="code" :value="code">{{ currencyLabel(code) }}</option>
                             </select>
-                            <p class="text-xs cvr-text-muted mt-1">Limited to the company's main functional currency and the LC Currency above</p>
+                            <p class="text-xs cvr-text-muted mt-1">{{ $t('Limited to the company\'s main functional currency and the LC Currency above') }}</p>
                         </div>
                         <div>
                             <label class="cvr-form-label">{{ $t('Cash Cover Amount') }}</label>

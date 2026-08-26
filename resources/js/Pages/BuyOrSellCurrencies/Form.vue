@@ -344,7 +344,7 @@ function submit() {
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-6">
-                {{ isEdit ? $t('Edit') : $t('Add') }} Sell Or Buy Currencies
+                {{ isEdit ? $t('Edit') : $t('Add') }} {{ $t('Sell Or Buy Currencies') }}
             </h1>
 
             <FormErrorSummary />

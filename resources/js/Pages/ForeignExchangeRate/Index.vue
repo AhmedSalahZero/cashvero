@@ -131,7 +131,7 @@ function destroyRow() {
         <div class="p-6">
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Foreign Exchange Rate') }}</h1>
             <p class="text-sm cvr-text-blue mb-6">
-                Main functional currency: {{ mainFunctionalCurrency }}
+                {{ $t('Main functional currency:') }} {{ mainFunctionalCurrency }}
                 <span v-if="hasOdooIntegration"> {{ $t('— rates also sync automatically from Odoo') }}</span>
             </p>
 
@@ -144,7 +144,7 @@ function destroyRow() {
                     class="cvr-filter-pill"
                     :class="{ 'cvr-filter-pill-active': activeTab === currency }"
                 >
-                    {{ currency }} Table
+                    {{ currency }} {{ $t('Table') }}
                 </button>
             </div>
 
@@ -246,7 +246,7 @@ function destroyRow() {
             <!-- Pagination -->
             <div v-if="rates.last_page > 1" class="flex items-center justify-between mt-4 flex-wrap gap-3">
                 <p class="text-xs cvr-text-muted">
-                    Showing {{ rates.from }}–{{ rates.to }} of {{ rates.total }} rates
+                    {{ $t('Showing') }} {{ rates.from }}–{{ rates.to }} {{ $t('of') }} {{ rates.total }} {{ $t('rates') }}
                 </p>
                 <div class="flex items-center gap-1 flex-wrap">
                     <button

@@ -66,7 +66,7 @@ function submit() {
 <template>
     <AppLayout :nav-urls="navUrls">
         <div class="p-6 max-w-4xl">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">Export Fields — {{ modelDisplayName }}</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Export Fields —') }} {{ modelDisplayName }}</h1>
             <p class="text-sm cvr-text-muted mb-6">{{ $t('Please choose fields that you need to be in your Excel sheet') }}</p>
 
             <p v-if="isLoanScheduleModel" class="text-xs cvr-text-muted mb-4">

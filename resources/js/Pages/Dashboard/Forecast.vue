@@ -231,7 +231,7 @@ function chequeBarData(modelType) {
                     <input v-model="endDateModel" type="date" class="cvr-input px-3 py-2 rounded w-44" />
                 </div>
                 <button class="cvr-btn-primary px-4 py-2 rounded" @click="applyFilter">{{ $t('Apply') }}</button>
-                <span v-if="contractCode" class="cvr-badge cvr-badge-info self-center">Contract: {{ contractCode }}</span>
+                <span v-if="contractCode" class="cvr-badge cvr-badge-info self-center">{{ $t('Contract:') }} {{ contractCode }}</span>
                 <p class="text-xs cvr-text-muted w-full">{{ $t('Today\'s date must fall within the Start/End Date range.') }}</p>
             </div>
 
@@ -248,10 +248,10 @@ function chequeBarData(modelType) {
             </div>
 
             <!-- Cash Flow charts -->
-            <div class="cvr-section-heading"><h2>Cash Flow Projection [{{ activeCurrency }}]</h2></div>
+            <div class="cvr-section-heading"><h2>{{ $t('Cash Flow Projection [') }}{{ activeCurrency }}]</h2></div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
                 <div class="cvr-chart-card" style="border-top-color: var(--cvr-green-bright)">
-                    <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ cashFlowChartTitle }}</h4>
+                    <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ $t(cashFlowChartTitle) }}</h4>
                     <MultiLineChart :data="cashFlowReport?.[activeCurrency]?.total_cash_in_out_flow || []" :series="cashFlowSeries" :height="300" />
                 </div>
                 <div class="cvr-chart-card" style="border-top-color: var(--cvr-blue)">
@@ -261,24 +261,24 @@ function chequeBarData(modelType) {
             </div>
 
             <!-- Invoice & Cheque Aging -->
-            <div class="cvr-section-heading"><h2>Aging Summary [{{ activeCurrency }}]</h2></div>
+            <div class="cvr-section-heading"><h2>{{ $t('Aging Summary [') }}{{ activeCurrency }}]</h2></div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
                 <div v-for="modelType in invoiceTypesModels" :key="'inv-'+modelType" class="cvr-chart-card" style="border-top-color: var(--cvr-num-amber)">
-                    <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ invoiceTypeLabels[modelType] || modelType }} Aging</h4>
+                    <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ $t(invoiceTypeLabels[modelType] || modelType) }} {{ $t('Aging') }}</h4>
                     <p class="text-xs cvr-text-muted mb-1">{{ $t('Past Due (left) · Current & Coming Due (right)') }}</p>
                     <AgingDivergingBarChart :data="agingBarData(modelType)" :height="300" />
                 </div>
             </div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
                 <div v-for="modelType in invoiceTypesModels" :key="'chq-'+modelType" class="cvr-chart-card" style="border-top-color: var(--cvr-copper-bright)">
-                    <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ chequeTypeLabels[modelType] || modelType }} Aging</h4>
+                    <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ $t(chequeTypeLabels[modelType] || modelType) }} {{ $t('Aging') }}</h4>
                     <p class="text-xs cvr-text-muted mb-1">{{ $t('Past Due (left) · Current & Coming Due (right)') }}</p>
                     <AgingDivergingBarChart :data="chequeBarData(modelType)" :height="300" />
                 </div>
             </div>
 
             <!-- Past Due Summary -->
-            <div class="cvr-section-heading"><h2>Past Due Summary [{{ currencyName }}]</h2></div>
+            <div class="cvr-section-heading"><h2>{{ $t('Past Due Summary [') }}{{ currencyName }}]</h2></div>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
                 <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
                     <div class="px-4 py-2 cvr-table-head text-xs">{{ $t('Past Due Customer Invoices') }}</div>

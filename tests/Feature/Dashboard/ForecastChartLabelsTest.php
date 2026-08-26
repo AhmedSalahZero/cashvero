@@ -38,11 +38,17 @@ class ForecastChartLabelsTest extends TestCase
      * diverging bar chart the invoices use, so the heading dropped the
      * "— Cheques Coming Due" suffix and now reads "... Aging" to match
      * the row above it. The labels themselves are unchanged.
+     *
+     * Both the map expression and the trailing word are wrapped in $t()
+     * since the Arabic rollout. What this guards is which LABEL MAP
+     * feeds the heading — not how it is wrapped for translation — so
+     * the assertion pins the map and the word, and stays out of the
+     * way of the i18n plumbing between them.
      */
     public function test_the_cheque_row_reads_the_cheque_labels(): void
     {
-        $this->assertStringContainsString(
-            '{{ chequeTypeLabels[modelType] || modelType }} Aging',
+        $this->assertMatchesRegularExpression(
+            '/chequeTypeLabels\[modelType\][^<]*Aging/',
             $this->page()
         );
     }
@@ -65,7 +71,10 @@ class ForecastChartLabelsTest extends TestCase
     {
         $page = $this->page();
 
-        $this->assertStringContainsString('{{ invoiceTypeLabels[modelType] || modelType }} Aging', $page);
+        $this->assertMatchesRegularExpression(
+            '/invoiceTypeLabels\[modelType\][^<]*Aging/',
+            $page
+        );
         $this->assertStringContainsString(
             "const invoiceTypeLabels = { CustomerInvoice: 'Customer Invoices', SupplierInvoice: 'Supplier Invoices' }",
             $page

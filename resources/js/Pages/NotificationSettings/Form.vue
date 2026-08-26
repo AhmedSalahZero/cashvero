@@ -72,7 +72,7 @@ function submit() {
             <form @submit.prevent="submit" class="space-y-6">
                 <div v-for="section in sections" :key="section.title" class="cvr-card">
                     <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">
-                        {{ section.title }}
+                        {{ $t(section.title) }}
                     </h2>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div v-for="[name, label] in section.fields" :key="name">

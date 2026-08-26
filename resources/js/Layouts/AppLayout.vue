@@ -272,7 +272,7 @@ if (page.flash?.success || page.flash?.error) {
                 style="border-bottom: 1px solid var(--cvr-nav-divider);"
             >
                 <span v-if="isMobileNav || sidebarExpanded" class="font-bold text-xl tracking-tight whitespace-nowrap" style="color: var(--cvr-nav-text-active);">
-                    Cash<span style="color: var(--cvr-amber-bright);">Vero</span>
+                    {{ $t('Cash') }}<span style="color: var(--cvr-amber-bright);">Vero</span>
                 </span>
                 <span v-else class="font-bold text-lg" style="color: var(--cvr-amber-bright);">CV</span>
             </div>

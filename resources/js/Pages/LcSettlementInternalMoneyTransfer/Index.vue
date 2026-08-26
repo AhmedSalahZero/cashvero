@@ -163,7 +163,7 @@ function confirmReset() {
                             </td>
                             <td class="px-4 py-3">
                                 {{ row.settlements_count }}
-                                <span v-if="row.last_settlement_date_formatted" class="cvr-text-muted text-xs">(last {{ row.last_settlement_date_formatted }})</span>
+                                <span v-if="row.last_settlement_date_formatted" class="cvr-text-muted text-xs">{{ $t('(last') }} {{ row.last_settlement_date_formatted }})</span>
                             </td>
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-1">
@@ -197,10 +197,10 @@ function confirmReset() {
             <!-- Mark As Settle popup -->
             <div v-if="settleTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-5xl max-h-[85vh] overflow-y-auto">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-1">Settle LC — {{ settleTarget.transaction_name }}</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-1">{{ $t('Settle LC —') }} {{ settleTarget.transaction_name }}</h2>
                     <p class="text-xs cvr-text-muted mb-4">
-                        Remaining before this settlement: {{ Number(settleDataInfo.remaining_amount).toLocaleString('en-EG') }} {{ settleTarget.currency }}.
-                        {{ settleDataInfo.days }} day(s) since {{ settleTarget.last_settlement_date_formatted || $t('the LC was paid') }}, at {{ settleDataInfo.interest_rate }}%.
+                        {{ $t('Remaining before this settlement:') }} {{ Number(settleDataInfo.remaining_amount).toLocaleString('en-EG') }} {{ settleTarget.currency }}.
+                        {{ settleDataInfo.days }} {{ $t('day(s) since') }} {{ settleTarget.last_settlement_date_formatted || $t('the LC was paid') }}{{ $t(', at') }} {{ settleDataInfo.interest_rate }}%.
                     </p>
                     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                         <div>
@@ -268,8 +268,7 @@ function confirmReset() {
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
                     <h2 class="text-lg font-medium cvr-text-primary mb-2">{{ $t('Reset this LC\'s settlement?') }}</h2>
                     <p class="text-sm cvr-text-muted mb-4">
-                        This undoes every settlement made so far for {{ resetTarget.transaction_name }} — principal and interest
-                        alike — and returns the full original amount to "remaining". This can't be undone.
+                        {{ $t('This undoes every settlement made so far for') }} {{ resetTarget.transaction_name }} {{ $t('— principal and interest alike — and returns the full original amount to "remaining". This can\'t be undone.') }}
                     </p>
                     <div class="flex justify-end gap-2">
                         <button @click="resetTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>

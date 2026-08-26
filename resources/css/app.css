@@ -1129,3 +1129,39 @@ aside .cvr-nav-sub-item.cvr-nav-item-active .cvr-nav-icon-svg {
 [dir="rtl"] .cvr-toast-leave-to {
     transform: translateX(-24px);
 }
+
+/*
+ * Select dropdown arrow in Arabic.
+ *
+ * @tailwindcss/forms draws the arrow as a background-image and pins it
+ * with PHYSICAL properties:
+ *
+ *     background-position: right .5rem center;
+ *     padding-right: 2.5rem;
+ *
+ * Neither one flips for RTL — `right` means right in both directions.
+ * So in Arabic the arrow stayed pinned to the right edge, sitting on
+ * top of the right-aligned Arabic text (which is what reads as a stray
+ * mark over the text), while the left edge, where the arrow belongs,
+ * had no room reserved at all.
+ *
+ * Mirrored onto the correct side here rather than switched to a logical
+ * property, because `background-position` has no logical equivalent
+ * with usable browser support.
+ */
+[dir="rtl"] select {
+    background-position: left .5rem center;
+    padding-right: .75rem;
+    padding-left: 2.5rem;
+}
+
+/*
+ * A multiple/sized select has no arrow — the plugin removes the image
+ * for those. Mirror that exception too, or they would be left with
+ * 2.5rem of padding reserved for an arrow that is not drawn.
+ */
+[dir="rtl"] select:where([multiple]),
+[dir="rtl"] select:where([size]:not([size="1"])) {
+    padding-right: .75rem;
+    padding-left: .75rem;
+}

@@ -176,18 +176,18 @@ const odooErrorTarget = ref(null);
                     <!-- Filters -->
                     <div class="flex flex-wrap items-end gap-3 mb-4">
                         <div>
-                            <label class="cvr-form-label">Search (Account Number)</label>
-                            <input v-model="searchValue" type="text" placeholder="Search..." class="cvr-input px-3 py-2 rounded" />
+                            <label class="cvr-form-label">{{ $t('Search (Account Number)') }}</label>
+                            <input v-model="searchValue" type="text" :placeholder="$t('Search...')" class="cvr-input px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Start Date</label>
+                            <label class="cvr-form-label">{{ $t('Start Date') }}</label>
                             <input v-model="filters[type].startDate" type="date" class="cvr-input px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">End Date</label>
+                            <label class="cvr-form-label">{{ $t('End Date') }}</label>
                             <input v-model="filters[type].endDate" type="date" class="cvr-input px-3 py-2 rounded" />
                         </div>
-                        <button @click="applyFilters(type)" class="cvr-btn-secondary px-4 py-2 rounded border">Apply</button>
+                        <button @click="applyFilters(type)" class="cvr-btn-secondary px-4 py-2 rounded border">{{ $t('Apply') }}</button>
                     </div>
 
                     <!-- Table -->
@@ -196,13 +196,13 @@ const odooErrorTarget = ref(null);
                             <thead class="cvr-table-head">
                                 <tr>
                                     <th class="px-3 py-3 text-start">#</th>
-                                    <th class="px-3 py-3 text-start">Transfer Date</th>
-                                    <th class="px-3 py-3 text-start">Amount</th>
-                                    <th class="px-3 py-3 text-start">Currency</th>
+                                    <th class="px-3 py-3 text-start">{{ $t('Transfer Date') }}</th>
+                                    <th class="px-3 py-3 text-start">{{ $t('Amount') }}</th>
+                                    <th class="px-3 py-3 text-start">{{ $t('Currency') }}</th>
                                     <th v-for="col in columnsFor(type)" :key="col" class="px-3 py-3 text-start whitespace-nowrap">
-                                        {{ columnLabels[col] }}
+                                        {{ $t(columnLabels[col]) }}
                                     </th>
-                                    <th v-if="canUpdate || canDelete" class="px-3 py-3 text-start">Control</th>
+                                    <th v-if="canUpdate || canDelete" class="px-3 py-3 text-start">{{ $t('Control') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -223,17 +223,17 @@ const odooErrorTarget = ref(null);
                                     <td v-if="canUpdate || canDelete" class="px-3 py-3">
                                         <div class="flex items-center gap-2">
                                             <RecordLogButton subject="InternalMoneyTransfer" :id="row.id" :company-id="company.id" />
-                                            <button v-if="row.user_comment" @click="commentTarget = row" class="cvr-action-btn" title="User Comment">💬</button>
-                                            <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Odoo Error">🐞</button>
-                                            <button v-if="row.is_fully_integrated_with_odoo" @click="odooRefTarget = row" class="cvr-action-btn" title="Fully Integrated">👍</button>
-                                            <Link v-if="canUpdate" :href="row.edit_url" class="cvr-action-btn" title="Edit">✏️</Link>
-                                            <button v-if="canDelete" @click="confirmDelete(row)" class="cvr-action-btn" title="Delete">🗑️</button>
+                                            <button v-if="row.user_comment" @click="commentTarget = row" class="cvr-action-btn" :title="$t('User Comment')">💬</button>
+                                            <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Odoo Error')">🐞</button>
+                                            <button v-if="row.is_fully_integrated_with_odoo" @click="odooRefTarget = row" class="cvr-action-btn" :title="$t('Fully Integrated')">👍</button>
+                                            <Link v-if="canUpdate" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</Link>
+                                            <button v-if="canDelete" @click="confirmDelete(row)" class="cvr-action-btn" :title="$t('Delete')">🗑️</button>
                                         </div>
                                     </td>
                                 </tr>
                                 <tr v-if="tabs[type].rows.data.length === 0">
                                     <td :colspan="5 + columnsFor(type).length" class="px-4 py-8 text-center cvr-text-muted">
-                                        No {{ label.toLowerCase() }} transfers found.
+                                        {{ $t('No') }} {{ label.toLowerCase() }} {{ $t('transfers found.') }}
                                     </td>
                                 </tr>
                             </tbody>
@@ -243,7 +243,7 @@ const odooErrorTarget = ref(null);
                     <!-- Pagination -->
                     <div v-if="tabs[type].rows.last_page > 1" class="flex items-center justify-between mt-4 flex-wrap gap-3">
                         <p class="text-xs cvr-text-muted">
-                            Showing {{ tabs[type].rows.from }}–{{ tabs[type].rows.to }} of {{ tabs[type].rows.total }}
+                            {{ $t('Showing') }} {{ tabs[type].rows.from }}–{{ tabs[type].rows.to }} {{ $t('of') }} {{ tabs[type].rows.total }}
                         </p>
                         <div class="flex items-center gap-1 flex-wrap">
                             <button

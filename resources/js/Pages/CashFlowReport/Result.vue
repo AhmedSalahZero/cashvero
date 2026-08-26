@@ -586,9 +586,9 @@ function saveProjectionTab(type) {
                                 <td class="px-2 py-2 whitespace-nowrap">
                                     <span v-if="row.hasSubRows">{{ expandedRows.has(row.key) ? '−' : '+' }}</span>
                                     {{ row.name }}
-                                    <button v-if="row.name === 'Customers Past Due Invoices'" @click.stop="openDueInvoiceModal('CustomerInvoice')" class="cvr-btn-secondary px-2 py-0.5 rounded border text-xs ms-2">View</button>
-                                    <button v-if="row.name === 'Suppliers Past Due Invoices'" @click.stop="openDueInvoiceModal('SupplierInvoice')" class="cvr-btn-secondary px-2 py-0.5 rounded border text-xs ms-2">View</button>
-                                    <button v-if="row.name === 'Loan Past Due Installments'" @click.stop="openLoanInstallmentModal()" class="cvr-btn-secondary px-2 py-0.5 rounded border text-xs ms-2">View</button>
+                                    <button v-if="row.name === 'Customers Past Due Invoices'" @click.stop="openDueInvoiceModal('CustomerInvoice')" class="cvr-btn-secondary px-2 py-0.5 rounded border text-xs ms-2">{{ $t('View') }}</button>
+                                    <button v-if="row.name === 'Suppliers Past Due Invoices'" @click.stop="openDueInvoiceModal('SupplierInvoice')" class="cvr-btn-secondary px-2 py-0.5 rounded border text-xs ms-2">{{ $t('View') }}</button>
+                                    <button v-if="row.name === 'Loan Past Due Installments'" @click.stop="openLoanInstallmentModal()" class="cvr-btn-secondary px-2 py-0.5 rounded border text-xs ms-2">{{ $t('View') }}</button>
                                 </td>
                                 <td v-for="(cell, i) in row.cells" :key="i" class="px-2 py-2 text-center cvr-num whitespace-nowrap">
                                     {{ fmt(cell) }}
@@ -607,7 +607,7 @@ function saveProjectionTab(type) {
                                         @click.stop="openChecksCollectedModal(sub)"
                                         type="button"
                                         class="ms-1 text-xs cvr-btn-secondary px-1.5 py-0.5 rounded border"
-                                        title="Details"
+                                        :title="$t('Details')"
                                     >
                                         i
                                     </button>
@@ -616,10 +616,10 @@ function saveProjectionTab(type) {
                                     {{ fmt(cell) }}
                                     <i v-if="(row.name === 'Cancelled LGs Cash Cover' || row.name === 'Issued LG Cash Cover') && cell"
                                         @click.stop="openLgBreakdown(sub.label, weekKeys[i], sub.lgBreakdown?.[i])"
-                                        class="ms-1 cursor-pointer" title="Breakdown">ℹ️</i>
+                                        class="ms-1 cursor-pointer" :title="$t('Breakdown')">ℹ️</i>
                                     <i v-if="row.name === 'Incoming Transfers' && cell"
                                         @click.stop="openLgBreakdown(sub.label, weekKeys[i], sub.incomingTransferBreakdown?.[i], 'incoming_transfer')"
-                                        class="ms-1 cursor-pointer" title="Breakdown">ℹ️</i>
+                                        class="ms-1 cursor-pointer" :title="$t('Breakdown')">ℹ️</i>
                                 </td>
                                 <td class="px-2 py-2 text-center cvr-num whitespace-nowrap text-xs">{{ fmt(sub.total) }}</td>
                             </tr>
@@ -704,7 +704,7 @@ function saveProjectionTab(type) {
                                 <th class="px-2 py-2 text-start">{{ dueInvoiceModal.invoiceType === $t('CustomerInvoice') ? $t('Customer Name') : $t('Supplier Name') }}</th>
                                 <th class="px-2 py-2 text-start">{{ $t('Invoice No.') }}</th>
                                 <th class="px-2 py-2 text-start">{{ $t('Currency') }}</th>
-                                <th class="px-2 py-2 text-right">Net Balance{{ activeTab === mainFunctionalCurrency ? $t(' (in ') + mainFunctionalCurrency + ')' : '' }}</th>
+                                <th class="px-2 py-2 text-right">{{ $t('Net Balance') }}{{ activeTab === mainFunctionalCurrency ? $t(' (in ') + mainFunctionalCurrency + ')' : '' }}</th>
                                 <th class="px-2 py-2 text-start">{{ $t('Due Date') }}</th>
                                 <th class="px-2 py-2 text-center">{{ $t('Collection %') }}</th>
                                 <th class="px-2 py-2 text-start">{{ $t('Collection Week') }}</th>
@@ -724,7 +724,7 @@ function saveProjectionTab(type) {
                                     <select v-model="dueInvoiceForm[row.id].week_start_date" class="cvr-input px-2 py-1 rounded">
                                         <option value="">{{ $t('Select') }}</option>
                                         <option v-for="wk in weekKeys" :key="wk" :value="dates[wk]?.start_date">
-                                            Week {{ weeks[wk] }} ({{ dates[wk]?.start_date }} - {{ dates[wk]?.end_date }})
+                                            {{ $t('Week') }} {{ weeks[wk] }} ({{ dates[wk]?.start_date }} - {{ dates[wk]?.end_date }})
                                         </option>
                                     </select>
                                 </td>
@@ -747,7 +747,7 @@ function saveProjectionTab(type) {
                             <tr>
                                 <th class="px-2 py-2 text-start">{{ $t('Name') }}</th>
                                 <th class="px-2 py-2 text-start">{{ $t('Currency') }}</th>
-                                <th class="px-2 py-2 text-right">Remaining{{ activeTab === mainFunctionalCurrency ? $t(' (in ') + mainFunctionalCurrency + ')' : '' }}</th>
+                                <th class="px-2 py-2 text-right">{{ $t('Remaining') }}{{ activeTab === mainFunctionalCurrency ? $t(' (in ') + mainFunctionalCurrency + ')' : '' }}</th>
                                 <th class="px-2 py-2 text-start">{{ $t('Due Date') }}</th>
                                 <th class="px-2 py-2 text-center">{{ $t('Collection %') }}</th>
                                 <th class="px-2 py-2 text-start">{{ $t('Collection Week') }}</th>
@@ -766,7 +766,7 @@ function saveProjectionTab(type) {
                                     <select v-model="loanInstallmentForm[row.id].week_start_date" class="cvr-input px-2 py-1 rounded">
                                         <option value="">{{ $t('Select') }}</option>
                                         <option v-for="wk in weekKeys" :key="wk" :value="dates[wk]?.start_date">
-                                            Week {{ weeks[wk] }} ({{ dates[wk]?.start_date }} - {{ dates[wk]?.end_date }})
+                                            {{ $t('Week') }} {{ weeks[wk] }} ({{ dates[wk]?.start_date }} - {{ dates[wk]?.end_date }})
                                         </option>
                                     </select>
                                 </td>
@@ -783,7 +783,7 @@ function saveProjectionTab(type) {
             <!-- LG Breakdown modal -->
             <div v-if="lgBreakdownModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-4xl">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Breakdown [{{ lgBreakdownModal.label }}]</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Breakdown [') }}{{ lgBreakdownModal.label }}]</h2>
                     <table class="min-w-full text-sm mb-4">
                         <thead class="cvr-table-head">
                             <tr v-if="lgBreakdownModal.type === 'incoming_transfer'">
@@ -817,14 +817,14 @@ function saveProjectionTab(type) {
             <!-- Cross-currency collection notes (informational only) -->
             <div v-if="crossCurrencyModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-4xl">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-2">Collected in a Different Currency [{{ crossCurrencyModal.label }}]</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-2">{{ $t('Collected in a Different Currency [') }}{{ crossCurrencyModal.label }}]</h2>
                     <p class="text-xs cvr-text-muted mb-4">{{ $t('These amounts are shown for reference only and are not included in this tab\'s totals — the cash itself is counted under the currency it was actually collected in.') }}</p>
                     <table class="min-w-full text-sm mb-4">
                         <thead class="cvr-table-head">
                             <tr>
                                 <th class="px-2 py-2 text-start">{{ $t('Name') }}</th>
                                 <th class="px-2 py-2 text-start">{{ $t('Date') }}</th>
-                                <th class="px-2 py-2 text-right">{{ currencyName }}-Equivalent</th>
+                                <th class="px-2 py-2 text-right">{{ currencyName }}{{ $t('-Equivalent') }}</th>
                                 <th class="px-2 py-2 text-right">{{ $t('Actually Collected') }}</th>
                             </tr>
                         </thead>

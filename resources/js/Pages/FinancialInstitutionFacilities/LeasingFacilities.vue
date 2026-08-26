@@ -26,7 +26,7 @@ function formatAmount(value) {
     <AppLayout>
         <div class="p-6">
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Leasing Facilities') }}</h1>
-            <p class="text-sm cvr-text-blue mb-6">Every leasing contract across every leasing company for {{ company.name }}</p>
+            <p class="text-sm cvr-text-blue mb-6">{{ $t('Every leasing contract across every leasing company for') }} {{ company.name }}</p>
 
             <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
                 <div class="cvr-search-bar flex items-center gap-2 px-3 py-1.5 w-72">

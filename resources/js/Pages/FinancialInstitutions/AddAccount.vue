@@ -82,7 +82,7 @@ function submit() {
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Add New Account') }}</h1>
-            <p class="text-sm cvr-text-muted mb-6">For {{ financialInstitution.name }}</p>
+            <p class="text-sm cvr-text-muted mb-6">{{ $t('For') }} {{ financialInstitution.name }}</p>
 
             <!-- General error banner — shows if anything failed, even if we
                  can't map it to a specific row for some reason -->

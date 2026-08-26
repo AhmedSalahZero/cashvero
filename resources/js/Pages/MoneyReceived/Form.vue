@@ -556,7 +556,7 @@ function submit() {
                         <label class="cvr-form-label">{{ $t('Transaction') }} *</label>
                         <select v-model="transactionType" class="cvr-input w-full px-3 py-2 rounded">
                             <option value="">{{ $t('Select') }}</option>
-                            <option v-for="opt in transactionTypeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                            <option v-for="opt in transactionTypeOptions" :key="opt.value" :value="opt.value">{{ $t(opt.label) }}</option>
                         </select>
                     </div>
                 </div>
@@ -577,7 +577,7 @@ function submit() {
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Received Amount [{{ receivingCurrency }}] *</label>
+                        <label class="cvr-form-label">{{ $t('Received Amount [') }}{{ receivingCurrency }}] *</label>
                         <input v-model="receivedAmount" type="number" step="any" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
@@ -591,7 +591,7 @@ function submit() {
                         <input v-model="exchangeRateInput" @blur="onExchangeRateBlur" type="text" inputmode="decimal" :placeholder="$t('e.g. 50 or 1/50')" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">Amount In Invoice Currency [{{ invoiceCurrency }}]</label>
+                        <label class="cvr-form-label">{{ $t('Amount In Invoice Currency [') }}{{ invoiceCurrency }}]</label>
                         <input :value="amountInInvoiceCurrency" readonly class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                 </div>
@@ -608,7 +608,7 @@ function submit() {
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Deposit Amount [{{ receivingCurrency }}] *</label>
+                        <label class="cvr-form-label">{{ $t('Deposit Amount [') }}{{ receivingCurrency }}] *</label>
                         <input v-model="receivedAmount" type="number" step="any" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
@@ -634,7 +634,7 @@ function submit() {
                         <input v-model="exchangeRateInput" @blur="onExchangeRateBlur" type="text" inputmode="decimal" :placeholder="$t('e.g. 50 or 1/50')" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">Amount In Invoice Currency [{{ invoiceCurrency }}]</label>
+                        <label class="cvr-form-label">{{ $t('Amount In Invoice Currency [') }}{{ invoiceCurrency }}]</label>
                         <input :value="amountInInvoiceCurrency" readonly class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                 </div>
@@ -651,7 +651,7 @@ function submit() {
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Cheque Amount [{{ receivingCurrency }}] *</label>
+                        <label class="cvr-form-label">{{ $t('Cheque Amount [') }}{{ receivingCurrency }}] *</label>
                         <input v-model="receivedAmount" type="number" step="any" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
@@ -674,11 +674,11 @@ function submit() {
                     </div>
                     <template v-if="showExchangeRateFields">
                         <div class="cvr-field-narrow">
-                            <label class="cvr-form-label">Exchange Rate *</label>
-                            <input v-model="exchangeRateInput" @blur="onExchangeRateBlur" type="text" inputmode="decimal" placeholder="e.g. 50 or 1/50" class="cvr-input w-full px-3 py-2 rounded" />
+                            <label class="cvr-form-label">{{ $t('Exchange Rate *') }}</label>
+                            <input v-model="exchangeRateInput" @blur="onExchangeRateBlur" type="text" inputmode="decimal" :placeholder="$t('e.g. 50 or 1/50')" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div class="cvr-field-narrow">
-                            <label class="cvr-form-label">Amount In Invoice Currency [{{ invoiceCurrency }}]</label>
+                            <label class="cvr-form-label">{{ $t('Amount In Invoice Currency [') }}{{ invoiceCurrency }}]</label>
                             <input :value="amountInInvoiceCurrency" readonly class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </template>
@@ -696,7 +696,7 @@ function submit() {
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Transfer Amount [{{ receivingCurrency }}] *</label>
+                        <label class="cvr-form-label">{{ $t('Transfer Amount [') }}{{ receivingCurrency }}] *</label>
                         <input v-model="receivedAmount" type="number" step="any" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
@@ -722,7 +722,7 @@ function submit() {
                         <input v-model="exchangeRateInput" @blur="onExchangeRateBlur" type="text" inputmode="decimal" :placeholder="$t('e.g. 50 or 1/50')" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">Amount In Invoice Currency [{{ invoiceCurrency }}]</label>
+                        <label class="cvr-form-label">{{ $t('Amount In Invoice Currency [') }}{{ invoiceCurrency }}]</label>
                         <input :value="amountInInvoiceCurrency" readonly class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                 </div>
@@ -739,10 +739,10 @@ function submit() {
                     <p style="color: var(--cvr-danger-text)">{{ $t('Couldn\'t load invoices for this customer — please try again, or reload the page. If this keeps happening, contact support.') }}</p>
                 </div>
                 <div v-else-if="invoices.length === 0 && customerInvoiceCurrencies.length && !customerInvoiceCurrencies.includes(invoiceCurrency)" class="text-sm cvr-text-muted mb-4">
-                    This customer has no open invoices in {{ invoiceCurrency }}. They do have invoices in: {{ customerInvoiceCurrencies.join(', ') }} — try switching Invoice Currency above.
+                    {{ $t('This customer has no open invoices in') }} {{ invoiceCurrency }}{{ $t('. They do have invoices in:') }} {{ customerInvoiceCurrencies.join(', ') }} {{ $t('— try switching Invoice Currency above.') }}
                 </div>
                 <div v-else-if="invoices.length === 0" class="text-sm cvr-text-muted mb-4">
-                    This customer has no open invoices in {{ invoiceCurrency }}.
+                    {{ $t('This customer has no open invoices in') }} {{ invoiceCurrency }}.
                 </div>
 
                 <div v-for="(inv, i) in invoices" :key="inv.id" class="cvr-border border rounded-lg p-4 mb-3">
@@ -764,7 +764,7 @@ function submit() {
                             <input :value="inv.invoice_due_date" disabled class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Invoice Amount [{{ inv.currency }}]</label>
+                            <label class="cvr-form-label">{{ $t('Invoice Amount [') }}{{ inv.currency }}]</label>
                             <input :value="fmtAmount(inv.net_invoice_amount)" disabled class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
@@ -810,11 +810,11 @@ function submit() {
                             <input :value="so.so_number" disabled class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Amount [{{ receivingCurrency }}]</label>
+                            <label class="cvr-form-label">{{ $t('Amount [') }}{{ receivingCurrency }}]</label>
                             <input :value="so.amount" disabled class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Received Amount [{{ receivingCurrency }}] *</label>
+                            <label class="cvr-form-label">{{ $t('Received Amount [') }}{{ receivingCurrency }}] *</label>
                             <input v-model.number="so.received_amount" type="number" step="any" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
@@ -823,13 +823,13 @@ function submit() {
 
                 <div class="cvr-form-row-unapplied">
                     <div>
-                        <label class="cvr-form-label">Unapplied Amount [{{ receivingCurrency }}]</label>
+                        <label class="cvr-form-label">{{ $t('Unapplied Amount [') }}{{ receivingCurrency }}]</label>
                         <input :value="unappliedAmountInReceivingCurrency" readonly class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <!-- Second field only when Invoice Currency and Receive Currency differ —
                          with the same currency both figures are identical, so showing both is redundant. -->
                     <div v-if="!isSameCurrency">
-                        <label class="cvr-form-label">Unapplied Amount [{{ invoiceCurrency }}]</label>
+                        <label class="cvr-form-label">{{ $t('Unapplied Amount [') }}{{ invoiceCurrency }}]</label>
                         <input :value="unappliedAmount" readonly class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                 </div>

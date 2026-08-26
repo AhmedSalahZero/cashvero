@@ -191,7 +191,7 @@ function destroyRow() {
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">
-                        Delete Renewal Date History {{ deleteTarget.renewal_date_formatted }}?
+                        {{ $t('Delete Renewal Date History') }} {{ deleteTarget.renewal_date_formatted }}?
                     </h2>
                     <div class="flex justify-end gap-2">
                         <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>

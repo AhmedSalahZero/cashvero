@@ -89,9 +89,9 @@ function submit() {
     <AppLayout>
         <div class="p-6">
             <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm mb-3">
-                ← Back to {{ modelDisplayName }} Review
+                {{ $t('← Back to') }} {{ modelDisplayName }} {{ $t('Review') }}
             </Link>
-            <h1 class="text-xl font-semibold cvr-text-primary mb-6">{{ modelDisplayName }} — Edit Row</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-6">{{ modelDisplayName }} {{ $t('— Edit Row') }}</h1>
 
             <div class="cvr-card-bg cvr-border border rounded-lg p-4">
                 <div class="cvr-form-grid-2">

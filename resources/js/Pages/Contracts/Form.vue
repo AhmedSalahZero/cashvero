@@ -207,7 +207,7 @@ function submit() {
         <div class="p-6">
             <div class="flex items-center gap-3 mb-1">
                 <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
-                    ← Back to {{ type }} Contracts
+                    {{ $t('← Back to') }} {{ type }} {{ $t('Contracts') }}
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-6">{{ formTitle }}</h1>
@@ -274,16 +274,15 @@ function submit() {
                             <span>
                                 <span class="text-sm cvr-text-primary">{{ $t('Monthly Executed') }}</span>
                                 <span class="block text-xs cvr-text-muted mt-0.5">
-                                    The contract value is executed evenly across its own period instead of through
-                                    {{ salesOrderOrPurchaseNumberText }}s. The cash flow report pays out one slice per
-                                    remaining month rather than the whole remainder on a single collection date.
+                                    {{ $t('The contract value is executed evenly across its own period instead of through') }}
+                                    {{ salesOrderOrPurchaseNumberText }}{{ $t('s. The cash flow report pays out one slice per remaining month rather than the whole remainder on a single collection date.') }}
                                 </span>
                             </span>
                         </label>
 
                         <p v-if="isMonthlyExecuted && contractMonths" class="text-xs cvr-num-green mt-2 ms-6">
-                            {{ contractMonths }} month<span v-if="contractMonths !== 1">{{ $t('s') }}</span> ·
-                            {{ monthlyAmount.toFixed(2) }} {{ form.currency }} per month
+                            {{ contractMonths }} {{ $t('month') }}<span v-if="contractMonths !== 1">{{ $t('s') }}</span> ·
+                            {{ monthlyAmount.toFixed(2) }} {{ form.currency }} {{ $t('per month') }}
                         </p>
                         <p v-else-if="isMonthlyExecuted" class="text-xs cvr-num-amber mt-2 ms-6">
                             {{ $t('Set a Start Date and an End Date to see the monthly amount.') }}
@@ -296,7 +295,7 @@ function submit() {
                     <div class="flex items-center justify-between mb-4">
                         <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide">{{ salesOrderOrPurchaseOrderInformationText }}</h2>
                         <p class="text-xs" :class="totalsMismatch ? 'cvr-num-red' : 'cvr-num-green'">
-                            Orders Total: {{ ordersTotal.toFixed(2) }} / Contract Amount: {{ Number(form.amount || 0).toFixed(2) }}
+                            {{ $t('Orders Total:') }} {{ ordersTotal.toFixed(2) }} {{ $t('/ Contract Amount:') }} {{ Number(form.amount || 0).toFixed(2) }}
                         </p>
                     </div>
 
@@ -330,7 +329,7 @@ function submit() {
                     </table>
 
                     <button type="button" @click="addOrderRow" class="cvr-btn-secondary px-3 py-1.5 rounded border text-xs">
-                        + Add {{ salesOrderOrPurchaseNumberText }}
+                        {{ $t('+ Add') }} {{ salesOrderOrPurchaseNumberText }}
                     </button>
                 </div>
 
@@ -347,12 +346,12 @@ function submit() {
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-5xl max-h-[85vh] overflow-y-auto">
                     <div class="flex items-center justify-between mb-1">
                         <h2 class="text-lg font-medium cvr-text-primary">
-                            Execution Details — {{ orders[executionModalIndex].number || $t('(unnamed order)') }}
+                            {{ $t('Execution Details —') }} {{ orders[executionModalIndex].number || $t('(unnamed order)') }}
                         </h2>
                         <button @click="closeExecutionModal" class="cvr-btn-secondary px-2 py-1 rounded border text-xs">✕</button>
                     </div>
                     <p class="text-xs mb-4" :class="totalPhasePercentage(orders[executionModalIndex]) > 100 ? 'cvr-num-red' : 'cvr-text-muted'">
-                        Total across the 5 phases: {{ totalPhasePercentage(orders[executionModalIndex]) }}% (must not exceed 100%)
+                        {{ $t('Total across the 5 phases:') }} {{ totalPhasePercentage(orders[executionModalIndex]) }}{{ $t('% (must not exceed 100%)') }}
                     </p>
 
                     <table class="min-w-full text-xs">

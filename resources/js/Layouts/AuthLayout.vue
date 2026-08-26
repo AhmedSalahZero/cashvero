@@ -102,7 +102,7 @@ const logoUrl = '/images/cashvero-logo.png';
                     </div>
                 </div>
                 <p class="zav-footer-left">
-                    © {{ currentYear }} CashVero · Built by
+                    © {{ currentYear }} {{ $t('CashVero · Built by') }}
                     <span class="zav-footer-squad">{{ $t('SQUAD Business Consulting') }}</span>
                     {{ $t('· Cairo, Egypt') }}
                 </p>

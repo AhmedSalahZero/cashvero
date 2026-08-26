@@ -315,11 +315,11 @@ function submitApplyCollection() {
                 </div>
                 <template v-else>
                     <div>
-                        <label class="cvr-form-label">From</label>
+                        <label class="cvr-form-label">{{ $t('From') }}</label>
                         <input v-model="filterFrom" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">To</label>
+                        <label class="cvr-form-label">{{ $t('To') }}</label>
                         <input v-model="filterTo" type="date" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                 </template>
@@ -337,7 +337,7 @@ function submitApplyCollection() {
                     class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm"
                     :class="{ 'opacity-40 cursor-not-allowed': !selectedIds.length }"
                 >
-                    📖 Batch Send To Collection ({{ selectedIds.length }})
+                    {{ $t('📖 Batch Send To Collection (') }}{{ selectedIds.length }})
                 </button>
             </div>
 
@@ -351,64 +351,64 @@ function submitApplyCollection() {
                             <th class="px-4 py-3 text-start">{{ $t('Customer Name') }}</th>
 
                             <template v-if="['cheque', 'cheque-rejected'].includes(activeTab)">
-                                <th class="px-4 py-3 text-start">Receiving Date</th>
-                                <th class="px-4 py-3 text-start">Cheque Number</th>
-                                <th class="px-4 py-3 text-start">Cheque Amount</th>
-                                <th class="px-4 py-3 text-start">Currency</th>
-                                <th class="px-4 py-3 text-start">Drawee Bank</th>
-                                <th class="px-4 py-3 text-start">Due Date</th>
-                                <th v-if="activeTab === 'cheque'" class="px-4 py-3 text-start">Due After Days</th>
-                                <th class="px-4 py-3 text-start">Status</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Receiving Date') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Cheque Number') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Cheque Amount') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Currency') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Drawee Bank') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Due Date') }}</th>
+                                <th v-if="activeTab === 'cheque'" class="px-4 py-3 text-start">{{ $t('Due After Days') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Status') }}</th>
                             </template>
 
                             <template v-else-if="activeTab === 'cheque-under-collection'">
-                                <th class="px-4 py-3 text-start">Cheque Number</th>
-                                <th class="px-4 py-3 text-start">Cheque Amount</th>
-                                <th class="px-4 py-3 text-start">Deposit Date</th>
-                                <th class="px-4 py-3 text-start">Drawal Bank</th>
-                                <th class="px-4 py-3 text-start">Account Type</th>
-                                <th class="px-4 py-3 text-start">Account Number</th>
-                                <th class="px-4 py-3 text-start">Cheque Due Date</th>
-                                <th class="px-4 py-3 text-start">Clearance Days</th>
-                                <th class="px-4 py-3 text-start">Expected Collection Date</th>
-                                <th class="px-4 py-3 text-start">Status</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Cheque Number') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Cheque Amount') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Deposit Date') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Drawal Bank') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Account Type') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Account Number') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Cheque Due Date') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Clearance Days') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Expected Collection Date') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Status') }}</th>
                             </template>
 
                             <template v-else-if="activeTab === 'cheque-collected'">
-                                <th class="px-4 py-3 text-start">Cheque Number</th>
-                                <th class="px-4 py-3 text-start">Cheque Amount</th>
-                                <th class="px-4 py-3 text-start">Due Date</th>
-                                <th class="px-4 py-3 text-start">Deposit Date</th>
-                                <th class="px-4 py-3 text-start">Drawal Bank</th>
-                                <th class="px-4 py-3 text-start">Account Type</th>
-                                <th class="px-4 py-3 text-start">Account Number</th>
-                                <th class="px-4 py-3 text-start">Actual Collection Date</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Cheque Number') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Cheque Amount') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Due Date') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Deposit Date') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Drawal Bank') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Account Type') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Account Number') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Actual Collection Date') }}</th>
                             </template>
 
                             <template v-else-if="activeTab === 'incoming-transfer'">
-                                <th class="px-4 py-3 text-start">Receiving Date</th>
-                                <th class="px-4 py-3 text-start">Receiving Bank</th>
-                                <th class="px-4 py-3 text-start">Transfer Amount</th>
-                                <th class="px-4 py-3 text-start">Currency</th>
-                                <th class="px-4 py-3 text-start">Account Type</th>
-                                <th class="px-4 py-3 text-start">Account Number</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Receiving Date') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Receiving Bank') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Transfer Amount') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Currency') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Account Type') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Account Number') }}</th>
                             </template>
 
                             <template v-else-if="activeTab === 'cash-in-safe'">
-                                <th class="px-4 py-3 text-start">Receiving Date</th>
-                                <th class="px-4 py-3 text-start">Branch</th>
-                                <th class="px-4 py-3 text-start">Received Amount</th>
-                                <th class="px-4 py-3 text-start">Currency</th>
-                                <th class="px-4 py-3 text-start">Receipt Number</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Receiving Date') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Branch') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Received Amount') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Currency') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Receipt Number') }}</th>
                             </template>
 
                             <template v-else-if="activeTab === 'cash-in-bank'">
-                                <th class="px-4 py-3 text-start">Receiving Date</th>
-                                <th class="px-4 py-3 text-start">Receiving Bank</th>
-                                <th class="px-4 py-3 text-start">Deposit Amount</th>
-                                <th class="px-4 py-3 text-start">Currency</th>
-                                <th class="px-4 py-3 text-start">Account Type</th>
-                                <th class="px-4 py-3 text-start">Account Number</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Receiving Date') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Receiving Bank') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Deposit Amount') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Currency') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Account Type') }}</th>
+                                <th class="px-4 py-3 text-start">{{ $t('Account Number') }}</th>
                             </template>
 
                             <th class="px-4 py-3 text-start">{{ $t('Control') }}</th>
@@ -495,34 +495,34 @@ function submitApplyCollection() {
 
                                     <!-- Cheques In Safe -->
                                     <template v-if="activeTab === 'cheque'">
-                                        <Link v-if="permissions.canUpdate && !row.is_open_balance" :href="row.edit_url" class="cvr-action-btn" title="Edit">✏️</Link>
-                                        <button v-if="permissions.canChangeChequeStatus" @click="openSendToCollection(row)" class="cvr-action-btn" title="Send Under Collection">🏦</button>
-                                        <button v-if="permissions.canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Delete">🗑️</button>
+                                        <Link v-if="permissions.canUpdate && !row.is_open_balance" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</Link>
+                                        <button v-if="permissions.canChangeChequeStatus" @click="openSendToCollection(row)" class="cvr-action-btn" :title="$t('Send Under Collection')">🏦</button>
+                                        <button v-if="permissions.canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Delete')">🗑️</button>
                                     </template>
 
                                     <!-- Rejected Cheques (no Edit — matches original, which had it commented out) -->
                                     <template v-else-if="activeTab === 'cheque-rejected'">
-                                        <button v-if="permissions.canChangeChequeStatus" @click="openSendToCollection(row)" class="cvr-action-btn" title="Send Under Collection">🏦</button>
-                                        <button v-if="permissions.canDelete && !row.is_open_balance" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Delete">🗑️</button>
+                                        <button v-if="permissions.canChangeChequeStatus" @click="openSendToCollection(row)" class="cvr-action-btn" :title="$t('Send Under Collection')">🏦</button>
+                                        <button v-if="permissions.canDelete && !row.is_open_balance" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Delete')">🗑️</button>
                                     </template>
 
                                     <!-- Cheques Under Collection -->
                                     <template v-else-if="activeTab === 'cheque-under-collection'">
-                                        <button v-if="permissions.canChangeChequeStatus && !row.is_open_balance" @click="openSendToCollection(row)" class="cvr-action-btn" title="Edit Deposit Info">✏️</button>
-                                        <button v-if="permissions.canChangeChequeStatus && row.due_status_bool" @click="openApplyCollection(row)" class="cvr-action-btn" title="Apply Collection">🪙</button>
-                                        <Link v-if="permissions.canChangeChequeStatus" :href="row.send_to_safe_url" class="cvr-action-btn" title="Send In Safe">↩️</Link>
-                                        <Link v-if="row.due_status_bool && permissions.canChangeChequeStatus" :href="row.send_to_rejected_safe_url" class="cvr-action-btn-danger cvr-action-btn" title="Rejected">🚫</Link>
+                                        <button v-if="permissions.canChangeChequeStatus && !row.is_open_balance" @click="openSendToCollection(row)" class="cvr-action-btn" :title="$t('Edit Deposit Info')">✏️</button>
+                                        <button v-if="permissions.canChangeChequeStatus && row.due_status_bool" @click="openApplyCollection(row)" class="cvr-action-btn" :title="$t('Apply Collection')">🪙</button>
+                                        <Link v-if="permissions.canChangeChequeStatus" :href="row.send_to_safe_url" class="cvr-action-btn" :title="$t('Send In Safe')">↩️</Link>
+                                        <Link v-if="row.due_status_bool && permissions.canChangeChequeStatus" :href="row.send_to_rejected_safe_url" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Rejected')">🚫</Link>
                                     </template>
 
                                     <!-- Collected Cheques -->
                                     <template v-else-if="activeTab === 'cheque-collected'">
-                                        <Link v-if="permissions.canChangeChequeStatus" :href="row.send_to_under_collection_url" class="cvr-action-btn" title="Under Collection">↩️</Link>
+                                        <Link v-if="permissions.canChangeChequeStatus" :href="row.send_to_under_collection_url" class="cvr-action-btn" :title="$t('Under Collection')">↩️</Link>
                                     </template>
 
                                     <!-- Incoming Transfer / Cash In Safe / Cash In Bank -->
                                     <template v-else>
-                                        <Link v-if="permissions.canUpdate" :href="row.edit_url" class="cvr-action-btn" title="Edit">✏️</Link>
-                                        <button v-if="permissions.canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Delete">🗑️</button>
+                                        <Link v-if="permissions.canUpdate" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</Link>
+                                        <button v-if="permissions.canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Delete')">🗑️</button>
                                     </template>
                                 </div>
                             </td>
@@ -600,7 +600,7 @@ function submitApplyCollection() {
             <div v-if="collectionTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-6xl">
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">
-                        Send {{ collectionTarget.ids.length > 1 ? $t('these cheques') : $t('this cheque') }} to under collection?
+                        {{ $t('Send') }} {{ collectionTarget.ids.length > 1 ? $t('these cheques') : $t('this cheque') }} {{ $t('to under collection?') }}
                     </h2>
                     <div class="cvr-form-grid-3 mb-4">
                         <div>

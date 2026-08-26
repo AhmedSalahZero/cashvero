@@ -117,7 +117,7 @@ function submit() {
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">
-                {{ isEdit ? $t('Edit') : $t('Add') }} Clean Overdraft
+                {{ isEdit ? $t('Edit') : $t('Add') }} {{ $t('Clean Overdraft') }}
             </h1>
             <p class="text-sm cvr-text-muted mb-6">{{ financialInstitution.name }}</p>
 
@@ -175,11 +175,11 @@ function submit() {
                         </div>
                         <template v-if="!isLockedByRenewal">
                             <div>
-                                <label class="cvr-form-label">Outstanding Balance *</label>
+                                <label class="cvr-form-label">{{ $t('Outstanding Balance *') }}</label>
                                 <input v-model="form.outstanding_balance" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Balance Date *</label>
+                                <label class="cvr-form-label">{{ $t('Balance Date *') }}</label>
                                 <input v-model="form.balance_date" type="date" required class="cvr-input w-full px-3 py-2 rounded" />
                                 <p v-if="errorFor('balance_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('balance_date') }}</p>
                             </div>
@@ -190,19 +190,19 @@ function submit() {
                              list page instead, exactly like the original. -->
                         <template v-if="!isEdit">
                             <div>
-                                <label class="cvr-form-label">Borrowing Rate (%) *</label>
+                                <label class="cvr-form-label">{{ $t('Borrowing Rate (%) *') }}</label>
                                 <input v-model="form.borrowing_rate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Bank Margin Rate (%) *</label>
+                                <label class="cvr-form-label">{{ $t('Bank Margin Rate (%) *') }}</label>
                                 <input v-model="form.margin_rate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Interest Rate (%) *</label>
+                                <label class="cvr-form-label">{{ $t('Interest Rate (%) *') }}</label>
                                 <input disabled :value="form.interest_rate" class="cvr-input w-full px-3 py-2 rounded opacity-70" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Min Interest Rate (%) *</label>
+                                <label class="cvr-form-label">{{ $t('Min Interest Rate (%) *') }}</label>
                                 <input v-model="form.min_interest_rate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                         </template>

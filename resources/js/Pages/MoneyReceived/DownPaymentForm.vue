@@ -347,7 +347,7 @@ function submit() {
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Received Amount [{{ receivingCurrency }}] *</label>
+                        <label class="cvr-form-label">{{ $t('Received Amount [') }}{{ receivingCurrency }}] *</label>
                         <input v-model="receivedAmount" type="number" step="any" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
@@ -361,7 +361,7 @@ function submit() {
                         <input v-model="exchangeRate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">Amount In Contract Currency [{{ contractCurrency }}]</label>
+                        <label class="cvr-form-label">{{ $t('Amount In Contract Currency [') }}{{ contractCurrency }}]</label>
                         <input :value="amountInContractCurrency" readonly class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                 </div>
@@ -378,7 +378,7 @@ function submit() {
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Deposit Amount [{{ receivingCurrency }}] *</label>
+                        <label class="cvr-form-label">{{ $t('Deposit Amount [') }}{{ receivingCurrency }}] *</label>
                         <input v-model="receivedAmount" type="number" step="any" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
@@ -404,7 +404,7 @@ function submit() {
                         <input v-model="exchangeRate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">Amount In Contract Currency [{{ contractCurrency }}]</label>
+                        <label class="cvr-form-label">{{ $t('Amount In Contract Currency [') }}{{ contractCurrency }}]</label>
                         <input :value="amountInContractCurrency" readonly class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                 </div>
@@ -421,7 +421,7 @@ function submit() {
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Cheque Amount [{{ receivingCurrency }}] *</label>
+                        <label class="cvr-form-label">{{ $t('Cheque Amount [') }}{{ receivingCurrency }}] *</label>
                         <input v-model="receivedAmount" type="number" step="any" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
@@ -444,11 +444,11 @@ function submit() {
                     </div>
                     <template v-if="showExchangeRateFields">
                         <div>
-                            <label class="cvr-form-label">Exchange Rate *</label>
+                            <label class="cvr-form-label">{{ $t('Exchange Rate *') }}</label>
                             <input v-model="exchangeRate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Amount In Contract Currency [{{ contractCurrency }}]</label>
+                            <label class="cvr-form-label">{{ $t('Amount In Contract Currency [') }}{{ contractCurrency }}]</label>
                             <input :value="amountInContractCurrency" readonly class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </template>
@@ -466,7 +466,7 @@ function submit() {
                         </select>
                     </div>
                     <div>
-                        <label class="cvr-form-label">Incoming Transfer Amount [{{ receivingCurrency }}] *</label>
+                        <label class="cvr-form-label">{{ $t('Incoming Transfer Amount [') }}{{ receivingCurrency }}] *</label>
                         <input v-model="receivedAmount" type="number" step="any" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
@@ -492,7 +492,7 @@ function submit() {
                         <input v-model="exchangeRate" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">Amount In Contract Currency [{{ contractCurrency }}]</label>
+                        <label class="cvr-form-label">{{ $t('Amount In Contract Currency [') }}{{ contractCurrency }}]</label>
                         <input :value="amountInContractCurrency" readonly class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                 </div>
@@ -510,11 +510,11 @@ function submit() {
                         <input :value="so.so_number" disabled class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">Amount [{{ receivingCurrency }}]</label>
+                        <label class="cvr-form-label">{{ $t('Amount [') }}{{ receivingCurrency }}]</label>
                         <input :value="so.amount" disabled class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                     <div>
-                        <label class="cvr-form-label">Received Amount [{{ receivingCurrency }}] *</label>
+                        <label class="cvr-form-label">{{ $t('Received Amount [') }}{{ receivingCurrency }}] *</label>
                         <input v-model.number="so.received_amount" type="number" step="any" min="0" class="cvr-input w-full px-3 py-2 rounded" />
                     </div>
                 </div>

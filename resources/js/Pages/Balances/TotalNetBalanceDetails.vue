@@ -42,7 +42,7 @@ function statusBadgeClass(status) {
                 {{ reportTitle }}
                 <span class="cvr-text-secondary font-normal">[ {{ currency }} ]</span>
             </h1>
-            <p class="text-sm cvr-text-muted mb-6">{{ invoicesBalances.length }} invoice(s)</p>
+            <p class="text-sm cvr-text-muted mb-6">{{ invoicesBalances.length }} {{ $t('invoice(s)') }}</p>
 
             <div class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto">
                 <table class="min-w-full text-sm">

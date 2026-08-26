@@ -254,8 +254,8 @@ function submitAllocations() {
 <template>
     <AppLayout>
         <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ pageTitle }}</h1>
-            <p class="text-sm cvr-text-blue mb-6">{{ type }} Contracts</p>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t(pageTitle) }}</h1>
+            <p class="text-sm cvr-text-blue mb-6">{{ type }} {{ $t('Contracts') }}</p>
 
             <!-- KPI cards -->
             <div class="cvr-kpi-row mb-6">
@@ -285,7 +285,7 @@ function submitAllocations() {
                         class="cvr-filter-pill"
                         :class="{ 'cvr-filter-pill-active': activeTab === status }"
                     >
-                        {{ tabLabels[status] }}
+                        {{ $t(tabLabels[status]) }}
                     </button>
                 </div>
                 <Link v-if="canCreate" :href="createUrl" class="cvr-btn-copper px-3 py-1.5 rounded text-sm inline-flex items-center gap-1">
@@ -331,13 +331,13 @@ function submitAllocations() {
                                     <div class="flex items-center gap-2">
                                         <RecordLogButton subject="Contract" :id="row.id" :company-id="company.id" />
                                         <Link :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">
-                                            Edit
+                                            {{ $t('Edit') }}
                                         </Link>
 
                                         <button
                                             @click="openInvoices(row)"
                                             class="cvr-action-btn"
-                                            title="Invoices"
+                                            :title="$t('Invoices')"
                                         >🧾</button>
 
                                         <!-- Supplier contracts hanging off this customer contract -->
@@ -345,29 +345,29 @@ function submitAllocations() {
                                             v-if="type === 'Customer' && row.related_contracts.length"
                                             @click="openRelatedContracts(row)"
                                             class="cvr-tag"
-                                            title="Supplier Contracts"
-                                        >Supplier Contracts ({{ row.related_contracts.length }})</button>
+                                            :title="$t('Supplier Contracts')"
+                                        >{{ $t('Supplier Contracts (') }}{{ row.related_contracts.length }})</button>
 
                                         <button
                                             v-if="activeTab === 'running'"
                                             @click="confirmMarkFinished(row)"
                                             class="cvr-action-btn"
-                                            title="Mark As Finished"
+                                            :title="$t('Mark As Finished')"
                                         >✔️</button>
 
                                         <button
                                             v-if="activeTab === 'running_and_against' && canApprove"
                                             @click="confirmMarkFinished(row)"
                                             class="cvr-action-btn"
-                                            title="Mark As Finished"
+                                            :title="$t('Mark As Finished')"
                                         >👍</button>
 
                                         <button
                                             v-if="activeTab === 'finished' && canApprove && !row.is_assigned_as_collateral"
                                             @click="confirmMarkRunning(row)"
                                             class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs"
-                                            title="Back to Running"
-                                        >Back to Running</button>
+                                            :title="$t('Back to Running')"
+                                        >{{ $t('Back to Running') }}</button>
 
                                         <!-- Pledged contracts must return to Running And Against,
                                              not plain Running — that path is what reverses the
@@ -376,18 +376,18 @@ function submitAllocations() {
                                             v-if="activeTab === 'finished' && canApprove && row.is_assigned_as_collateral"
                                             @click="confirmMarkRunningAndAgainst(row)"
                                             class="cvr-action-btn"
-                                            title="Mark As Running And Against"
+                                            :title="$t('Mark As Running And Against')"
                                         >👍</button>
 
                                         <!-- The whole Options menu disappears when its
                                              only entry is one the user may not perform. -->
                                         <Dropdown v-if="canDelete">
                                             <template #trigger="{ toggle }">
-                                                <button @click="toggle" class="cvr-tag">Options ▾</button>
+                                                <button @click="toggle" class="cvr-tag">{{ $t('Options ▾') }}</button>
                                             </template>
                                             <template #content>
                                                 <button @click="confirmDelete(row)" class="block w-full text-start px-3 py-2 text-xs cvr-dropdown-item">
-                                                    Delete
+                                                    {{ $t('Delete') }}
                                                 </button>
                                             </template>
                                         </Dropdown>
@@ -400,7 +400,7 @@ function submitAllocations() {
                                 <tr v-for="subItem in row.sub_items" :key="'sub-' + subItem.id" class="cvr-table-row bg-black/5">
                                     <td class="px-4 py-2 ps-10 cvr-text-muted text-xs" colspan="2">{{ subItem.order_label }}</td>
                                     <td class="px-4 py-2 cvr-text-secondary text-xs">{{ subItem.order_number }}</td>
-                                    <td class="px-4 py-2 cvr-text-muted text-xs">Amount</td>
+                                    <td class="px-4 py-2 cvr-text-muted text-xs">{{ $t('Amount') }}</td>
                                     <td class="px-4 py-2 cvr-num text-xs" colspan="2">{{ subItem.amount_formatted }}</td>
                                     <td class="px-4 py-2">
                                         <!-- Hidden once the company is on Odoo — allocation comes from there -->
@@ -409,7 +409,7 @@ function submitAllocations() {
                                             @click="openAllocationModal(subItem)"
                                             class="cvr-btn-secondary px-2 py-1 rounded border text-xs"
                                         >
-                                            Allocate
+                                            {{ $t('Allocate') }}
                                         </button>
                                     </td>
                                 </tr>
@@ -418,7 +418,7 @@ function submitAllocations() {
 
                         <tr v-if="filteredRows.length === 0">
                             <td colspan="7" class="px-4 py-8 text-center cvr-text-muted">
-                                No {{ type.toLowerCase() }} contracts found.
+                                {{ $t('No') }} {{ type.toLowerCase() }} {{ $t('contracts found.') }}
                             </td>
                         </tr>
                     </tbody>
@@ -444,7 +444,7 @@ function submitAllocations() {
             <div v-if="statusChangeTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">
-                        Do you want to mark this contract as {{ statusChangeTarget.label }}?
+                        {{ $t('Do you want to mark this contract as') }} {{ statusChangeTarget.label }}?
                     </h2>
                     <div class="flex justify-end gap-2">
                         <button @click="statusChangeTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
@@ -458,7 +458,7 @@ function submitAllocations() {
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-6xl max-h-[85vh] overflow-y-auto">
                     <div class="flex items-center justify-between mb-4">
                         <h2 class="text-lg font-medium cvr-text-primary">
-                            Related Supplier Contracts — {{ relatedContractsTarget.name }}
+                            {{ $t('Related Supplier Contracts —') }} {{ relatedContractsTarget.name }}
                             ({{ relatedContractsTarget.amount_formatted }} {{ relatedContractsTarget.currency }})
                         </h2>
                         <button @click="relatedContractsTarget = null" class="cvr-btn-secondary px-2 py-1 rounded border text-xs">✕</button>
@@ -515,7 +515,7 @@ function submitAllocations() {
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-7xl max-h-[85vh] overflow-y-auto">
                     <div class="flex items-center justify-between mb-4">
                         <h2 class="text-lg font-medium cvr-text-primary">
-                            Contract Invoices — {{ invoicesTarget.client_name }} / {{ invoicesTarget.name }}
+                            {{ $t('Contract Invoices —') }} {{ invoicesTarget.client_name }} / {{ invoicesTarget.name }}
                             ({{ invoicesTarget.amount_formatted }} {{ invoicesTarget.currency }})
                         </h2>
                         <button @click="invoicesTarget = null" class="cvr-btn-secondary px-2 py-1 rounded border text-xs">✕</button>
@@ -528,7 +528,7 @@ function submitAllocations() {
                                 <th class="px-3 py-2 text-start">{{ $t('Currency') }}</th>
                                 <th class="px-3 py-2 text-start">{{ $t('Amount') }}</th>
                                 <th class="px-3 py-2 text-start">{{ $t('Withhold') }}</th>
-                                <th class="px-3 py-2 text-start">VAT</th>
+                                <th class="px-3 py-2 text-start">{{ $t('VAT') }}</th>
                                 <th class="px-3 py-2 text-start">{{ $t('Deductions') }}</th>
                                 <th class="px-3 py-2 text-start">{{ $t('Collected') }}</th>
                                 <th class="px-3 py-2 text-start">{{ $t('Due Date') }}</th>
@@ -571,8 +571,8 @@ function submitAllocations() {
             <!-- FX breakdown modal (ℹ️ icon on a foreign-currency invoice row) -->
             <div v-if="fxBreakdownTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-1">Invoice #{{ fxBreakdownTarget.invoice_number }}</h2>
-                    <p class="text-sm cvr-text-muted mb-4">Dated {{ fxBreakdownTarget.invoice_date }}</p>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-1">{{ $t('Invoice #') }}{{ fxBreakdownTarget.invoice_number }}</h2>
+                    <p class="text-sm cvr-text-muted mb-4">{{ $t('Dated') }} {{ fxBreakdownTarget.invoice_date }}</p>
                     <table class="min-w-full text-sm mb-4">
                         <tbody>
                             <tr class="cvr-table-row">
@@ -595,10 +595,10 @@ function submitAllocations() {
             <div v-if="allocationTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-7xl max-h-[85vh] overflow-y-auto">
                     <h2 class="text-lg font-medium cvr-text-primary mb-1">
-                        Allocate Purchase Order {{ allocationTarget.order_number }}
+                        {{ $t('Allocate Purchase Order') }} {{ allocationTarget.order_number }}
                     </h2>
                     <p class="text-xs cvr-text-muted mb-4">
-                        PO Amount: {{ allocationTarget.amount_formatted }} — split it across one or more customers below.
+                        {{ $t('PO Amount:') }} {{ allocationTarget.amount_formatted }} {{ $t('— split it across one or more customers below.') }}
                     </p>
 
                     <table class="min-w-full text-xs mb-3">

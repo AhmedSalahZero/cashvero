@@ -216,10 +216,10 @@ function dateRange(kind, interval) {
     <AppLayout>
         <div class="p-6">
             <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm mb-3">
-                ← Back to {{ customersOrSupplierAgingText }} Filters
+                {{ $t('← Back to') }} {{ customersOrSupplierAgingText }} {{ $t('Filters') }}
             </Link>
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ customersOrSupplierAgingText }}</h1>
-            <p class="text-sm cvr-text-muted mb-6">As of {{ agingDate }}</p>
+            <p class="text-sm cvr-text-muted mb-6">{{ $t('As of') }} {{ agingDate }}</p>
 
             <!-- Chart breakdowns -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">

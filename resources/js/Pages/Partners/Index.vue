@@ -145,7 +145,7 @@ function destroyRow() {
                         class="cvr-filter-pill"
                         :class="{ 'cvr-filter-pill-active': activeType === t.key }"
                     >
-                        {{ t.label }} <span class="cvr-text-muted">({{ counts[t.key] }})</span>
+                        {{ $t(t.label) }} <span class="cvr-text-muted">({{ counts[t.key] }})</span>
                     </button>
                 </div>
 
@@ -236,7 +236,7 @@ function destroyRow() {
             <!-- Pagination -->
             <div v-if="partners.last_page > 1" class="flex items-center justify-between mt-4 flex-wrap gap-3">
                 <p class="text-xs cvr-text-muted">
-                    Showing {{ partners.from }}–{{ partners.to }} of {{ partners.total }} partners
+                    {{ $t('Showing') }} {{ partners.from }}–{{ partners.to }} {{ $t('of') }} {{ partners.total }} {{ $t('partners') }}
                 </p>
                 <div class="flex items-center gap-1 flex-wrap">
                     <button

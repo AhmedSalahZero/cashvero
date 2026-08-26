@@ -53,11 +53,11 @@ const hasSchedule = computed(() => (props.breakdown || []).length > 0);
                     {{ $t('← Back to Medium Term Loan') }}
                 </Link>
             </div>
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">MTL Statement — {{ loan.name }}</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('MTL Statement —') }} {{ loan.name }}</h1>
             <p class="text-sm cvr-text-blue mb-6">
                 {{ financialInstitution.name }} · {{ loan.account_number }} · {{ loan.currency_formatted }}
                 · {{ loan.start_date_formatted }} → {{ loan.end_date_formatted }}
-                · Interest {{ loan.interest_rate_formatted }}
+                {{ $t('· Interest') }} {{ loan.interest_rate_formatted }}
             </p>
 
             <!-- ── Interest vs Principle: due, paid, remaining ─────────── -->
@@ -81,7 +81,7 @@ const hasSchedule = computed(() => (props.breakdown || []).length > 0);
                     <div class="mt-3 h-2 rounded cvr-border border overflow-hidden">
                         <div class="h-full cvr-btn-copper" :style="{ width: interestPct + '%' }"></div>
                     </div>
-                    <p class="text-xs cvr-text-muted mt-1">{{ interestPct }}% of scheduled interest paid</p>
+                    <p class="text-xs cvr-text-muted mt-1">{{ interestPct }}{{ $t('% of scheduled interest paid') }}</p>
                 </div>
 
                 <div class="cvr-card">
@@ -103,7 +103,7 @@ const hasSchedule = computed(() => (props.breakdown || []).length > 0);
                     <div class="mt-3 h-2 rounded cvr-border border overflow-hidden">
                         <div class="h-full cvr-btn-copper" :style="{ width: princiblePct + '%' }"></div>
                     </div>
-                    <p class="text-xs cvr-text-muted mt-1">{{ princiblePct }}% of the loan itself repaid</p>
+                    <p class="text-xs cvr-text-muted mt-1">{{ princiblePct }}{{ $t('% of the loan itself repaid') }}</p>
                 </div>
 
                 <div v-if="loan.is_payable_facility" class="cvr-card">
@@ -125,7 +125,7 @@ const hasSchedule = computed(() => (props.breakdown || []).length > 0);
                     <div class="mt-3 h-2 rounded cvr-border border overflow-hidden">
                         <div class="h-full cvr-btn-copper" :style="{ width: roomPct + '%' }"></div>
                     </div>
-                    <p class="text-xs cvr-text-muted mt-1">{{ roomPct }}% of the loan still available to pay suppliers</p>
+                    <p class="text-xs cvr-text-muted mt-1">{{ roomPct }}{{ $t('% of the loan still available to pay suppliers') }}</p>
                 </div>
 
                 <div v-else class="cvr-card">
@@ -201,24 +201,22 @@ const hasSchedule = computed(() => (props.breakdown || []).length > 0);
 
             <!-- ── Facility ledger (drawdowns / repayments / room) ─────── -->
             <template v-if="loan.is_payable_facility">
-                <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-1">Facility Ledger</h2>
+                <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-1">{{ $t('Facility Ledger') }}</h2>
                 <p class="text-xs cvr-text-muted mb-2">
-                    Drawdowns reduce the room; the principle half of each installment gives it back.
-                    Interest is shown for reference only — it is already inside the installment, so it
-                    never moves the drawn balance.
+                    {{ $t('Drawdowns reduce the room; the principle half of each installment gives it back. Interest is shown for reference only — it is already inside the installment, so it never moves the drawn balance.') }}
                 </p>
                 <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden overflow-x-auto">
                     <table class="min-w-full text-sm">
                         <thead class="cvr-table-head">
                             <tr>
-                                <th class="px-3 py-3 text-start">Date</th>
-                                <th class="px-3 py-3 text-start">Description</th>
-                                <th class="px-3 py-3 text-right">Beginning</th>
-                                <th class="px-3 py-3 text-right">Drawn (Credit)</th>
-                                <th class="px-3 py-3 text-right">Principle (Debit)</th>
-                                <th class="px-3 py-3 text-right">Interest Paid</th>
-                                <th class="px-3 py-3 text-right">End Balance</th>
-                                <th class="px-3 py-3 text-right">Room</th>
+                                <th class="px-3 py-3 text-start">{{ $t('Date') }}</th>
+                                <th class="px-3 py-3 text-start">{{ $t('Description') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Beginning') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Drawn (Credit)') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Principle (Debit)') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Interest Paid') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('End Balance') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('Room') }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -237,7 +235,7 @@ const hasSchedule = computed(() => (props.breakdown || []).length > 0);
                             </tr>
                             <tr v-if="!ledger.length">
                                 <td colspan="8" class="px-4 py-8 text-center cvr-text-muted">
-                                    Nothing drawn from this loan yet — the full limit of {{ fmt(loan.limit) }} is available.
+                                    {{ $t('Nothing drawn from this loan yet — the full limit of') }} {{ fmt(loan.limit) }} {{ $t('is available.') }}
                                 </td>
                             </tr>
                         </tbody>

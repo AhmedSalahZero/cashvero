@@ -138,8 +138,8 @@ function submit() {
                     </div>
                 </div>
                 <p class="text-xs cvr-text-muted mb-4">
-                    These are the actual items chosen when logging a cash expense.
-                    <template v-if="companyHasOdoo">Each one maps to an Odoo Chart Of Account Number.</template>
+                    {{ $t('These are the actual items chosen when logging a cash expense.') }}
+                    <template v-if="companyHasOdoo">{{ $t('Each one maps to an Odoo Chart Of Account Number.') }}</template>
                 </p>
 
                 <div class="space-y-3">

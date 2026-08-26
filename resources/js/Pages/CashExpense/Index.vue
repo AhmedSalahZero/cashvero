@@ -214,30 +214,30 @@ const odooErrorTarget = ref(null);
                     <!-- Filters -->
                     <div class="flex flex-wrap items-end gap-3 mb-4">
                         <div>
-                            <label class="cvr-form-label">Search In</label>
+                            <label class="cvr-form-label">{{ $t('Search In') }}</label>
                             <select v-model="searchField" class="cvr-input px-3 py-2 rounded">
                                 <option v-for="(flabel, field) in searchFieldOptionsByType[type]" :key="field" :value="field">{{ flabel }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="cvr-form-label">Value</label>
-                            <input v-model="searchValue" type="text" placeholder="Search..." class="cvr-input px-3 py-2 rounded" />
+                            <label class="cvr-form-label">{{ $t('Value') }}</label>
+                            <input v-model="searchValue" type="text" :placeholder="$t('Search...')" class="cvr-input px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">Start Date</label>
+                            <label class="cvr-form-label">{{ $t('Start Date') }}</label>
                             <input v-model="filters[type].startDate" type="date" class="cvr-input px-3 py-2 rounded" />
                         </div>
                         <div>
-                            <label class="cvr-form-label">End Date</label>
+                            <label class="cvr-form-label">{{ $t('End Date') }}</label>
                             <input v-model="filters[type].endDate" type="date" class="cvr-input px-3 py-2 rounded" />
                         </div>
-                        <button @click="applyFilters(type)" class="cvr-btn-secondary px-4 py-2 rounded border">Apply</button>
+                        <button @click="applyFilters(type)" class="cvr-btn-secondary px-4 py-2 rounded border">{{ $t('Apply') }}</button>
                         <button
                             v-if="canMarkAsPaid && tab.hasBatchCollection && (selectedIds[type] || []).length"
                             @click="openMarkPaidModal(type)"
                             class="cvr-btn-primary px-4 py-2 rounded ms-auto"
                         >
-                            Mark {{ (selectedIds[type] || []).length }} Selected As Paid
+                            {{ $t('Mark') }} {{ (selectedIds[type] || []).length }} {{ $t('Selected As Paid') }}
                         </button>
                     </div>
 
@@ -246,16 +246,16 @@ const odooErrorTarget = ref(null);
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th v-if="canMarkAsPaid && tab.hasBatchCollection" class="px-3 py-3 text-start">Select</th>
-                                    <th class="px-3 py-3 text-start whitespace-nowrap">Category</th>
-                                    <th class="px-3 py-3 text-start whitespace-nowrap">Expense Name</th>
-                                    <th class="px-3 py-3 text-start whitespace-nowrap">Payment Date</th>
+                                    <th v-if="canMarkAsPaid && tab.hasBatchCollection" class="px-3 py-3 text-start">{{ $t('Select') }}</th>
+                                    <th class="px-3 py-3 text-start whitespace-nowrap">{{ $t('Category') }}</th>
+                                    <th class="px-3 py-3 text-start whitespace-nowrap">{{ $t('Expense Name') }}</th>
+                                    <th class="px-3 py-3 text-start whitespace-nowrap">{{ $t('Payment Date') }}</th>
                                     <th v-for="col in columnsByType[type]" :key="col" class="px-3 py-3 text-start whitespace-nowrap">
-                                        {{ columnLabels[col] }}
+                                        {{ $t(columnLabels[col]) }}
                                     </th>
-                                    <th class="px-3 py-3 text-start">Amount</th>
-                                    <th class="px-3 py-3 text-start">Currency</th>
-                                    <th v-if="canUpdate || canDelete || canMarkAsPaid" class="px-3 py-3 text-start">Control</th>
+                                    <th class="px-3 py-3 text-start">{{ $t('Amount') }}</th>
+                                    <th class="px-3 py-3 text-start">{{ $t('Currency') }}</th>
+                                    <th v-if="canUpdate || canDelete || canMarkAsPaid" class="px-3 py-3 text-start">{{ $t('Control') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -288,36 +288,36 @@ const odooErrorTarget = ref(null);
                                     <td v-if="canUpdate || canDelete || canMarkAsPaid" class="px-3 py-3">
                                         <div class="flex items-center gap-2">
                                             <RecordLogButton subject="CashExpense" :id="row.id" :company-id="company.id" />
-                                            <button v-if="row.user_comment" @click="commentTarget = row" class="cvr-action-btn" title="User Comment">💬</button>
-                                            <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn-danger cvr-action-btn" title="Odoo Error">🐞</button>
-                                            <button v-if="row.is_fully_integrated_with_odoo" @click="odooRefTarget = row" class="cvr-action-btn" title="Fully Integrated">👍</button>
-                                            <Link v-if="canUpdate && row.edit_url" :href="row.edit_url" class="cvr-action-btn" title="Edit">✏️</Link>
+                                            <button v-if="row.user_comment" @click="commentTarget = row" class="cvr-action-btn" :title="$t('User Comment')">💬</button>
+                                            <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Odoo Error')">🐞</button>
+                                            <button v-if="row.is_fully_integrated_with_odoo" @click="odooRefTarget = row" class="cvr-action-btn" :title="$t('Fully Integrated')">👍</button>
+                                            <Link v-if="canUpdate && row.edit_url" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</Link>
                                             <!--
                                                 Copy — opens the CREATE form already filled in from
                                                 this row, ready to save as a new expense. Gated by
                                                 canCreate (what it leads to), not canUpdate: it
                                                 never changes the row it was opened from.
                                             -->
-                                            <Link v-if="canCreate && row.copy_url" :href="row.copy_url" class="cvr-action-btn" title="Copy">📋</Link>
+                                            <Link v-if="canCreate && row.copy_url" :href="row.copy_url" class="cvr-action-btn" :title="$t('Copy')">📋</Link>
                                             <button
                                                 v-if="canMarkAsPaid && tab.hasBatchCollection && row.can_mark_paid"
                                                 @click="openMarkPaidModalForRow(type, row.id)"
                                                 class="cvr-action-btn"
-                                                title="Mark As Paid"
+                                                :title="$t('Mark As Paid')"
                                             >💵</button>
                                             <button
                                                 v-if="canMarkAsPaid && type === TYPES.PAYABLE_CHEQUE && row.can_unmark_paid"
                                                 @click="unmarkTarget = row"
                                                 class="cvr-action-btn"
-                                                title="Mark As Unpaid"
+                                                :title="$t('Mark As Unpaid')"
                                             >↩️</button>
-                                            <button v-if="canDelete && row.delete_url" @click="confirmDelete(row)" class="cvr-action-btn" title="Delete">🗑️</button>
+                                            <button v-if="canDelete && row.delete_url" @click="confirmDelete(row)" class="cvr-action-btn" :title="$t('Delete')">🗑️</button>
                                         </div>
                                     </td>
                                 </tr>
                                 <tr v-if="tab.rows.data.length === 0">
                                     <td :colspan="8 + columnsByType[type].length" class="px-4 py-8 text-center cvr-text-muted">
-                                        No {{ tab.label.toLowerCase() }} found.
+                                        {{ $t('No') }} {{ tab.label.toLowerCase() }} {{ $t('found.') }}
                                     </td>
                                 </tr>
                             </tbody>
@@ -327,7 +327,7 @@ const odooErrorTarget = ref(null);
                     <!-- Pagination -->
                     <div v-if="tab.rows.last_page > 1" class="flex items-center justify-between mt-4 flex-wrap gap-3">
                         <p class="text-xs cvr-text-muted">
-                            Showing {{ tab.rows.from }}–{{ tab.rows.to }} of {{ tab.rows.total }}
+                            {{ $t('Showing') }} {{ tab.rows.from }}–{{ tab.rows.to }} {{ $t('of') }} {{ tab.rows.total }}
                         </p>
                         <div class="flex items-center gap-1 flex-wrap">
                             <button
@@ -348,7 +348,7 @@ const odooErrorTarget = ref(null);
             <div v-if="markPaidTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">
-                        Mark {{ markPaidTarget.ids.length }} item(s) as paid?
+                        {{ $t('Mark') }} {{ markPaidTarget.ids.length }} {{ $t('item(s) as paid?') }}
                     </h2>
                     <label class="cvr-form-label">{{ $t('Actual Payment Date') }}</label>
                     <input v-model="actualPaymentDate" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded mb-4" />

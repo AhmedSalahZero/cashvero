@@ -200,14 +200,14 @@ onBeforeUnmount(() => {
     <AppLayout>
         <div class="p-6">
             <Link :href="indexUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm mb-3">
-                ← Back to {{ modelDisplayName }} Table
+                {{ $t('← Back to') }} {{ modelDisplayName }} {{ $t('Table') }}
             </Link>
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ modelDisplayName }} Import</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ modelDisplayName }} {{ $t('Import') }}</h1>
             <p class="text-sm cvr-text-muted mb-6">{{ $t('Maximum 50,000 rows per upload') }}</p>
 
             <p v-if="currentFileNameLabel" class="text-sm cvr-text-secondary mb-4">{{ currentFileNameLabel }}</p>
             <div v-if="skippedDuplicateCount > 0" class="cvr-card-bg cvr-border border rounded-lg p-3 mb-4" style="border-color: var(--cvr-num-amber)">
-                <p class="text-sm cvr-num-amber">Your last save skipped {{ skippedDuplicateCount }} row(s) that already existed and were not re-added.</p>
+                <p class="text-sm cvr-num-amber">{{ $t('Your last save skipped') }} {{ skippedDuplicateCount }} {{ $t('row(s) that already existed and were not re-added.') }}</p>
             </div>
             <Link v-if="lastUploadFailedUrl" :href="lastUploadFailedUrl" class="inline-block text-sm cvr-num-red hover:underline mb-4">{{ $t('View last upload\'s failed rows →') }}</Link>
 
@@ -225,13 +225,13 @@ onBeforeUnmount(() => {
 
             <!-- State: saving -->
             <div v-else-if="isSaving && !saveGaveUp" class="cvr-card-bg cvr-border border rounded-lg p-6 mb-6">
-                <p class="cvr-num-green font-medium mb-3">Saving to the database… {{ savingPercent.toFixed(0) }}%</p>
+                <p class="cvr-num-green font-medium mb-3">{{ $t('Saving to the database…') }} {{ savingPercent.toFixed(0) }}%</p>
                 <div class="h-2 rounded-full bg-white/5 overflow-hidden">
                     <div class="h-full rounded-full transition-all" :style="{ width: savingPercent + '%', backgroundColor: 'var(--cvr-green-bright)' }"></div>
                 </div>
             </div>
             <div v-else-if="isSaving && saveGaveUp" class="cvr-card-bg cvr-border border rounded-lg p-6 mb-6 flex items-center justify-between gap-3 flex-wrap">
-                <p class="text-sm">This is taking longer than expected ({{ savingPercent.toFixed(0) }}% when we stopped checking). Your data may still be saving in the background.</p>
+                <p class="text-sm">{{ $t('This is taking longer than expected (') }}{{ savingPercent.toFixed(0) }}{{ $t('% when we stopped checking). Your data may still be saving in the background.') }}</p>
                 <button type="button" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap" @click="checkSaveAgain">{{ $t('Check Again') }}</button>
             </div>
 
@@ -239,15 +239,15 @@ onBeforeUnmount(() => {
             <template v-else-if="canReview && totalCachedRows > 0">
                 <div v-if="duplicateCount > 0" class="cvr-card-bg cvr-border border rounded-lg p-3 mb-4" style="border-color: var(--cvr-num-red)">
                     <p class="text-sm cvr-num-red">
-                        {{ duplicateCount }} of {{ totalCachedRows }} row(s) already exist for this company (same invoice number + currency) and will be <strong>skipped</strong>, not replaced, when you save.
+                        {{ duplicateCount }} {{ $t('of') }} {{ totalCachedRows }} {{ $t('row(s) already exist for this company (same invoice number + currency) and will be') }} <strong>{{ $t('skipped') }}</strong>{{ $t(', not replaced, when you save.') }}
                     </p>
                 </div>
 
                 <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
-                    <p class="text-sm cvr-text-muted">Showing {{ previewRows.length }} of {{ totalCachedRows }} row(s) — review before saving</p>
+                    <p class="text-sm cvr-text-muted">{{ $t('Showing') }} {{ previewRows.length }} {{ $t('of') }} {{ totalCachedRows }} {{ $t('row(s) — review before saving') }}</p>
                     <div class="flex items-center gap-2">
-                        <Link :href="deleteAllUrl" class="cvr-btn-danger px-3 py-1.5 rounded border text-sm whitespace-nowrap" as="button" method="get">Delete All / Start Over</Link>
-                        <Link :href="saveDataUrl" class="cvr-btn-primary px-4 py-1.5 rounded text-sm whitespace-nowrap">Save Data</Link>
+                        <Link :href="deleteAllUrl" class="cvr-btn-danger px-3 py-1.5 rounded border text-sm whitespace-nowrap" as="button" method="get">{{ $t('Delete All / Start Over') }}</Link>
+                        <Link :href="saveDataUrl" class="cvr-btn-primary px-4 py-1.5 rounded text-sm whitespace-nowrap">{{ $t('Save Data') }}</Link>
                     </div>
                 </div>
 
@@ -271,19 +271,19 @@ onBeforeUnmount(() => {
                     <div class="flex items-center justify-between mb-2">
                         <label class="flex items-center gap-2 text-sm cvr-text-secondary">
                             <input type="checkbox" @change="toggleAll" />
-                            Select all shown
+                            {{ $t('Select all shown') }}
                         </label>
-                        <button type="submit" class="cvr-btn-danger px-3 py-1.5 rounded border text-sm">Delete Selected</button>
+                        <button type="submit" class="cvr-btn-danger px-3 py-1.5 rounded border text-sm">{{ $t('Delete Selected') }}</button>
                     </div>
 
                     <div class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto">
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-3 py-2 text-center">Select</th>
+                                    <th class="px-3 py-2 text-center">{{ $t('Select') }}</th>
                                     <th class="px-3 py-2 text-center">#</th>
                                     <th v-for="col in columns" :key="col.field" class="px-3 py-2 text-center">{{ col.label }}</th>
-                                    <th class="px-3 py-2 text-center">Actions</th>
+                                    <th class="px-3 py-2 text-center">{{ $t('Actions') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -296,8 +296,8 @@ onBeforeUnmount(() => {
                                         <span class="block truncate max-w-[200px]" :title="cell">{{ cell }}</span>
                                     </td>
                                     <td class="px-3 py-2 text-center">
-                                        <span v-if="row.isDuplicate" class="cvr-num-red text-xs font-medium">Duplicate — will skip</span>
-                                        <Link v-else-if="row.editUrl" :href="row.editUrl" class="cvr-action-btn" title="Edit">✎</Link>
+                                        <span v-if="row.isDuplicate" class="cvr-num-red text-xs font-medium">{{ $t('Duplicate — will skip') }}</span>
+                                        <Link v-else-if="row.editUrl" :href="row.editUrl" class="cvr-action-btn" :title="$t('Edit')">✎</Link>
                                     </td>
                                 </tr>
                             </tbody>
@@ -318,7 +318,7 @@ onBeforeUnmount(() => {
                         <label class="cvr-form-label">{{ $t('Date Formatting') }} *</label>
                         <select v-model="form.format" required class="cvr-input w-full px-3 py-2 rounded">
                             <option value="" disabled>{{ $t('Select') }}</option>
-                            <option v-for="opt in dateFormatOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                            <option v-for="opt in dateFormatOptions" :key="opt.value" :value="opt.value">{{ $t(opt.label) }}</option>
                         </select>
                     </div>
                 </div>

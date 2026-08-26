@@ -39,7 +39,7 @@ const tabs = [
             :class="{ 'cvr-dash-tab-active': active === tab.key }"
         >
             <span>{{ tab.icon }}</span>
-            <span>{{ tab.label }}</span>
+            <span>{{ $t(tab.label) }}</span>
         </Link>
     </div>
 </template>

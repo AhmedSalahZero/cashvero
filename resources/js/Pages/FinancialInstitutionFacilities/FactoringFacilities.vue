@@ -26,7 +26,7 @@ function formatAmount(value) {
     <AppLayout>
         <div class="p-6">
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Factoring Facilities') }}</h1>
-            <p class="text-sm cvr-text-blue mb-1">Every factoring contract across every factoring company for {{ company.name }}</p>
+            <p class="text-sm cvr-text-blue mb-1">{{ $t('Every factoring contract across every factoring company for') }} {{ company.name }}</p>
             <p class="text-xs cvr-text-muted mb-6">
                 {{ $t('Note: factoring contracts have no name field in this system — "Contract Name" below shows the Recourse Type (With/Without Recourse) instead, the same identifier already used on the Factoring Contracts page.') }}
             </p>

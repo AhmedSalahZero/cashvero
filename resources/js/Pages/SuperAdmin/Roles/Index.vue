@@ -97,7 +97,7 @@ function destroyRole() {
 
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-card p-6 max-w-md w-full mx-4">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-2">Delete the “{{ deleteTarget.label }}” role?</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-2">{{ $t('Delete the “') }}{{ deleteTarget.label }}{{ $t('” role?') }}</h2>
                     <p class="text-sm cvr-text-muted mb-4">
                         {{ $t('This cannot be undone. Users must be moved to another role first.') }}
                     </p>

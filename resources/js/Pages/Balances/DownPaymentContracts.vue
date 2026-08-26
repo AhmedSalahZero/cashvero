@@ -94,7 +94,7 @@ const odooErrorTarget = ref(null);
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Odoo Error') }}</h2>
                     <p v-if="odooErrorTarget.odoo_error" class="cvr-text-secondary mb-4">{{ odooErrorTarget.odoo_error }}</p>
                     <template v-if="odooErrorTarget.failed_settlement_errors && odooErrorTarget.failed_settlement_errors.length">
-                        <p class="text-sm font-medium cvr-text-primary mb-2">Failed invoice settlements:</p>
+                        <p class="text-sm font-medium cvr-text-primary mb-2">{{ $t('Failed invoice settlements:') }}</p>
                         <ul class="list-disc ps-5 cvr-text-secondary mb-4">
                             <li v-for="(err, i) in odooErrorTarget.failed_settlement_errors" :key="i">{{ err }}</li>
                         </ul>

@@ -199,7 +199,7 @@ function submitReverse() {
                         class="cvr-filter-pill"
                         :class="{ 'cvr-filter-pill-active': activeTab === tab.key }"
                     >
-                        {{ tab.label }}
+                        {{ $t(tab.label) }}
                     </button>
                 </div>
                 <Link v-if="canCreate" :href="createUrl" class="cvr-btn-copper px-3 py-1.5 rounded text-sm inline-flex items-center gap-1">
@@ -304,14 +304,14 @@ function submitReverse() {
 
                                     <Dropdown>
                                         <template #trigger="{ toggle }">
-                                            <button @click="toggle" class="cvr-tag">Options ▾</button>
+                                            <button @click="toggle" class="cvr-tag">{{ $t('Options ▾') }}</button>
                                         </template>
                                         <template #content>
                                             <Link :href="row.view_period_interest_url" class="block px-3 py-2 text-xs cvr-dropdown-item">
-                                                View Period Interest
+                                                {{ $t('View Period Interest') }}
                                             </Link>
                                             <button @click="confirmDelete(row)" class="block w-full text-start px-3 py-2 text-xs cvr-dropdown-item">
-                                                Delete
+                                                {{ $t('Delete') }}
                                             </button>
                                         </template>
                                     </Dropdown>

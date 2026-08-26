@@ -130,7 +130,7 @@ function deleteSchedule() {
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-3">
-                {{ isEdit ? $t('Edit') : $t('Add') }} Medium Term Loan
+                {{ isEdit ? $t('Edit') : $t('Add') }} {{ $t('Medium Term Loan') }}
             </h1>
             <p class="text-sm cvr-text-muted mb-6">{{ financialInstitution.name }}</p>
 

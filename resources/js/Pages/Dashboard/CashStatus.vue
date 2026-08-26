@@ -351,33 +351,33 @@ const expandedLoanId = ref(null);
 
             <template v-if="activeCurrency">
                 <!-- Current Cash Position -->
-                <div class="cvr-section-heading"><h2>Current Cash Position [{{ activeCurrency }}]</h2></div>
+                <div class="cvr-section-heading"><h2>{{ $t('Current Cash Position [') }}{{ activeCurrency }}]</h2></div>
                 <div class="cvr-kpi-row-4 mb-6">
                     <div class="cvr-kpi-card cursor-pointer" @click="toggleDetail('cash')">
                         <div class="cvr-kpi-icon cvr-kpi-icon-blue">🏦</div>
                         <div>
-                            <p class="cvr-kpi-label">Cash &amp; Banks</p>
+                            <p class="cvr-kpi-label">{{ $t('Cash & Banks') }}</p>
                             <p class="cvr-kpi-value cvr-num-blue">{{ fmt(reports?.cash_and_banks?.[activeCurrency]) }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card cursor-pointer" @click="toggleDetail('td')">
                         <div class="cvr-kpi-icon cvr-kpi-icon-copper">⏱</div>
                         <div>
-                            <p class="cvr-kpi-label">Time Deposit</p>
+                            <p class="cvr-kpi-label">{{ $t('Time Deposit') }}</p>
                             <p class="cvr-kpi-value cvr-num-amber">{{ fmt(reports?.time_deposits?.[activeCurrency]) }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card cursor-pointer" @click="toggleDetail('cd')">
                         <div class="cvr-kpi-icon cvr-kpi-icon-copper">📄</div>
                         <div>
-                            <p class="cvr-kpi-label">Certificate Of Deposit</p>
+                            <p class="cvr-kpi-label">{{ $t('Certificate Of Deposit') }}</p>
                             <p class="cvr-kpi-value cvr-num-amber">{{ fmt(reports?.certificate_of_deposits?.[activeCurrency]) }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card">
                         <div class="cvr-kpi-icon cvr-kpi-icon-green">Σ</div>
                         <div>
-                            <p class="cvr-kpi-label">Total</p>
+                            <p class="cvr-kpi-label">{{ $t('Total') }}</p>
                             <p class="cvr-kpi-value cvr-num-green">{{ fmt(reports?.total?.[activeCurrency]) }}</p>
                         </div>
                     </div>
@@ -388,12 +388,12 @@ const expandedLoanId = ref(null);
                     <table class="min-w-full text-sm">
                         <thead class="cvr-table-head">
                             <tr>
-                                <th class="px-4 py-2 text-start">Source</th>
-                                <th class="px-4 py-2 text-start">Financial Institution / Branch Name</th>
-                                <th class="px-4 py-2 text-start">Account Number</th>
-                                <th class="px-4 py-2 text-right">Amount [ {{ activeCurrency }} ]</th>
-                                <th v-if="activeCurrency !== mainFunctionalCurrency" class="px-4 py-2 text-right">Exchange Rate</th>
-                                <th v-if="activeCurrency !== mainFunctionalCurrency" class="px-4 py-2 text-right">Amount [ {{ mainFunctionalCurrency }} ]</th>
+                                <th class="px-4 py-2 text-start">{{ $t('Source') }}</th>
+                                <th class="px-4 py-2 text-start">{{ $t('Financial Institution / Branch Name') }}</th>
+                                <th class="px-4 py-2 text-start">{{ $t('Account Number') }}</th>
+                                <th class="px-4 py-2 text-right">{{ $t('Amount [') }} {{ activeCurrency }} ]</th>
+                                <th v-if="activeCurrency !== mainFunctionalCurrency" class="px-4 py-2 text-right">{{ $t('Exchange Rate') }}</th>
+                                <th v-if="activeCurrency !== mainFunctionalCurrency" class="px-4 py-2 text-right">{{ $t('Amount [') }} {{ mainFunctionalCurrency }} ]</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -414,7 +414,7 @@ const expandedLoanId = ref(null);
                 </div>
                 <div v-if="openDetail === 'td'" class="cvr-card-bg cvr-border border rounded-lg overflow-hidden mb-6">
                     <table class="min-w-full text-sm">
-                        <thead class="cvr-table-head"><tr><th class="px-4 py-2 text-start">Bank</th><th class="px-4 py-2 text-right">Amount</th></tr></thead>
+                        <thead class="cvr-table-head"><tr><th class="px-4 py-2 text-start">{{ $t('Bank') }}</th><th class="px-4 py-2 text-right">{{ $t('Amount') }}</th></tr></thead>
                         <tbody>
                             <tr v-for="(row, i) in (details?.[activeCurrency]?.time_of_deposits || [])" :key="i" class="cvr-table-row">
                                 <td class="px-4 py-2">{{ row.financial_institution_name }}</td>
@@ -425,7 +425,7 @@ const expandedLoanId = ref(null);
                 </div>
                 <div v-if="openDetail === 'cd'" class="cvr-card-bg cvr-border border rounded-lg overflow-hidden mb-6">
                     <table class="min-w-full text-sm">
-                        <thead class="cvr-table-head"><tr><th class="px-4 py-2 text-start">Bank</th><th class="px-4 py-2 text-right">Amount</th></tr></thead>
+                        <thead class="cvr-table-head"><tr><th class="px-4 py-2 text-start">{{ $t('Bank') }}</th><th class="px-4 py-2 text-right">{{ $t('Amount') }}</th></tr></thead>
                         <tbody>
                             <tr v-for="(row, i) in (details?.[activeCurrency]?.certificate_of_deposits || [])" :key="i" class="cvr-table-row">
                                 <td class="px-4 py-2">{{ row.financial_institution_name }}</td>
@@ -436,33 +436,33 @@ const expandedLoanId = ref(null);
                 </div>
 
                 <!-- Total Cash Facilities -->
-                <div class="cvr-section-heading"><h2>Total Cash Facilities [{{ activeCurrency }}]</h2></div>
+                <div class="cvr-section-heading"><h2>{{ $t('Total Cash Facilities [') }}{{ activeCurrency }}]</h2></div>
                 <div class="cvr-kpi-row-4 mb-8">
                     <div class="cvr-kpi-card">
                         <div class="cvr-kpi-icon cvr-kpi-icon-blue">🎯</div>
-                        <div><p class="cvr-kpi-label">Limit</p><p class="cvr-kpi-value cvr-num-blue">{{ fmt(totalCard?.[activeCurrency]?.limit) }}</p></div>
+                        <div><p class="cvr-kpi-label">{{ $t('Limit') }}</p><p class="cvr-kpi-value cvr-num-blue">{{ fmt(totalCard?.[activeCurrency]?.limit) }}</p></div>
                     </div>
                     <div class="cvr-kpi-card">
                         <div class="cvr-kpi-icon cvr-kpi-icon-copper">📉</div>
-                        <div><p class="cvr-kpi-label">Outstanding</p><p class="cvr-kpi-value cvr-num-amber">{{ fmt(totalCard?.[activeCurrency]?.outstanding) }}</p></div>
+                        <div><p class="cvr-kpi-label">{{ $t('Outstanding') }}</p><p class="cvr-kpi-value cvr-num-amber">{{ fmt(totalCard?.[activeCurrency]?.outstanding) }}</p></div>
                     </div>
                     <div class="cvr-kpi-card">
                         <div class="cvr-kpi-icon cvr-kpi-icon-green">✅</div>
-                        <div><p class="cvr-kpi-label">Available</p><p class="cvr-kpi-value cvr-num-green">{{ fmt(totalCard?.[activeCurrency]?.room) }}</p></div>
+                        <div><p class="cvr-kpi-label">{{ $t('Available') }}</p><p class="cvr-kpi-value cvr-num-green">{{ fmt(totalCard?.[activeCurrency]?.room) }}</p></div>
                     </div>
                     <div class="cvr-kpi-card">
                         <div class="cvr-kpi-icon cvr-kpi-icon-copper">%</div>
-                        <div><p class="cvr-kpi-label">Interest</p><p class="cvr-kpi-value cvr-num">{{ fmt(totalCard?.[activeCurrency]?.interest_amount) }}</p></div>
+                        <div><p class="cvr-kpi-label">{{ $t('Interest') }}</p><p class="cvr-kpi-value cvr-num">{{ fmt(totalCard?.[activeCurrency]?.interest_amount) }}</p></div>
                     </div>
                 </div>
 
                 <!-- Per overdraft-type sections -->
                 <div v-for="section in overdraftSections" :key="section.type" class="mb-8">
                     <div class="cvr-section-heading justify-between w-full">
-                        <h3>{{ section.label }}</h3>
+                        <h3>{{ $t(section.label) }}</h3>
                         <div class="flex gap-2 ms-auto">
-                            <Link v-if="bankStatementUrls?.[section.type]?.[activeCurrency]" :href="bankStatementUrls[section.type][activeCurrency]" class="cvr-btn-secondary px-3 py-1.5 rounded border text-xs">📈 Bank Statement Report</Link>
-                            <Link v-if="withdrawalReportUrls?.[section.type]?.[activeCurrency]" :href="withdrawalReportUrls[section.type][activeCurrency]" class="cvr-btn-secondary px-3 py-1.5 rounded border text-xs">📉 Withdrawal Report</Link>
+                            <Link v-if="bankStatementUrls?.[section.type]?.[activeCurrency]" :href="bankStatementUrls[section.type][activeCurrency]" class="cvr-btn-secondary px-3 py-1.5 rounded border text-xs">{{ $t('📈 Bank Statement Report') }}</Link>
+                            <Link v-if="withdrawalReportUrls?.[section.type]?.[activeCurrency]" :href="withdrawalReportUrls[section.type][activeCurrency]" class="cvr-btn-secondary px-3 py-1.5 rounded border text-xs">{{ $t('📉 Withdrawal Report') }}</Link>
                         </div>
                     </div>
 
@@ -472,23 +472,23 @@ const expandedLoanId = ref(null);
                             :class="{ 'ring-1 ring-[var(--cvr-blue)]': openLimitDetail === section.type }"
                             @click="toggleLimitDetail(section.type)"
                         >
-                            <p class="cvr-mini-kpi-label">Limit</p>
+                            <p class="cvr-mini-kpi-label">{{ $t('Limit') }}</p>
                             <p class="cvr-mini-kpi-value cvr-num-blue">{{ fmt(section.cardData?.[activeCurrency]?.limit) }}</p>
                         </div>
-                        <div class="cvr-mini-kpi"><p class="cvr-mini-kpi-label">Outstanding</p><p class="cvr-mini-kpi-value cvr-num-amber">{{ fmt(section.cardData?.[activeCurrency]?.outstanding) }}</p></div>
-                        <div class="cvr-mini-kpi"><p class="cvr-mini-kpi-label">Available Room</p><p class="cvr-mini-kpi-value cvr-num-green">{{ fmt(section.cardData?.[activeCurrency]?.room) }}</p></div>
-                        <div class="cvr-mini-kpi"><p class="cvr-mini-kpi-label">Interest</p><p class="cvr-mini-kpi-value cvr-num">{{ fmt(section.cardData?.[activeCurrency]?.interest_amount) }}</p></div>
+                        <div class="cvr-mini-kpi"><p class="cvr-mini-kpi-label">{{ $t('Outstanding') }}</p><p class="cvr-mini-kpi-value cvr-num-amber">{{ fmt(section.cardData?.[activeCurrency]?.outstanding) }}</p></div>
+                        <div class="cvr-mini-kpi"><p class="cvr-mini-kpi-label">{{ $t('Available Room') }}</p><p class="cvr-mini-kpi-value cvr-num-green">{{ fmt(section.cardData?.[activeCurrency]?.room) }}</p></div>
+                        <div class="cvr-mini-kpi"><p class="cvr-mini-kpi-label">{{ $t('Interest') }}</p><p class="cvr-mini-kpi-value cvr-num">{{ fmt(section.cardData?.[activeCurrency]?.interest_amount) }}</p></div>
                     </div>
 
                     <div v-if="openLimitDetail === section.type" class="cvr-card-bg cvr-border border rounded-lg overflow-hidden mb-4">
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-4 py-2 text-start">Bank Name</th>
-                                    <th class="px-4 py-2 text-right">Limit</th>
-                                    <th class="px-4 py-2 text-right">Outstanding</th>
-                                    <th class="px-4 py-2 text-right">Available Room</th>
-                                    <th class="px-4 py-2 text-right">Interest</th>
+                                    <th class="px-4 py-2 text-start">{{ $t('Bank Name') }}</th>
+                                    <th class="px-4 py-2 text-right">{{ $t('Limit') }}</th>
+                                    <th class="px-4 py-2 text-right">{{ $t('Outstanding') }}</th>
+                                    <th class="px-4 py-2 text-right">{{ $t('Available Room') }}</th>
+                                    <th class="px-4 py-2 text-right">{{ $t('Interest') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -500,10 +500,10 @@ const expandedLoanId = ref(null);
                                     <td class="px-4 py-2 text-right cvr-num">{{ fmt(row.interest) }}</td>
                                 </tr>
                                 <tr v-if="!limitDetailRows(section).length">
-                                    <td colspan="5" class="px-4 py-4 text-center cvr-text-muted">No facility rows for this currency.</td>
+                                    <td colspan="5" class="px-4 py-4 text-center cvr-text-muted">{{ $t('No facility rows for this currency.') }}</td>
                                 </tr>
                                 <tr v-else class="cvr-table-row cvr-summary-row">
-                                    <td class="px-4 py-2 font-semibold">Total</td>
+                                    <td class="px-4 py-2 font-semibold">{{ $t('Total') }}</td>
                                     <td class="px-4 py-2 text-right cvr-num-blue font-semibold">{{ fmt(sumLimitDetail(section, 'limit')) }}</td>
                                     <td class="px-4 py-2 text-right cvr-num-amber font-semibold">{{ fmt(sumLimitDetail(section, 'end_balance')) }}</td>
                                     <td class="px-4 py-2 text-right cvr-num-green font-semibold">{{ fmt(sumLimitDetail(section, 'available_room')) }}</td>
@@ -515,7 +515,7 @@ const expandedLoanId = ref(null);
 
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
                         <div class="cvr-chart-card" style="border-top-color: var(--cvr-copper-bright)">
-                            <h4 class="text-sm font-semibold cvr-text-primary mb-2">Available Room by Bank</h4>
+                            <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ $t('Available Room by Bank') }}</h4>
                             <DonutChart3D
                                 :key="`${section.type}-${activeCurrency}`"
                                 :data="roomDonutData(section)"
@@ -524,13 +524,13 @@ const expandedLoanId = ref(null);
                         </div>
                         <div class="cvr-chart-card lg:col-span-2" style="border-top-color: var(--cvr-blue)">
                             <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
-                                <h4 class="text-sm font-semibold cvr-text-primary">Bank Movement</h4>
+                                <h4 class="text-sm font-semibold cvr-text-primary">{{ $t('Bank Movement') }}</h4>
                                 <div class="flex gap-2">
                                     <select v-model="stateFor(section.type).bankId" class="cvr-input px-2 py-1 rounded text-xs" @change="onBankChange(section)">
                                         <option v-for="bank in section.banks" :key="bank.id" :value="String(bank.id)">{{ bank.name }}</option>
                                     </select>
                                     <select v-model="stateFor(section.type).accountNumber" class="cvr-input px-2 py-1 rounded text-xs" @change="onAccountChange(section)">
-                                        <option value="">Select Account</option>
+                                        <option value="">{{ $t('Select Account') }}</option>
                                         <option v-for="opt in stateFor(section.type).accountOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
                                     </select>
                                 </div>
@@ -542,18 +542,18 @@ const expandedLoanId = ref(null);
 
                 <!-- Medium/Long Term Loans -->
                 <template v-if="(mediumTermLoansArr?.[activeCurrency] || []).length">
-                    <div class="cvr-section-heading"><h3>Medium/Long Term Loans [{{ activeCurrency }}]</h3></div>
+                    <div class="cvr-section-heading"><h3>{{ $t('Medium/Long Term Loans [') }}{{ activeCurrency }}]</h3></div>
                     <div class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto mb-8">
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-4 py-2 text-start">Bank</th>
-                                    <th class="px-4 py-2 text-start">Loan</th>
-                                    <th class="px-4 py-2 text-right">Limit</th>
-                                    <th class="px-4 py-2 text-right">Paid</th>
-                                    <th class="px-4 py-2 text-right">Outstanding</th>
-                                    <th class="px-4 py-2 text-start">Next Installment</th>
-                                    <th class="px-4 py-2 text-right">Past Due</th>
+                                    <th class="px-4 py-2 text-start">{{ $t('Bank') }}</th>
+                                    <th class="px-4 py-2 text-start">{{ $t('Loan') }}</th>
+                                    <th class="px-4 py-2 text-right">{{ $t('Limit') }}</th>
+                                    <th class="px-4 py-2 text-right">{{ $t('Paid') }}</th>
+                                    <th class="px-4 py-2 text-right">{{ $t('Outstanding') }}</th>
+                                    <th class="px-4 py-2 text-start">{{ $t('Next Installment') }}</th>
+                                    <th class="px-4 py-2 text-right">{{ $t('Past Due') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -574,7 +574,7 @@ const expandedLoanId = ref(null);
                                                     {{ pd.date }}: <span class="cvr-num-red">{{ fmt(pd.remaining) }}</span>
                                                 </span>
                                             </div>
-                                            <div v-else class="text-xs cvr-text-muted">No past-due installments.</div>
+                                            <div v-else class="text-xs cvr-text-muted">{{ $t('No past-due installments.') }}</div>
                                         </td>
                                     </tr>
                                 </template>
@@ -585,18 +585,18 @@ const expandedLoanId = ref(null);
 
                 <!-- Leasing Contracts -->
                 <template v-if="(leasingContractsArr?.[activeCurrency] || []).length">
-                    <div class="cvr-section-heading"><h3>Leasing Contracts [{{ activeCurrency }}]</h3></div>
+                    <div class="cvr-section-heading"><h3>{{ $t('Leasing Contracts [') }}{{ activeCurrency }}]</h3></div>
                     <div class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto mb-8">
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-4 py-2 text-start">Leasing Company</th>
-                                    <th class="px-4 py-2 text-start">Contract</th>
-                                    <th class="px-4 py-2 text-right">Limit</th>
-                                    <th class="px-4 py-2 text-right">Paid</th>
-                                    <th class="px-4 py-2 text-right">Outstanding</th>
-                                    <th class="px-4 py-2 text-start">Next Installment</th>
-                                    <th class="px-4 py-2 text-right">Past Due</th>
+                                    <th class="px-4 py-2 text-start">{{ $t('Leasing Company') }}</th>
+                                    <th class="px-4 py-2 text-start">{{ $t('Contract') }}</th>
+                                    <th class="px-4 py-2 text-right">{{ $t('Limit') }}</th>
+                                    <th class="px-4 py-2 text-right">{{ $t('Paid') }}</th>
+                                    <th class="px-4 py-2 text-right">{{ $t('Outstanding') }}</th>
+                                    <th class="px-4 py-2 text-start">{{ $t('Next Installment') }}</th>
+                                    <th class="px-4 py-2 text-right">{{ $t('Past Due') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -617,7 +617,7 @@ const expandedLoanId = ref(null);
                                                     {{ pd.date }}: <span class="cvr-num-red">{{ fmt(pd.remaining) }}</span>
                                                 </span>
                                             </div>
-                                            <div v-else class="text-xs cvr-text-muted">No past-due installments.</div>
+                                            <div v-else class="text-xs cvr-text-muted">{{ $t('No past-due installments.') }}</div>
                                         </td>
                                     </tr>
                                 </template>

@@ -142,7 +142,7 @@ function submitRenew() {
                     @click="activeMainTab = 'archived'"
                     class="px-4 py-2 text-sm font-medium border-b-2 -mb-px"
                     :class="activeMainTab === 'archived' ? 'border-current cvr-text-primary' : 'border-transparent cvr-text-muted'"
-                >Archived Contracts ({{ archivedRows.length }})</button>
+                >{{ $t('Archived Contracts (') }}{{ archivedRows.length }})</button>
             </div>
 
             <div v-if="activeMainTab === 'contracts'" class="cvr-card-bg cvr-border border rounded-lg overflow-hidden overflow-x-auto">
@@ -223,14 +223,14 @@ function submitRenew() {
                                     <table class="w-full text-xs border rounded overflow-hidden">
                                         <thead class="cvr-table-head">
                                             <tr>
-                                                <th class="px-3 py-2 text-start">Effective Date</th>
-                                                <th class="px-3 py-2 text-start">Contract End Date</th>
-                                                <th class="px-3 py-2 text-start">Limit</th>
-                                                <th class="px-3 py-2 text-start">Borrowing Rate</th>
-                                                <th class="px-3 py-2 text-start">Margin Rate</th>
-                                                <th class="px-3 py-2 text-start">Interest Rate</th>
-                                                <th class="px-3 py-2 text-start">Settlement Days</th>
-                                                <th class="px-3 py-2 text-start">Chapter</th>
+                                                <th class="px-3 py-2 text-start">{{ $t('Effective Date') }}</th>
+                                                <th class="px-3 py-2 text-start">{{ $t('Contract End Date') }}</th>
+                                                <th class="px-3 py-2 text-start">{{ $t('Limit') }}</th>
+                                                <th class="px-3 py-2 text-start">{{ $t('Borrowing Rate') }}</th>
+                                                <th class="px-3 py-2 text-start">{{ $t('Margin Rate') }}</th>
+                                                <th class="px-3 py-2 text-start">{{ $t('Interest Rate') }}</th>
+                                                <th class="px-3 py-2 text-start">{{ $t('Settlement Days') }}</th>
+                                                <th class="px-3 py-2 text-start">{{ $t('Chapter') }}</th>
                                                 <th class="px-3 py-2 text-start"></th>
                                             </tr>
                                         </thead>
@@ -249,8 +249,8 @@ function submitRenew() {
                                                         v-if="canUpdate && tIndex === row.terms_history.length - 1 && !term.is_original"
                                                         @click.stop="confirmDeleteRenewal(row)"
                                                         class="cvr-btn-danger px-2 py-1 rounded border text-xs"
-                                                        title="Undo this renewal — reverts the contract to its previous chapter's terms"
-                                                    >Delete This Renewal</button>
+                                                        :title="$t('Undo this renewal — reverts the contract to its previous chapter\'s terms')"
+                                                    >{{ $t('Delete This Renewal') }}</button>
                                                 </td>
                                             </tr>
                                         </tbody>
@@ -294,7 +294,7 @@ function submitRenew() {
             <!-- Contract Renewal modal -->
             <div v-if="renewTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-1">Renew Contract — {{ renewTarget.recourse_type_label }}</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-1">{{ $t('Renew Contract —') }} {{ renewTarget.recourse_type_label }}</h2>
                     <p class="text-xs cvr-text-muted mb-4">
                         {{ $t('Leave a field blank to keep it unchanged from the current terms. Nothing dated before the effective date is ever recalculated — past interest, fees, and due dates stay exactly as they were.') }}
                     </p>

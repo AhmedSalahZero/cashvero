@@ -343,7 +343,7 @@ const commentTarget = ref(null);
                 <!-- Pagination -->
                 <div v-if="currentTab.rows.last_page > 1" class="flex items-center justify-between mt-4 flex-wrap gap-3">
                     <p class="text-xs cvr-text-muted">
-                        Showing {{ currentTab.rows.from }}–{{ currentTab.rows.to }} of {{ currentTab.rows.total }}
+                        {{ $t('Showing') }} {{ currentTab.rows.from }}–{{ currentTab.rows.to }} {{ $t('of') }} {{ currentTab.rows.total }}
                     </p>
                     <div class="flex items-center gap-1 flex-wrap">
                         <button
@@ -438,30 +438,30 @@ const commentTarget = ref(null);
 
                         <template v-if="payTarget.is_financed_by_self">
                             <div>
-                                <label class="cvr-form-label">LC Payment Currency *</label>
+                                <label class="cvr-form-label">{{ $t('LC Payment Currency *') }}</label>
                                 <select v-model="payForm.payment_currency" class="cvr-input w-full px-3 py-2 rounded">
-                                    <option value="" disabled>Select</option>
+                                    <option value="" disabled>{{ $t('Select') }}</option>
                                     <option :value="payTarget.company_main_currency">{{ payTarget.company_main_currency }}</option>
                                     <option :value="payTarget.lc_currency">{{ payTarget.lc_currency?.toUpperCase() }}</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="cvr-form-label">LC Remaining Amount</label>
+                                <label class="cvr-form-label">{{ $t('LC Remaining Amount') }}</label>
                                 <input v-model="payForm.lc_remaining_amount" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
                             </div>
                             <div>
-                                <label class="cvr-form-label">Account Type</label>
+                                <label class="cvr-form-label">{{ $t('Account Type') }}</label>
                                 <select v-model="payForm.payment_account_type_id" class="cvr-input w-full px-3 py-2 rounded">
                                     <option v-for="t in payTarget.current_account_types" :key="t.id" :value="t.id">{{ t.name }}</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="cvr-form-label">Account Number</label>
+                                <label class="cvr-form-label">{{ $t('Account Number') }}</label>
                                 <select v-model="payForm.payment_account_number_id" class="cvr-input w-full px-3 py-2 rounded">
-                                    <option value="">Select</option>
+                                    <option value="">{{ $t('Select') }}</option>
                                     <option v-for="a in filteredPaymentAccounts" :key="a.id" :value="a.id">{{ a.account_number }}</option>
                                 </select>
-                                <p v-if="payForm.payment_currency && !filteredPaymentAccounts.length" class="text-xs cvr-text-muted mt-1">No accounts in this currency for this bank.</p>
+                                <p v-if="payForm.payment_currency && !filteredPaymentAccounts.length" class="text-xs cvr-text-muted mt-1">{{ $t('No accounts in this currency for this bank.') }}</p>
                             </div>
                         </template>
                     </div>
@@ -537,7 +537,7 @@ const commentTarget = ref(null);
             <!-- Expenses modal -->
             <div v-if="expensesTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-4xl">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">Expenses — {{ expensesTarget.transaction_name }}</h2>
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Expenses —') }} {{ expensesTarget.transaction_name }}</h2>
                     <div class="cvr-form-grid-4 mb-4 items-end">
                         <div>
                             <label class="cvr-form-label">{{ $t('Expense Name') }}</label>

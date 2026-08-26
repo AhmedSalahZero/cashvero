@@ -48,7 +48,7 @@ function fmt(amount) {
 
             <template v-else>
                 <p class="text-sm cvr-text-secondary mt-4 mb-6">
-                    As of <span class="cvr-text-primary font-medium">{{ date }}</span>
+                    {{ $t('As of') }} <span class="cvr-text-primary font-medium">{{ date }}</span>
                 </p>
 
                 <!-- KPI row -->
@@ -56,14 +56,14 @@ function fmt(amount) {
                     <div class="cvr-kpi-card">
                         <div class="cvr-kpi-icon cvr-kpi-icon-blue">🧾</div>
                         <div>
-                            <p class="cvr-kpi-label">Opening Invoices</p>
+                            <p class="cvr-kpi-label">{{ $t('Opening Invoices') }}</p>
                             <p class="cvr-kpi-value">{{ invoices.length }}</p>
                         </div>
                     </div>
                     <div class="cvr-kpi-card">
                         <div class="cvr-kpi-icon cvr-kpi-icon-copper">💸</div>
                         <div>
-                            <p class="cvr-kpi-label">Advanced Down Payments</p>
+                            <p class="cvr-kpi-label">{{ $t('Advanced Down Payments') }}</p>
                             <p class="cvr-kpi-value">{{ downPayments.length }}</p>
                         </div>
                     </div>
@@ -71,18 +71,18 @@ function fmt(amount) {
 
                 <!-- Opening Invoices -->
                 <div class="mb-8">
-                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary mb-3">Opening Invoices</h2>
+                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary mb-3">{{ $t('Opening Invoices') }}</h2>
                     <div class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto">
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-4 py-3 text-start">Supplier</th>
-                                    <th class="px-4 py-3 text-start">Invoice #</th>
-                                    <th class="px-4 py-3 text-start">Due Date</th>
-                                    <th class="px-4 py-3 text-start">Currency</th>
-                                    <th class="px-4 py-3 text-right">Amount</th>
-                                    <th class="px-4 py-3 text-start">Contract</th>
-                                    <th class="px-4 py-3 text-start">Purchase Order #</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Supplier') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Invoice #') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Due Date') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Currency') }}</th>
+                                    <th class="px-4 py-3 text-right">{{ $t('Amount') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Contract') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Purchase Order #') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -102,7 +102,7 @@ function fmt(amount) {
                                     <td class="px-4 py-3 cvr-text-secondary">{{ row.purchases_order_number || '—' }}</td>
                                 </tr>
                                 <tr v-if="invoices.length === 0">
-                                    <td colspan="7" class="px-4 py-6 text-center cvr-text-muted">No opening invoices.</td>
+                                    <td colspan="7" class="px-4 py-6 text-center cvr-text-muted">{{ $t('No opening invoices.') }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -111,16 +111,16 @@ function fmt(amount) {
 
                 <!-- Advanced Down Payments -->
                 <div class="mb-4">
-                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary mb-3">Advanced Down Payments</h2>
+                    <h2 class="text-sm font-semibold uppercase tracking-wide cvr-text-secondary mb-3">{{ $t('Advanced Down Payments') }}</h2>
                     <div class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto">
                         <table class="min-w-full text-sm">
                             <thead class="cvr-table-head">
                                 <tr>
-                                    <th class="px-4 py-3 text-start">Supplier</th>
-                                    <th class="px-4 py-3 text-start">Type</th>
-                                    <th class="px-4 py-3 text-start">Contract</th>
-                                    <th class="px-4 py-3 text-start">Currency</th>
-                                    <th class="px-4 py-3 text-right">Amount</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Supplier') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Type') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Contract') }}</th>
+                                    <th class="px-4 py-3 text-start">{{ $t('Currency') }}</th>
+                                    <th class="px-4 py-3 text-right">{{ $t('Amount') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -134,7 +134,7 @@ function fmt(amount) {
                                     <td class="px-4 py-3 text-right cvr-num-amber">{{ fmt(row.amount) }}</td>
                                 </tr>
                                 <tr v-if="downPayments.length === 0">
-                                    <td colspan="5" class="px-4 py-6 text-center cvr-text-muted">No advanced down payments.</td>
+                                    <td colspan="5" class="px-4 py-6 text-center cvr-text-muted">{{ $t('No advanced down payments.') }}</td>
                                 </tr>
                             </tbody>
                         </table>

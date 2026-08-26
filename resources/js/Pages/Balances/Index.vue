@@ -234,7 +234,7 @@ function formatAmount(value) {
     <AppLayout>
         <div class="p-6">
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ title }}</h1>
-            <p class="text-sm cvr-text-muted mb-6">Net balance per {{ customersOrSupplierText.toLowerCase() }}, by currency</p>
+            <p class="text-sm cvr-text-muted mb-6">{{ $t('Net balance per') }} {{ customersOrSupplierText.toLowerCase() }}{{ $t(', by currency') }}</p>
 
             <!-- KPI row — one card per currency, each with its own
                  drill-down buttons (hidden for the main-currency card,
@@ -269,7 +269,7 @@ function formatAmount(value) {
                 </div>
 
                 <Link v-if="activeCard" :href="activeCard.bulk_statement_url" class="cvr-btn-primary px-3 py-1.5 rounded text-sm whitespace-nowrap">
-                    {{ customersOrSupplierStatementText }} — All in {{ currencyLabel(activeCard.currency) }}
+                    {{ customersOrSupplierStatementText }} {{ $t('— All in') }} {{ currencyLabel(activeCard.currency) }}
                 </Link>
             </div>
 
@@ -350,7 +350,7 @@ function formatAmount(value) {
                     <tfoot v-if="filteredRows.length" class="cvr-table-head">
                         <tr v-if="isPaginated">
                             <td colspan="3" class="px-4 py-3 text-right font-medium cvr-text-secondary">
-                                Total — this page ({{ pagedRows.length }} of {{ filteredRows.length }})
+                                {{ $t('Total — this page (') }}{{ pagedRows.length }} {{ $t('of') }} {{ filteredRows.length }})
                             </td>
                             <td class="px-4 py-3 text-right font-medium cvr-text-secondary">{{ formatAmount(pageTotals.invoices) }}</td>
                             <td class="px-4 py-3 text-right font-medium cvr-text-secondary">{{ formatAmount(pageTotals.down_payments) }}</td>
@@ -379,7 +379,7 @@ function formatAmount(value) {
                  See the script's "Client-side pagination" note for why. -->
             <div v-if="filteredRows.length > pageSize" class="flex items-center justify-between mt-4 flex-wrap gap-3">
                 <p class="text-xs cvr-text-muted">
-                    Showing {{ (currentPage - 1) * pageSize + 1 }}–{{ Math.min(currentPage * pageSize, filteredRows.length) }} of {{ filteredRows.length }}
+                    {{ $t('Showing') }} {{ (currentPage - 1) * pageSize + 1 }}–{{ Math.min(currentPage * pageSize, filteredRows.length) }} {{ $t('of') }} {{ filteredRows.length }}
                 </p>
                 <div class="flex items-center gap-1 flex-wrap">
                     <button
@@ -388,7 +388,7 @@ function formatAmount(value) {
                         class="cvr-filter-pill"
                         :class="{ 'opacity-40 cursor-not-allowed': currentPage === 1 }"
                     >{{ $t('‹ Prev') }}</button>
-                    <span class="text-xs cvr-text-muted px-2">Page {{ currentPage }} of {{ totalPages }}</span>
+                    <span class="text-xs cvr-text-muted px-2">{{ $t('Page') }} {{ currentPage }} {{ $t('of') }} {{ totalPages }}</span>
                     <button
                         @click="goToPage(currentPage + 1)"
                         :disabled="currentPage === totalPages"
