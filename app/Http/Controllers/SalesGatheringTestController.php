@@ -712,6 +712,26 @@ class SalesGatheringTestController extends Controller
 				$type = 'purchase_order_select';
 				$submitField = 'purchases_order_id';
 				$value = $currentPurchaseOrderId;
+			} elseif ($fieldName === 'currency') {
+				/**
+				 * Currency is chosen, not typed. It was a free-text box,
+				 * so "egp" / "EGP " / "L.E" all saved as different
+				 * currencies — and every screen downstream groups and
+				 * filters by this exact string (the balances tabs, the
+				 * invoice report, the statements), so one typo silently
+				 * split a customer's balance across two currencies.
+				 */
+				$type = 'currency_select';
+				$options = collect(getCurrencies())->mapWithKeys(fn ($c) => [$c => $c]);
+			} elseif ($fieldName === 'net_invoice_amount') {
+				/**
+				 * "Total Invoice Amount" is not typed either — it is
+				 * invoice amount + VAT − withholding, computed live in
+				 * the form and shown read-only. Typing it by hand let it
+				 * disagree with its own three components, and it is the
+				 * number the receivable (net_balance) is built from.
+				 */
+				$type = 'computed_total';
 			} elseif (str_contains($fieldName, 'date') || collect($dateWords)->contains(fn ($w) => str_contains($label, $w))) {
 				$type = 'date';
 				if ($value) {
@@ -734,6 +754,18 @@ class SalesGatheringTestController extends Controller
 			'modelName' => $modelName,
 			'modelDisplayName' => camelToTitle($modelName),
 			'fields' => $fields,
+			/**
+			 * The three inputs "Total Invoice Amount" is computed from.
+			 * Named here rather than assumed in the form, because which
+			 * columns a company shows is configurable — company 146 does
+			 * not display Withhold Amount at all, and a term that is not
+			 * on the form contributes 0 rather than breaking the sum.
+			 */
+			'totalInvoiceFormula' => [
+				'target' => 'net_invoice_amount',
+				'add' => ['invoice_amount', 'vat_amount'],
+				'subtract' => ['withhold_amount'],
+			],
 			'projectsUrl' => route('get.projects.for.customer.or.supplier', ['company' => $company->id]),
 			'poOrSoUrl' => route('get.po.or.so.from.contract', ['company' => $company->id]),
 			'submitUrl' => $model
@@ -891,8 +923,27 @@ class SalesGatheringTestController extends Controller
 		$class = '\App\Models\\'.$modelName ;
 		$model = new $class;
 		
+		/**
+		 * ⚠️ REAL BUG FIXED HERE (client-flagged): company_id was never
+		 * set on an invoice created or edited through this form — only
+		 * the LoanSchedule / ContractLoanSchedule branches below ever
+		 * set it. The row landed with company_id = 0, which made it
+		 * invisible almost everywhere:
+		 *
+		 *   - /uploading/{model}      filters where('company_id', ...)  → gone
+		 *   - the Invoice Report      filters where('company_id', ...)  → "No Data Found"
+		 *   - Customers Balances      joins on partners.company_id and never
+		 *                             filters the invoice's own company_id
+		 *                             → the invoice SHOWED here, which is why
+		 *                               the balance looked right while every
+		 *                               other screen denied the invoice existed.
+		 *
+		 * Set from the route-bound company, not from the request, so it
+		 * cannot be spoofed by posting a company_id field.
+		 */
 		if($modelName == 'CustomerInvoice'){
-					$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','contract_id','sales_order_id']);
+					$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','contract_id','sales_order_id','company_id']);
+						$tableDataArr['company_id'] = $companyId;
 						$salesOrderId = $request->get('sales_order_id') ;
 						$contractId = $request->get('contract_id') ;
 						$tableDataArr['sales_order_number'] =$salesOrderId ? SalesOrder::find($salesOrderId)->getNumber() : null ; 
@@ -905,7 +956,9 @@ class SalesGatheringTestController extends Controller
 						CustomerInvoice::create($tableDataArr);
 					}
 					if($modelName == 'SupplierInvoice'){
-						$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','contract_id','purchases_order_id']);
+						// Same company_id fix as CustomerInvoice above.
+						$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','contract_id','purchases_order_id','company_id']);
+						$tableDataArr['company_id'] = $companyId;
 						$purchasesOrderId = $request->get('purchases_order_id') ;
 						$contractId = $request->get('contract_id') ;
 						$tableDataArr['purchases_order_number'] =$purchasesOrderId ? PurchaseOrder::find($purchasesOrderId)->getNumber() : null ; 
@@ -1012,7 +1065,10 @@ class SalesGatheringTestController extends Controller
 		$model = ('\App\Models\\'.$modelName)::find($modelId) ;
 		
 		if($modelName == 'CustomerInvoice'){
-					$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','contract_id','sales_order_id']);
+					// Same company_id fix as storeModel() — which also repairs a
+					// row already saved without one, the next time it is edited.
+					$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','contract_id','sales_order_id','company_id']);
+						$tableDataArr['company_id'] = $companyId;
 						$salesOrderId = $request->get('sales_order_id') ;
 						$contractId = $request->get('contract_id') ;
 						$tableDataArr['sales_order_number'] =$salesOrderId ? SalesOrder::find($salesOrderId)->getNumber() : null ; 
@@ -1024,7 +1080,9 @@ class SalesGatheringTestController extends Controller
 						$model->update($tableDataArr);
 					}
 					if($modelName == 'SupplierInvoice'){
-						$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','contract_id','purchases_order_id']);
+						// Same company_id fix as storeModel().
+						$tableDataArr = $request->except(['tableIds','_token','model_id','id','creator_id','contract_id','purchases_order_id','company_id']);
+						$tableDataArr['company_id'] = $companyId;
 						$purchasesOrderId = $request->get('purchases_order_id') ;
 						$contractId = $request->get('contract_id') ;
 						$tableDataArr['purchases_order_number'] =$purchasesOrderId ? PurchaseOrder::find($purchasesOrderId)->getNumber() : null ; 

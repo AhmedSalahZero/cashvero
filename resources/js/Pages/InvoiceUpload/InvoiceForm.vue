@@ -29,7 +29,7 @@
  * actual invoice-saving business logic was never touched, only this
  * presentation layer.
  */
-import { ref } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useForm, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
@@ -42,6 +42,10 @@ const props = defineProps({
     submitUrl: String,
     isEdit: Boolean,
     backUrl: String,
+    /* { target, add: [...], subtract: [...] } — which fields make up
+       "Total Invoice Amount". Comes from the server because the set of
+       columns a company shows is configurable. */
+    totalInvoiceFormula: { type: Object, default: () => ({ target: '', add: [], subtract: [] }) },
 });
 
 const isCustomer = props.modelName === 'CustomerInvoice';
@@ -51,6 +55,45 @@ const orderField = isCustomer ? 'sales_order_id' : 'purchases_order_id';
 const form = useForm(
     Object.fromEntries(props.fields.map(f => [f.field, f.value]))
 );
+
+/* ── Total Invoice Amount ──────────────────────────────────────────
+   invoice amount + VAT − withholding, kept in step with its inputs
+   instead of typed. A term the company does not show on the form is
+   simply absent from `form` and counts as 0 — the same thing typing
+   nothing into it would have meant.
+
+   The value still submits under its own field name, so nothing about
+   how the invoice is saved changes; the field is just no longer a
+   place the three numbers can be contradicted. */
+const totalTargetField = props.totalInvoiceFormula?.target || '';
+
+function sumOf(fieldNames) {
+    return (fieldNames || []).reduce((total, name) => {
+        const raw = form[name];
+        const value = Number(String(raw ?? '').replace(/,/g, ''));
+        return total + (Number.isFinite(value) ? value : 0);
+    }, 0);
+}
+
+const computedTotalInvoiceAmount = computed(() => {
+    const total = sumOf(props.totalInvoiceFormula?.add) - sumOf(props.totalInvoiceFormula?.subtract);
+    // Money, not a float artefact: 100 + 14.5 must not become 114.49999.
+    return Math.round(total * 100) / 100;
+});
+
+if (totalTargetField) {
+    watch(computedTotalInvoiceAmount, (total) => { form[totalTargetField] = total; }, { immediate: true });
+}
+
+/* Spelled out with this company's own field labels, so the number is
+   checkable on the spot rather than taken on trust. */
+const totalFormulaHint = computed(() => {
+    const labelFor = (name) => props.fields.find(f => f.field === name)?.label;
+    const added = (props.totalInvoiceFormula?.add || []).map(labelFor).filter(Boolean);
+    const subtracted = (props.totalInvoiceFormula?.subtract || []).map(labelFor).filter(Boolean);
+    if (!added.length) return '';
+    return added.join(' + ') + subtracted.map(l => ` − ${l}`).join('');
+});
 
 /* ── Cascade state — auto-fill targets matched by partial field
    name, mirroring the original's [name*="..."] selector approach. ── */
@@ -160,6 +203,20 @@ function submit() {
                             <option value="">{{ $t('Select') }}</option>
                             <option v-for="o in orderOptions" :key="o.id" :value="o.id">{{ o.number }}</option>
                         </select>
+
+                        <select v-else-if="f.type === 'currency_select'" v-model="form[f.field]" class="cvr-input w-full px-3 py-2 rounded">
+                            <option value="">{{ $t('Select') }}</option>
+                            <option v-for="(name, code) in f.options" :key="code" :value="code">{{ name }}</option>
+                        </select>
+
+                        <!-- Computed, not typed — see the script's
+                             "Total Invoice Amount" note. Shown disabled so it
+                             reads as a result rather than an empty box someone
+                             forgot to fill. -->
+                        <template v-else-if="f.type === 'computed_total'">
+                            <input :value="computedTotalInvoiceAmount" type="number" disabled class="cvr-input w-full px-3 py-2 rounded opacity-70 cursor-not-allowed" />
+                            <p class="text-xs cvr-text-muted mt-1">{{ totalFormulaHint }}</p>
+                        </template>
 
                         <input v-else v-model="form[f.field]" :type="f.type" class="cvr-input w-full px-3 py-2 rounded" />
 

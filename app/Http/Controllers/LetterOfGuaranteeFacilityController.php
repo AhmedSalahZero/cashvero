@@ -116,6 +116,20 @@ class LetterOfGuaranteeFacilityController
 					'currency' => $lgf->getCurrency(),
 					'limit_formatted' => $lgf->getLimitFormatted(),
 					'term_and_conditions' => ($latestChapter?->termAndConditions ?? $lgf->termAndConditions)->map(fn ($tc) => [
+						/**
+						 * The raw key as well as the label. The Renew
+						 * dialog used to recover the key by searching
+						 * LgTypes::getAll() for a matching label, but
+						 * the two are produced by different code and
+						 * only agree for Bid Bond:
+						 *   final-lgs            → 'Final LG'  vs 'Final Lgs'
+						 *   advanced-payment-lgs → 'Advanced Payment LG' vs '… Lgs'
+						 *   performance-lg       → 'Performance LG' vs 'Performance Lg'
+						 * The three misses all became lg_type '' and so
+						 * shared one :key, which Vue collapsed into a
+						 * single row — the "only Bid Bond shows" report.
+						 */
+						'lg_type' => $tc->getLgType(),
 						'lg_type_formatted' => $tc->getLgTypeFormatted(),
 						'cash_cover_rate_formatted' => $tc->getCashCoverRate() . ' %',
 						'commission_rate_formatted' => $tc->getCommissionRate() . ' %',
@@ -135,6 +149,7 @@ class LetterOfGuaranteeFacilityController
 						'limit_formatted' => $t->getLimitFormatted(),
 						'is_original' => (bool) $t->is_original,
 						'term_and_conditions' => $t->termAndConditions->map(fn ($tc) => [
+							'lg_type' => $tc->getLgType(),
 							'lg_type_formatted' => $tc->getLgTypeFormatted(),
 							'cash_cover_rate_formatted' => $tc->getCashCoverRate() . ' %',
 							'commission_rate_formatted' => $tc->getCommissionRate() . ' %',

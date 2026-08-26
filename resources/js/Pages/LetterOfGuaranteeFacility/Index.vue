@@ -77,21 +77,35 @@ function openRenew(row) {
     renewTarget.value = row;
     renewErrors.value = {};
     renewForm.value = { effective_date: '', limit: '', contract_end_date: '', notes: '' };
-    // Pre-fill labels from the row's own current matrix if available,
-    // so the person only has to type new numbers, not remember the
-    // LG type order.
-    if (row.term_and_conditions?.length) {
-        renewTermAndConditions.value = row.term_and_conditions.map(tc => ({
-            lg_type: Object.keys(lgTypes).find(k => lgTypes[k] === tc.lg_type_formatted) || '',
-            cash_cover_rate: 0,
-            commission_rate: 0,
-            commission_interval: 'quarterly',
-            min_commission_fees: 0,
-            issuance_fees: 0,
-        }));
-    } else {
-        renewTermAndConditions.value = blankRenewTermAndConditions();
-    }
+    /**
+     * ⚠️ REAL BUG FIXED HERE (client-flagged: "only Bid Bond shows in
+     * the LG Type column").
+     *
+     * The matrix was built from the facility's EXISTING term rows, and
+     * each row's key was recovered by searching lgTypes for an entry
+     * whose LABEL equalled `lg_type_formatted`. Those two labels come
+     * from different code and only agree for Bid Bond — LgTypes says
+     * "Final LG" where camelizeWithSpace() says "Final Lgs", and so on.
+     * The three that missed all fell back to lg_type '', so all three
+     * rendered under the same `:key=""` and Vue collapsed them into one
+     * node. Four rows went in, one type came out.
+     *
+     * Now the matrix is always one row per LG type, straight from
+     * lgTypes — which is also what it has to be regardless of the
+     * lookup: a renewal that omits a type leaves any LG of that type
+     * issued afterwards with no rate at all (see blankRenewTermAndConditions).
+     * The existing rows only pre-fill the numbers, keyed on the raw
+     * lg_type the server now sends, never on a display label.
+     */
+    const existingByType = Object.fromEntries(
+        (row.term_and_conditions || [])
+            .filter(tc => tc.lg_type)
+            .map(tc => [tc.lg_type, tc])
+    );
+    renewTermAndConditions.value = blankRenewTermAndConditions().map(blank => ({
+        ...blank,
+        commission_interval: existingByType[blank.lg_type]?.commission_interval || blank.commission_interval,
+    }));
 }
 function cancelRenew() { renewTarget.value = null; }
 const currentContractEndDate = computed(() => {
