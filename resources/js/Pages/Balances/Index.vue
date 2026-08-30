@@ -31,6 +31,11 @@ const props = defineProps({
        False on Suppliers Balances — see BalancesController@index. */
     canSettleInternally: { type: Boolean, default: false },
     storeInternalSettlementUrl: String,
+    /* Where the settle/edit dialog fetches the partner's open invoices
+       from. Must be DECLARED here, not just sent by the controller —
+       an undeclared prop is simply absent from `props`, and the fetch
+       then resolves 'undefined' against the current path. */
+    internalSettlementInvoicesUrl: String,
 });
 
 /* ── Tabs — one per currency, same shape as TimeOfDeposits' tabs.
@@ -128,56 +133,153 @@ const trailingColumns = computed(() => (activeCard.value?.currency !== 'main_cur
    feature is missing" on a company where nobody happens to be both —
    a dash says "not applicable here", which is the true answer. */
 
+// Switching currency or searching should always land back on page 1 —
+// otherwise "page 4" of one tab could silently show as an empty
+// "page 4" of a shorter tab/search result.
+function goToPage(page) {
+    if (page < 1 || page > totalPages.value) return;
+    currentPage.value = page;
+}
+
+/* ── Number Color Rule (Style Guide §4) applied to net_balance:
+   net_balance is "how much this partner still owes/is owed" —
+   > 0  → still outstanding  → amber (pending/at-risk)
+   = 0  → fully settled      → green (positive)
+   < 0  → credit/overpayment → red (unusual, worth a second look) */
+function balanceClass(balance) {
+    if (balance > 0) return 'cvr-num-amber';
+    if (balance < 0) return 'cvr-num-red';
+    return 'cvr-num-green';
+}
+
+/* Same rule as balanceClass, as a raw custom-property value for the
+   places that need an inline style rather than a class. */
+function balanceColorVar(balance) {
+    if (balance > 0) return 'var(--cvr-num-amber)';
+    if (balance < 0) return 'var(--cvr-num-red)';
+    return 'var(--cvr-num-green)';
+}
+
 const settleTarget = ref(null);
-const settleForm = ref({ amount: '', settlement_date: todayDate(), user_comment: '' });
+const settleForm = ref({ settlement_date: todayDate(), user_comment: '' });
 const settleError = ref('');
 const settleSubmitting = ref(false);
+const settleLoading = ref(false);
+/* The settlement being edited, or null when creating a new one. */
+const settleEditing = ref(null);
 
-/* What is still offsettable on the open row. The server re-checks this
-   on save — the page's copy can be stale if someone else settled in
-   the meantime — but showing it here is what stops the user entering a
-   number that was never going to be accepted. */
-const settleMax = computed(() => Number(settleTarget.value?.net_balance || 0));
+/* Open invoices on each side, loaded when the dialog opens.
+   { id, invoice_number, invoice_date, net_invoice_amount, open, allocated } */
+const settleInvoices = ref({ customer: [], supplier: [] });
+/* What the user has typed against each invoice: { [invoiceId]: amount } */
+const settleAllocations = ref({ customer: {}, supplier: {} });
 
-function openSettle(row) {
+function allocationTotal(side) {
+    return Object.values(settleAllocations.value[side] || {})
+        .reduce((sum, v) => sum + (Number(v) || 0), 0);
+}
+const customerAllocated = computed(() => Math.round(allocationTotal('customer') * 100) / 100);
+const supplierAllocated = computed(() => Math.round(allocationTotal('supplier') * 100) / 100);
+
+/* Both sides have to move the same money — that is what makes it an
+   offset rather than two unrelated adjustments. */
+const sidesMatch = computed(() =>
+    customerAllocated.value > 0 && Math.abs(customerAllocated.value - supplierAllocated.value) < 0.01
+);
+
+/* The ceiling. It is the smaller of the two sides now: the money has
+   to come off real customer invoices AND land on real supplier
+   invoices, so whichever side runs out first decides. */
+const settleCeiling = computed(() => {
+    const open = side => (settleInvoices.value[side] || []).reduce((sum, i) => sum + Number(i.open || 0), 0);
+    return Math.round(Math.min(open('customer'), open('supplier')) * 100) / 100;
+});
+
+function openOf(side, invoiceId) {
+    const inv = (settleInvoices.value[side] || []).find(i => i.id === invoiceId);
+    return Number(inv?.open || 0);
+}
+function overAllocated(side, invoiceId) {
+    return (Number(settleAllocations.value[side]?.[invoiceId]) || 0) > openOf(side, invoiceId) + 0.001;
+}
+
+async function loadSettleInvoices(row, settlement) {
+    settleLoading.value = true;
+    settleInvoices.value = { customer: [], supplier: [] };
+    settleAllocations.value = { customer: {}, supplier: {} };
+    try {
+        const params = new URLSearchParams({ partner_id: row.client_id, currency: row.currency });
+        if (settlement) params.append('internal_settlement_id', settlement.id);
+        const res = await fetch(`${props.internalSettlementInvoicesUrl}?${params}`, { headers: { Accept: 'application/json' } });
+        const data = await res.json();
+        settleInvoices.value = { customer: data.customer || [], supplier: data.supplier || [] };
+        // Editing opens on what this settlement already put where.
+        for (const side of ['customer', 'supplier']) {
+            for (const inv of settleInvoices.value[side]) {
+                if (Number(inv.allocated) > 0) settleAllocations.value[side][inv.id] = Number(inv.allocated);
+            }
+        }
+    } finally {
+        settleLoading.value = false;
+    }
+}
+
+function openSettle(row, settlement = null) {
     settleTarget.value = row;
+    settleEditing.value = settlement;
     settleError.value = '';
-    settleForm.value = { amount: '', settlement_date: todayDate(), user_comment: '' };
+    settleForm.value = {
+        settlement_date: settlement?.date || todayDate(),
+        user_comment: settlement?.user_comment || '',
+    };
+    loadSettleInvoices(row, settlement);
 }
 
 function closeSettle() {
     settleTarget.value = null;
+    settleEditing.value = null;
     settleError.value = '';
 }
 
 function submitSettle() {
-    const amount = Number(settleForm.value.amount);
-
-    if (!amount || amount <= 0) {
-        settleError.value = 'Enter an amount greater than zero.';
+    if (!sidesMatch.value) {
+        settleError.value = `The two sides must match — ${formatAmount(customerAllocated.value)} taken from customer invoices against ${formatAmount(supplierAllocated.value)} paid to supplier invoices.`;
         return;
     }
-    if (amount > settleMax.value) {
-        settleError.value = `The amount cannot exceed the customer balance of ${formatAmount(settleMax.value)} ${settleTarget.value.currency}.`;
-        return;
+    for (const side of ['customer', 'supplier']) {
+        for (const inv of settleInvoices.value[side]) {
+            if (overAllocated(side, inv.id)) {
+                settleError.value = `Invoice ${inv.invoice_number} only has ${formatAmount(inv.open)} ${settleTarget.value.currency} open.`;
+                return;
+            }
+        }
     }
 
-    settleSubmitting.value = true;
-    router.post(props.storeInternalSettlementUrl, {
+    const clean = side => Object.fromEntries(
+        Object.entries(settleAllocations.value[side] || {})
+            .map(([id, v]) => [id, Number(v) || 0])
+            .filter(([, v]) => v > 0)
+    );
+    const payload = {
         partner_id: settleTarget.value.client_id,
         currency: settleTarget.value.currency,
         settlement_date: settleForm.value.settlement_date,
-        amount,
         user_comment: settleForm.value.user_comment,
-    }, {
-        onFinish: () => { settleSubmitting.value = false; closeSettle(); },
-    });
+        customer_allocations: clean('customer'),
+        supplier_allocations: clean('supplier'),
+    };
+
+    settleSubmitting.value = true;
+    const done = { onFinish: () => { settleSubmitting.value = false; closeSettle(); } };
+    if (settleEditing.value) {
+        router.put(settleEditing.value.update_url, payload, done);
+    } else {
+        router.post(props.storeInternalSettlementUrl, payload, done);
+    }
 }
 
-/* Deleting the settlement row IS the reversal — both balances and both
-   statements are derived from it, so there is no compensating entry to
-   post. Confirmed inline rather than with a second modal on top of a
-   modal. */
+/* Deleting the settlement IS the reversal — every allocation it made
+   is taken back and both sides' invoices recompute. */
 const settlementToDelete = ref(null);
 function destroySettlement() {
     router.delete(settlementToDelete.value.delete_url, {
@@ -185,46 +287,6 @@ function destroySettlement() {
     });
 }
 
-// Switching currency or searching should always land back on page 1 —
-// otherwise "page 4" of one tab could silently show as an empty
-// "page 4" of a shorter tab/search result.
-watch([activeCurrency, search], () => { currentPage.value = 1; });
-
-function goToPage(page) {
-    if (page < 1 || page > totalPages.value) return;
-    currentPage.value = page;
-}
-/* ── Number Color Rule (Style Guide §4) applied to net_balance:
-   net_balance is "how much this partner still owes/is owed" —
-   > 0  → still outstanding  → amber (pending/at-risk)
-   = 0  → fully settled      → green (positive)
-   < 0  → credit/overpayment → red (unusual, worth a second look)
-   This reading was not spelled out in the original Blade (plain
-   black text everywhere) — flagging it here as a judgment call
-   made during migration, easy to adjust if a different meaning
-   is intended. ─────────────────────────────────────────────────── */
-function balanceClass(balance) {
-    if (balance > 0) return 'cvr-num-amber';
-    if (balance < 0) return 'cvr-num-red';
-    return 'cvr-num-green';
-}
-
-// .cvr-kpi-value sets its own `color`, and it's declared AFTER the
-// .cvr-num-* classes in app.css — so on an element with BOTH classes,
-// cvr-kpi-value silently wins regardless of class order in the HTML.
-// No other page in this project combines them for that reason. An
-// inline style always wins over both, so that's how the KPI cards'
-// numbers get their Number-Color-Rule color instead.
-function balanceColorVar(balance) {
-    if (balance > 0) return 'var(--cvr-num-amber)';
-    if (balance < 0) return 'var(--cvr-num-red)';
-    return 'var(--cvr-num-green)';
-}
-
-// Whole numbers only — balances here are read at a glance and the
-// piasters were pure noise. Also puts this page in step with the same
-// report in system.veroanalysis.com, whose Blade has always rendered
-// these through number_format() with no decimals.
 function formatAmount(value) {
     return Number(value || 0).toLocaleString('en-EG', { maximumFractionDigits: 0 });
 }
@@ -409,77 +471,160 @@ function formatAmount(value) {
         -->
         <teleport to="body">
             <div v-if="settleTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="closeSettle">
-                <div class="cvr-modal rounded-lg p-6 w-full max-w-lg max-h-[85vh] overflow-y-auto mx-4">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto mx-4">
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-lg font-medium cvr-text-primary">{{ $t('Internal Settlement') }}</h2>
+                        <h2 class="text-lg font-medium cvr-text-primary">
+                            {{ settleEditing ? $t('Edit Internal Settlement') : $t('Internal Settlement') }}
+                        </h2>
                         <button @click="closeSettle" class="cvr-action-btn" :title="$t('Close')">✕</button>
                     </div>
 
                     <p class="text-sm cvr-text-secondary mb-1">{{ settleTarget.client_name }}</p>
                     <p class="text-xs cvr-text-muted mb-4">
-                        {{ $t('This partner is both a customer and a supplier. Settling moves the amount off both balances at once — they owe you less as a customer, and you owe them less as a supplier.') }}
+                        {{ $t('Take the money off the customer invoices on the left, and put the same money onto the supplier invoices on the right. Both sides must total the same — that is what makes it an offset rather than two separate adjustments.') }}
                     </p>
 
-                    <div class="cvr-card-bg cvr-border border rounded p-3 mb-4 flex items-center justify-between">
-                        <span class="text-sm cvr-text-secondary">{{ $t('Owed as a customer') }}</span>
-                        <span class="cvr-num font-medium" :class="balanceClass(settleMax)">
-                            {{ formatAmount(settleMax) }} {{ settleTarget.currency }}
-                        </span>
-                    </div>
+                    <div v-if="settleLoading" class="py-8 text-center cvr-text-muted text-sm">{{ $t('Loading…') }}</div>
 
-                    <div class="mb-3">
-                        <label class="cvr-form-label">{{ $t('Amount To Settle') }}</label>
-                        <input
-                            v-model="settleForm.amount"
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            :max="settleMax"
-                            class="cvr-input w-full px-3 py-2 rounded"
-                        />
-                        <p class="text-xs cvr-text-muted mt-1">{{ $t('Maximum') }}: {{ formatAmount(settleMax) }} {{ settleTarget.currency }}</p>
-                    </div>
+                    <template v-else>
+                        <div v-if="settleCeiling <= 0" class="cvr-card-bg cvr-border border rounded p-3 mb-4 text-sm cvr-text-muted">
+                            {{ $t('Nothing can be settled: this partner needs open invoices on BOTH sides in this currency.') }}
+                        </div>
 
-                    <div class="mb-3">
-                        <label class="cvr-form-label">{{ $t('Date') }}</label>
-                        <input v-model="settleForm.settlement_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
-                    </div>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                            <!-- Customer side: where the money comes FROM -->
+                            <div class="cvr-card-bg cvr-border border rounded-lg p-3">
+                                <p class="text-xs font-semibold cvr-text-secondary uppercase tracking-wide mb-2">
+                                    {{ $t('Take from these customer invoices') }}
+                                </p>
+                                <table class="w-full text-xs">
+                                    <thead class="cvr-table-head">
+                                        <tr>
+                                            <th class="px-2 py-1 text-start">{{ $t('Invoice #') }}</th>
+                                            <th class="px-2 py-1 text-right">{{ $t('Open') }}</th>
+                                            <th class="px-2 py-1 text-right w-28">{{ $t('Allocate') }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="inv in settleInvoices.customer" :key="inv.id" class="cvr-table-row">
+                                            <td class="px-2 py-1 cvr-text-primary whitespace-nowrap">{{ inv.invoice_number }}</td>
+                                            <td class="px-2 py-1 text-right cvr-num cvr-text-secondary">{{ formatAmount(inv.open) }}</td>
+                                            <td class="px-2 py-1">
+                                                <input
+                                                    v-model="settleAllocations.customer[inv.id]"
+                                                    type="number" step="0.01" min="0" :max="inv.open"
+                                                    class="cvr-input w-full px-2 py-1 rounded text-end"
+                                                    :class="{ 'cvr-num-red': overAllocated('customer', inv.id) }"
+                                                />
+                                            </td>
+                                        </tr>
+                                        <tr v-if="!settleInvoices.customer.length">
+                                            <td colspan="3" class="px-2 py-4 text-center cvr-text-muted">{{ $t('No open invoices found for this customer in this currency.') }}</td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot v-if="settleInvoices.customer.length" class="cvr-table-head">
+                                        <tr>
+                                            <td colspan="2" class="px-2 py-1 text-end cvr-text-secondary">{{ $t('Allocated') }}</td>
+                                            <td class="px-2 py-1 text-end cvr-num font-semibold">{{ formatAmount(customerAllocated) }}</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
 
-                    <div class="mb-3">
-                        <label class="cvr-form-label">{{ $t('Comment') }}</label>
-                        <textarea v-model="settleForm.user_comment" rows="2" class="cvr-input w-full px-3 py-2 rounded"></textarea>
-                    </div>
+                            <!-- Supplier side: where the same money goes TO -->
+                            <div class="cvr-card-bg cvr-border border rounded-lg p-3">
+                                <p class="text-xs font-semibold cvr-text-secondary uppercase tracking-wide mb-2">
+                                    {{ $t('Pay these supplier invoices') }}
+                                </p>
+                                <table class="w-full text-xs">
+                                    <thead class="cvr-table-head">
+                                        <tr>
+                                            <th class="px-2 py-1 text-start">{{ $t('Invoice #') }}</th>
+                                            <th class="px-2 py-1 text-right">{{ $t('Open') }}</th>
+                                            <th class="px-2 py-1 text-right w-28">{{ $t('Allocate') }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="inv in settleInvoices.supplier" :key="inv.id" class="cvr-table-row">
+                                            <td class="px-2 py-1 cvr-text-primary whitespace-nowrap">{{ inv.invoice_number }}</td>
+                                            <td class="px-2 py-1 text-right cvr-num cvr-text-secondary">{{ formatAmount(inv.open) }}</td>
+                                            <td class="px-2 py-1">
+                                                <input
+                                                    v-model="settleAllocations.supplier[inv.id]"
+                                                    type="number" step="0.01" min="0" :max="inv.open"
+                                                    class="cvr-input w-full px-2 py-1 rounded text-end"
+                                                    :class="{ 'cvr-num-red': overAllocated('supplier', inv.id) }"
+                                                />
+                                            </td>
+                                        </tr>
+                                        <tr v-if="!settleInvoices.supplier.length">
+                                            <td colspan="3" class="px-2 py-4 text-center cvr-text-muted">{{ $t('No open invoices found for this supplier in this currency.') }}</td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot v-if="settleInvoices.supplier.length" class="cvr-table-head">
+                                        <tr>
+                                            <td colspan="2" class="px-2 py-1 text-end cvr-text-secondary">{{ $t('Allocated') }}</td>
+                                            <td class="px-2 py-1 text-end cvr-num font-semibold">{{ formatAmount(supplierAllocated) }}</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
 
-                    <p v-if="settleError" class="text-sm mb-3" style="color: var(--cvr-danger-text);">{{ settleError }}</p>
+                        <!-- The one number that decides whether this can be saved. -->
+                        <div class="cvr-card-bg cvr-border border rounded p-3 mb-4 flex items-center justify-between">
+                            <span class="text-sm cvr-text-secondary">{{ $t('Settlement Amount') }}</span>
+                            <span class="cvr-num font-medium" :class="sidesMatch ? 'cvr-num-green' : 'cvr-num-red'">
+                                {{ formatAmount(customerAllocated) }} / {{ formatAmount(supplierAllocated) }} {{ settleTarget.currency }}
+                            </span>
+                        </div>
 
-                    <!-- What has already been settled on this balance, so the
-                         same offset does not get entered twice, and a wrong
-                         one can be taken back. -->
-                    <div v-if="settleTarget.settlements?.length" class="mb-4">
-                        <p class="text-xs cvr-text-muted mb-2">{{ $t('Already Settled') }}</p>
-                        <table class="w-full text-xs">
-                            <tbody>
-                                <tr v-for="settlement in settleTarget.settlements" :key="settlement.id" class="cvr-table-row">
-                                    <td class="py-1 pe-2 cvr-text-secondary whitespace-nowrap">{{ settlement.date_formatted }}</td>
-                                    <td class="py-1 pe-2 cvr-num cvr-text-primary">{{ formatAmount(settlement.amount) }}</td>
-                                    <td class="py-1 pe-2 cvr-text-muted">{{ settlement.user_comment }}</td>
-                                    <td class="py-1 text-end">
-                                        <button @click="settlementToDelete = settlement" class="cvr-action-btn" :title="$t('Delete')">🗑️</button>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                        <div class="cvr-form-grid-2 mb-3">
+                            <div>
+                                <label class="cvr-form-label">{{ $t('Date') }}</label>
+                                <input v-model="settleForm.settlement_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                            </div>
+                            <div>
+                                <label class="cvr-form-label">{{ $t('Comment') }}</label>
+                                <input v-model="settleForm.user_comment" type="text" class="cvr-input w-full px-3 py-2 rounded" />
+                            </div>
+                        </div>
 
-                    <div class="flex items-center justify-end gap-2">
-                        <button @click="closeSettle" class="cvr-btn-secondary px-4 py-2 rounded border text-sm">{{ $t('Cancel') }}</button>
-                        <button
-                            @click="submitSettle"
-                            :disabled="settleSubmitting"
-                            class="cvr-btn-primary px-4 py-2 rounded text-sm"
-                            :class="{ 'opacity-50 cursor-not-allowed': settleSubmitting }"
-                        >{{ $t('Save') }}</button>
-                    </div>
+                        <p v-if="settleError" class="text-sm mb-3" style="color: var(--cvr-danger-text);">{{ settleError }}</p>
+
+                        <!-- Settlements already recorded on this balance, so the
+                             same offset is not entered twice, and a wrong one can
+                             be corrected or taken back. -->
+                        <div v-if="settleTarget.settlements?.length && !settleEditing" class="mb-4">
+                            <p class="text-xs cvr-text-muted mb-2">{{ $t('Already Settled') }}</p>
+                            <table class="w-full text-xs">
+                                <tbody>
+                                    <tr v-for="settlement in settleTarget.settlements" :key="settlement.id" class="cvr-table-row">
+                                        <td class="py-1 pe-2 cvr-text-secondary whitespace-nowrap">{{ settlement.date_formatted }}</td>
+                                        <td class="py-1 pe-2 cvr-num cvr-text-primary">{{ formatAmount(settlement.amount) }}</td>
+                                        <td class="py-1 pe-2 cvr-text-muted">
+                                            {{ settlement.customer_invoice_numbers?.join(' / ') }}
+                                            <span v-if="settlement.supplier_invoice_numbers?.length"> → {{ settlement.supplier_invoice_numbers.join(' / ') }}</span>
+                                        </td>
+                                        <td class="py-1 text-end whitespace-nowrap">
+                                            <button @click="openSettle(settleTarget, settlement)" class="cvr-action-btn" :title="$t('Edit')">✎</button>
+                                            <button @click="settlementToDelete = settlement" class="cvr-action-btn" :title="$t('Delete')">🗑️</button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="flex items-center justify-end gap-2">
+                            <button @click="closeSettle" class="cvr-btn-secondary px-4 py-2 rounded border text-sm">{{ $t('Cancel') }}</button>
+                            <button
+                                @click="submitSettle"
+                                :disabled="settleSubmitting || !sidesMatch"
+                                class="cvr-btn-primary px-4 py-2 rounded text-sm"
+                                :class="{ 'opacity-50 cursor-not-allowed': settleSubmitting || !sidesMatch }"
+                            >{{ $t('Save') }}</button>
+                        </div>
+                    </template>
                 </div>
             </div>
 

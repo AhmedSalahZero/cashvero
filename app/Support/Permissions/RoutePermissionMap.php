@@ -40,6 +40,10 @@ class RoutePermissionMap
         // ── The user's own profile & session ──
         'profile.edit', 'profile.update', 'theme.toggle',
 
+        // ── Written help. Text only, no company data of any kind, so
+        //    anyone who can reach a screen can read how it works.
+        'view.instructions',
+
         /**
          * ── Landing / routing helpers ──
          *
@@ -219,7 +223,9 @@ class RoutePermissionMap
         'view.balances' => ['customer_balance.view', 'supplier_balance.view'],
         // Offsetting a partner against themselves — see App\Models\InternalSettlement.
         'store.internal.settlement' => 'customer_balance.settle',
+        'update.internal.settlement' => 'customer_balance.settle',
         'delete.internal.settlement' => 'customer_balance.settle',
+        'internal.settlement.invoices' => 'customer_balance.settle',
         'show.total.net.balance.in' => ['customer_balance.view', 'supplier_balance.view'],
         'view.aging.analysis' => ['customer_aging.view', 'supplier_aging.view'],
         'result.aging.analysis' => ['customer_aging.view', 'supplier_aging.view'],

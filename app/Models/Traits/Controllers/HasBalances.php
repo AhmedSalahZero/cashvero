@@ -216,10 +216,9 @@ trait HasBalances
 			$currentData['document_no'] = null;
 			$currentData['debit'] = $isCustomer ? 0 : $settlementAmount;
 			$currentData['credit'] = $isCustomer ? $settlementAmount : 0;
-			$currentData['comment'] = trim(
-				\App\Models\InternalSettlement::statementComment($isCustomer)
-				. ($internalSettlement->getUserComment() ? ' — ' . $internalSettlement->getUserComment() : '')
-			);
+			// Names the invoices the money landed on over on the other
+			// side, so the row explains itself from either statement.
+			$currentData['comment'] = $internalSettlement->statementCommentWithInvoices($isCustomer);
 
 			$index++ ;
 			if($isNotBegBalance){

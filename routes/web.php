@@ -697,7 +697,29 @@ Route::group(
                     Route::get('lg-lc-bank-statement/export', 'LGLCSBanktatementController@exportExcel')->name('export.lg.lc.bank.statement');
                     Route::get('get-lg-lc-types', 'LGLCSBanktatementController@getLgOrLcType')->name('get.lc.or.lg.types');
 
-                    Route::get('customer-balances/{modelType}', 'BalancesController@index')->name('view.balances');
+                    /**
+                     * ⚠️ Must stay ABOVE customer-balances/{modelType}.
+                     *
+                     * Laravel matches in registration order, and that
+                     * wildcard is a single segment — so registered after
+                     * it, this URL was captured as modelType =
+                     * 'internal-settlement-invoices' and reached
+                     * BalancesController@index, which builds a class name
+                     * out of it ('\App\Models\'.$modelType) and died
+                     * with a 500. The dialog read that as "no invoices"
+                     * and told the user the partner had none.
+                     */
+                    Route::get('customer-balances/internal-settlement-invoices', 'BalancesController@internalSettlementInvoices')->name('internal.settlement.invoices');
+
+                    /**
+                     * modelType is only ever one of these two — it is
+                     * turned straight into a model class name. Constrained
+                     * so anything else 404s instead of reaching the
+                     * controller and blowing up on an unknown class.
+                     */
+                    Route::get('customer-balances/{modelType}', 'BalancesController@index')
+                        ->whereIn('modelType', ['CustomerInvoice', 'SupplierInvoice'])
+                        ->name('view.balances');
                     Route::get('/cashvero-dashboard/cash', 'CustomerInvoiceDashboardController@viewCashDashboard')->name('view.customer.invoice.dashboard.cash');
                     Route::get('/cashvero-dashboard/contracts', 'ContractDashboardController@index')->name('view.contracts.dashboard');
                     Route::get('/cashvero-dashboard/contracts/export', 'ContractDashboardController@export')->name('export.contracts.dashboard');
@@ -716,6 +738,7 @@ Route::group(
                      * See App\Models\InternalSettlement.
                      */
                     Route::post('/customer-balances/internal-settlement', 'BalancesController@storeInternalSettlement')->name('store.internal.settlement');
+                    Route::put('/customer-balances/internal-settlement/{internalSettlement}', 'BalancesController@updateInternalSettlement')->name('update.internal.settlement');
                     Route::delete('/customer-balances/internal-settlement/{internalSettlement}', 'BalancesController@destroyInternalSettlement')->name('delete.internal.settlement');
                     // Route::get('collection-effectiveness-index-report',[]);
                     Route::get('get-contract-name-for-customer-or-supplier', 'getProjectsForCustomerOrSupplierController@handle')->name('get.projects.for.customer.or.supplier');
@@ -756,6 +779,14 @@ Route::group(
                     Route::post('read-odoo-contracts', 'ReadOdooContracts@handle')->name('read-odoo-contracts');
                     Route::post('read-odoo-partners', 'ReadOdooPartners@handle')->name('read-odoo-partners');
                     Route::post('send-odoo-collection-or-payments', 'SendOdooCollectionOrPayment@handle')->name('send-odoo-collection-or-payments');
+                    /**
+                     * Written guides — text only, no company data, so
+                     * every signed-in user may read one. The {page} key
+                     * is validated against the registry in the
+                     * controller, which 404s anything unknown.
+                     */
+                    Route::get('instructions/{page}', 'InstructionsController@show')->name('view.instructions');
+
                     Route::get('money-received', 'MoneyReceivedController@index')->name('view.money.receive');
                     Route::get('money-received/json', 'MoneyReceivedController@indexJson')->name('view.money.receive.json');
                     Route::post('resend-odoo-money/{moneyReceived}', 'MoneyReceivedController@resendToOdoo')->name('resend.with.odoo');

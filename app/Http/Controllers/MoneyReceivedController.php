@@ -31,6 +31,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Support\Instructions\PageInstructions;
 use Inertia\Inertia;
 
 /**
@@ -268,6 +269,7 @@ class MoneyReceivedController
         $user = auth()->user();
 
         return Inertia::render('MoneyReceived/Index', [
+            'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::MONEY_RECEIVED_INDEX]),
             'company' => ['id' => $company->id, 'name' => $company->getName()],
             'activeTab' => $activeTab,
             'tabs' => $tabsOut,
@@ -440,6 +442,7 @@ class MoneyReceivedController
             : Partner::orderBy('name')->where('is_customer', 1)->where('company_id', $company->id)->pluck('name', 'id')->toArray();
 
         return Inertia::render('MoneyReceived/Form', [
+            'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::MONEY_RECEIVED_FORM]),
             'company' => ['id' => $company->id, 'name' => $company->getName(), 'mainFunctionalCurrency' => $company->getMainFunctionalCurrency()],
             'model' => null,
             'singleModel' => $customerInvoiceId,
@@ -475,6 +478,7 @@ class MoneyReceivedController
         $customers = Partner::orderBy('name')->where('is_customer', 1)->where('company_id', $company->id)->onlyThatHaveCustomerContracts()->pluck('name', 'id');
 
         return Inertia::render('MoneyReceived/DownPaymentForm', [
+            'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::MONEY_RECEIVED_DOWN_PAYMENT]),
             'company' => ['id' => $company->id, 'name' => $company->getName(), 'mainFunctionalCurrency' => $company->getMainFunctionalCurrency()],
             'model' => null,
             'customers' => collect($customers)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
@@ -889,6 +893,7 @@ class MoneyReceivedController
         $warningMessage = count($moneyReceived->settlementsForDownPaymentThatComeFromMoneyModel) ? __('Warning, please take care incase you changed the received amount, the invoices settled using this down payment will be deleted') : null;
 
         return Inertia::render('MoneyReceived/Form', [
+            'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::MONEY_RECEIVED_FORM]),
             'company' => ['id' => $company->id, 'name' => $company->getName(), 'mainFunctionalCurrency' => $company->getMainFunctionalCurrency()],
             'model' => $this->serializeMoneyReceivedForForm($moneyReceived),
             'singleModel' => $customerInvoiceId,
@@ -981,6 +986,7 @@ class MoneyReceivedController
         $warningMessage = count($moneyReceived->settlementsForDownPaymentThatComeFromMoneyModel) ? __('Warning, please take care incase you changed the received amount, the invoices settled using this down payment will be deleted') : null;
 
         return Inertia::render('MoneyReceived/DownPaymentForm', [
+            'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::MONEY_RECEIVED_DOWN_PAYMENT]),
             'company' => ['id' => $company->id, 'name' => $company->getName(), 'mainFunctionalCurrency' => $company->getMainFunctionalCurrency()],
             'model' => $this->serializeDownPaymentForForm($moneyReceived),
             'warningMessage' => $warningMessage,

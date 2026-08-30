@@ -136,27 +136,24 @@ class BalancesController
 		$invoicesBalances = array_merge($invoicesBalances , $invoicesBalancesForMainFunctionalCurrency);
 
 		/**
-		 * Internal settlements come off the net LAST — deliberately
-		 * after addMainCurrency() has run.
+		 * ⚠️ The page no longer subtracts internal settlements here, and
+		 * must not start again.
 		 *
-		 * addMainCurrency() builds each partner's main-currency row by
-		 * summing net_balance_in_main_currency off the per-currency
-		 * rows. Subtracting here rather than earlier means those
-		 * per-currency rows are still untouched when it reads them, so
-		 * the main-currency row is adjusted exactly once — by its own
-		 * amount_in_main_currency total — instead of inheriting an
-		 * already-adjusted figure and then being adjusted again.
+		 * A settlement now writes real rows into `settlements` /
+		 * `payment_settlements`, and the invoice triggers take the
+		 * money off `customer_invoices.net_balance` /
+		 * `supplier_invoices.net_balance` themselves. Those reduced
+		 * balances are what the query above already read, so
+		 * subtracting the settlement a second time here would take the
+		 * same amount off twice.
 		 *
-		 * Doing it before sumNetBalancePerCurrency() is equally
-		 * deliberate: the currency KPI cards at the top of the page and
-		 * the rows underneath them are then the same numbers, which is
-		 * the whole point of the cards.
+		 * The totals are still fetched, but only to SHOW what has been
+		 * settled in its own column — they are not applied to the net.
 		 */
 		$settlementTotals = InternalSettlement::totalsByPartnerAndCurrency(
 			$company->id,
 			array_values(array_unique(array_column($invoicesBalances, $clientIdColumnName)))
 		);
-		$this->applyInternalSettlements($invoicesBalances, $settlementTotals, $clientIdColumnName);
 
 		$cardNetBalances = $this->sumNetBalancePerCurrency($invoicesBalances,$mainFunctionalCurrency,$clientNameColumnName);
 		$hasMoreThanCurrency = isset($cardNetBalances['currencies']) && count($cardNetBalances['currencies']) >1 ;
@@ -203,6 +200,13 @@ class BalancesController
 				'date_formatted' => $settlement->getDateFormatted(),
 				'amount' => $settlement->getAmount(),
 				'user_comment' => $settlement->getUserComment(),
+				// What it actually settled, so the history line is
+				// readable without opening it.
+				'customer_invoice_numbers' => $settlement->invoiceNumbersFor(InternalSettlement::SIDE_CUSTOMER),
+				'supplier_invoice_numbers' => $settlement->invoiceNumbersFor(InternalSettlement::SIDE_SUPPLIER),
+				'update_url' => route('update.internal.settlement', [
+					'company' => $company->id, 'internalSettlement' => $settlement->id,
+				]),
 				'delete_url' => route('delete.internal.settlement', [
 					'company' => $company->id, 'internalSettlement' => $settlement->id,
 				]),
@@ -233,7 +237,7 @@ class BalancesController
 				// against the same partner's other side. Its own column
 				// so the net stays auditable: invoices − down payments
 				// − internal settlements = net balance.
-				'internal_settlements' => (float) ($row->internal_settlement_amount ?? 0),
+				'internal_settlements' => (float) ($settlementTotals[$partnerId.'|'.$currency] ?? 0),
 				'is_dual_role' => $isDualRole,
 				/**
 				 * Whether a NEW settlement can be recorded on this row.
@@ -316,6 +320,7 @@ class BalancesController
 			 */
 			'canSettleInternally' => $modelType === 'CustomerInvoice' && hasAuthFor('customer_balance.settle'),
 			'storeInternalSettlementUrl' => route('store.internal.settlement', ['company' => $company->id]),
+			'internalSettlementInvoicesUrl' => route('internal.settlement.invoices', ['company' => $company->id]),
 			'title' => $title,
 			'customersOrSupplierText' => $customersOrSupplierText,
 			'customersOrSupplierStatementText' => $customersOrSupplierStatementText,
@@ -324,156 +329,284 @@ class BalancesController
 		]);
     }
 	/**
-	 * Takes each partner's internal settlements off their net balance,
-	 * and records the amount taken off as its own figure on the row.
+	 * The open invoices on one side of a partner, for one currency.
 	 *
-	 * Rows are mutated in place, the same way subtractQuery() applies
-	 * down payments, so every consumer downstream — the rows, the
-	 * currency cards, the totals — sees one consistent number.
+	 * "Open" is net_balance > 0 — what is still owed on that invoice
+	 * after everything already collected, withheld and deducted. When
+	 * an existing settlement is being edited, its own allocations are
+	 * added back on top: they came off these balances when it was
+	 * saved, and the edit form has to show the invoice as it was before
+	 * this settlement touched it, or its own amount would look
+	 * unavailable to itself.
 	 *
-	 * A main_currency row is matched on the 'main_currency' key rather
-	 * than on a currency, because it stands for every currency at once;
-	 * see InternalSettlement::totalsByPartnerAndCurrency().
-	 *
-	 * @param  array<int, \stdClass>  $invoicesBalances
-	 * @param  array<string, float>  $settlementTotals
+	 * @return list<array<string, mixed>>
 	 */
-	protected function applyInternalSettlements(array $invoicesBalances, array $settlementTotals, string $clientIdColumnName): void
+	protected function openInvoicesFor(Company $company, int $partnerId, string $currency, string $side, ?InternalSettlement $editing = null): array
 	{
-		foreach ($invoicesBalances as $row) {
-			$row->internal_settlement_amount = 0;
+		$meta = InternalSettlement::sideTables($side);
+		$mine = $editing?->allocationsBySide()[$side] ?? [];
 
-			if (! $row->currency) {
-				continue;
-			}
+		$rows = DB::table($meta['invoice_table'])
+			->where('company_id', $company->id)
+			->where($meta['partner_column'], $partnerId)
+			->where('currency', $currency)
+			->where(function ($q) use ($mine) {
+				$q->where('net_balance', '>', 0);
+				if ($mine !== []) {
+					$q->orWhereIn('id', array_keys($mine));
+				}
+			})
+			->orderBy('invoice_date')
+			->orderBy('id')
+			->get(['id', 'invoice_number', 'invoice_date', 'invoice_due_date', 'net_invoice_amount', 'net_balance']);
 
-			$settled = $settlementTotals[$row->{$clientIdColumnName}.'|'.$row->currency] ?? 0;
+		return $rows->map(function ($row) use ($mine) {
+			$allocated = (float) ($mine[$row->id] ?? 0);
 
-			if (! $settled) {
-				continue;
-			}
+			return [
+				'id' => (int) $row->id,
+				'invoice_number' => $row->invoice_number,
+				'invoice_date' => $row->invoice_date,
+				'invoice_due_date' => $row->invoice_due_date,
+				'net_invoice_amount' => (float) $row->net_invoice_amount,
+				// What is open right now, with this settlement's own
+				// effect on this invoice added back.
+				'open' => round((float) $row->net_balance + $allocated, 2),
+				'allocated' => $allocated,
+			];
+		})->values()->all();
+	}
 
-			$row->internal_settlement_amount = $settled;
-			$row->net_balance = $row->net_balance - $settled;
+	/**
+	 * Everything the settle/edit dialog needs for one balances row.
+	 *
+	 * Loaded on demand rather than shipped with every row of the page —
+	 * a company can have hundreds of partners and each one's invoices
+	 * would ride along for a dialog that is opened once.
+	 */
+	public function internalSettlementInvoices(Request $request, Company $company)
+	{
+		$partnerId = (int) $request->get('partner_id');
+		$currency = (string) $request->get('currency');
+		$editing = $request->get('internal_settlement_id')
+			? InternalSettlement::where('company_id', $company->id)->find($request->get('internal_settlement_id'))
+			: null;
+
+		$partner = Partner::where('company_id', $company->id)->find($partnerId);
+
+		if (! $partner || ! $partner->isCustomer() || ! $partner->isSupplier() || $currency === '' || $currency === 'main_currency') {
+			return response()->json(['customer' => [], 'supplier' => []]);
 		}
+
+		return response()->json([
+			'customer' => $this->openInvoicesFor($company, $partnerId, $currency, InternalSettlement::SIDE_CUSTOMER, $editing),
+			'supplier' => $this->openInvoicesFor($company, $partnerId, $currency, InternalSettlement::SIDE_SUPPLIER, $editing),
+			'settlement' => $editing ? [
+				'id' => $editing->id,
+				'amount' => $editing->getAmount(),
+				'settlement_date' => $editing->getDate(),
+				'user_comment' => $editing->getUserComment(),
+			] : null,
+		]);
 	}
 
 	/**
-	 * What is genuinely left to offset for one partner, in one
-	 * currency, right now.
+	 * Checks one submitted settlement and returns its allocations.
 	 *
-	 * This is the cap. It is computed here from the source tables
-	 * rather than trusted from the page, because the page's number was
-	 * true when it was rendered and a second tab, or a colleague, may
-	 * have settled against the same balance since.
+	 * Every rule is enforced here rather than in the form, because the
+	 * numbers decide what two invoices are worth afterwards:
+	 *   - the partner is a customer AND a supplier
+	 *   - the currency is a real one, not the main-currency roll-up
+	 *   - no invoice is given more than it has open (its own current
+	 *     allocation added back, when editing)
+	 *   - both sides total the same, and that total is the amount
 	 *
-	 * The three terms are exactly the three the balances page shows,
-	 * in the same order:
-	 *   invoices − down payments − already settled = net balance
+	 * @return array{0: array<string, array<int, float>>, 1: float}|string  allocations+amount, or an error message
 	 */
-	protected function customerBalanceAvailableToSettle(Company $company, int $partnerId, string $currency): float
+	protected function validateInternalSettlement(Request $request, Company $company, ?InternalSettlement $editing = null): array|string
 	{
-		$invoices = (float) DB::table('customer_invoices')
-			->where('company_id', $company->id)
-			->where('customer_id', $partnerId)
-			->where('currency', $currency)
-			->sum('net_balance');
+		$partner = Partner::where('company_id', $company->id)->find($request->get('partner_id'));
+		$currency = (string) $request->get('currency');
 
-		$downPayments = (float) DB::table('down_payment_settlements')
-			->where('company_id', $company->id)
-			->where('customer_id', $partnerId)
-			->where('currency', $currency)
-			->sum('down_payment_balance');
+		if (! $partner || ! $partner->isCustomer() || ! $partner->isSupplier()) {
+			return __('An internal settlement is only possible for a partner who is both a customer and a supplier.');
+		}
 
-		$alreadySettled = InternalSettlement::totalFor($company->id, $partnerId, $currency);
+		if ($currency === '' || $currency === 'main_currency') {
+			return __('Please record the settlement in the currency it is owed in.');
+		}
 
-		return round($invoices - $downPayments - $alreadySettled, 2);
+		$allocations = [];
+		$totals = [];
+
+		foreach ([InternalSettlement::SIDE_CUSTOMER, InternalSettlement::SIDE_SUPPLIER] as $side) {
+			$open = collect($this->openInvoicesFor($company, (int) $partner->id, $currency, $side, $editing))
+				->keyBy('id');
+			$submitted = (array) $request->get($side.'_allocations', []);
+			$allocations[$side] = [];
+			$totals[$side] = 0.0;
+
+			foreach ($submitted as $invoiceId => $amount) {
+				$amount = round((float) $amount, 2);
+				if ($amount <= 0) {
+					continue;
+				}
+
+				$invoice = $open->get((int) $invoiceId);
+				if (! $invoice) {
+					return __('One of the selected invoices no longer belongs to this partner in this currency.');
+				}
+
+				if ($amount > $invoice['open'] + 0.001) {
+					return __('Invoice :number only has :open :currency open — :amount cannot be allocated to it.', [
+						'number' => $invoice['invoice_number'],
+						'open' => number_format($invoice['open'], 2),
+						'currency' => $currency,
+						'amount' => number_format($amount, 2),
+					]);
+				}
+
+				$allocations[$side][(int) $invoiceId] = $amount;
+				$totals[$side] += $amount;
+			}
+		}
+
+		$customerTotal = round($totals[InternalSettlement::SIDE_CUSTOMER], 2);
+		$supplierTotal = round($totals[InternalSettlement::SIDE_SUPPLIER], 2);
+
+		if ($customerTotal <= 0) {
+			return __('Allocate the amount across at least one customer invoice and one supplier invoice.');
+		}
+
+		if (abs($customerTotal - $supplierTotal) > 0.01) {
+			return __('The two sides must match: :customer allocated on customer invoices against :supplier on supplier invoices.', [
+				'customer' => number_format($customerTotal, 2),
+				'supplier' => number_format($supplierTotal, 2),
+			]);
+		}
+
+		return [$allocations, $customerTotal];
 	}
 
 	/**
-	 * Records one internal settlement.
+	 * Records one internal settlement, allocated across real invoices.
 	 *
-	 * The partner must be a customer AND a supplier — the whole point
-	 * is that the two balances belong to the same person, so there is
-	 * no second party for the money to move to. Both checks are made
-	 * here and not only in the UI: the amount decides what two
-	 * statements say afterwards.
+	 * Wrapped in a transaction because a half-applied settlement would
+	 * leave one side's invoices paid and the other side's untouched —
+	 * money that came from nowhere.
 	 */
 	public function storeInternalSettlement(Request $request, Company $company)
 	{
-		$validated = $request->validate([
+		$request->validate([
 			'partner_id' => ['required', 'integer'],
 			'currency' => ['required', 'string'],
 			'settlement_date' => ['required', 'date'],
-			'amount' => ['required', 'numeric', 'gt:0'],
 			'user_comment' => ['nullable', 'string'],
 		]);
 
-		$partner = Partner::where('company_id', $company->id)->find($validated['partner_id']);
+		$checked = $this->validateInternalSettlement($request, $company);
 
-		if (! $partner || ! $partner->isCustomer() || ! $partner->isSupplier()) {
-			return redirect()->back()->with('fail', __('An internal settlement is only possible for a partner who is both a customer and a supplier.'));
+		if (is_string($checked)) {
+			return redirect()->back()->with('fail', $checked);
 		}
 
-		/**
-		 * main_currency is a roll-up of every currency, not a balance
-		 * anyone holds — there is no single rate an offset booked
-		 * against it could be unwound at later.
-		 */
-		if ($validated['currency'] === 'main_currency') {
-			return redirect()->back()->with('fail', __('Please record the settlement in the currency it is owed in.'));
-		}
+		[$allocations, $amount] = $checked;
 
-		$available = $this->customerBalanceAvailableToSettle($company, (int) $partner->id, $validated['currency']);
-		$amount = round((float) $validated['amount'], 2);
-
-		if ($available <= 0) {
-			return redirect()->back()->with('fail', __('This customer has no remaining balance to settle.'));
-		}
-
-		if ($amount > $available) {
-			return redirect()->back()->with('fail', __('The settlement cannot exceed the customer balance of :balance :currency.', [
-				'balance' => number_format($available, 2),
-				'currency' => $validated['currency'],
-			]));
-		}
-
-		$mainCurrency = $company->getMainFunctionalCurrency();
-		/**
-		 * Stamped now, from the settlement's own date — so the
-		 * main-currency view keeps reading the rate that applied when
-		 * the offset was agreed, however rates move afterwards.
-		 */
-		$exchangeRate = $validated['currency'] === $mainCurrency
-			? 1
-			: (float) ForeignExchangeRate::getExchangeRateForCurrencyAndClosestDate(
-				$validated['currency'], $mainCurrency, $validated['settlement_date'], $company->id
-			);
-		$exchangeRate = $exchangeRate > 0 ? $exchangeRate : 1;
-
-		InternalSettlement::create([
-			'company_id' => $company->id,
-			'partner_id' => $partner->id,
-			'currency' => $validated['currency'],
-			'settlement_date' => Carbon::make($validated['settlement_date'])->format('Y-m-d'),
-			'amount' => $amount,
-			'exchange_rate' => $exchangeRate,
-			'amount_in_main_currency' => round($amount * $exchangeRate, 2),
-			'user_comment' => $validated['user_comment'] ?? null,
-			'created_by' => $request->user()?->id,
-			'updated_by' => $request->user()?->id,
-		]);
+		DB::transaction(function () use ($request, $company, $allocations, $amount) {
+			$settlement = InternalSettlement::create($this->internalSettlementAttributes($request, $company, $amount));
+			$settlement->applyAllocations($allocations);
+		});
 
 		return redirect()->back()->with('success', __('Internal Settlement Saved Successfully'));
 	}
 
 	/**
+	 * Edits an existing settlement.
+	 *
+	 * The old allocations are taken back FIRST, inside the same
+	 * transaction, so the new ones are measured against invoices in the
+	 * state they were before this settlement existed. Doing it the
+	 * other way round would refuse a legitimate edit — raising an
+	 * allocation from 80,000 to 90,000 would be judged against a
+	 * balance the original 80,000 had already reduced.
+	 */
+	public function updateInternalSettlement(Request $request, Company $company, InternalSettlement $internalSettlement)
+	{
+		if ((int) $internalSettlement->company_id !== (int) $company->id) {
+			abort(403);
+		}
+
+		$request->validate([
+			'settlement_date' => ['required', 'date'],
+			'user_comment' => ['nullable', 'string'],
+		]);
+
+		// The partner and currency of a settlement are what it IS —
+		// changing either is a different settlement, so they are taken
+		// from the stored row, not from the form.
+		$request->merge([
+			'partner_id' => $internalSettlement->partner_id,
+			'currency' => $internalSettlement->currency,
+		]);
+
+		$checked = $this->validateInternalSettlement($request, $company, $internalSettlement);
+
+		if (is_string($checked)) {
+			return redirect()->back()->with('fail', $checked);
+		}
+
+		[$allocations, $amount] = $checked;
+
+		DB::transaction(function () use ($request, $company, $internalSettlement, $allocations, $amount) {
+			$internalSettlement->reverseAllocations();
+			$internalSettlement->update($this->internalSettlementAttributes($request, $company, $amount, $internalSettlement));
+			$internalSettlement->applyAllocations($allocations);
+		});
+
+		return redirect()->back()->with('success', __('Internal Settlement Saved Successfully'));
+	}
+
+	/**
+	 * The stored shape of a settlement, shared by create and edit.
+	 *
+	 * @return array<string, mixed>
+	 */
+	protected function internalSettlementAttributes(Request $request, Company $company, float $amount, ?InternalSettlement $existing = null): array
+	{
+		$currency = $existing?->currency ?? (string) $request->get('currency');
+		$mainCurrency = $company->getMainFunctionalCurrency();
+		$date = Carbon::make($request->get('settlement_date'))->format('Y-m-d');
+
+		/**
+		 * Stamped from the settlement's own date, so the main-currency
+		 * view keeps reading the rate that applied when the offset was
+		 * agreed, however rates move afterwards.
+		 */
+		$exchangeRate = $currency === $mainCurrency
+			? 1
+			: (float) ForeignExchangeRate::getExchangeRateForCurrencyAndClosestDate($currency, $mainCurrency, $date, $company->id);
+		$exchangeRate = $exchangeRate > 0 ? $exchangeRate : 1;
+
+		return [
+			'company_id' => $company->id,
+			'partner_id' => $existing?->partner_id ?? $request->get('partner_id'),
+			'currency' => $currency,
+			'settlement_date' => $date,
+			'amount' => $amount,
+			'exchange_rate' => $exchangeRate,
+			'amount_in_main_currency' => round($amount * $exchangeRate, 2),
+			'user_comment' => $request->get('user_comment'),
+			'created_by' => $existing?->created_by ?? $request->user()?->id,
+			'updated_by' => $request->user()?->id,
+		];
+	}
+
+	/**
 	 * Takes a settlement back.
 	 *
-	 * Deleting the row is the whole reversal: both balances and both
-	 * statements are derived from this table, so removing it restores
-	 * each side to exactly what it was — no compensating entry to get
-	 * wrong.
+	 * Deleting the allocations is the whole reversal: each delete fires
+	 * the invoice trigger that recomputes that invoice from the rows
+	 * that remain, so both sides return to exactly what they were.
 	 */
 	public function destroyInternalSettlement(Company $company, InternalSettlement $internalSettlement)
 	{
@@ -481,7 +614,10 @@ class BalancesController
 			abort(403);
 		}
 
-		$internalSettlement->delete();
+		DB::transaction(function () use ($internalSettlement) {
+			$internalSettlement->reverseAllocations();
+			$internalSettlement->delete();
+		});
 
 		return redirect()->back()->with('success', __('Internal Settlement Deleted Successfully'));
 	}
