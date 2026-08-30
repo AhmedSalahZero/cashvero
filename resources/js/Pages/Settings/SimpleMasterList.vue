@@ -13,10 +13,12 @@
  * Companies, two Odoo account-number fields) doesn't need a full page.
  */
 import { ref, computed } from 'vue';
-import { router } from '@inertiajs/vue3';
+import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
 const props = defineProps({
+    /* Link to this screen's written guide — see App\Support\Instructions\PageInstructions. */
+    instructionsUrl: String,
     company: Object,
     title: String,
     subtitle: String,
@@ -128,6 +130,11 @@ function destroyRow() {
 
 <template>
     <AppLayout>
+        <div class="px-6 pt-4">
+            <Link v-if="instructionsUrl" :href="instructionsUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
+                {{ $t('📖 Instructions') }}
+            </Link>
+        </div>
         <div class="p-6 max-w-5xl mx-auto">
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t(title) }}</h1>
             <p class="text-sm cvr-text-muted mb-6">{{ $t(subtitle) }}</p>

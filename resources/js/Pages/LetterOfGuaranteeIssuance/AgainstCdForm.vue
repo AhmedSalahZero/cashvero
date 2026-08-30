@@ -444,7 +444,7 @@ function submit() {
                                 <option value="" disabled>{{ $t('Select') }}</option>
                                 <option v-for="a in feesAccountOptions" :key="a.id" :value="a.id">{{ a.account_number }} ({{ a.currency?.toUpperCase() }})</option>
                             </select>
-                            <p v-if="errorFor('lg_fees_and_commission_account_id')" class="text-xs mt-1 cvr-num-red">{{ errorFor($t('lg_fees_and_commission_account_id')) }}</p>
+                            <p v-if="errorFor('lg_fees_and_commission_account_id')" class="text-xs mt-1 cvr-num-red">{{ errorFor('lg_fees_and_commission_account_id') }}</p>
                         </div>
                     </div>
                     <p class="text-xs cvr-text-muted mt-3">{{ $t('Only current accounts for the selected Bank Name, matching the LG\'s currency.') }}</p>

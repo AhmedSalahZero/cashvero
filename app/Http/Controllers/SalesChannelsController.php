@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Support\Instructions\PageInstructions;
 use App\Http\Requests\StoreSalesChannelRequest;
 use App\Models\CashVeroSalesChannel;
 use App\Models\Company;
@@ -15,6 +16,7 @@ class SalesChannelsController
         $items = $company->salesChannels()->orderBy('name')->get();
 
         return \Inertia\Inertia::render('Settings/SimpleMasterList', [
+            'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::SETTINGS]),
             // Shared master-list page — each controller supplies its own
             // module's rights so one screen cannot leak another's.
             'permissions' => [

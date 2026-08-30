@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Instructions\PageInstructions;
 use App\Http\Requests\StoreFactoringContractRequest;
 use App\Http\Requests\UpdateFactoringContractRequest;
 use App\Models\Company;
@@ -110,6 +111,7 @@ class FactoringContractController
         $contracts = $this->applyFilter($request, $contracts);
 
         return \Inertia\Inertia::render('FactoringContract/Index', [
+            'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::FACTORING]),
             'company' => ['id' => $company->id],
             'factoringCompany' => ['id' => $factoringCompany->id, 'name' => $factoringCompany->getName()],
             'canCreate' => hasAuthFor('factoring_contract.create'),

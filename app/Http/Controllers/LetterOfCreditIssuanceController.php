@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Support\Instructions\PageInstructions;
 use App\Enums\LcTypes;
 use App\Http\Requests\StoreLetterOfCreditIssuanceRequest;
 use App\Http\Requests\StoreNewSettlementWithLcIssuanceRequest;
@@ -373,6 +374,7 @@ class LetterOfCreditIssuanceController
         };
 
         return \Inertia\Inertia::render('LetterOfCreditIssuance/Index', [
+            'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LC_ISSUANCE]),
             'company' => ['id' => $company->id],
             'activeLcType' => $activeLcType,
             'filterDates' => $filterDates,

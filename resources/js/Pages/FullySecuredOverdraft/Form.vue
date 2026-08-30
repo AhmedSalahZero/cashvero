@@ -282,7 +282,7 @@ function submit() {
                         <div v-if="isLockedByRenewal">
                             <label class="cvr-form-label">{{ $t('CD Or TD Lending Percentage (%)') }} *</label>
                             <input v-model="form.cd_or_td_lending_percentage" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
-                            <p v-if="errorFor('cd_or_td_lending_percentage')" class="text-xs mt-1 cvr-num-red">{{ errorFor($t('cd_or_td_lending_percentage')) }}</p>
+                            <p v-if="errorFor('cd_or_td_lending_percentage')" class="text-xs mt-1 cvr-num-red">{{ errorFor('cd_or_td_lending_percentage') }}</p>
                         </div>
                         <template v-if="!isLockedByRenewal">
                             <div>

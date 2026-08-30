@@ -333,7 +333,7 @@ function fieldError(group, index, field) {
                                 <select v-model="row.customer_id" class="cvr-input w-full px-2 py-1.5 rounded text-sm">
                                     <option v-for="c in customers" :key="c.id" :value="c.id">{{ c.name }}</option>
                                 </select>
-                                <p v-if="fieldError('cheque-under-collection', i, 'customer_id')" class="text-xs mt-0.5" style="color: var(--cvr-danger-text);">{{ fieldError($t('cheque-under-collection'), i, 'customer_id') }}</p>
+                                <p v-if="fieldError('cheque-under-collection', i, 'customer_id')" class="text-xs mt-0.5" style="color: var(--cvr-danger-text);">{{ fieldError('cheque-under-collection', i, 'customer_id') }}</p>
                             </div>
                             <div>
                                 <label class="cvr-form-label">{{ $t('Currency') }}</label>

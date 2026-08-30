@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Support\Instructions\PageInstructions;
 use App\Models\AccountType;
 use App\Models\Bank;
 use App\Models\Branch;
@@ -203,6 +204,7 @@ class InternalMoneyTransferController
         };
 
         return \Inertia\Inertia::render('InternalMoneyTransfer/Index', [
+            'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::INTERNAL_TRANSFER]),
             'company' => ['id' => $company->id],
             'activeTab' => $currentType,
             'allTypes' => $this->allTypes(),
@@ -223,7 +225,7 @@ class InternalMoneyTransferController
 
 	public function create(Company $company,$type)
 	{
-		return \Inertia\Inertia::render('InternalMoneyTransfer/Form', $this->buildFormProps($company, $type, null));
+		return \Inertia\Inertia::render('InternalMoneyTransfer/Form', array_merge($this->buildFormProps($company, $type, null), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::INTERNAL_TRANSFER])]));
     }
 
 	/**
@@ -348,7 +350,7 @@ class InternalMoneyTransferController
 
 	public function edit(Company $company,string $type,InternalMoneyTransfer $internalMoneyTransfer)
 	{
-		return \Inertia\Inertia::render('InternalMoneyTransfer/Form', $this->buildFormProps($company, $type, $internalMoneyTransfer));
+		return \Inertia\Inertia::render('InternalMoneyTransfer/Form', array_merge($this->buildFormProps($company, $type, $internalMoneyTransfer), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::INTERNAL_TRANSFER])]));
     }
 	
 	public function update(Company $company , string $type , StoreInternalMoneyTransferRequest $request , InternalMoneyTransfer $internalMoneyTransfer){

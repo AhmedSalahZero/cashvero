@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Support\Instructions\PageInstructions;
 use App\Enums\LgTypes;
 use App\Http\Requests\StoreLetterOfGuaranteeIssuanceRequest;
 use App\Http\Requests\UpdateLetterOfGuaranteeIssuanceRequest;
@@ -264,6 +265,7 @@ class LetterOfGuaranteeIssuanceController
         }
 
 		return \Inertia\Inertia::render('LetterOfGuaranteeIssuance/Index', [
+            'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LG_ISSUANCE]),
 			'company' => ['id' => $company->id],
 			'activeLgType' => $activeLgType,
 			'filterDates' => $filterDates,

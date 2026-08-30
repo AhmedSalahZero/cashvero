@@ -11,6 +11,8 @@ import Pagination from '@/Components/Pagination.vue';
 import { mapAccountNumberOptions, accountNumberOption } from '@/composables/useAccountNumberOptions';
 
 const props = defineProps({
+    /* Link to this screen's written guide — see App\Support\Instructions\PageInstructions. */
+    instructionsUrl: String,
     company: Object,
     transactions: Object,
     searchFields: Object,
@@ -132,6 +134,11 @@ function destroyRow() {
 
 <template>
     <AppLayout>
+        <div class="px-6 pt-4">
+            <Link v-if="instructionsUrl" :href="instructionsUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
+                {{ $t('📖 Instructions') }}
+            </Link>
+        </div>
         <div class="p-6 mx-auto">
             <div class="flex items-center justify-between mb-6">
                 <div>

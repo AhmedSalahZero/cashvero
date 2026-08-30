@@ -38,6 +38,8 @@ const maxDate = todayDate();
  */
 
 const props = defineProps({
+    /* Link to this screen's written guide — see App\Support\Instructions\PageInstructions. */
+    instructionsUrl: String,
     company: Object,
     type: String, // fixed for this page load — 'bank-to-bank' | 'safe-to-bank' | 'bank-to-safe' | 'safe-to-safe'
     mode: String, // 'create' | 'edit'
@@ -233,6 +235,11 @@ function submit() {
 
 <template>
     <AppLayout>
+        <div class="px-6 pt-4">
+            <Link v-if="instructionsUrl" :href="instructionsUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
+                {{ $t('📖 Instructions') }}
+            </Link>
+        </div>
         <div class="p-6">
             <div class="flex items-center gap-3 mb-1">
                 <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
@@ -321,7 +328,7 @@ function submit() {
                                 <option value="">{{ $t('Select') }}</option>
                                 <option v-for="num in fromAccountNumberOptions" :key="num.value" :value="num.value">{{ num.label }}</option>
                             </select>
-                            <p v-if="errorFor('from_account_number')" class="text-xs mt-1 cvr-num-red">{{ errorFor($t('from_account_number')) }}</p>
+                            <p v-if="errorFor('from_account_number')" class="text-xs mt-1 cvr-num-red">{{ errorFor('from_account_number') }}</p>
                         </div>
                     </div>
 

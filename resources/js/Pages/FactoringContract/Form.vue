@@ -156,7 +156,7 @@ function submit() {
                         <div>
                             <label class="cvr-form-label">{{ $t('Contract Start Date') }} *</label>
                             <input v-model="form.contract_start_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
-                            <p v-if="errorFor('contract_start_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor($t('contract_start_date')) }}</p>
+                            <p v-if="errorFor('contract_start_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('contract_start_date') }}</p>
                         </div>
                         <div>
                             <label class="cvr-form-label">{{ $t('Contract End Date') }} *</label>
@@ -264,7 +264,7 @@ function submit() {
                     <p v-if="breakdownDateTooEarly" class="text-xs cvr-num-red mt-1">
                         {{ $t('Settlement Dates Must Be Greater Than Or Equal Contract Start Date') }}
                     </p>
-                    <p v-if="errorFor('outstanding_breakdowns')" class="text-xs cvr-num-red mt-1">{{ errorFor($t('outstanding_breakdowns')) }}</p>
+                    <p v-if="errorFor('outstanding_breakdowns')" class="text-xs cvr-num-red mt-1">{{ errorFor('outstanding_breakdowns') }}</p>
                 </div>
 
                 <div class="flex justify-end gap-2">

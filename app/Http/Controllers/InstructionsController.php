@@ -48,6 +48,13 @@ class InstructionsController
             PageInstructions::MONEY_RECEIVED_FORM,
             PageInstructions::MONEY_RECEIVED_DOWN_PAYMENT,
             PageInstructions::MONEY_RECEIVED_INDEX => route('view.money.receive', ['company' => $company->id]),
+            PageInstructions::MONEY_PAYMENT => route('view.money.payment', ['company' => $company->id]),
+            PageInstructions::CASH_EXPENSE => route('view.cash.expense', ['company' => $company->id]),
+            PageInstructions::INTERNAL_TRANSFER => route('internal-money-transfers.index', ['company' => $company->id]),
+            PageInstructions::CURRENCY_EXCHANGE => route('buy-or-sell-currencies.index', ['company' => $company->id]),
+            PageInstructions::LG_ISSUANCE => route('view.letter.of.guarantee.issuance', ['company' => $company->id]),
+            PageInstructions::LC_ISSUANCE => route('view.letter.of.credit.issuance', ['company' => $company->id]),
+            PageInstructions::LC_SETTLEMENT => route('lc-settlement-internal-money-transfers.index', ['company' => $company->id]),
             default => route('home', ['company' => $company->id]),
         };
     }

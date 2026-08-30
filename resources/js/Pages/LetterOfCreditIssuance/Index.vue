@@ -5,6 +5,8 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import RecordLogButton from '@/Components/RecordLogButton.vue';
 
 const props = defineProps({
+    /* Link to this screen's written guide — see App\Support\Instructions\PageInstructions. */
+    instructionsUrl: String,
     company: Object,
     activeLcType: String,
     filterDates: Object,
@@ -242,6 +244,11 @@ const commentTarget = ref(null);
 
 <template>
     <AppLayout :nav-urls="navUrls">
+        <div class="px-6 pt-4">
+            <Link v-if="instructionsUrl" :href="instructionsUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
+                {{ $t('📖 Instructions') }}
+            </Link>
+        </div>
         <div class="p-6">
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('LC Issuance') }}</h1>
             <p class="text-sm cvr-text-blue mb-6">{{ $t('Letters Of Credit issued across all financial institutions') }}</p>

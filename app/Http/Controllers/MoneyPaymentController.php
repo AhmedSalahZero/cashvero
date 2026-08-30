@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Support\Instructions\PageInstructions;
 use App\Helpers\HArr;
 use App\Http\Requests\DeleteMoneyPaymentRequest;
 use App\Http\Requests\MarkChequeAsPaidRequest;
@@ -325,6 +326,7 @@ class MoneyPaymentController
         $user = auth()->user();
 
         return Inertia::render('MoneyPayment/Index', [
+            'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::MONEY_PAYMENT]),
             'company' => ['id' => $company->id, 'name' => $company->getName()],
             'activeTab' => $activeTab,
             'tabs' => $tabsOut,
@@ -473,6 +475,7 @@ class MoneyPaymentController
             : Partner::orderBy('name')->where('is_supplier', 1)->where('company_id', $company->id)->pluck('name', 'id');
 
         return Inertia::render('MoneyPayment/Form', [
+            'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::MONEY_PAYMENT]),
             'company' => ['id' => $company->id, 'name' => $company->getName(), 'mainFunctionalCurrency' => $company->getMainFunctionalCurrency()],
             'model' => null,
             'singleModel' => $supplierInvoiceId,
@@ -506,6 +509,7 @@ class MoneyPaymentController
         $suppliers = Partner::orderBy('name')->where('is_supplier', 1)->where('company_id', $company->id)->onlyThatHaveSupplierContracts()->pluck('name', 'id');
 
         return Inertia::render('MoneyPayment/DownPaymentForm', [
+            'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::MONEY_PAYMENT]),
             'company' => ['id' => $company->id, 'name' => $company->getName(), 'mainFunctionalCurrency' => $company->getMainFunctionalCurrency()],
             'model' => null,
             'suppliers' => collect($suppliers)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
@@ -1002,6 +1006,7 @@ class MoneyPaymentController
         $warningMessage = count($moneyPayment->settlementsForDownPaymentThatComeFromMoneyModel) ? __('Warning, please take care incase you changed the paid amount, the invoices settled using this down payment will be deleted') : null;
 
         return Inertia::render('MoneyPayment/Form', [
+            'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::MONEY_PAYMENT]),
             'company' => ['id' => $company->id, 'name' => $company->getName(), 'mainFunctionalCurrency' => $company->getMainFunctionalCurrency()],
             'model' => $this->serializeMoneyPaymentForForm($moneyPayment),
             'singleModel' => $supplierInvoiceId,
@@ -1038,6 +1043,7 @@ class MoneyPaymentController
         $warningMessage = count($moneyPayment->settlementsForDownPaymentThatComeFromMoneyModel) ? __('Warning, please take care incase you changed the paid amount, the invoices settled using this down payment will be deleted') : null;
 
         return Inertia::render('MoneyPayment/DownPaymentForm', [
+            'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::MONEY_PAYMENT]),
             'company' => ['id' => $company->id, 'name' => $company->getName(), 'mainFunctionalCurrency' => $company->getMainFunctionalCurrency()],
             'model' => $this->serializeDownPaymentForForm($moneyPayment),
             'warningMessage' => $warningMessage,

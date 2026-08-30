@@ -698,7 +698,7 @@ function submit() {
               <p
                 v-if="errorFor('lg_fees_and_commission_account_id')"
                 class="text-xs mt-1 cvr-num-red">
-                {{ errorFor($t('lg_fees_and_commission_account_id')) }}
+                {{ errorFor('lg_fees_and_commission_account_id') }}
               </p>
             </div>
           </div>

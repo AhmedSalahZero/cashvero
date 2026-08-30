@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Support\Instructions\PageInstructions;
 use App\Models\AccountType;
 use App\Models\Bank;
 use App\Models\Company;
@@ -147,6 +148,7 @@ class LcSettlementInternalMoneyTransferController
         })->values();
 
         return Inertia::render('LcSettlementInternalMoneyTransfer/Index', [
+            'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LC_SETTLEMENT]),
             'company' => ['id' => $company->id, 'name' => $company->getName()],
             'rows' => $rows,
             'pagination' => [
@@ -173,7 +175,7 @@ class LcSettlementInternalMoneyTransferController
      */
     public function create(Company $company)
     {
-        return Inertia::render('LcSettlementInternalMoneyTransfer/Form', $this->formViewData($company));
+        return Inertia::render('LcSettlementInternalMoneyTransfer/Form', array_merge($this->formViewData($company), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LC_SETTLEMENT])]));
     }
 
     /**
@@ -202,7 +204,7 @@ class LcSettlementInternalMoneyTransferController
             'user_comment' => $lcSettlementInternalTransfer->user_comment,
         ];
 
-        return Inertia::render('LcSettlementInternalMoneyTransfer/Form', $viewData);
+        return Inertia::render('LcSettlementInternalMoneyTransfer/Form', array_merge($viewData, ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LC_SETTLEMENT])]));
     }
 
     /**

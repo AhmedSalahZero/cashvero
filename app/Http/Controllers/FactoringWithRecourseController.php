@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Instructions\PageInstructions;
 use App\Http\Requests\StoreFactoringWithRecourseRequest;
 use App\Models\AccountType;
 use App\Models\Company;
@@ -77,6 +78,7 @@ class FactoringWithRecourseController
         $searchFields = $this->factoringSearchFields();
 
         return Inertia::render('FactoringWithRecourse/Index', [
+            'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::FACTORING]),
             'company' => ['id' => $company->id, 'name' => $company->getName()],
             'searchFields' => $searchFields,
             // Echoed back so the search inputs keep what the user typed.

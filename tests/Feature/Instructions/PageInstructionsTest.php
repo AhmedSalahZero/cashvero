@@ -140,31 +140,80 @@ class PageInstructionsTest extends TestCase
         ));
     }
 
-    /** Each Money Received screen must actually link to its guide. */
-    public function test_each_money_received_screen_links_to_its_guide(): void
+    /**
+     * A button whose prop is never sent renders with no link, and a
+     * prop that is sent to a page that does not declare it is simply
+     * undefined — both look fine in a build and fail in the browser.
+     * Every screen carrying the button is checked from both ends.
+     */
+    public function test_every_screen_with_the_button_is_actually_sent_its_link(): void
     {
-        $controller = file_get_contents(app_path('Http/Controllers/MoneyReceivedController.php'));
-
-        foreach ([
-            PageInstructions::MONEY_RECEIVED_INDEX,
-            PageInstructions::MONEY_RECEIVED_FORM,
-            PageInstructions::MONEY_RECEIVED_DOWN_PAYMENT,
-        ] as $key) {
-            $constant = 'PageInstructions::'.strtoupper(str_replace(['money-received.', '-'], ['MONEY_RECEIVED_', '_'], $key));
-            $this->assertStringContainsString($constant, $controller,
-                "MoneyReceivedController does not send an instructionsUrl for {$key}.");
+        $declaring = [];
+        foreach ($this->vueFiles() as $file) {
+            $source = file_get_contents($file);
+            if (! str_contains($source, 'instructionsUrl')) {
+                continue;
+            }
+            $component = str_replace([resource_path('js/Pages').'/', '.vue'], '', $file);
+            $declaring[$component] = $source;
         }
 
-        foreach ([
-            'MoneyReceived/Index.vue',
-            'MoneyReceived/Form.vue',
-            'MoneyReceived/DownPaymentForm.vue',
-        ] as $page) {
-            $source = file_get_contents(resource_path('js/Pages/'.$page));
+        $this->assertNotEmpty($declaring, 'No screen has an Instructions button at all.');
+
+        $controllers = collect(glob(app_path('Http/Controllers/*.php')))
+            ->map(fn ($f) => file_get_contents($f))
+            ->implode("\n");
+
+        foreach ($declaring as $component => $source) {
             $this->assertMatchesRegularExpression('/^\s*instructionsUrl\s*:/m', $source,
-                "{$page} is sent instructionsUrl but does not declare it, so the button would have no link.");
-            $this->assertStringContainsString('Instructions', $source,
-                "{$page} has no Instructions button.");
+                "{$component}.vue uses instructionsUrl but never declares it in defineProps — it would be undefined.");
+
+            $this->assertMatchesRegularExpression(
+                '/render\(\s*[\'"]'.preg_quote($component, '/').'[\'"][^;]{0,400}instructionsUrl/s',
+                $controllers,
+                "{$component}.vue shows an Instructions button, but no controller sends it an instructionsUrl — the button would have no link."
+            );
         }
+    }
+
+    /** Every guide must be reachable — a key with no back-link is a dead end. */
+    public function test_every_guide_has_a_back_link_of_its_own(): void
+    {
+        $controller = file_get_contents(app_path('Http/Controllers/InstructionsController.php'));
+
+        foreach (PageInstructions::keys() as $key) {
+            if (str_starts_with($key, 'settings.') || $key === PageInstructions::FACTORING) {
+                continue; // these fall back to home deliberately
+            }
+            $constant = $this->constantFor($key);
+            $this->assertStringContainsString($constant, $controller,
+                "InstructionsController has no back-link case for {$key}, so Back would go to the home page.");
+        }
+    }
+
+    private function constantFor(string $key): string
+    {
+        $reflection = new \ReflectionClass(PageInstructions::class);
+        foreach ($reflection->getConstants() as $name => $value) {
+            if ($value === $key) {
+                return 'PageInstructions::'.$name;
+            }
+        }
+
+        return '';
+    }
+
+    /** @return list<string> */
+    private function vueFiles(): array
+    {
+        $files = [];
+        $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(resource_path('js/Pages')));
+        foreach ($iterator as $file) {
+            if ($file->isFile() && $file->getExtension() === 'vue') {
+                $files[] = $file->getPathname();
+            }
+        }
+
+        return $files;
     }
 }

@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Support\Instructions\PageInstructions;
 use App\Http\Requests\MarkChequeAsPaidRequest;
 use App\Http\Requests\StoreCashExpenseRequest;
 use App\Http\Requests\UnmarkChequeAsPaidRequest;
@@ -207,6 +208,7 @@ class CashExpenseController
 		};
 
 		return \Inertia\Inertia::render('CashExpense/Index', [
+            'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CASH_EXPENSE]),
 			'company' => ['id' => $company->id],
 			'activeTab' => $activeTab,
 			'canCreate' => hasAuthFor('cash_expense.create'),
@@ -252,7 +254,7 @@ class CashExpenseController
 	 */
 	public function create(Company $company,$supplierInvoiceId = null)
 	{
-		return \Inertia\Inertia::render('CashExpense/Form', $this->buildFormProps($company, null));
+		return \Inertia\Inertia::render('CashExpense/Form', array_merge($this->buildFormProps($company, null), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CASH_EXPENSE])]));
     }
 
 	/**
@@ -269,7 +271,7 @@ class CashExpenseController
 	 */
 	public function copy(Company $company, CashExpense $cashExpense)
 	{
-		return \Inertia\Inertia::render('CashExpense/Form', $this->buildFormProps($company, $cashExpense, true));
+		return \Inertia\Inertia::render('CashExpense/Form', array_merge($this->buildFormProps($company, $cashExpense, true), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CASH_EXPENSE])]));
 	}
 
 	/**
@@ -575,7 +577,7 @@ class CashExpenseController
 	}
 
 	public function edit(Company $company , Request $request , cashExpense $cashExpense ,$supplierInvoiceId = null){
-		return \Inertia\Inertia::render('CashExpense/Form', $this->buildFormProps($company, $cashExpense));
+		return \Inertia\Inertia::render('CashExpense/Form', array_merge($this->buildFormProps($company, $cashExpense), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CASH_EXPENSE])]));
 	}
 	public function update(Company $company , StoreCashExpenseRequest $request , cashExpense $cashExpense){
 		

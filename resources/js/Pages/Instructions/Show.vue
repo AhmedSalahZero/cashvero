@@ -28,7 +28,7 @@ defineProps({
     <AppLayout>
         <div class="p-6 max-w-4xl">
             <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm mb-3">
-                {{ $t('← Back') }}
+                <span aria-hidden="true">{{ $i18n.locale === 'ar' ? '→' : '←' }}</span> {{ $t('Back') }}
             </Link>
 
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t(title) }}</h1>

@@ -144,7 +144,7 @@ function submit() {
                         <div>
                             <label class="cvr-form-label">{{ $t('Opening Balance Date') }} *</label>
                             <input v-model="form.opening_balance_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
-                            <p v-if="errorFor('opening_balance_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor($t('opening_balance_date')) }}</p>
+                            <p v-if="errorFor('opening_balance_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('opening_balance_date') }}</p>
                             <p class="text-xs mt-1 cvr-text-muted">
                                 {{ $t('This is the reference date for all opening balances (Safe, Customers, Suppliers) and the earliest allowed balance date on any bank account for this company.') }}
                             </p>

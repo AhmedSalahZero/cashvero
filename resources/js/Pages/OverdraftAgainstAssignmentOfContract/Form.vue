@@ -223,7 +223,7 @@ function submit() {
                         <div>
                             <label class="cvr-form-label">{{ $t('Max Lending Limit Per Contract') }} *</label>
                             <input v-model="form.max_lending_limit_per_contract" type="number" step="any" class="cvr-input w-full px-3 py-2 rounded" />
-                            <p v-if="errorFor('max_lending_limit_per_contract')" class="text-xs mt-1 cvr-num-red">{{ errorFor($t('max_lending_limit_per_contract')) }}</p>
+                            <p v-if="errorFor('max_lending_limit_per_contract')" class="text-xs mt-1 cvr-num-red">{{ errorFor('max_lending_limit_per_contract') }}</p>
                         </div>
                     </div>
                 </div>

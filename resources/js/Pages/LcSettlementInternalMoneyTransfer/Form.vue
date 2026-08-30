@@ -10,6 +10,8 @@ import { mapAccountNumberOptions, accountNumberOption } from '@/composables/useA
 const maxDate = todayDate();
 
 const props = defineProps({
+    /* Link to this screen's written guide — see App\Support\Instructions\PageInstructions. */
+    instructionsUrl: String,
     company: Object,
     model: Object, // null on create
     currencies: Array,
@@ -122,6 +124,11 @@ function submit() {
 
 <template>
     <AppLayout>
+        <div class="px-6 pt-4">
+            <Link v-if="instructionsUrl" :href="instructionsUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
+                {{ $t('📖 Instructions') }}
+            </Link>
+        </div>
         <div class="p-6 max-w-6xl mx-auto">
             <div class="flex items-center gap-3 mb-1">
                 <Link :href="urls.back" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
