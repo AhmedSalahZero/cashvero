@@ -49,6 +49,59 @@ class Notification extends Model
 	const COMING_RECEIVABLE_CHEQUES_NOTIFICATIONS_DAYS = 'coming_receivable_cheques_notifications_days';
 
     protected $guarded = ['id'];
+
+	/**
+	 * Which existing screen permission grants each notification gate.
+	 *
+	 * The bell originally demanded a dedicated permission per notification
+	 * type (`view customer invoice past due notification`, …). Those names
+	 * were never added to PermissionRegistry, so the Roles & Permissions
+	 * screen has no way to grant them — only the original seeded super-admin
+	 * ever held them, and every account created since saw an empty bell.
+	 *
+	 * A notification is only an early warning about a record the user can
+	 * already open, so the screen's own view permission is the honest gate:
+	 * whoever may read customer balances may be told an invoice is overdue.
+	 *
+	 * The legacy name is still checked first, so nothing already granted is
+	 * taken away.
+	 */
+	private const NOTIFICATION_GATES = [
+		// Customer invoice due-date warnings → the customer balances screen.
+		'view customer invoice past due notification'      => 'view customer balances',
+		'view customer invoice coming due notification'    => 'view customer balances',
+		'view customer invoice current due notification'   => 'view customer balances',
+
+		// Supplier invoice due-date warnings → the supplier balances screen.
+		'view supplier invoices past due notifications'    => 'view supplier balances',
+		'view supplier invoices current due notifications' => 'view supplier balances',
+		'view supplier invoices coming due notifications'  => 'view supplier balances',
+
+		// Receivable cheques are collected from Money Received.
+		'view cheque past due notifications'               => 'view money received',
+		'view cheque current due notifications'            => 'view money received',
+		'view cheque under collection today notifications' => 'view money received',
+		'view cheque under collection since days notifications' => 'view money received',
+
+		// Payable cheques are issued from Money Payment.
+		'view current payable cheques notifications'       => 'view supplier payment',
+		'view coming payable cheques notifications'        => 'view supplier payment',
+	];
+
+	/**
+	 * True when the user holds the notification permission itself, or the
+	 * view permission of the screen that notification points at.
+	 */
+	public static function userCanSee(?User $user, string $permission): bool
+	{
+		if (! $user) {
+			return false;
+		}
+
+		return $user->can($permission)
+			|| (isset(self::NOTIFICATION_GATES[$permission]) && $user->can(self::NOTIFICATION_GATES[$permission]));
+	}
+
 	public static function getAllMainTypes():array 
 	{
 		return [
@@ -78,23 +131,23 @@ class Notification extends Model
 		}
 	
 		
-		$canViewCustomerInvoicePastDueNotification = $user->can('view customer invoice past due notification');
-		$canViewCustomerInvoiceComingDueNotification = $user->can('view customer invoice coming due notification');
-		$canViewCustomerInvoiceCurrentDueNotification = $user->can('view customer invoice current due notification');
+		$canViewCustomerInvoicePastDueNotification = self::userCanSee($user, 'view customer invoice past due notification');
+		$canViewCustomerInvoiceComingDueNotification = self::userCanSee($user, 'view customer invoice coming due notification');
+		$canViewCustomerInvoiceCurrentDueNotification = self::userCanSee($user, 'view customer invoice current due notification');
 		$canViewCustomerInvoicesNotifications = $canViewCustomerInvoicePastDueNotification || $canViewCustomerInvoiceComingDueNotification||$canViewCustomerInvoiceCurrentDueNotification ;
 		
 		
 		
-		$canViewSupplierInvoicesPastDueNotifications = $user->can('view supplier invoices past due notifications');
-		$canViewSupplierInvoicesCurrentDueNotification = $user->can('view supplier invoices current due notifications');
-		$canViewSupplierInvoicesComingDueNotification = $user->can('view supplier invoices coming due notifications');
+		$canViewSupplierInvoicesPastDueNotifications = self::userCanSee($user, 'view supplier invoices past due notifications');
+		$canViewSupplierInvoicesCurrentDueNotification = self::userCanSee($user, 'view supplier invoices current due notifications');
+		$canViewSupplierInvoicesComingDueNotification = self::userCanSee($user, 'view supplier invoices coming due notifications');
 		$canViewSupplierInvoicesNotifications = $canViewSupplierInvoicesPastDueNotifications || $canViewSupplierInvoicesCurrentDueNotification || $canViewSupplierInvoicesComingDueNotification;
 		
 		
-		$canViewChequePastDueNotifications = $user->can('view cheque past due notifications');
-		$canViewChequeComingDueNotifications = $user->can('view cheque current due notifications');
-		$canViewChequeUnderCollectionTodayNotifications = $user->can('view cheque under collection today notifications');
-		$canViewChequeUnderCollectionSinceDaysNotifications = $user->can('view cheque under collection since days notifications');
+		$canViewChequePastDueNotifications = self::userCanSee($user, 'view cheque past due notifications');
+		$canViewChequeComingDueNotifications = self::userCanSee($user, 'view cheque current due notifications');
+		$canViewChequeUnderCollectionTodayNotifications = self::userCanSee($user, 'view cheque under collection today notifications');
+		$canViewChequeUnderCollectionSinceDaysNotifications = self::userCanSee($user, 'view cheque under collection since days notifications');
 		$canViewReceivableChequesNotifications = $canViewChequePastDueNotifications || $canViewChequeComingDueNotifications ||$canViewChequeUnderCollectionTodayNotifications || $canViewChequeUnderCollectionSinceDaysNotifications;
 		 
 		$items = [];
@@ -129,12 +182,12 @@ class Notification extends Model
 				])
 				];
 		}
-		if($user->can('view current payable cheques notifications') || $user->can('view coming payable cheques notifications')){
+		if(self::userCanSee($user, 'view current payable cheques notifications') || self::userCanSee($user, 'view coming payable cheques notifications')){
 			$items[self::CURRENT_PAYABLE_CHEQUE] = [
 				'title'=>__('Payable Cheques') ,
 				'subitems'=>HArr::filterTrulyValue([
-					$user->can('view current payable cheques notifications') ? self::CURRENT_PAYABLE_CHEQUES:false,
-					$user->can('view coming payable cheques notifications') ? self::COMING_PAYABLE_CHEQUES:false,
+					self::userCanSee($user, 'view current payable cheques notifications') ? self::CURRENT_PAYABLE_CHEQUES:false,
+					self::userCanSee($user, 'view coming payable cheques notifications') ? self::COMING_PAYABLE_CHEQUES:false,
 					
 				])
 			];
