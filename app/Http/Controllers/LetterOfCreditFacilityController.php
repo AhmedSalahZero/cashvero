@@ -1,5 +1,7 @@
 <?php
 namespace App\Http\Controllers;
+
+use App\Support\Instructions\PageInstructions;
 use App\Enums\LcTypes;
 use App\Http\Requests\StoreLetterOfCreditFacilityRequest;
 use App\Models\AccountType;
@@ -140,6 +142,7 @@ class LetterOfCreditFacilityController
 		$letterOfCreditFacilities =   $this->applyFilter($request,$letterOfCreditFacilities) ;
 
 		return \Inertia\Inertia::render('LetterOfCreditFacility/Index', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LC_FACILITY, 'financialInstitution' => $financialInstitution->id]),
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
 			'canCreate' => hasAuthFor('lc_facility.create'),
@@ -211,6 +214,7 @@ class LetterOfCreditFacilityController
 	public function create(Company $company,FinancialInstitution $financialInstitution)
 	{
         return \Inertia\Inertia::render('LetterOfCreditFacility/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LC_FACILITY_FORM, 'financialInstitution' => $financialInstitution->id]),
 			'mode' => 'create',
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
@@ -325,6 +329,7 @@ class LetterOfCreditFacilityController
 	public function edit(Company $company , Request $request , FinancialInstitution $financialInstitution , LetterOfCreditFacility $letterOfCreditFacility){
 
         return \Inertia\Inertia::render('LetterOfCreditFacility/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LC_FACILITY_FORM, 'financialInstitution' => $financialInstitution->id]),
 			'mode' => 'edit',
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],

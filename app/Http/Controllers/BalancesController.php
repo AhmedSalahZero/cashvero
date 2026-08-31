@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Instructions\PageInstructions;
+
 use App\Models\Company;
 use App\Models\ForeignExchangeRate;
 use App\Models\InternalSettlement;
@@ -308,6 +310,16 @@ class BalancesController
 		}
 
 		return Inertia::render('Balances/Index', [
+			/**
+			 * Customer and supplier balances render the same component,
+			 * so the guide follows whichever side is on screen.
+			 */
+			'instructionsUrl' => route('view.instructions', [
+				'company' => $company->id,
+				'page' => $modelType === 'SupplierInvoice'
+					? PageInstructions::SUPPLIER_BALANCES
+					: PageInstructions::CUSTOMER_BALANCES,
+			]),
 			'company' => ['id' => $company->id],
 			'modelType' => $modelType,
 			/**
@@ -888,6 +900,7 @@ class BalancesController
 		};
 
 		return Inertia::render('Balances/TotalNetBalanceDetails', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::NET_BALANCE_DETAILS, 'modelType' => $modelType]),
 			'invoicesBalances' => $rows,
 			'currency' => $currency,
 			'clientNameText' => $clientNameText,

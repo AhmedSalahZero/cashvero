@@ -817,16 +817,16 @@ class LetterOfGuaranteeIssuanceController
             return redirect()->back()->with('fail', $commonVars['errorMessage']);
         }
         if ($source === LetterOfGuaranteeIssuance::LG_FACILITY) {
-            return \Inertia\Inertia::render('LetterOfGuaranteeIssuance/LgFacilityForm', $this->lgFacilityFormVars($company, $commonVars, null));
+            return \Inertia\Inertia::render('LetterOfGuaranteeIssuance/LgFacilityForm', array_merge($this->lgFacilityFormVars($company, $commonVars, null), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LG_ISSUANCE_FORM])]));
         }
         if ($source === LetterOfGuaranteeIssuance::AGAINST_TD) {
-            return \Inertia\Inertia::render('LetterOfGuaranteeIssuance/AgainstTdForm', $this->againstTdFormVars($company, $commonVars, null));
+            return \Inertia\Inertia::render('LetterOfGuaranteeIssuance/AgainstTdForm', array_merge($this->againstTdFormVars($company, $commonVars, null), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LG_ISSUANCE_FORM])]));
         }
         if ($source === LetterOfGuaranteeIssuance::AGAINST_CD) {
-            return \Inertia\Inertia::render('LetterOfGuaranteeIssuance/AgainstCdForm', $this->againstCdFormVars($company, $commonVars, null));
+            return \Inertia\Inertia::render('LetterOfGuaranteeIssuance/AgainstCdForm', array_merge($this->againstCdFormVars($company, $commonVars, null), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LG_ISSUANCE_FORM])]));
         }
         if ($source === LetterOfGuaranteeIssuance::HUNDRED_PERCENTAGE_CASH_COVER) {
-            return \Inertia\Inertia::render('LetterOfGuaranteeIssuance/HundredPercentageCashCoverForm', $this->hundredPercentageCashCoverFormVars($company, $commonVars, null));
+            return \Inertia\Inertia::render('LetterOfGuaranteeIssuance/HundredPercentageCashCoverForm', array_merge($this->hundredPercentageCashCoverFormVars($company, $commonVars, null), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LG_ISSUANCE_FORM])]));
         }
 
         abort(404);
@@ -1025,16 +1025,16 @@ class LetterOfGuaranteeIssuanceController
             return redirect()->back()->with('fail', $commonVars['errorMessage']);
         }
         if ($source === LetterOfGuaranteeIssuance::LG_FACILITY) {
-            return \Inertia\Inertia::render('LetterOfGuaranteeIssuance/LgFacilityForm', $this->lgFacilityFormVars($company, $commonVars, $letterOfGuaranteeIssuance));
+            return \Inertia\Inertia::render('LetterOfGuaranteeIssuance/LgFacilityForm', array_merge($this->lgFacilityFormVars($company, $commonVars, $letterOfGuaranteeIssuance), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LG_ISSUANCE_FORM])]));
         }
         if ($source === LetterOfGuaranteeIssuance::AGAINST_TD) {
-            return \Inertia\Inertia::render('LetterOfGuaranteeIssuance/AgainstTdForm', $this->againstTdFormVars($company, $commonVars, $letterOfGuaranteeIssuance));
+            return \Inertia\Inertia::render('LetterOfGuaranteeIssuance/AgainstTdForm', array_merge($this->againstTdFormVars($company, $commonVars, $letterOfGuaranteeIssuance), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LG_ISSUANCE_FORM])]));
         }
         if ($source === LetterOfGuaranteeIssuance::AGAINST_CD) {
-            return \Inertia\Inertia::render('LetterOfGuaranteeIssuance/AgainstCdForm', $this->againstCdFormVars($company, $commonVars, $letterOfGuaranteeIssuance));
+            return \Inertia\Inertia::render('LetterOfGuaranteeIssuance/AgainstCdForm', array_merge($this->againstCdFormVars($company, $commonVars, $letterOfGuaranteeIssuance), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LG_ISSUANCE_FORM])]));
         }
         if ($source === LetterOfGuaranteeIssuance::HUNDRED_PERCENTAGE_CASH_COVER) {
-            return \Inertia\Inertia::render('LetterOfGuaranteeIssuance/HundredPercentageCashCoverForm', $this->hundredPercentageCashCoverFormVars($company, $commonVars, $letterOfGuaranteeIssuance));
+            return \Inertia\Inertia::render('LetterOfGuaranteeIssuance/HundredPercentageCashCoverForm', array_merge($this->hundredPercentageCashCoverFormVars($company, $commonVars, $letterOfGuaranteeIssuance), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LG_ISSUANCE_FORM])]));
         }
 
         abort(404);

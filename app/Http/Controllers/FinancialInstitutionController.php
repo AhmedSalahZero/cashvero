@@ -1,6 +1,8 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Support\Instructions\PageInstructions;
+
 use App\Helpers\HArr;
 use App\Http\Requests\StoreCurrentAccountRequest;
 use App\Http\Requests\StoreFinancialInstitutionRequest;
@@ -237,6 +239,7 @@ class FinancialInstitutionController
 		})->values();
 
 		return \Inertia\Inertia::render('FinancialInstitutions/Index', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::FINANCIAL_INSTITUTIONS]),
 			'activeTab' => $type,
 			'company' => ['id' => $company->id],
 			'permissions' => $permissions,
@@ -312,6 +315,7 @@ class FinancialInstitutionController
 		$banks = Bank::whereNotIn('id',$exceptBanks)->pluck('view_name','id');
 	
 		return \Inertia\Inertia::render('FinancialInstitutions/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::FINANCIAL_INSTITUTION_FORM]),
 			'company' => ['id' => $company->id],
 			'model' => null,
 			'banks' => $banks,
@@ -400,6 +404,7 @@ class FinancialInstitutionController
 		$banks = Bank::whereNotIn('id',$exceptBanks)->pluck('view_name','id');
 	
 		return \Inertia\Inertia::render('FinancialInstitutions/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::FINANCIAL_INSTITUTION_FORM]),
 			'company' => ['id' => $company->id],
 			'model' => [
 				'id' => $financialInstitution->id,
@@ -490,6 +495,7 @@ class FinancialInstitutionController
 	public function addAccount(Company $company , Request $request , FinancialInstitution $financialInstitution)
 	{
 		return \Inertia\Inertia::render('FinancialInstitutions/AddAccount', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CURRENT_ACCOUNT_FORM, 'financialInstitution' => $financialInstitution->id]),
 			'company' => ['id' => $company->id],
 			'financialInstitution' => [
 				'id' => $financialInstitution->id,
@@ -612,6 +618,7 @@ class FinancialInstitutionController
 		})->values();
 
 		return \Inertia\Inertia::render('BankAccounts/Index', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CURRENT_ACCOUNT, 'financialInstitution' => $financialInstitution->id]),
 			'bankAccounts' => $bankAccounts,
 			'financialInstitution' => [
 				'id' => $financialInstitution->id,

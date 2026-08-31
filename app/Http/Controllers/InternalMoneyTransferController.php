@@ -225,7 +225,7 @@ class InternalMoneyTransferController
 
 	public function create(Company $company,$type)
 	{
-		return \Inertia\Inertia::render('InternalMoneyTransfer/Form', array_merge($this->buildFormProps($company, $type, null), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::INTERNAL_TRANSFER])]));
+		return \Inertia\Inertia::render('InternalMoneyTransfer/Form', array_merge($this->buildFormProps($company, $type, null), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::INTERNAL_TRANSFER_FORM])]));
     }
 
 	/**
@@ -350,7 +350,7 @@ class InternalMoneyTransferController
 
 	public function edit(Company $company,string $type,InternalMoneyTransfer $internalMoneyTransfer)
 	{
-		return \Inertia\Inertia::render('InternalMoneyTransfer/Form', array_merge($this->buildFormProps($company, $type, $internalMoneyTransfer), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::INTERNAL_TRANSFER])]));
+		return \Inertia\Inertia::render('InternalMoneyTransfer/Form', array_merge($this->buildFormProps($company, $type, $internalMoneyTransfer), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::INTERNAL_TRANSFER_FORM])]));
     }
 	
 	public function update(Company $company , string $type , StoreInternalMoneyTransferRequest $request , InternalMoneyTransfer $internalMoneyTransfer){

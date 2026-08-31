@@ -1,5 +1,7 @@
 <?php
 namespace App\Http\Controllers;
+
+use App\Support\Instructions\PageInstructions;
 use App\Http\Requests\StoreTimeOfDepositRequest;
 use App\Http\Requests\UpdateTimeOfDepositRequest;
 use App\Models\AccountType;
@@ -291,6 +293,7 @@ class TimeOfDepositsController
 		};
 
 		return \Inertia\Inertia::render('TimeOfDeposits/Index', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::TIME_OF_DEPOSIT, 'financialInstitution' => $financialInstitution->id]),
 			'company' => ['id' => $company->id],
 			'financialInstitution' => [
 				'id' => $financialInstitution->id,
@@ -339,6 +342,7 @@ class TimeOfDepositsController
 		 */
 		$accounts = $financialInstitution->accounts ;
         return \Inertia\Inertia::render('TimeOfDeposits/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::TIME_OF_DEPOSIT_FORM, 'financialInstitution' => $financialInstitution->id]),
 			'mode' => 'create',
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
@@ -419,6 +423,7 @@ class TimeOfDepositsController
 	public function edit(Company $company , Request $request , FinancialInstitution $financialInstitution , TimeOfDeposit $timeOfDeposit){
 		$accounts = $financialInstitution->accounts ;
         return \Inertia\Inertia::render('TimeOfDeposits/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::TIME_OF_DEPOSIT_FORM, 'financialInstitution' => $financialInstitution->id]),
 			'mode' => 'edit',
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
@@ -527,6 +532,7 @@ class TimeOfDepositsController
 	{
 		$rows = CurrentAccountBankStatement::where('company_id',$company->id)->where('time_of_deposit_id',$timeOfDeposit->id)->where('is_period_cd_or_td_interest',1)->get();
 		return \Inertia\Inertia::render('TimeOfDeposits/PeriodInterest', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::TD_PERIOD_INTEREST, 'financialInstitution' => $financialInstitution->id]),
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
 			'timeOfDeposit' => ['id' => $timeOfDeposit->id, 'currency' => $timeOfDeposit->getCurrency()],

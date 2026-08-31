@@ -1,6 +1,8 @@
 <?php
 
 namespace App\Http\Controllers;
+
+use App\Support\Instructions\PageInstructions;
 use App\Enums\LcTypes;
 use App\Enums\LgTypes;
 use App\Exports\Statements\CustomerSupplierStatementExport;
@@ -689,6 +691,7 @@ class CustomerInvoiceDashboardController extends Controller
 		});
 
         return Inertia::render('Balances/InvoiceReport', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::INVOICE_REPORT, 'modelType' => $modelType]),
             'invoices' => $formattedInvoices->toArray(),
             'partnerName' => $customer->getName(),
             'partnerId' => $customer->getId(),
@@ -1265,6 +1268,7 @@ class CustomerInvoiceDashboardController extends Controller
 		$backUrl = route('view.balances', ['company' => $company->id, 'modelType' => $modelType]);
 		if(!$partner){
 			return Inertia::render('Balances/Statement', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::INVOICE_STATEMENT, 'modelType' => $modelType]),
 				'invoicesWithItsReceivedMoney' => [],
 				'partnerName' => null,
 				'partnerId' => $partnerId,
@@ -1294,6 +1298,7 @@ class CustomerInvoiceDashboardController extends Controller
         }
 		
         return Inertia::render('Balances/Statement', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::INVOICE_STATEMENT, 'modelType' => $modelType]),
             'invoicesWithItsReceivedMoney' => $invoicesWithItsReceivedMoney,
             'partnerName' => $partnerName,
             'partnerId' => $partnerId,

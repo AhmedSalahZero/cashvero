@@ -111,7 +111,7 @@ class FactoringContractController
         $contracts = $this->applyFilter($request, $contracts);
 
         return \Inertia\Inertia::render('FactoringContract/Index', [
-            'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::FACTORING]),
+            'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::FACTORING_CONTRACTS]),
             'company' => ['id' => $company->id],
             'factoringCompany' => ['id' => $factoringCompany->id, 'name' => $factoringCompany->getName()],
             'canCreate' => hasAuthFor('factoring_contract.create'),
@@ -171,6 +171,7 @@ class FactoringContractController
     public function create(Company $company, FactoringCompany $factoringCompany)
     {
         return \Inertia\Inertia::render('FactoringContract/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::FACTORING_CONTRACT_FORM]),
             'mode' => 'create',
             'company' => ['id' => $company->id],
             'factoringCompany' => ['id' => $factoringCompany->id, 'name' => $factoringCompany->getName()],
@@ -232,6 +233,7 @@ class FactoringContractController
     public function edit(Company $company, FactoringCompany $factoringCompany, FactoringContract $factoringContract)
     {
         return \Inertia\Inertia::render('FactoringContract/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::FACTORING_CONTRACT_FORM]),
             'mode' => 'edit',
             'company' => ['id' => $company->id],
             'factoringCompany' => ['id' => $factoringCompany->id, 'name' => $factoringCompany->getName()],

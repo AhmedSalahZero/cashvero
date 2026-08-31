@@ -1,6 +1,8 @@
 <?php
 
 namespace App\Http\Controllers;
+
+use App\Support\Instructions\PageInstructions;
 use App\Http\Requests\StoreDownPaymentSettlementRequest;
 use App\Models\Company;
 use App\Models\Contract;
@@ -169,6 +171,7 @@ class DownPaymentContractsController extends Controller
 		})->values();
 
         return Inertia::render('Balances/DownPaymentContracts', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::DOWN_PAYMENT_SETTLEMENT, 'modelType' => $modelType]),
 			'title' => $partnerName . ' ' . __('Down Payment'),
 			'currency' => $currency,
 			'rows' => $rows,

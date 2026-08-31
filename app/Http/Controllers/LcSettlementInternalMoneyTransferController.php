@@ -175,7 +175,7 @@ class LcSettlementInternalMoneyTransferController
      */
     public function create(Company $company)
     {
-        return Inertia::render('LcSettlementInternalMoneyTransfer/Form', array_merge($this->formViewData($company), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LC_SETTLEMENT])]));
+        return Inertia::render('LcSettlementInternalMoneyTransfer/Form', array_merge($this->formViewData($company), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LC_SETTLEMENT_FORM])]));
     }
 
     /**
@@ -204,7 +204,7 @@ class LcSettlementInternalMoneyTransferController
             'user_comment' => $lcSettlementInternalTransfer->user_comment,
         ];
 
-        return Inertia::render('LcSettlementInternalMoneyTransfer/Form', array_merge($viewData, ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LC_SETTLEMENT])]));
+        return Inertia::render('LcSettlementInternalMoneyTransfer/Form', array_merge($viewData, ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LC_SETTLEMENT_FORM])]));
     }
 
     /**

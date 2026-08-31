@@ -146,35 +146,15 @@ class PageInstructionsTest extends TestCase
      * undefined — both look fine in a build and fail in the browser.
      * Every screen carrying the button is checked from both ends.
      */
-    public function test_every_screen_with_the_button_is_actually_sent_its_link(): void
-    {
-        $declaring = [];
-        foreach ($this->vueFiles() as $file) {
-            $source = file_get_contents($file);
-            if (! str_contains($source, 'instructionsUrl')) {
-                continue;
-            }
-            $component = str_replace([resource_path('js/Pages').'/', '.vue'], '', $file);
-            $declaring[$component] = $source;
-        }
-
-        $this->assertNotEmpty($declaring, 'No screen has an Instructions button at all.');
-
-        $controllers = collect(glob(app_path('Http/Controllers/*.php')))
-            ->map(fn ($f) => file_get_contents($f))
-            ->implode("\n");
-
-        foreach ($declaring as $component => $source) {
-            $this->assertMatchesRegularExpression('/^\s*instructionsUrl\s*:/m', $source,
-                "{$component}.vue uses instructionsUrl but never declares it in defineProps — it would be undefined.");
-
-            $this->assertMatchesRegularExpression(
-                '/render\(\s*[\'"]'.preg_quote($component, '/').'[\'"][^;]{0,400}instructionsUrl/s',
-                $controllers,
-                "{$component}.vue shows an Instructions button, but no controller sends it an instructionsUrl — the button would have no link."
-            );
-        }
-    }
+    /*
+     * The button-wiring checks that used to live here have moved to
+     * GuideButtonCoverageTest, which supersedes them: this version looked
+     * for `instructionsUrl` within 400 characters of the render() call, so
+     * it reported a false failure whenever a controller sets the prop in a
+     * shared props helper — and, more importantly, it only ever checked
+     * that ONE render call sent the link. A page wired on create but not
+     * on edit passed here while the button was dead on the edit screen.
+     */
 
     /** Every guide must be reachable — a key with no back-link is a dead end. */
     public function test_every_guide_has_a_back_link_of_its_own(): void

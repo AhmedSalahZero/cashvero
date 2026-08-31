@@ -1,6 +1,8 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Support\Instructions\PageInstructions;
+
 use App\Http\Requests\DeleteCurrentAccountRequest;
 use App\Http\Requests\UpdateCurrentAccountRequest;
 use App\Models\Company;
@@ -54,6 +56,7 @@ class FinancialInstitutionAccountController
 	public function edit(Company $company , Request $request , FinancialInstitutionAccount $financialInstitutionAccount){
 
 		return \Inertia\Inertia::render('FinancialInstitutions/EditAccount', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CURRENT_ACCOUNT_FORM, 'financialInstitution' => $financialInstitutionAccount->financialInstitution->id]),
 			'company' => ['id' => $company->id],
 			'financialInstitution' => [
 				'id' => $financialInstitutionAccount->financialInstitution->id,

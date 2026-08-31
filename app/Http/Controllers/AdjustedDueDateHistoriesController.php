@@ -1,5 +1,7 @@
 <?php
 namespace App\Http\Controllers;
+
+use App\Support\Instructions\PageInstructions;
 use App\Interfaces\Models\IInvoice;
 use App\Models\Company;
 use App\Models\DueDateHistory;
@@ -81,6 +83,9 @@ class AdjustedDueDateHistoriesController
 				'net_balance_formatted' => $invoice->getNetBalanceFormatted(),
 				'currency' => $invoice->getCurrency(),
 			],
+			/* Both the list and the edit view come through here, so the
+		   guide link is built once rather than at each call site. */
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::ADJUST_DUE_DATE, 'modelType' => $invoiceModelName]),
 			'modelType' => $invoiceModelName,
 			'customerNameOrSupplierNameText' => $customerNameOrSupplierNameText,
 			'dueDateHistories' => $rows,

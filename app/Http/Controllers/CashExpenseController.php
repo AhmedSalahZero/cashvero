@@ -254,7 +254,7 @@ class CashExpenseController
 	 */
 	public function create(Company $company,$supplierInvoiceId = null)
 	{
-		return \Inertia\Inertia::render('CashExpense/Form', array_merge($this->buildFormProps($company, null), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CASH_EXPENSE])]));
+		return \Inertia\Inertia::render('CashExpense/Form', array_merge($this->buildFormProps($company, null), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CASH_EXPENSE_FORM])]));
     }
 
 	/**
@@ -271,7 +271,7 @@ class CashExpenseController
 	 */
 	public function copy(Company $company, CashExpense $cashExpense)
 	{
-		return \Inertia\Inertia::render('CashExpense/Form', array_merge($this->buildFormProps($company, $cashExpense, true), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CASH_EXPENSE])]));
+		return \Inertia\Inertia::render('CashExpense/Form', array_merge($this->buildFormProps($company, $cashExpense, true), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CASH_EXPENSE_FORM])]));
 	}
 
 	/**
@@ -577,7 +577,7 @@ class CashExpenseController
 	}
 
 	public function edit(Company $company , Request $request , cashExpense $cashExpense ,$supplierInvoiceId = null){
-		return \Inertia\Inertia::render('CashExpense/Form', array_merge($this->buildFormProps($company, $cashExpense), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CASH_EXPENSE])]));
+		return \Inertia\Inertia::render('CashExpense/Form', array_merge($this->buildFormProps($company, $cashExpense), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CASH_EXPENSE_FORM])]));
 	}
 	public function update(Company $company , StoreCashExpenseRequest $request , cashExpense $cashExpense){
 		

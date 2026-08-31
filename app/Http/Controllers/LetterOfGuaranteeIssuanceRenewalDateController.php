@@ -1,5 +1,7 @@
 <?php
 namespace App\Http\Controllers;
+
+use App\Support\Instructions\PageInstructions;
 use App\Http\Requests\StoreLgRenewalDateRequest;
 use App\Models\Company;
 use App\Models\CurrentAccountBankStatement;
@@ -113,6 +115,7 @@ class LetterOfGuaranteeIssuanceRenewalDateController
 		$currentRenewalDate = $letterOfGuaranteeIssuance->getRenewalDate();
 
 		return \Inertia\Inertia::render('LetterOfGuaranteeIssuance/RenewalHistory', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LG_RENEWAL_HISTORY]),
 			'company' => ['id' => $company->id],
 			'letterOfGuaranteeIssuance' => [
 				'id' => $letterOfGuaranteeIssuance->id,

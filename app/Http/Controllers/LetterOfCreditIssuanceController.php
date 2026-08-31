@@ -717,10 +717,10 @@ class LetterOfCreditIssuanceController
     {
         $commonVars = $this->commonViewVars($company, $source);
         if ($source === LetterOfCreditIssuance::LC_FACILITY) {
-            return \Inertia\Inertia::render('LetterOfCreditIssuance/LcFacilityForm', $this->lcFacilityFormVars($company, $commonVars, null));
+            return \Inertia\Inertia::render('LetterOfCreditIssuance/LcFacilityForm', array_merge($this->lcFacilityFormVars($company, $commonVars, null), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LC_ISSUANCE_FORM])]));
         }
         if ($source === LetterOfCreditIssuance::HUNDRED_PERCENTAGE_CASH_COVER) {
-            return \Inertia\Inertia::render('LetterOfCreditIssuance/HundredPercentageCashCoverForm', $this->hundredPercentageCashCoverFormVars($company, $commonVars, null));
+            return \Inertia\Inertia::render('LetterOfCreditIssuance/HundredPercentageCashCoverForm', array_merge($this->hundredPercentageCashCoverFormVars($company, $commonVars, null), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LC_ISSUANCE_FORM])]));
         }
         // AGAINST_CD / AGAINST_TD — confirmed dead with the project
         // owner: the LC Facility contract was restructured to cover
@@ -980,10 +980,10 @@ class LetterOfCreditIssuanceController
     {
         $commonVars = $this->commonViewVars($company, $source, $letterOfCreditIssuance);
         if ($source === LetterOfCreditIssuance::LC_FACILITY) {
-            return \Inertia\Inertia::render('LetterOfCreditIssuance/LcFacilityForm', $this->lcFacilityFormVars($company, $commonVars, $letterOfCreditIssuance));
+            return \Inertia\Inertia::render('LetterOfCreditIssuance/LcFacilityForm', array_merge($this->lcFacilityFormVars($company, $commonVars, $letterOfCreditIssuance), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LC_ISSUANCE_FORM])]));
         }
         if ($source === LetterOfCreditIssuance::HUNDRED_PERCENTAGE_CASH_COVER) {
-            return \Inertia\Inertia::render('LetterOfCreditIssuance/HundredPercentageCashCoverForm', $this->hundredPercentageCashCoverFormVars($company, $commonVars, $letterOfCreditIssuance));
+            return \Inertia\Inertia::render('LetterOfCreditIssuance/HundredPercentageCashCoverForm', array_merge($this->hundredPercentageCashCoverFormVars($company, $commonVars, $letterOfCreditIssuance), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LC_ISSUANCE_FORM])]));
         }
         return redirect()
             ->route('view.letter.of.credit.issuance', ['company' => $company->id])

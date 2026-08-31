@@ -1,6 +1,8 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Support\Instructions\PageInstructions;
+
 use App\Http\Requests\StoreOverdraftAgainstAssignmentOfContractRequest;
 use App\Http\Requests\UpdateOverdraftAgainstAssignmentOfContractRequest;
 use App\Models\AccountType;
@@ -146,6 +148,7 @@ class OverdraftAgainstAssignmentOfContractController
 		}
 
         return \Inertia\Inertia::render('OverdraftAgainstAssignmentOfContract/Index', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::OVERDRAFT_ASSIGNMENT_OF_CONTRACTS, 'financialInstitution' => $financialInstitution->id]),
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
 			'canCreate' => hasAuthFor('overdraft_assignment_contract.create'),
@@ -238,6 +241,7 @@ class OverdraftAgainstAssignmentOfContractController
 	public function create(Company $company,FinancialInstitution $financialInstitution)
 	{
         return \Inertia\Inertia::render('OverdraftAgainstAssignmentOfContract/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::OVERDRAFT_ASSIGNMENT_FORM, 'financialInstitution' => $financialInstitution->id]),
 			'mode' => 'create',
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
@@ -323,6 +327,7 @@ class OverdraftAgainstAssignmentOfContractController
 		$hasRenewals = $odAgainstAssignmentOfContract->hasRenewals();
 		$latestChapter = $odAgainstAssignmentOfContract->getLatestTerms();
         return \Inertia\Inertia::render('OverdraftAgainstAssignmentOfContract/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::OVERDRAFT_ASSIGNMENT_FORM, 'financialInstitution' => $financialInstitution->id]),
 			'mode' => 'edit',
 			'hasRenewals' => $hasRenewals,
 			'company' => ['id' => $company->id],

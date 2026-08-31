@@ -1,5 +1,7 @@
 <?php
 namespace App\Http\Controllers;
+
+use App\Support\Instructions\PageInstructions;
 use App\Http\Requests\StoreFullySecuredOverdraftRequest;
 use App\Http\Requests\UpdateFullySecuredOverdraftRequest;
 use App\Http\Requests\RenewFullySecuredOverdraftRequest;
@@ -118,6 +120,7 @@ class FullySecuredOverdraftController
 		$canCreateRate = hasAuthFor('fully_secured_overdraft.create');
 
 		return \Inertia\Inertia::render('FullySecuredOverdraft/Index', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::FULLY_SECURED_OVERDRAFT, 'financialInstitution' => $financialInstitution->id]),
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
 			'canCreate' => hasAuthFor('fully_secured_overdraft.create'),
@@ -227,6 +230,7 @@ class FullySecuredOverdraftController
 	public function create(Company $company,FinancialInstitution $financialInstitution)
 	{
         return \Inertia\Inertia::render('FullySecuredOverdraft/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::FULLY_SECURED_OVERDRAFT_FORM, 'financialInstitution' => $financialInstitution->id]),
 			'mode' => 'create',
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
@@ -368,6 +372,7 @@ class FullySecuredOverdraftController
 		}
 
         return \Inertia\Inertia::render('FullySecuredOverdraft/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::FULLY_SECURED_OVERDRAFT_FORM, 'financialInstitution' => $financialInstitution->id]),
 			'mode' => 'edit',
 			'hasRenewals' => $fullySecuredOverdraft->hasRenewals(),
 			'linkedCdOrTdAmount' => $fullySecuredOverdraft->getLinkedCdOrTdAmount(),

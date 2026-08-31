@@ -6,6 +6,9 @@ import FormErrorSummary from '@/Components/FormErrorSummary.vue';
 import ShareholderOwnershipFields from '@/Components/ShareholderOwnershipFields.vue';
 
 const props = defineProps({
+    /* Link to this screen's written guide — see
+       App\Support\Instructions\PageInstructions. */
+    instructionsUrl: String,
     company: Object,
     model: Object, // null = create mode, populated object = edit mode
     banks: Object,  // { id: "Bank Name", ... }
@@ -102,6 +105,11 @@ function submit() {
 
 <template>
     <AppLayout :nav-urls="navUrls">
+        <div class="px-6 pt-4">
+            <Link v-if="instructionsUrl" :href="instructionsUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
+                {{ $t('📖 Instructions') }}
+            </Link>
+        </div>
         <div class="p-6">
             <div class="flex items-center gap-3 mb-6">
                 <Link :href="listUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">

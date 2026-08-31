@@ -1,5 +1,7 @@
 <?php
 namespace App\Http\Controllers;
+
+use App\Support\Instructions\PageInstructions;
 use App\Http\Requests\StoreCleanOverdraftRequest;
 use App\Http\Requests\UpdateCleanOverdraftRequest;
 use App\Models\AccountType;
@@ -108,6 +110,7 @@ class CleanOverdraftController
 		$canCreateRate = hasAuthFor('clean_overdraft.create');
 
         return \Inertia\Inertia::render('CleanOverdraft/Index', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CLEAN_OVERDRAFT, 'financialInstitution' => $financialInstitution->id]),
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
 			'canCreate' => hasAuthFor('clean_overdraft.create'),
@@ -179,6 +182,7 @@ class CleanOverdraftController
 	public function create(Company $company,FinancialInstitution $financialInstitution)
 	{
         return \Inertia\Inertia::render('CleanOverdraft/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CLEAN_OVERDRAFT_FORM, 'financialInstitution' => $financialInstitution->id]),
 			'mode' => 'create',
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
@@ -281,6 +285,7 @@ class CleanOverdraftController
 		$hasRenewals = $cleanOverdraft->hasRenewals();
 		$latestChapter = $cleanOverdraft->getLatestTerms();
         return \Inertia\Inertia::render('CleanOverdraft/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CLEAN_OVERDRAFT_FORM, 'financialInstitution' => $financialInstitution->id]),
 			'mode' => 'edit',
 			'hasRenewals' => $hasRenewals,
 			'company' => ['id' => $company->id],

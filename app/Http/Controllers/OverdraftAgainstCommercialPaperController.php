@@ -1,5 +1,7 @@
 <?php
 namespace App\Http\Controllers;
+
+use App\Support\Instructions\PageInstructions;
 use App\Http\Requests\StoreOverdraftAgainstCommercialPaperRequest;
 use App\Http\Requests\UpdateOverdraftAgainstCommercialPaperRequest;
 use App\Models\AccountType;
@@ -119,6 +121,7 @@ class OverdraftAgainstCommercialPaperController
 		$canCreateRate = hasAuthFor('overdraft_commercial_paper.create');
 
         return \Inertia\Inertia::render('OverdraftAgainstCommercialPaper/Index', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::OVERDRAFT_COMMERCIAL_PAPER, 'financialInstitution' => $financialInstitution->id]),
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
 			'canCreate' => hasAuthFor('overdraft_commercial_paper.create'),
@@ -195,6 +198,7 @@ class OverdraftAgainstCommercialPaperController
 	public function create(Company $company,FinancialInstitution $financialInstitution)
 	{
         return \Inertia\Inertia::render('OverdraftAgainstCommercialPaper/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::OVERDRAFT_COMMERCIAL_PAPER_FORM, 'financialInstitution' => $financialInstitution->id]),
 			'mode' => 'create',
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
@@ -295,6 +299,7 @@ class OverdraftAgainstCommercialPaperController
 		$hasRenewals = $overdraftAgainstCommercialPaper->hasRenewals();
 		$latestChapter = $overdraftAgainstCommercialPaper->getLatestTerms();
         return \Inertia\Inertia::render('OverdraftAgainstCommercialPaper/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::OVERDRAFT_COMMERCIAL_PAPER_FORM, 'financialInstitution' => $financialInstitution->id]),
 			'mode' => 'edit',
 			'hasRenewals' => $hasRenewals,
 			'company' => ['id' => $company->id],

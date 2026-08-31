@@ -1,5 +1,7 @@
 <?php
 namespace App\Http\Controllers;
+
+use App\Support\Instructions\PageInstructions;
 use App\Http\Requests\StoreCertificateOfDepositRequest;
 use App\Http\Requests\UpdateCertificateOfDepositRequest;
 use App\Models\AccountType;
@@ -241,6 +243,7 @@ class CertificatesOfDepositsController
 		};
 
 		return \Inertia\Inertia::render('CertificatesOfDeposits/Index', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CERTIFICATE_OF_DEPOSIT, 'financialInstitution' => $financialInstitution->id]),
 			'company' => ['id' => $company->id],
 			'financialInstitution' => [
 				'id' => $financialInstitution->id,
@@ -283,6 +286,7 @@ class CertificatesOfDepositsController
 	{
 		$accounts = $financialInstitution->accounts ;
         return \Inertia\Inertia::render('CertificatesOfDeposits/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CERTIFICATE_OF_DEPOSIT_FORM, 'financialInstitution' => $financialInstitution->id]),
 			'mode' => 'create',
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
@@ -360,6 +364,7 @@ class CertificatesOfDepositsController
 	public function edit(Company $company , Request $request , FinancialInstitution $financialInstitution , CertificatesOfDeposit $certificatesOfDeposit){
 		$accounts = $financialInstitution->accounts ;
         return \Inertia\Inertia::render('CertificatesOfDeposits/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CERTIFICATE_OF_DEPOSIT_FORM, 'financialInstitution' => $financialInstitution->id]),
 			'mode' => 'edit',
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
@@ -475,6 +480,7 @@ class CertificatesOfDepositsController
 	{
 		$rows = CurrentAccountBankStatement::where('company_id',$company->id)->where('certificate_of_deposit_id',$certificatesOfDeposit->id)->where('is_period_cd_or_td_interest',1)->get();
 		return \Inertia\Inertia::render('CertificatesOfDeposits/PeriodInterest', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CD_PERIOD_INTEREST, 'financialInstitution' => $financialInstitution->id]),
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
 			'certificatesOfDeposit' => ['id' => $certificatesOfDeposit->id, 'currency' => $certificatesOfDeposit->getCurrency()],

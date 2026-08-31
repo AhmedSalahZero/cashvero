@@ -237,7 +237,7 @@ class BuyOrSellCurrenciesController
 	 */
 	public function create(Company $company)
 	{
-        return \Inertia\Inertia::render('BuyOrSellCurrencies/Form', array_merge($this->buildFormProps($company, null), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CURRENCY_EXCHANGE])]));
+        return \Inertia\Inertia::render('BuyOrSellCurrencies/Form', array_merge($this->buildFormProps($company, null), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CURRENCY_EXCHANGE_FORM])]));
     }
 
 	/**
@@ -376,7 +376,7 @@ class BuyOrSellCurrenciesController
 
 	public function edit(Company $company,BuyOrSellCurrency $buyOrSellCurrency)
 	{
-        return \Inertia\Inertia::render('BuyOrSellCurrencies/Form', array_merge($this->buildFormProps($company, $buyOrSellCurrency), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CURRENCY_EXCHANGE])]));
+        return \Inertia\Inertia::render('BuyOrSellCurrencies/Form', array_merge($this->buildFormProps($company, $buyOrSellCurrency), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CURRENCY_EXCHANGE_FORM])]));
     }
 	
 	public function update(Company $company , StoreBuyOrSellCurrencyRequest $request , BuyOrSellCurrency $buyOrSellCurrency){

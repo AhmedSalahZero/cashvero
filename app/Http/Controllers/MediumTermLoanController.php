@@ -1,5 +1,7 @@
 <?php
 namespace App\Http\Controllers;
+
+use App\Support\Instructions\PageInstructions;
 use App\Http\Controllers\MoneyReceivedController;
 use App\Http\Requests\StoreMediumTermLoanRequest;
 use App\Models\AccountType;
@@ -120,6 +122,7 @@ class MediumTermLoanController
         $mediumTermLoans = $this->applyFilter($request, $mediumTermLoans);
 
         return \Inertia\Inertia::render('MediumTermLoan/Index', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::MEDIUM_TERM_LOAN, 'financialInstitution' => $financialInstitution->id]),
             'company' => ['id' => $company->id],
             'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
             'canCreate' => hasAuthFor('medium_term_loan.create'),
@@ -189,6 +192,7 @@ class MediumTermLoanController
             : collect();
 
         return \Inertia\Inertia::render('MediumTermLoan/Statement', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::MTL_STATEMENT, 'financialInstitution' => $financialInstitution->id]),
             'company' => ['id' => $company->id],
             'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
             'loan' => [
@@ -250,6 +254,7 @@ class MediumTermLoanController
     public function create(Company $company, FinancialInstitution $financialInstitution)
     {
         return \Inertia\Inertia::render('MediumTermLoan/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::MEDIUM_TERM_LOAN_FORM, 'financialInstitution' => $financialInstitution->id]),
             'mode' => 'create',
             'company' => ['id' => $company->id],
             'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
@@ -387,6 +392,7 @@ class MediumTermLoanController
         $isConsumptionLocked = $mediumTermLoan->hasDrawdowns();
 
         return \Inertia\Inertia::render('MediumTermLoan/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::MEDIUM_TERM_LOAN_FORM, 'financialInstitution' => $financialInstitution->id]),
             'mode' => 'edit',
             'company' => ['id' => $company->id],
             'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],

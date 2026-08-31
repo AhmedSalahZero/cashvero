@@ -144,7 +144,7 @@ class FactoringWithoutRecourseController
 
     public function create(Company $company)
     {
-        return Inertia::render('Factoring/Form', $this->formViewData($company));
+        return Inertia::render('Factoring/Form', array_merge($this->formViewData($company), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::FACTORING_FORM])]));
     }
 
     public function edit(Company $company, FactoringTransaction $factoringTransaction)
@@ -194,7 +194,7 @@ class FactoringWithoutRecourseController
         ])->values();
         $viewData['urls']['update'] = route('factoring.without-recourse.update', ['company' => $company->id, 'factoringTransaction' => $factoringTransaction->id]);
 
-        return Inertia::render('Factoring/Form', $viewData);
+        return Inertia::render('Factoring/Form', array_merge($viewData, ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::FACTORING_FORM])]));
     }
 
     public function store(Company $company, StoreFactoringWithoutRecourseRequest $request)

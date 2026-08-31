@@ -1,5 +1,7 @@
 <?php
 namespace App\Http\Controllers;
+
+use App\Support\Instructions\PageInstructions;
 use App\Enums\LgTypes;
 use App\Models\AccountType;
 use App\Models\CertificatesOfDeposit;
@@ -100,6 +102,7 @@ class LetterOfGuaranteeFacilityController
 		$letterOfGuaranteeFacilities =   $this->applyFilter($request,$letterOfGuaranteeFacilities) ;
 
 		return \Inertia\Inertia::render('LetterOfGuaranteeFacility/Index', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LG_FACILITY, 'financialInstitution' => $financialInstitution->id]),
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
 			'canCreate' => hasAuthFor('lg_facility.create'),
@@ -181,6 +184,7 @@ class LetterOfGuaranteeFacilityController
 	public function create(Company $company,FinancialInstitution $financialInstitution)
 	{
         return \Inertia\Inertia::render('LetterOfGuaranteeFacility/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LG_FACILITY_FORM, 'financialInstitution' => $financialInstitution->id]),
 			'mode' => 'create',
 			'company' => ['id' => $company->id],
 			'financialInstitution' => ['id' => $financialInstitution->id, 'name' => $financialInstitution->getName()],
@@ -250,6 +254,7 @@ class LetterOfGuaranteeFacilityController
 		$hasRenewals = $letterOfGuaranteeFacility->hasRenewals();
 		$latestChapter = $letterOfGuaranteeFacility->getLatestTerms();
         return \Inertia\Inertia::render('LetterOfGuaranteeFacility/Form', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LG_FACILITY_FORM, 'financialInstitution' => $financialInstitution->id]),
 			'mode' => 'edit',
 			'hasRenewals' => $hasRenewals,
 			'company' => ['id' => $company->id],

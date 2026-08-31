@@ -23,6 +23,9 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import { usePermissions } from '@/composables/usePermissions';
 
 const props = defineProps({
+    /* Link to this screen's written guide — see
+       App\Support\Instructions\PageInstructions. */
+    instructionsUrl: String,
     company: Object,
     invoice: Object, // { id, name, invoice_number, due_date_formatted, net_balance_formatted, currency }
     modelType: String,
@@ -73,6 +76,11 @@ function destroyRow() {
 
 <template>
     <AppLayout>
+        <div class="px-6 pt-4">
+            <Link v-if="instructionsUrl" :href="instructionsUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm">
+                {{ $t('📖 Instructions') }}
+            </Link>
+        </div>
         <div class="p-6">
             <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm mb-3">
                 {{ $t('← Back to Invoice Report') }}

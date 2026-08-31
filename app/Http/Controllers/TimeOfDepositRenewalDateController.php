@@ -1,5 +1,7 @@
 <?php
 namespace App\Http\Controllers;
+
+use App\Support\Instructions\PageInstructions;
 use App\Http\Requests\StoreTdRenewalDateRequest;
 use App\Models\Company;
 use App\Models\TdRenewalDateHistory;
@@ -80,6 +82,7 @@ class TimeOfDepositRenewalDateController
 		})->values();
 
 		return \Inertia\Inertia::render('TimeOfDeposits/RenewalHistory', [
+			'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::TD_RENEWAL_HISTORY]),
 			'company' => ['id' => $company->id],
 			'timeOfDeposit' => [
 				'id' => $timeOfDeposit->id,
