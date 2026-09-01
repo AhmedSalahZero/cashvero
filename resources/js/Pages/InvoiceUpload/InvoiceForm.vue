@@ -32,6 +32,8 @@
 import { ref, computed, watch } from 'vue';
 import { useForm, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { useI18n } from 'vue-i18n';
+const { t } = useI18n();
 
 const props = defineProps({
     modelName: String,
@@ -87,8 +89,14 @@ if (totalTargetField) {
 
 /* Spelled out with this company's own field labels, so the number is
    checkable on the spot rather than taken on trust. */
+/* The hint is built from the same field labels the form shows, so each
+   one has to go through $t() — joining the raw labels left the formula
+   in English on an otherwise Arabic page. */
 const totalFormulaHint = computed(() => {
-    const labelFor = (name) => props.fields.find(f => f.field === name)?.label;
+    const labelFor = (name) => {
+        const label = props.fields.find(f => f.field === name)?.label;
+        return label ? t(label) : null;
+    };
     const added = (props.totalInvoiceFormula?.add || []).map(labelFor).filter(Boolean);
     const subtracted = (props.totalInvoiceFormula?.subtract || []).map(labelFor).filter(Boolean);
     if (!added.length) return '';
@@ -174,15 +182,15 @@ function submit() {
     <AppLayout>
         <div class="p-6">
             <Link :href="backUrl" class="cvr-btn-secondary inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm mb-3">
-                {{ $t('← Back to') }} {{ modelDisplayName }} {{ $t('Table') }}
+                {{ $t('← Back to {name} Table', { name: $t(modelDisplayName) }) }}
             </Link>
-            <h1 class="text-xl font-semibold cvr-text-primary mb-6">{{ modelDisplayName }} {{ isEdit ? $t('— Edit') : $t('— Create') }}</h1>
+            <h1 class="text-xl font-semibold cvr-text-primary mb-6">{{ $t(modelDisplayName) }} {{ isEdit ? $t('— Edit') : $t('— Create') }}</h1>
             <p v-if="!isEdit" class="text-sm cvr-text-muted -mt-4 mb-6">{{ $t('If you can\'t find your customer or supplier in the dropdown, create them first from the Partners section.') }}</p>
 
             <div class="cvr-card-bg cvr-border border rounded-lg p-4">
                 <div class="cvr-form-grid-4">
                     <div v-for="f in fields" :key="f.field">
-                        <label class="cvr-form-label">{{ f.label }}</label>
+                        <label class="cvr-form-label">{{ $t(f.label) }}</label>
 
                         <select v-if="f.type === 'customer_select' || f.type === 'supplier_select'" v-model="form[f.field]" @change="onCustomerOrSupplierChange" class="cvr-input w-full px-3 py-2 rounded">
                             <option value="">{{ $t('Select') }}</option>

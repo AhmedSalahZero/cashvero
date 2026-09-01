@@ -890,6 +890,24 @@ class PermissionRegistry
                 'delete' => ['delete sales persons', 'view sales persons'],
             ],
         ],
+        'cash_cover_statement' => [
+            'label' => 'Cash Cover Statement',
+            'group' => 'reports',
+            'actions' => [
+                // Same underlying grant as the LG & LC Statement it sits
+                // beside: whoever may read that report may read the cover
+                // behind the same instruments.
+                'view' => ['view lc & lg statement report', 'view bank statement report'],
+            ],
+        ],
+        'other_due' => [
+            'label' => 'Other Dues',
+            'group' => 'suppliers',
+            'actions' => [
+                'view' => ['view other dues'],
+                'update' => ['view other dues'],
+            ],
+        ],
         'notification_setting' => [
             'label' => 'Notification Settings',
             'group' => 'master_data',

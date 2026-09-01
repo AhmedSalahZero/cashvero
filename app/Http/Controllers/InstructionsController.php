@@ -148,6 +148,7 @@ class InstructionsController
              */
             PageInstructions::FACTORING_CONTRACTS,
             PageInstructions::FACTORING_CONTRACT_FORM => route('view.financial.institutions', ['company' => $company->id]),
+            PageInstructions::OTHER_DUES => route('other-dues.index', ['company' => $company->id]),
             default => route('home', ['company' => $company->id]),
         };
     }

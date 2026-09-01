@@ -405,7 +405,13 @@ class LetterOfGuaranteeIssuanceRenewalDateController
 			if($letterOfGuaranteeIssuance->renewalDateHistories->count() == 1){
 				$lastHistory->delete();
 			}
-		return redirect()->route('letter.of.issuance.renewal.date',['company'=>$company->id,'letterOfGuaranteeIssuance'=>$letterOfGuaranteeIssuance->id]);
+		/**
+		 * Back to the issuance list, not to the history page this came
+		 * from. Deleting the last renewal also removes the remaining
+		 * original row above it, so staying here would land the reader
+		 * on a history screen with nothing left in it.
+		 */
+		return redirect()->route('view.letter.of.guarantee.issuance', ['company' => $company->id]);
 	}
 	
 }

@@ -165,6 +165,8 @@ class PageInstructions
 
     public const MEDIUM_TERM_LOAN_FORM = 'account.medium-term-loan.form';
 
+    public const OTHER_DUES = 'other-dues';
+
     public static function keys(): array
     {
         return [
@@ -189,6 +191,7 @@ class PageInstructions
             self::CLEAN_OVERDRAFT_FORM, self::FULLY_SECURED_OVERDRAFT_FORM,
             self::OVERDRAFT_COMMERCIAL_PAPER_FORM, self::OVERDRAFT_ASSIGNMENT_FORM,
             self::LG_FACILITY_FORM, self::LC_FACILITY_FORM, self::MEDIUM_TERM_LOAN_FORM,
+            self::OTHER_DUES,
         ];
     }
 
@@ -260,6 +263,7 @@ class PageInstructions
             self::LG_FACILITY_FORM => self::lgFacilityForm(),
             self::LC_FACILITY_FORM => self::lcFacilityForm(),
             self::MEDIUM_TERM_LOAN_FORM => self::mediumTermLoanForm(),
+            self::OTHER_DUES => self::otherDues(),
             default => null,
         };
     }
@@ -2751,6 +2755,63 @@ class PageInstructions
                     'notes' => [
                         'A loan is not an overdraft: what you repay cannot be drawn again.',
                         'Without a schedule, the statement has nothing to track repayment against.',
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    private static function otherDues(): array
+    {
+        return [
+            'title' => 'Other Dues',
+            'summary' => 'Money owed either way with a partner that is not an invoice — a deposit you left with a customer, a retention held against you, a balance carried over from before you began using CashVero.',
+            'sections' => [
+                [
+                    'heading' => 'When this screen is the right place',
+                    'body' => [
+                        'Use it for an amount that has no invoice behind it. If there IS an invoice, it belongs in the opening invoices repeater instead, so it can be settled and aged like any other invoice.',
+                        'Everything entered here is dated on the company\'s opening balance date, because it describes the position you started from rather than something that happened on a particular day.',
+                    ],
+                    'example' => 'You left a 50,000 EGP deposit with a customer years ago as security. It is not an invoice and will never be collected against one, but it is money of yours that they hold. Record it as a Due From that customer.',
+                ],
+                [
+                    'heading' => 'Which way the money goes',
+                    'fields' => [
+                        ['label' => 'Due From (they owe us)', 'text' => 'The partner holds money of yours. It increases what you are owed — a debit on their statement.'],
+                        ['label' => 'Due To (we owe them)', 'text' => 'You hold money of theirs. It increases what you owe — a credit on their statement.'],
+                    ],
+                ],
+                [
+                    'heading' => 'The rest of the row',
+                    'fields' => [
+                        ['label' => 'Partner Type', 'text' => 'Which kind of partner this is. It decides which list the name select offers, and which statement the movement appears in.'],
+                        ['label' => 'Name', 'text' => 'The partner. The list holds only partners of the type you chose, sorted by name, and you can type to search it.'],
+                        ['label' => 'Amount', 'text' => 'How much is owed. It must be greater than zero.'],
+                        ['label' => 'Currency', 'text' => 'The currency the due is in.'],
+                        ['label' => 'Exchange Rate', 'text' => 'Required only when the currency is not the company\'s main currency — it is what lets the due be shown alongside everything else.'],
+                        ['label' => 'Comment', 'text' => 'Why this due exists. It is written onto the partner\'s statement, so it is what someone reading that statement later will see to explain the row.'],
+                    ],
+                ],
+                [
+                    'heading' => 'The same partner can appear more than once',
+                    'body' => ['Two dues from the same partner stay two separate rows and are deliberately NOT added together. Each has its own reason and its own comment, and merging them would lose exactly that.'],
+                    'example' => 'A 50,000 deposit and a 12,000 retention with the same customer are two rows, each with its own comment — not one row of 62,000.'],
+                [
+                    'heading' => 'Where the movement shows up',
+                    'body' => [
+                        'For a shareholder, employee, subsidiary company, other partner or tax authority, the due becomes a real row on their Partner Statement, with its comment, and the running balance after it follows on.',
+                        'For a customer or a supplier there is no partner ledger — their statement is built from invoices — so the due is added to that invoice statement instead. It appears with the document type "Other Due" and the same comment.',
+                    ],
+                    'notes' => [
+                        'A due always appears as its own row, whatever date range the statement is filtered to. It carries the opening balance date, so an ordinary range starts after it — folding it into the Beginning Balance instead would hide the comment, which is the only thing explaining what the amount is.',
+                    ],
+                ],
+                [
+                    'heading' => 'Saving',
+                    'notes' => [
+                        'The repeater is saved whole: a row you remove and then save is gone, along with the statement movement it created.',
+                        'A partner must genuinely be of the type the row claims. Picking a name that is not of that type is refused, because the due would otherwise land in a statement the partner does not belong to.',
                     ],
                 ],
             ],

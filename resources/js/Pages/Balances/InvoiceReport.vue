@@ -180,9 +180,13 @@ function submitDeductions(invoice) {
                                 </Link>
                             </td>
                             <td class="px-4 py-3 text-center">
-                                <button @click="openDeductModal(invoice)" class="cvr-btn-primary px-3 py-1 rounded text-xs whitespace-nowrap">
+                                <!-- Nothing left to deduct from once the
+                                     invoice is settled: a deduction only has
+                                     meaning against an open balance. -->
+                                <button v-if="invoice.net_balance > 0" @click="openDeductModal(invoice)" class="cvr-btn-primary px-3 py-1 rounded text-xs whitespace-nowrap">
                                     {{ $t('Deduct') }}
                                 </button>
+                                <span v-else class="cvr-text-muted text-xs">—</span>
                             </td>
                             <td class="px-4 py-3 text-center">
                                 <a v-if="invoice.money_action_url" :href="invoice.money_action_url" class="cvr-btn-copper px-3 py-1 rounded text-xs whitespace-nowrap">

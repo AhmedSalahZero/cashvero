@@ -76,6 +76,7 @@ class SidebarMenu
                 self::item(__('LG By Beneficiary Name'), $user->hasPermissionKey('report_lg_by_beneficiary.view'), route('view.lg.by.beneficiary.name.report', ['company' => $companyId]), inertia: true, icon: 'file-badge'),
                 self::item(__('LG By Bank Name'), $user->hasPermissionKey('report_lg_by_bank.view'), route('view.lg.by.bank.name.report', ['company' => $companyId]), inertia: true, icon: 'building'),
                 self::item(__('LG & LC Statement'), $user->hasPermissionKey('report_lg_lc_statement.view'), route('view.lg.lc.bank.statement', ['company' => $companyId]), inertia: true, icon: 'files'),
+                self::item(__('Cash Cover Statement'), $user->hasPermissionKey('cash_cover_statement.view'), route('view.cash.cover.statement', ['company' => $companyId]), inertia: true, icon: 'file-badge'),
                 self::item(__('Cash Expense Statement'), $user->hasPermissionKey('report_cash_expense_statement.view'), route('view.cash.expense.statement', ['company' => $companyId]), inertia: true, icon: 'credit-card'),
                 self::item(__('Partner Statement'), $user->hasPermissionKey('report_partners_statement.view'), route('view.partners.statement', ['company' => $companyId]), inertia: true, icon: 'handshake'),
                 self::item(__('Taxes & Insurance'), $user->hasPermissionKey('report_taxes_insurance.view'), route('view.taxes.insurance.statement', ['company' => $companyId]), inertia: true, icon: 'receipt'),
@@ -151,6 +152,7 @@ class SidebarMenu
                 self::item(__('Cash in Safe & Cheque Balance'), $user->hasPermissionKey('opening_balance.view'), route('opening-balance.index', ['company' => $companyId]), inertia: true, icon: 'archive'),
                 self::item(__('Customers Opening Balances'), $user->hasPermissionKey('customer_opening_balance.view'), route('customers-opening-balance.index', ['company' => $companyId]), inertia: true, icon: 'users'),
                 self::item(__('Suppliers Opening Balance'), $user->hasPermissionKey('supplier_opening_balance.view'), route('suppliers-opening-balance.index', ['company' => $companyId]), inertia: true, icon: 'truck'),
+                self::item(__('Other Dues'), $user->hasPermissionKey('other_due.view'), route('other-dues.index', ['company' => $companyId]), inertia: true, icon: 'file-text'),
             ]),
 
             'general-settings' => self::section(__('General Settings'), 'settings', [

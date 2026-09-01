@@ -221,6 +221,16 @@ Route::group(
                     Route::resource('customers-opening-balance', 'CustomerOpeningBalancesController');
                     Route::get('suppliers-opening-balance/manage', 'SupplierOpeningBalancesController@manage')->name('suppliers-opening-balance.manage');
                     Route::resource('suppliers-opening-balance', 'SupplierOpeningBalancesController');
+
+                    /**
+                     * Other Dues — non-invoice amounts owed either way with
+                     * a partner, entered beside the Suppliers Opening
+                     * Balance and dated on the company's opening date.
+                     * `partners` feeds the searchable per-row select.
+                     */
+                    Route::get('other-dues', 'OtherDuesController@index')->name('other-dues.index');
+                    Route::get('other-dues/partners', 'OtherDuesController@partners')->name('other-dues.partners');
+                    Route::post('other-dues', 'OtherDuesController@store')->name('other-dues.store');
 					Route::get('ajax-refresh-limits-chart', 'CustomerInvoiceDashboardController@refreshBankMovementChart')->name('refresh.chart.limits.data') ; // ajax request
 					Route::get('/get-customers-from-currencies/{modelType}', 'AgingController@getCustomersFromBusinessUnitsAndCurrencies')->name('get.customers.or.suppliers.from.business.units.currencies');
                     Route::get('/get-customers-for-settlement-of-opening-balance', 'MoneyReceivedController@getCustomersWithOpeningBalance')->name('get.customers.of.opening-balance');
@@ -695,6 +705,14 @@ Route::group(
                     Route::get('lg-lc-bank-statement', 'LGLCSBanktatementController@index')->name('view.lg.lc.bank.statement');
                     Route::get('lg-lc-bank-statement/result', 'LGLCSBanktatementController@result')->name('result.lg.lc.bank.statement');
                     Route::get('lg-lc-bank-statement/export', 'LGLCSBanktatementController@exportExcel')->name('export.lg.lc.bank.statement');
+
+                    /**
+                     * Cash Cover Statement — the money frozen behind letters
+                     * of guarantee and credit, as opposed to the instruments
+                     * themselves. Same filter shape as the report above.
+                     */
+                    Route::get('cash-cover-statement', 'CashCoverStatementController@index')->name('view.cash.cover.statement');
+                    Route::get('cash-cover-statement/result', 'CashCoverStatementController@result')->name('result.cash.cover.statement');
                     Route::get('get-lg-lc-types', 'LGLCSBanktatementController@getLgOrLcType')->name('get.lc.or.lg.types');
 
                     /**

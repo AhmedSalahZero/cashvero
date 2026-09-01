@@ -722,7 +722,18 @@ class SalesGatheringTestController extends Controller
 				 * split a customer's balance across two currencies.
 				 */
 				$type = 'currency_select';
-				$options = collect(getCurrencies())->mapWithKeys(fn ($c) => [$c => $c]);
+				/**
+				 * getCurrencies() is already [code => translated label].
+				 * This used to be mapWithKeys(fn ($c) => [$c => $c]),
+				 * which receives the VALUE — so under /ar it built
+				 * ['جنيه مصري' => 'جنيه مصري'] and the option's value,
+				 * the string actually written to `currency`, became the
+				 * Arabic name. Every screen downstream groups by that
+				 * exact string, so an invoice saved in Arabic would have
+				 * become a currency of its own. Keep the code as the
+				 * value; translate only what is displayed.
+				 */
+				$options = getCurrencies();
 			} elseif ($fieldName === 'net_invoice_amount') {
 				/**
 				 * "Total Invoice Amount" is not typed either — it is

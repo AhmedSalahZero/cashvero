@@ -628,6 +628,11 @@ class RoutePermissionMap
         'sales.persons.update' => 'sales_person.update',
         'sales.persons.destroy' => 'sales_person.delete',
 
+        'view.cash.cover.statement' => 'cash_cover_statement.view',
+        'result.cash.cover.statement' => 'cash_cover_statement.view',
+        'other-dues.index' => 'other_due.view',
+        'other-dues.partners' => 'other_due.view',
+        'other-dues.store' => 'other_due.update',
         'notifications-settings.index' => 'notification_setting.view',
         'notifications-settings.show' => 'notification_setting.view',
         'notifications-settings.create' => 'notification_setting.create',

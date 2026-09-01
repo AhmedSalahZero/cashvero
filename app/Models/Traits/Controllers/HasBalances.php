@@ -27,6 +27,16 @@ trait HasBalances
 		$invoicesForBeginningBalance = $fullClassName::getInvoicesForInvoiceStartAndEndDate( $clientIdColumnName, $partnerId, currentCompany() ,  $currency ,  $oneDayBeforeStartDate,$startDateMinusOne );
 		$formattedData = [];
 		$beginningBalance = self::appendBalances($isMainCurrency , $currency,$invoicesForBeginningBalance, $index, $formattedData, $partnerId, $oneDayBeforeStartDate,$startDateMinusOne,$clientInvoiceIds,$modelType,false) ;
+		/**
+		 * Other Dues are NOT folded into the opening figure.
+		 *
+		 * They carry the company's opening balance date, so an ordinary
+		 * date range starts after them and they would disappear into the
+		 * Beginning Balance row — which has no comment. The comment is the
+		 * only thing that explains why the amount exists, so the due is
+		 * always shown as its own row instead, and counted exactly once
+		 * there rather than here.
+		 */
 		$index = 0 ;
 		$currentData['date'] = $startDateFormatted;
 		$currentData['document_type'] = 'Beginning Balance';
@@ -38,6 +48,7 @@ trait HasBalances
 		$index++ ;
 		$formattedData[$index] = $currentData;
 		self::appendBalances($isMainCurrency , $currency,$invoices, $index, $formattedData, $partnerId, $startDate, $endDate,$clientInvoiceIds,$modelType,true);
+		self::appendOtherDues($formattedData, $index, $partnerId, $currency, $isMainCurrency);
 		return HArr::sortBasedOnKey($formattedData,'date');
 }
 
@@ -419,5 +430,66 @@ trait HasBalances
 	}
 	
 	
+
+
+	/**
+	 * The Other Dues for one partner in one currency, inside a date range.
+	 *
+	 * Only dues entered under a partner type with NO ledger table
+	 * (customer / supplier) belong here — the others already wrote a real
+	 * statement row when they were saved, and returning them here as well
+	 * would count them twice.
+	 */
+	protected static function otherDuesIn(int $partnerId, string $currency)
+	{
+		$company = currentCompany();
+
+		if (! $company) {
+			return collect();
+		}
+
+		/**
+		 * Deliberately not filtered by the date range. A due describes the
+		 * opening position, so it belongs on the statement whatever window
+		 * is being looked at — and filtering it out is what made its
+		 * comment invisible on the default twelve-month view.
+		 */
+		$ledgerTypes = array_keys(\App\Models\OtherDue::LEDGER_STATEMENTS);
+
+		return \App\Models\OtherDue::where('company_id', $company->id)
+			->where('partner_id', $partnerId)
+			->whereNotIn('partner_type', $ledgerTypes)
+			->when($currency !== 'main_currency', fn ($q) => $q->where('currency', $currency))
+			->orderBy('id')
+			->get();
+	}
+
+	/**
+	 * One row per due, never summed — two dues from the same partner stay
+	 * two rows, each carrying its own comment, which is the whole point of
+	 * recording them separately.
+	 */
+	protected static function appendOtherDues(array &$formattedData, int &$index, int $partnerId, string $currency, bool $isMainCurrency): void
+	{
+		foreach (self::otherDuesIn($partnerId, $currency) as $due) {
+			$amount = $isMainCurrency ? $due->getAmountInMainCurrency() : $due->getAmount();
+
+			if ($amount <= 0) {
+				continue;
+			}
+
+			$isDueFrom = $due->isDueFrom();
+			$index++;
+			$formattedData[] = [
+				'date' => Carbon::make(\App\Support\OtherDues\OtherDueStatements::dateFor(currentCompany()))->format('d-m-Y'),
+				'document_type' => __('Other Due'),
+				'document_no' => null,
+				'debit' => $isDueFrom ? $amount : 0,
+				'credit' => $isDueFrom ? 0 : $amount,
+				'end_balance' => $isDueFrom ? $amount : -$amount,
+				'comment' => $due->getComment(),
+			];
+		}
+	}
 
 }

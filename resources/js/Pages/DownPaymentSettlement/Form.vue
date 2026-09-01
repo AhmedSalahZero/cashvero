@@ -87,7 +87,7 @@ function submit() {
                 </Link>
             </div>
             <h1 class="text-xl font-semibold cvr-text-primary mb-6">
-                {{ contractName ? `Settlement Using Contract Down Payment [${contractName}]` : $t('Settlement Using Down Payment') }}
+                {{ contractName ? $t('Settlement Using Contract Down Payment [{name}]', { name: contractName }) : $t('Settlement Using Down Payment') }}
             </h1>
 
             <div v-if="errorMessages.length" class="mb-4 px-4 py-3 rounded cvr-badge-overdue text-sm">
@@ -97,7 +97,7 @@ function submit() {
             <form @submit.prevent="submit" class="space-y-6">
                 <div class="cvr-card-bg cvr-border border rounded-lg p-5">
                     <h2 class="text-base font-medium cvr-text-primary mb-4">
-                        {{ contractName ? `Settlement Using Contract Down Payment [${contractName}]` : $t('Settlement Using Down Payment') }}
+                        {{ contractName ? $t('Settlement Using Contract Down Payment [{name}]', { name: contractName }) : $t('Settlement Using Down Payment') }}
                     </h2>
                     <div class="cvr-form-grid-4">
                         <div>

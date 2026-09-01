@@ -79,6 +79,7 @@ class ReferencedRecordGuard
                 ['table' => 'shareholder_statements', 'column' => 'partner_id', 'label' => 'Shareholder Statements'],
                 ['table' => 'subsidiary_company_statements', 'column' => 'partner_id', 'label' => 'Subsidiary Company Statements'],
                 ['table' => 'tax_statements', 'column' => 'partner_id', 'label' => 'Tax Statements'],
+                ['table' => 'other_dues', 'column' => 'partner_id', 'label' => 'Other Dues'],
                 ['table' => 'letter_of_guarantee_issuances', 'column' => 'partner_id', 'label' => 'Letters of Guarantee'],
                 ['table' => 'letter_of_credit_issuances', 'column' => 'partner_id', 'label' => 'Letters of Credit'],
                 ['table' => 'factoring_transactions', 'column' => 'customer_id', 'label' => 'Factoring Transactions'],

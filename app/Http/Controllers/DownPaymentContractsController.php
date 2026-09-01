@@ -205,13 +205,16 @@ class DownPaymentContractsController extends Controller
 		->where($clientNameColumnName,$partnerName)
 		->where('currency','=',$contractCurrency)
 		->where('company_id',$company->id)
-		->where('net_invoice_amount','>',0);
-		// ⚠️ Same note as the original: $inEditMode always evaluates
-		// to false here, so the ->where('net_balance', '>', 0) filter
-		// was never actually applied — every matching invoice shows
-		// up regardless of remaining balance. Preserved exactly as-is,
-		// not ours to silently "fix" without a decision from the
-		// project owner.
+		->where('net_invoice_amount','>',0)
+		/**
+		 * Only invoices that still owe something can absorb a down
+		 * payment. The original carried this filter behind an
+		 * $inEditMode flag that always evaluated to false, so it never
+		 * ran and fully-settled invoices were offered for settlement —
+		 * rows on which there is nothing left to settle. Applied
+		 * unconditionally now, at the project owner's decision.
+		 */
+		->where('net_balance', '>', 0);
 		$invoices = $invoices->orderBy('invoice_date','asc')->get() ; 
 		
 		$downPaymentAmount =  $downPayment->getDownPaymentAmount();
