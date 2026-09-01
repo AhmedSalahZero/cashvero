@@ -5003,5 +5003,7 @@
     "Total Settlement": "إجمالي التسوية",
     "Prepared By": "أعدّه",
     "Reviewed By": "راجعه",
-    "Approved By": "اعتمده"
+    "Approved By": "اعتمده",
+    "Could not reach Odoo. Your record was saved and marked as not sent — it can be sent again once the connection is back.": "تعذّر الاتصال بأودو. تم حفظ السجل ووُسِم بأنه لم يُرسَل — ويمكن إرساله مرة أخرى بمجرد عودة الاتصال.",
+    "Odoo rejected this record. Please contact your administrator.": "رفض أودو هذا السجل. برجاء التواصل مع مسؤول النظام."
 }

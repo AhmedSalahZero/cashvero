@@ -146,12 +146,32 @@ class OdooSync
         return self::$deferred !== [];
     }
 
+    /**
+     * Signatures of a connection failure, as opposed to Odoo answering with
+     * a complaint about the data. Matched on the message because the
+     * transport exception class lives in public/apis and is not always
+     * loaded when this runs.
+     */
+    private const TRANSPORT_SIGNATURES = [
+        'could not access',
+        'failed to open stream',
+        'connection refused',
+        'connection timed out',
+        'could not resolve host',
+        'curl error',
+        'operation timed out',
+        'network is unreachable',
+        'ssl',
+    ];
+
     private static function recordFailure(Throwable $e, ?Model $model, ?string $context): void
     {
-        $message = ($context ? $context.': ' : '').$e->getMessage();
+        $raw = ($context ? $context.': ' : '').$e->getMessage();
 
         try {
-            Log::error('Odoo sync failed — '.$message, [
+            // The log keeps everything — URL, PHP function, stack trace.
+            // That is where this detail belongs, and the only place.
+            Log::error('Odoo sync failed — '.$raw, [
                 'model' => $model ? get_class($model).'#'.$model->getKey() : null,
                 'exception' => $e,
             ]);
@@ -159,13 +179,76 @@ class OdooSync
             // logging must never break the request
         }
 
-        self::flagModel($model, $message);
+        $shown = self::userFacingMessage($e, $context);
+
+        self::flagModel($model, $shown);
 
         try {
-            session()->flash('fail', __('Error While Connecting With Odoo : ').$message);
+            session()->flash('fail', $shown);
         } catch (Throwable $ignored) {
             // no session in console context
         }
+    }
+
+    /**
+     * What the person in front of the screen is allowed to see.
+     *
+     * The raw text of a transport failure is
+     * "Could not access https://<tenant>.odoo.com/xmlrpc/2/object —
+     * file_get_contents(...): Failed to open stream: Connection refused".
+     * That names the internal Odoo host, quotes a PHP function, and tells
+     * the reader nothing they can act on. It went straight to a flash
+     * message and onto the row, where the bug icon shows it.
+     *
+     * A complaint FROM Odoo ("missing required field") is different: it is
+     * about the data and the operator can fix it, so it is kept — with any
+     * URL still stripped out.
+     */
+    public static function userFacingMessage(Throwable $e, ?string $context = null): string
+    {
+        if (self::isTransportFailure($e)) {
+            return __('Could not reach Odoo. Your record was saved and marked as not sent — it can be sent again once the connection is back.');
+        }
+
+        $detail = self::redact($e->getMessage());
+
+        if ($detail === '') {
+            return __('Odoo rejected this record. Please contact your administrator.');
+        }
+
+        return __('Error While Connecting With Odoo : ').($context ? $context.': ' : '').$detail;
+    }
+
+    private static function isTransportFailure(Throwable $e): bool
+    {
+        if (class_exists(\Ripcord_TransportException::class, false) && $e instanceof \Ripcord_TransportException) {
+            return true;
+        }
+
+        $message = mb_strtolower($e->getMessage());
+
+        foreach (self::TRANSPORT_SIGNATURES as $signature) {
+            if (str_contains($message, $signature)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Removes what the reader must not see and cannot use: the server
+     * address, and PHP\'s own stream-function noise.
+     */
+    private static function redact(string $message): string
+    {
+        // The host is the sensitive part — it identifies the tenant.
+        $message = preg_replace('~https?://\S+~i', '[server]', $message) ?? $message;
+
+        // "file_get_contents(...): " and friends.
+        $message = preg_replace('~\b(file_get_contents|fopen|fsockopen|stream_socket_client|curl_exec)\s*\([^)]*\)\s*:?\s*~i', '', $message) ?? $message;
+
+        return trim(Str::limit(trim($message, " \t\n\r\0\x0B-—:"), 300));
     }
 
     /**

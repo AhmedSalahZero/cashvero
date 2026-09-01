@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Api\OdooSync;
+
 use App\Models\Company;
 use App\Services\Api\OdooService;
 use Illuminate\Http\Request;
@@ -21,7 +23,10 @@ class ReadOdooPartners extends Controller
 		try {
 			$odoo->getPartners($startDate, $endDate, $company->id);
 		} catch (\Exception $e) {
-			session()->flash('fail', $e->getMessage());
+			// Never the raw text: a connection failure names the internal
+			// Odoo host and quotes a PHP function, neither of which the
+			// reader may see or can act on. The full detail is logged.
+			session()->flash('fail', OdooSync::userFacingMessage($e));
 
 			return back();
 		}
