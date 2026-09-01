@@ -23,17 +23,23 @@ use Illuminate\Support\Facades\DB;
  * Two deliberate behaviours worth knowing:
  *   - the same partner may appear on several rows and they are NOT
  *     summed — each due is its own item with its own comment;
- *   - where the movement shows depends on the partner type. Types with a
- *     ledger table get a real statement row; customers and suppliers have
- *     no ledger, so their dues are added to the invoice statement at read
- *     time (HasBalances). See App\Support\OtherDues\OtherDueStatements.
+ *   - only partner types that keep a ledger are offered, so every due
+ *     written is one somebody can read back on a statement. See
+ *     App\Support\OtherDues\OtherDueStatements.
  */
 class OtherDuesController
 {
-    /** Every partner type a due can be recorded against. */
+    /**
+     * The partner types a due can be recorded against — every one of them
+     * keeps a ledger, so every due written can be read back.
+     *
+     * Customers and suppliers are excluded deliberately. They keep no
+     * partner ledger; their statement is derived from invoices, and an
+     * amount that is not an invoice has no honest place in it. Their
+     * outstanding balances belong in the opening invoices repeater, where
+     * they can be settled and aged like anything else.
+     */
     public const PARTNER_TYPES = [
-        // 'is_customer' => 'Customer',
-        // 'is_supplier' => 'Supplier',
         'is_subsidiary_company' => 'Subsidiary Company',
         'is_shareholder' => 'Shareholder',
         'is_employee' => 'Employee',

@@ -573,18 +573,83 @@ class LgRenewalTermsTest extends TestCase
     }
 
     /**
-     * An opening-balance LG's cover was never posted — it is already
-     * inside the opening balance — so a renewal has nothing to move.
+     * An opening-balance LG still moves money when its cover is re-priced.
+     *
+     * This used to assert the opposite, and that was wrong. The two events
+     * are different: the ORIGINAL cover was never posted because it is
+     * already inside the opening balance — correct — but the renewal is a
+     * transaction happening now. Raising the cover from 10,000 to 20,000
+     * means the bank takes another 10,000 today, whatever the LG's origin.
      */
-    public function test_an_opening_balance_lg_is_re_priced_without_moving_money(): void
+    public function test_an_opening_balance_lg_posts_its_renewal_cover_difference(): void
     {
         $letterOfGuaranteeIssuance = $this->issueLg(['category_name' => LetterOfGuaranteeIssuance::OPENING_BALANCE]);
 
         $this->renew($letterOfGuaranteeIssuance);
 
-        $this->assertCount(0, $this->cashCoverRows(LgRenewalTerms::CASH_COVER_TYPE));
-        $this->assertCount(0, $this->bankRows('is_renewal_cash_cover'));
+        $ledger = $this->cashCoverRows(LgRenewalTerms::CASH_COVER_TYPE);
+        $bank = $this->bankRows('is_renewal_cash_cover');
+
+        $this->assertCount(1, $ledger, 'The LG cash cover ledger must record the increase.');
+        $this->assertCount(1, $bank, 'The current account must be charged the difference.');
+
+        $difference = 20000 - self::ORIGINAL_CASH_COVER;
+
+        $this->assertEquals($difference, (float) $ledger->first()->debit,
+            'Only the DIFFERENCE moves — the original cover was already accounted for at opening.');
+        $this->assertEquals($difference, (float) $bank->first()->credit,
+            'The bank takes the extra cover on the renewal date.');
         $this->assertEquals(20000, $letterOfGuaranteeIssuance->refresh()->getCashCoverAmount());
+    }
+
+    /**
+     * And the mirror: lowering the cover on an opening-balance LG refunds
+     * the difference rather than doing nothing.
+     */
+    public function test_an_opening_balance_lg_is_refunded_when_its_cover_falls(): void
+    {
+        $letterOfGuaranteeIssuance = $this->issueLg(['category_name' => LetterOfGuaranteeIssuance::OPENING_BALANCE]);
+
+        $this->renew($letterOfGuaranteeIssuance, ['cash_cover_amount' => '8,000']);
+
+        $ledger = $this->cashCoverRows(LgRenewalTerms::CASH_COVER_TYPE);
+        $bank = $this->bankRows('is_renewal_cash_cover');
+
+        $difference = self::ORIGINAL_CASH_COVER - 8000;
+
+        $this->assertCount(1, $ledger);
+        $this->assertCount(1, $bank);
+        $this->assertEquals($difference, (float) $ledger->first()->credit,
+            'A cover that falls credits the cover ledger by the difference.');
+        $this->assertEquals($difference, (float) $bank->first()->debit,
+            'And the money comes back to the current account.');
+        $this->assertEquals(8000, $letterOfGuaranteeIssuance->refresh()->getCashCoverAmount());
+    }
+
+    /**
+     * Deleting the renewal has to undo both rows, or the cover would be
+     * charged for a period that no longer exists.
+     */
+    public function test_deleting_an_opening_balance_renewal_reverses_both_rows(): void
+    {
+        $letterOfGuaranteeIssuance = $this->issueLg(['category_name' => LetterOfGuaranteeIssuance::OPENING_BALANCE]);
+        $history = $this->renew($letterOfGuaranteeIssuance);
+
+        $this->assertCount(1, $this->cashCoverRows(LgRenewalTerms::CASH_COVER_TYPE));
+        $this->assertCount(1, $this->bankRows('is_renewal_cash_cover'));
+
+        (new LetterOfGuaranteeIssuanceRenewalDateController)->destroy(
+            Company::findOrFail(self::COMPANY),
+            $letterOfGuaranteeIssuance,
+            $history
+        );
+
+        $this->assertCount(0, $this->cashCoverRows(LgRenewalTerms::CASH_COVER_TYPE),
+            'The cover ledger row must go with the renewal.');
+        $this->assertCount(0, $this->bankRows('is_renewal_cash_cover'),
+            'And so must the bank row, or the account stays short.');
+        $this->assertEquals(self::ORIGINAL_CASH_COVER, $letterOfGuaranteeIssuance->refresh()->getCashCoverAmount(),
+            'The cover returns to what it was before the renewal.');
     }
 
     // ---------------------------------------------------------------

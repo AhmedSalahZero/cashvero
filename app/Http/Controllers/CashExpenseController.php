@@ -103,6 +103,7 @@ class CashExpenseController
 				'has_odoo_error' => (bool) $model->hasOdooError(),
 				'odoo_error' => $model->getOdooError(),
 				'odoo_reference_names' => $model->getOdooReferenceNames(),
+				'print_url' => route('print.cash.expense', ['company' => $company->id, 'cashExpense' => $model->id]),
 				'edit_url' => $model->isOpenBalance() ? null : route('edit.cash.expense', ['company' => $company->id, 'cashExpense' => $model->id]),
 				/**
 				 * Same isOpenBalance() guard as edit/delete: an opening
@@ -226,6 +227,46 @@ class CashExpenseController
 			'markOutgoingTransfersAsPaidUrl' => route('cash.expense.outgoing.transfer.mark.as.paid', ['company' => $company->id]),
 		]);
     }
+
+	public function print(Company $company, CashExpense $cashExpense)
+	{
+		$details = match ($cashExpense->getType()) {
+			CashExpense::OUTGOING_TRANSFER => [
+				['label' => __('Payment Bank'), 'value' => $cashExpense->getOutgoingTransferDeliveryBankName()],
+				['label' => __('Account Type'), 'value' => $cashExpense->getOutgoingTransferAccountTypeName()],
+				['label' => __('Account Number'), 'value' => $cashExpense->getOutgoingTransferAccountNumber()],
+			],
+			CashExpense::PAYABLE_CHEQUE => [
+				['label' => __('Cheque Number'), 'value' => $cashExpense->payableCheque?->getChequeNumber()],
+				['label' => __('Payment Bank'), 'value' => $cashExpense->payableCheque?->getPaymentBankName()],
+				['label' => __('Account Type'), 'value' => $cashExpense->payableCheque?->getAccountTypeName()],
+				['label' => __('Account Number'), 'value' => $cashExpense->payableCheque?->getAccountNumber()],
+				['label' => __('Due Date'), 'value' => $cashExpense->payableCheque?->getDueDateFormatted()],
+				['label' => __('Status'), 'value' => $cashExpense->payableCheque?->getStatusFormatted()],
+			],
+			CashExpense::CASH_PAYMENT => [
+				['label' => __('Branch'), 'value' => $cashExpense->getCashPaymentBranchName()],
+				['label' => __('Receipt Number'), 'value' => $cashExpense->getCashPaymentReceiptNumber()],
+			],
+			default => [],
+		};
+
+		return \Inertia\Inertia::render('CashExpense/Print', [
+			'company' => ['id' => $company->id, 'name' => $company->getName()],
+			'record' => [
+				'id' => $cashExpense->id,
+				'type' => camelizeWithSpace($cashExpense->getType()),
+				'category' => $cashExpense->getExpenseCategoryName(),
+				'expense_name' => $cashExpense->getExpenseName(),
+				'date' => $cashExpense->getPaymentDateFormatted(),
+				'amount' => $cashExpense->getPaidAmountFormatted(),
+				'currency' => $cashExpense->getCurrencyToPaymentCurrencyFormatted(),
+				'user_comment' => $cashExpense->getUserComment(),
+				'details' => collect($details)->filter(fn ($item) => filled($item['value']))->values()->all(),
+			],
+			'printedAt' => now()->format('d-m-Y H:i'),
+		]);
+	}
 
 	/**
 	 * Add Cash Expense form.

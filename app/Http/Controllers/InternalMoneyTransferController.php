@@ -133,6 +133,7 @@ class InternalMoneyTransferController
                 'has_odoo_error' => (bool) $model->hasOdooError(),
                 'odoo_error' => $model->getOdooError(),
                 'odoo_reference_names' => $model->getOdooReferenceNames(),
+                'print_url' => route('internal-money-transfers.print', ['company' => $company->id, 'type' => $model->getType(), 'internal_money_transfer' => $model->id]),
                 'edit_url' => route('internal-money-transfers.edit', ['company' => $company->id, 'type' => $model->getType(), 'internal_money_transfer' => $model->id]),
                 'delete_url' => route('internal-money-transfers.destroy', ['company' => $company->id, 'type' => $model->getType(), 'internal_money_transfer' => $model->id]),
             ];
@@ -222,6 +223,36 @@ class InternalMoneyTransferController
             ]),
         ]);
     }
+
+	public function print(Company $company, string $type, InternalMoneyTransfer $internalMoneyTransfer)
+	{
+		$details = [
+			['label' => __('From Bank'), 'value' => $internalMoneyTransfer->getFromBankName()],
+			['label' => __('From Account Type'), 'value' => $internalMoneyTransfer->getFromAccountTypeName()],
+			['label' => __('From Account Number'), 'value' => $internalMoneyTransfer->getFromAccountNumber()],
+			['label' => __('To Bank'), 'value' => $internalMoneyTransfer->getToBankName()],
+			['label' => __('To Account Type'), 'value' => $internalMoneyTransfer->getToAccountTypeName()],
+			['label' => __('To Account Number'), 'value' => $internalMoneyTransfer->getToAccountNumber()],
+			['label' => __('From Branch'), 'value' => $internalMoneyTransfer->getFromBranchName()],
+			['label' => __('To Branch'), 'value' => $internalMoneyTransfer->getToBranchName()],
+			['label' => __('Transfer Days'), 'value' => $internalMoneyTransfer->getTransferDays()],
+			['label' => __('Cheque Number'), 'value' => $internalMoneyTransfer->getChequeNumber()],
+		];
+
+		return \Inertia\Inertia::render('InternalMoneyTransfer/Print', [
+			'company' => ['id' => $company->id, 'name' => $company->getName()],
+			'record' => [
+				'id' => $internalMoneyTransfer->id,
+				'type' => $this->allTypes()[$type] ?? $type,
+				'date' => $internalMoneyTransfer->getTransferDateFormatted(),
+				'amount' => $internalMoneyTransfer->getAmountFormatted(),
+				'currency' => $internalMoneyTransfer->getCurrencyFormatted(),
+				'user_comment' => $internalMoneyTransfer->getUserComment(),
+				'details' => collect($details)->filter(fn ($item) => filled($item['value']) && $item['value'] !== 0)->values()->all(),
+			],
+			'printedAt' => now()->format('d-m-Y H:i'),
+		]);
+	}
 
 	public function create(Company $company,$type)
 	{

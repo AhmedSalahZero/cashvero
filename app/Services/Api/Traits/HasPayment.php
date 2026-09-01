@@ -5,6 +5,8 @@ use Exception;
 
 trait HasPayment
 {
+    use HasAtomicOdooDeletion;
+
 
     /**
      * * $inBoundOrOutBound [inbound , outbound]
@@ -79,15 +81,19 @@ trait HasPayment
          */
         foreach ($payments as $existingPayment) {
             $odooPaymentId = $existingPayment['id'] ;
-            $this->setPaymentToDraft($odooPaymentId);
-             $this->execute(
+            /**
+             * * كانت action_draft بعدين unlink كل واحدة لوحدها ، فلو الحذف
+             * * اترفض المدفوعة كانت بتفضل draft في اودو — نص عملية .
+             * * دلوقتي لو الحذف فشل بترجع لحالتها الاصلية و بيترمي
+             * * OdooOperationNotAllowedException
+             */
+            $this->unlinkOdooRecordAtomically(
                 'account.payment',
-                'unlink',
-                [[$odooPaymentId]]
+                $odooPaymentId,
+                'action_draft',
+                ['posted' => 'action_post', 'cancel' => 'action_cancel'],
+                'Cancel Odoo payment #'.$odooPaymentId
             );
-            
-           
-            
         }
     }
     

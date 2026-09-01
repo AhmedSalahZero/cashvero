@@ -4,6 +4,8 @@ namespace App\Services\Api\Traits;
 
 trait HasUnlinkAccountBankStatementLine 
 {
+	use HasAtomicOdooDeletion;
+
 
 	public function unlinkWithOdooId(int $odooId): bool
 {
@@ -34,40 +36,27 @@ trait HasUnlinkAccountBankStatementLine
     return true;
 }
 
+	/**
+	 * * قبل كده كانت بتعمل button_draft بعدين unlink كل واحدة لوحدها ، فلو
+	 * * الـ unlink فشل (اشهر سبب : القيد استهلك رقم تسلسلي و مش آخر واحد
+	 * * في السلسلة) القيد كان بيفضل draft في اودو — نص عملية
+	 *
+	 * * دلوقتي العملية اما تكمل او ترجّع اودو زي ما كان و ترمي
+	 * * OdooOperationNotAllowedException
+	 *
+	 * * السلوك القديم بتاع الـ draft اتساب زي ما هو : القيد اللي حالته
+	 * * draft اصلا ما بيتحذفش
+	 */
 	public function unlink(int $journalEntryId)
-    { 
-        // Check if the payment exists
-        $entry = $this->execute(
+    {
+        $this->unlinkOdooRecordAtomically(
             'account.move',
-            'read',
-            [[$journalEntryId], ['id', 'state']]
-        );
-		
-		 if (empty($entry)) {
-			return ;
-            // throw new \Exception("Move ID not found: " . $journalEntryId);
-        }
-        if ($entry[0]['state'] === 'draft') {
-    //        Log::info("Payment $accountBankStatementLineId is already in draft state");
-            return true;
-        }
-        
-        // Set the account.payment to draft
-         $this->execute(
-            'account.move',
+            $journalEntryId,
             'button_draft',
-            [[$journalEntryId]]
+            ['posted' => 'action_post', 'cancel' => 'button_cancel'],
+            'Unlink Odoo journal entry #'.$journalEntryId,
+            true
         );
-		
-		
-		$this->execute(
-                'account.move',
-                'unlink',
-                [[$journalEntryId]]
-            );
-			
-
-       
     }
 	
 }

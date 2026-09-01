@@ -2773,7 +2773,7 @@ class PageInstructions
                         'Use it for an amount that has no invoice behind it. If there IS an invoice, it belongs in the opening invoices repeater instead, so it can be settled and aged like any other invoice.',
                         'Everything entered here is dated on the company\'s opening balance date, because it describes the position you started from rather than something that happened on a particular day.',
                     ],
-                    'example' => 'You left a 50,000 EGP deposit with a customer years ago as security. It is not an invoice and will never be collected against one, but it is money of yours that they hold. Record it as a Due From that customer.',
+                    'example' => 'A subsidiary company has held 50,000 EGP of yours since before you began using CashVero. It is not an invoice and will never be collected against one, but it is money of yours that they hold. Record it as a Due From that company.',
                 ],
                 [
                     'heading' => 'Which way the money goes',
@@ -2785,7 +2785,7 @@ class PageInstructions
                 [
                     'heading' => 'The rest of the row',
                     'fields' => [
-                        ['label' => 'Partner Type', 'text' => 'Which kind of partner this is. It decides which list the name select offers, and which statement the movement appears in.'],
+                        ['label' => 'Partner Type', 'text' => 'Which kind of partner this is. It decides which list the name select offers, and which statement the movement appears in. Only types that keep a statement are listed.'],
                         ['label' => 'Name', 'text' => 'The partner. The list holds only partners of the type you chose, sorted by name, and you can type to search it.'],
                         ['label' => 'Amount', 'text' => 'How much is owed. It must be greater than zero.'],
                         ['label' => 'Currency', 'text' => 'The currency the due is in.'],
@@ -2800,11 +2800,11 @@ class PageInstructions
                 [
                     'heading' => 'Where the movement shows up',
                     'body' => [
-                        'For a shareholder, employee, subsidiary company, other partner or tax authority, the due becomes a real row on their Partner Statement, with its comment, and the running balance after it follows on.',
-                        'For a customer or a supplier there is no partner ledger — their statement is built from invoices — so the due is added to that invoice statement instead. It appears with the document type "Other Due" and the same comment.',
+                        'The due becomes a real row on that partner\'s statement, carrying its comment, and the running balance after it follows on — exactly like any other movement.',
+                        'Only partner types that keep a statement of their own are offered here, so every due you record is one somebody can go and read back.',
                     ],
                     'notes' => [
-                        'A due always appears as its own row, whatever date range the statement is filtered to. It carries the opening balance date, so an ordinary range starts after it — folding it into the Beginning Balance instead would hide the comment, which is the only thing explaining what the amount is.',
+                        'Customers and suppliers are not on the list. They keep no partner statement — theirs is built from invoices — so an amount that is not an invoice has nowhere honest to sit in it. A customer or supplier balance carried in from before belongs in the opening invoices repeater, where it can be settled and aged.',
                     ],
                 ],
                 [

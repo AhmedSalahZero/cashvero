@@ -106,6 +106,7 @@ class RoutePermissionMap
         /* ────────────────────── Money Received ──────────────────── */
         'view.money.receive' => 'money_received.view',
         'view.money.receive.json' => 'money_received.view',
+        'print.money.receive' => 'money_received.view',
         'create.money.receive' => 'money_received.create',
         'store.money.receive' => 'money_received.create',
         'edit.money.receive' => 'money_received.update',
@@ -126,6 +127,7 @@ class RoutePermissionMap
 
         /* ─────────────────────── Money Payment ──────────────────── */
         'view.money.payment' => 'money_payment.view',
+        'print.money.payment' => 'money_payment.view',
         'create.money.payment' => 'money_payment.create',
         'store.money.payment' => 'money_payment.create',
         'edit.money.payment' => 'money_payment.update',
@@ -142,6 +144,7 @@ class RoutePermissionMap
 
         /* ──────────────────────── Cash Expense ──────────────────── */
         'view.cash.expense' => 'cash_expense.view',
+        'print.cash.expense' => 'cash_expense.view',
         'create.cash.expense' => 'cash_expense.create',
         'store.cash.expense' => 'cash_expense.create',
         // Opens the create form pre-filled from an existing row.
@@ -155,6 +158,7 @@ class RoutePermissionMap
 
         /* ───────────────── Internal / LC settlement transfers ───── */
         'internal-money-transfers.index' => 'internal_money_transfer.view',
+        'internal-money-transfers.print' => 'internal_money_transfer.view',
         'internal-money-transfers.create' => 'internal_money_transfer.create',
         'internal-money-transfers.store' => 'internal_money_transfer.create',
         'internal-money-transfers.edit' => 'internal_money_transfer.update',
@@ -172,6 +176,7 @@ class RoutePermissionMap
 
         /* ──────────────── Currency & exchange rates ─────────────── */
         'buy-or-sell-currencies.index' => 'buy_or_sell_currency.view',
+        'buy-or-sell-currencies.print' => 'buy_or_sell_currency.view',
         'buy-or-sell-currencies.create' => 'buy_or_sell_currency.create',
         'buy-or-sell-currencies.store' => 'buy_or_sell_currency.create',
         'buy-or-sell-currencies.edit' => 'buy_or_sell_currency.update',

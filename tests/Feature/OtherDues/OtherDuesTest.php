@@ -182,56 +182,7 @@ class OtherDuesTest extends TestCase
             'Removing one due must not touch another partner row.');
     }
 
-    /* ── customers and suppliers: no ledger, injected instead ─────── */
 
-    public function test_a_customer_due_writes_no_ledger_row(): void
-    {
-        $partner = $this->partnerOfType('is_customer');
-        $due = $this->makeDue($partner, 'is_customer', OtherDue::DUE_FROM, 50000, 'Deposit at customer');
-
-        $found = 0;
-        foreach (OtherDue::LEDGER_STATEMENTS as $model) {
-            $found += $model::where('other_due_id', $due->id)->count();
-        }
-
-        $this->assertSame(0, $found,
-            'Customers keep no partner ledger — writing one here would double-count against the '
-            .'row injected into their invoice statement.');
-    }
-
-    public function test_a_customer_due_appears_in_the_invoice_statement_with_its_comment(): void
-    {
-        $partner = $this->partnerOfType('is_customer');
-        $this->makeDue($partner, 'is_customer', OtherDue::DUE_FROM, 50000, 'Deposit at customer');
-        $this->makeDue($partner, 'is_customer', OtherDue::DUE_FROM, 12000, 'Second retention');
-
-        session(['currentCompanyId' => $this->company->id]);
-
-        $rows = (new \App\Http\Controllers\CustomerInvoiceDashboardController)
-            ->formatForStatementReport(collect(), $partner->id, '2000-01-01', '2099-12-31', 'EGP', 'CustomerInvoice');
-
-        $allDues = array_values(array_filter($rows, fn ($r) => ($r['document_type'] ?? '') === __('Other Due')));
-
-        // Scoped to the two this test wrote: the partner may already carry
-        // real dues entered through the screen, and asserting on the total
-        // would fail for a reason that has nothing to do with the code.
-        $mine = array_values(array_filter(
-            $allDues,
-            fn ($r) => in_array($r['comment'], ['Deposit at customer', 'Second retention'], true)
-        ));
-
-        $this->assertCount(2, $mine, 'Both dues must show, each as its own row rather than one summed row.');
-        $this->assertEqualsCanonicalizing(
-            ['Deposit at customer', 'Second retention'],
-            array_column($mine, 'comment')
-        );
-        $this->assertEqualsCanonicalizing(
-            [50000.0, 12000.0],
-            array_map(fn ($r) => (float) $r['debit'], $mine),
-            '"Due from" is a debit on the customer statement, the same direction as an invoice, '
-            .'and the two amounts stay apart.'
-        );
-    }
 
     /* ── wiring ───────────────────────────────────────────────────── */
 
@@ -242,12 +193,13 @@ class OtherDuesTest extends TestCase
         $this->assertTrue(PermissionRegistry::has('other_due.update'));
     }
 
-    public function test_every_partner_type_is_offered(): void
+    public function test_the_ledger_backed_partner_types_are_offered(): void
     {
         $offered = array_keys(OtherDuesController::PARTNER_TYPES);
 
-        foreach (['is_customer', 'is_supplier', 'is_subsidiary_company', 'is_shareholder', 'is_employee', 'is_other_partner'] as $type) {
-            $this->assertContains($type, $offered, "{$type} must be selectable — the form covers every partner type.");
+        foreach (['is_subsidiary_company', 'is_shareholder', 'is_employee', 'is_other_partner'] as $type) {
+            $this->assertContains($type, $offered,
+                "{$type} keeps a statement of its own, so a due against it can be read back.");
         }
     }
 
@@ -284,15 +236,15 @@ class OtherDuesTest extends TestCase
     public function test_saving_the_repeater_writes_every_row(): void
     {
         $shareholder = $this->partnerOfType('is_shareholder');
-        $customer = $this->partnerOfType('is_customer');
+        $other = $this->partnerOfType('is_other_partner');
 
         $this->store([
             ['direction' => OtherDue::DUE_FROM, 'partner_type' => 'is_shareholder', 'partner_id' => $shareholder->id,
              'amount' => 50000, 'currency' => 'EGP', 'comment' => 'Deposit'],
             ['direction' => OtherDue::DUE_FROM, 'partner_type' => 'is_shareholder', 'partner_id' => $shareholder->id,
              'amount' => 12000, 'currency' => 'EGP', 'comment' => 'Retention'],
-            ['direction' => OtherDue::DUE_TO, 'partner_type' => 'is_customer', 'partner_id' => $customer->id,
-             'amount' => 8000, 'currency' => 'EGP', 'comment' => 'Owed to customer'],
+            ['direction' => OtherDue::DUE_TO, 'partner_type' => 'is_other_partner', 'partner_id' => $other->id,
+             'amount' => 8000, 'currency' => 'EGP', 'comment' => 'Owed to other partner'],
         ]);
 
         $this->assertSame(3, $this->duesCreatedHere(),
@@ -381,79 +333,6 @@ class OtherDuesTest extends TestCase
             '1,000 at a rate of 50 is 50,000 in the main currency.');
     }
 
-    /** Only the dues this test created — never anything already on file. */
-    private function duesCreatedHere(): int
-    {
-        return OtherDue::where('company_id', $this->company->id)
-            ->where('id', '>=', $this->firstNewDueId)
-            ->count();
-    }
-
-    /**
-     * The bug this pins: the due carries the opening balance date, so an
-     * ordinary statement range starts after it. It used to be folded into
-     * the Beginning Balance row — which has no comment — and the comment
-     * is the only thing explaining what the amount is.
-     */
-    public function test_a_due_shows_with_its_comment_even_when_the_range_starts_after_it(): void
-    {
-        $partner = $this->partnerOfType('is_customer');
-        $this->makeDue($partner, 'is_customer', OtherDue::DUE_FROM, 7777, 'Explains the amount');
-
-        session(['currentCompanyId' => $this->company->id]);
-
-        $openingDate = \App\Support\OtherDues\OtherDueStatements::dateFor($this->company);
-        $wellAfter = \Carbon\Carbon::parse($openingDate)->addYears(5)->format('Y-m-d');
-
-        $rows = (new \App\Http\Controllers\CustomerInvoiceDashboardController)
-            ->formatForStatementReport(collect(), $partner->id, $wellAfter, '2099-12-31', 'EGP', 'CustomerInvoice');
-
-        $mine = array_values(array_filter(
-            $rows,
-            fn ($r) => ($r['comment'] ?? null) === 'Explains the amount'
-        ));
-
-        $this->assertCount(1, $mine,
-            'The due must still appear as its own row when the range starts long after its date.');
-        $this->assertSame(__('Other Due'), $mine[0]['document_type']);
-        $this->assertEquals(7777, $mine[0]['debit']);
-    }
-
-    /**
-     * And it must be counted once, not both as a row and inside the
-     * opening figure.
-     */
-    public function test_a_due_is_not_counted_in_the_beginning_balance_as_well(): void
-    {
-        $partner = $this->partnerOfType('is_customer');
-
-        session(['currentCompanyId' => $this->company->id]);
-        $openingDate = \App\Support\OtherDues\OtherDueStatements::dateFor($this->company);
-        $wellAfter = \Carbon\Carbon::parse($openingDate)->addYears(5)->format('Y-m-d');
-
-        $beginningBefore = $this->beginningBalanceFor($partner->id, $wellAfter);
-
-        $this->makeDue($partner, 'is_customer', OtherDue::DUE_FROM, 7777, 'Counted once');
-
-        $beginningAfter = $this->beginningBalanceFor($partner->id, $wellAfter);
-
-        $this->assertEqualsWithDelta($beginningBefore, $beginningAfter, 0.01,
-            'Adding a due must not move the Beginning Balance — it is shown as its own row instead.');
-    }
-
-    private function beginningBalanceFor(int $partnerId, string $startDate): float
-    {
-        $rows = (new \App\Http\Controllers\CustomerInvoiceDashboardController)
-            ->formatForStatementReport(collect(), $partnerId, $startDate, '2099-12-31', 'EGP', 'CustomerInvoice');
-
-        foreach ($rows as $row) {
-            if (($row['document_type'] ?? '') === 'Beginning Balance') {
-                return (float) $row['debit'] - (float) $row['credit'];
-            }
-        }
-
-        return 0.0;
-    }
 
     /** The partner picker has to be searchable — the lists run to hundreds. */
     public function test_the_partner_picker_is_searchable(): void
@@ -467,5 +346,65 @@ class OtherDuesTest extends TestCase
             $vue,
             'The partner field is the one that needs searching.'
         );
+    }
+
+    /* ── customers and suppliers are deliberately not offered ─────── */
+
+    /**
+     * The decision this pins: a due may only be recorded against a partner
+     * type that keeps a statement. Customers and suppliers keep none —
+     * theirs is derived from invoices — so offering them would accept a
+     * movement that then appears nowhere.
+     */
+    public function test_customers_and_suppliers_are_not_offered(): void
+    {
+        $offered = array_keys(OtherDuesController::PARTNER_TYPES);
+
+        $this->assertNotContains('is_customer', $offered,
+            'A customer keeps no partner statement, so a due against one could not be read back.');
+        $this->assertNotContains('is_supplier', $offered,
+            'A supplier keeps no partner statement either.');
+    }
+
+    public function test_a_customer_is_refused_even_if_sent_directly(): void
+    {
+        $customer = $this->partnerOfType('is_customer');
+
+        // The validation rule rejects the type outright, so this throws
+        // rather than returning — which is the strongest possible refusal.
+        try {
+            $this->store([
+                ['direction' => OtherDue::DUE_FROM, 'partner_type' => 'is_customer', 'partner_id' => $customer->id,
+                 'amount' => 5000, 'currency' => 'EGP', 'comment' => 'Should not save'],
+            ]);
+            $this->fail('A customer must be refused, not saved.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertArrayHasKey('rows.0.partner_type', $e->errors());
+        }
+
+        $this->assertSame(0, $this->duesCreatedHere(),
+            'Nothing may be written for a partner type that keeps no statement.');
+    }
+
+    /**
+     * The invoice statement must be left exactly as it was — the earlier
+     * version injected dues into it, and that has been withdrawn.
+     */
+    public function test_the_invoice_statement_carries_no_other_dues(): void
+    {
+        $source = file_get_contents(app_path('Models/Traits/Controllers/HasBalances.php'));
+
+        $this->assertStringNotContainsString('OtherDue', $source,
+            'The balances trait must not read Other Dues: customer and supplier statements are '
+            .'built from invoices alone.');
+        $this->assertStringNotContainsString('appendOtherDues', $source);
+    }
+
+    /** Only the dues this test created — never anything already on file. */
+    private function duesCreatedHere(): int
+    {
+        return OtherDue::where('company_id', $this->company->id)
+            ->where('id', '>=', $this->firstNewDueId)
+            ->count();
     }
 }

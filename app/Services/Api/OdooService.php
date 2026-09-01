@@ -34,7 +34,7 @@ class OdooService
 
 	/**
 	 * * بتجيب الـ odoo_id لليوزر المبعوت مش لليوزر اللي عامل لوجن
-	 * * بتصفّر القيمة القديمة الأول عشان AuthTrait يعمل authenticate من جديد
+	 * * بتفضّي القيمة في الذاكرة بس عشان AuthTrait يعمل authenticate من جديد
 	 * * بترجّع الـ uid لو نجح و null لو فشل، ومش بترمي استثناء
 	 */
 	public static function refreshUserOdooId(Company $company, User $user): ?int
@@ -43,10 +43,20 @@ class OdooService
 			return null;
 		}
 
-		$user->update(['odoo_id' => null]);
+		$originalOdooId = $user->getOdooId();
+
+		/**
+		 * * الكونستراكتور بيعيد المصادقة بس لما getOdooId() ترجع null ،
+		 * * فبنفضّي العمود في الذاكرة بس — مش في الداتابيز
+		 *
+		 * * قبل كده كان بيتحفظ null في الصف الاول ، فلو المصادقة فشلت
+		 * * (باسورد اتغير ، اودو واقع ، الشبكة قطعت) اليوزر كان بيفضل
+		 * * بـ odoo_id فاضي للابد و تكامله بيتكسر بالكامل — و ده حصل فعلا
+		 */
+		$user->setAttribute('odoo_id', null);
 
 		try {
-			return (new self($company, $user))->getUid();
+			$uid = (new self($company, $user))->getUid();
 		} catch (\Throwable $e) {
 			Log::error('Odoo odoo_id refresh failed: '.$e->getMessage(), [
 				'company_id' => $company->id,
@@ -55,8 +65,21 @@ class OdooService
 				'exception' => get_class($e),
 			]);
 
+			$uid = null;
+		}
+
+		if (is_null($uid)) {
+			/**
+			 * * المصادقة ما نجحتش ، فبنسيب القيمة القديمة زي ما هي بدل ما
+			 * * نكسر تكامل شغال . الصف ما اتلمسش اصلا فمفيش حاجة نرجّعها
+			 * * غير القيمة اللي في الذاكرة
+			 */
+			$user->setAttribute('odoo_id', $originalOdooId);
+
 			return null;
 		}
+
+		return $uid;
 	}
 
 	/**

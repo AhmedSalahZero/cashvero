@@ -153,12 +153,19 @@ class ReportedIssuesTest extends TestCase
     /* ── the LG renewal cash cover question ───────────────────────── */
 
     /**
-     * Documents WHY nothing is posted for an opening-balance LG, so the
-     * skip cannot be quietly removed later: that cover was never posted
-     * to a bank statement in the first place, because it is already
-     * inside the opening balance.
+     * A renewal that changes the cash cover posts the DIFFERENCE, whatever
+     * the LG's origin.
+     *
+     * This test previously asserted the opposite for an opening-balance
+     * LG, and that was wrong. The two events are separate: the original
+     * cover was never posted because it is already inside the opening
+     * balance — correct — but raising it on renewal is a transaction
+     * happening now, and the bank really does take the extra.
+     *
+     * A cover held against a CD/TD is still skipped: it is secured by the
+     * deposit itself and never moves through a current account.
      */
-    public function test_renewal_cash_cover_skips_opening_balance_and_cd_td(): void
+    public function test_only_a_cd_or_td_cover_skips_the_renewal_difference(): void
     {
         $src = file_get_contents(app_path('Support/LetterOfGuarantee/LgRenewalTerms.php'));
 
@@ -166,12 +173,11 @@ class ReportedIssuesTest extends TestCase
         $this->assertNotFalse($start, 'postCashCoverDifference() is gone.');
         $body = substr($src, $start, 2000);
 
-        $this->assertMatchesRegularExpression(
-            '/isOpeningBalance\(\)\s*\|\|\s*\$letterOfGuaranteeIssuance->isCdOrTd\(\)/',
-            $body,
-            'Both skips must stay: an opening-balance LG never posted its cover, and a CD/TD-backed '
-            .'cover never moves through a current account.'
-        );
+        $this->assertStringContainsString('isCdOrTd()', $body,
+            'A CD/TD-backed cover never moves through a current account, so it stays skipped.');
+        $this->assertStringNotContainsString('isOpeningBalance()', $body,
+            'An opening-balance LG must NOT be skipped: its renewal difference is real money '
+            .'moving today, and skipping it left that money missing from both ledgers.');
     }
 
     /**

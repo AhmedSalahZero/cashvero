@@ -230,6 +230,7 @@ const odooErrorTarget = ref(null);
                                     <td v-if="canUpdate || canDelete" class="px-3 py-3">
                                         <div class="flex items-center gap-2">
                                             <RecordLogButton subject="InternalMoneyTransfer" :id="row.id" :company-id="company.id" />
+                                            <a v-if="row.print_url" :href="row.print_url" target="_blank" rel="noopener" class="cvr-action-btn" :title="$t('Print')">🖨️</a>
                                             <button v-if="row.user_comment" @click="commentTarget = row" class="cvr-action-btn" :title="$t('User Comment')">💬</button>
                                             <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Odoo Error')">🐞</button>
                                             <button v-if="row.is_fully_integrated_with_odoo" @click="odooRefTarget = row" class="cvr-action-btn" :title="$t('Fully Integrated')">👍</button>

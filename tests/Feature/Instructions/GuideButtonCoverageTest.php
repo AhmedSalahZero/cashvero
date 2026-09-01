@@ -47,6 +47,18 @@ class GuideButtonCoverageTest extends TestCase
     private const EXEMPT = [
         // Never referenced by any controller; superseded by Index.vue.
         'LetterOfGuaranteeIssuance/LetterOfGuaranteeIssuance_Index' => 'dead file, rendered by nothing',
+
+        /*
+         * Print views render one record for paper. They carry no controls
+         * to explain, and a button that cannot be pressed on a printout is
+         * noise on the page — the guide belongs on the screen the reader
+         * printed from.
+         */
+        'BuyOrSellCurrencies/Print' => 'print view — no controls to explain',
+        'CashExpense/Print' => 'print view — no controls to explain',
+        'InternalMoneyTransfer/Print' => 'print view — no controls to explain',
+        'MoneyPayment/Print' => 'print view — no controls to explain',
+        'MoneyReceived/Print' => 'print view — no controls to explain',
     ];
 
     /** Every page component some controller renders. */

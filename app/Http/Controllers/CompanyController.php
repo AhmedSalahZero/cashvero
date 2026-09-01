@@ -205,11 +205,17 @@ class CompanyController extends Controller
         $newSystems = $request->get('systems');
         $systemsToPreserve = array_intersect($oldSystems, $newSystems);
         $newSystemsToBeAdded = array_diff($newSystems, $oldSystems);
-        $companySection->users->each(function ($user) {
-            $user->update([
-                'odoo_id' => null,
-            ]);
-        });
+        /**
+         * * قبل كده كان بيصفّر odoo_id لكل يوزرات الشركة هنا ، و بعدين
+         * * يعيد جلبه للي بعتوا بيانات دخول جديدة بس . فأي يوزر مش في
+         * * القايمة دي كان بيفضل بـ null للابد و تكامله يتكسر من غير ما
+         * * حد ياخد باله
+         *
+         * * دلوقتي مفيش تصفير : refreshUserOdooId هي اللي بتعيد المصادقة ،
+         * * و بتسيب القيمة القديمة زي ما هي لو المصادقة فشلت
+         */
+        $odooConnectionChanged = $request->get('odoo_db_url') != $companySection->odoo_db_url
+            || $request->get('odoo_db_name') != $companySection->odoo_db_name;
 
         $usersWithNewCredentials = [];
 
@@ -232,7 +238,16 @@ class CompanyController extends Controller
          * * عشان المصادقة تتم على الـ url والداتابيز الجداد لو اتغيروا
          * * وبنبعت اليوزر صراحةً لأن اللي عامل لوجن هنا هو السوبر أدمن
          */
-        foreach ($usersWithNewCredentials as $user) {
+        /**
+         * * لو الـ url او الداتابيز اتغيروا فالـ odoo_id القديم بقى بتاع
+         * * سيرفر تاني ، فلازم كل يوزرات الشركة يعيدوا المصادقة — مش بس
+         * * اللي بعتوا بيانات جديدة
+         */
+        $usersToRefresh = $odooConnectionChanged
+            ? $companySection->users()->get()->all()
+            : $usersWithNewCredentials;
+
+        foreach (collect($usersToRefresh)->unique('id') as $user) {
             OdooService::refreshUserOdooId($companySection, $user);
         }
 

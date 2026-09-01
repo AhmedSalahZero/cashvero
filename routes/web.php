@@ -320,6 +320,7 @@ Route::group(
                     Route::get('internal-money-transfers/{type}/create', 'InternalMoneyTransferController@create')->name('internal-money-transfers.create');
                     Route::post('internal-money-transfers/{type}/store', 'InternalMoneyTransferController@store')->name('internal-money-transfers.store');
                     Route::get('internal-money-transfers/{type}/{internal_money_transfer}/edit', 'InternalMoneyTransferController@edit')->name('internal-money-transfers.edit');
+                    Route::get('internal-money-transfers/{type}/{internal_money_transfer}/print', 'InternalMoneyTransferController@print')->name('internal-money-transfers.print');
                     Route::put('internal-money-transfers/{type}/{internal_money_transfer}/update', 'InternalMoneyTransferController@update')->name('internal-money-transfers.update');
                     Route::delete('internal-money-transfers/{type}/{internal_money_transfer}/delete', 'InternalMoneyTransferController@destroy')->name('internal-money-transfers.destroy');
                  
@@ -328,6 +329,7 @@ Route::group(
                     Route::get('buy-or-sell-currencies/create', 'BuyOrSellCurrenciesController@create')->name('buy-or-sell-currencies.create');
                     Route::post('buy-or-sell-currencies/store', 'BuyOrSellCurrenciesController@store')->name('buy-or-sell-currencies.store');
                     Route::get('buy-or-sell-currencies/{buy_or_sell_currency}/edit', 'BuyOrSellCurrenciesController@edit')->name('buy-or-sell-currencies.edit');
+                    Route::get('buy-or-sell-currencies/{buy_or_sell_currency}/print', 'BuyOrSellCurrenciesController@print')->name('buy-or-sell-currencies.print');
                     Route::put('buy-or-sell-currencies/{buy_or_sell_currency}/update', 'BuyOrSellCurrenciesController@update')->name('buy-or-sell-currencies.update');
                     Route::delete('buy-or-sell-currencies/{buy_or_sell_currency}/delete', 'BuyOrSellCurrenciesController@destroy')->name('buy-or-sell-currencies.destroy');
                  
@@ -809,6 +811,7 @@ Route::group(
                     Route::get('money-received/json', 'MoneyReceivedController@indexJson')->name('view.money.receive.json');
                     Route::post('resend-odoo-money/{moneyReceived}', 'MoneyReceivedController@resendToOdoo')->name('resend.with.odoo');
                     Route::get('money-received/create/{model?}', 'MoneyReceivedController@create')->name('create.money.receive');
+                    Route::get('money-received/print/{moneyReceived}', 'MoneyReceivedController@print')->name('print.money.receive');
                     Route::post('money-received/create', 'MoneyReceivedController@store')->name('store.money.receive');
                     Route::get('money-received/edit/{moneyReceived}', 'MoneyReceivedController@edit')->name('edit.money.receive');
                     Route::put('money-received/update/{moneyReceived}', 'MoneyReceivedController@update')->name('update.money.receive');
@@ -859,6 +862,7 @@ Route::group(
                     Route::get('factoring/with-recourse/invoices/{customerId}/{currency?}', 'FactoringWithRecourseController@getInvoices');
                     Route::post('factoring/with-recourse/calculate', 'FactoringWithRecourseController@calculate')->name('factoring.with-recourse.calculate');
                     Route::get('money-payment/create/{model?}', 'MoneyPaymentController@create')->name('create.money.payment');
+                    Route::get('money-payment/print/{moneyPayment}', 'MoneyPaymentController@print')->name('print.money.payment');
                     Route::post('money-payment/create', 'MoneyPaymentController@store')->name('store.money.payment');
                     Route::get('money-payment/edit/{moneyPayment}', 'MoneyPaymentController@edit')->name('edit.money.payment');
                     Route::put('money-payment/update/{moneyPayment}', 'MoneyPaymentController@update')->name('update.money.payment');
@@ -877,6 +881,7 @@ Route::group(
                     
                     Route::get('cash-expense', 'CashExpenseController@index')->name('view.cash.expense');
                     Route::get('cash-expense/create/{model?}', 'CashExpenseController@create')->name('create.cash.expense');
+                    Route::get('cash-expense/print/{cashExpense}', 'CashExpenseController@print')->name('print.cash.expense');
                     Route::post('cash-expense/create', 'CashExpenseController@store')->name('store.cash.expense');
                     Route::get('cash-expense/edit/{cashExpense}', 'CashExpenseController@edit')->name('edit.cash.expense');
                     /**

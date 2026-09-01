@@ -38,6 +38,22 @@ class Handler extends ExceptionHandler
 
 	public function render($request, Throwable $exception)
 	{
+		/**
+		 * * الرسالة التقنية بتاعة اودو راحت للـ logs خلاص عن طريق report()
+		 * * اللي بتشتغل قبل render() ، فهنا بنعرض للمستخدم الرسالة المفهومة
+		 * * بس بدل صفحة 500
+		 */
+		if ($exception instanceof OdooOperationNotAllowedException) {
+			if ($request->expectsJson() || $request->ajax()) {
+				return response()->json([
+					'status' => false,
+					'msg' => $exception->getUserMessage(),
+				], 422);
+			}
+
+			return back()->with('fail', $exception->getUserMessage());
+		}
+
 		return parent::render($request, $exception);
 	}
 	public function getAccountsToSentExceptionsFor(): array

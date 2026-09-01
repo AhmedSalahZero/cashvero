@@ -1,4 +1,5 @@
 {
+    "Your account does not have the permission to perform this change": "حسابك لا يملك الصلاحية لإجراء هذا التعديل",
     "Dark Mode": "الوضع الداكن",
     "Light Mode": "الوضع الفاتح",
     "Excel Collected Amount": "المبلغ المحصل من الإكسل",
@@ -4989,5 +4990,18 @@
     "Movement": "الحركة",
     "Instrument is not selected.": "لم يتم اختيار الأداة.",
     "A due always appears as its own row, whatever date range the statement is filtered to. It carries the opening balance date, so an ordinary range starts after it — folding it into the Beginning Balance instead would hide the comment, which is the only thing explaining what the amount is.": "يظهر المستحق دائماً كسطر مستقل، أياً كان النطاق الزمني الذي رُشِّح به الكشف. فهو يحمل تاريخ الرصيد الافتتاحي، والنطاق المعتاد يبدأ بعده — وضمّه إلى الرصيد الافتتاحي بدلاً من ذلك كان سيخفي التعليق، وهو الشيء الوحيد الذي يوضّح ما هذا المبلغ.",
-    "Search by name…": "ابحث بالاسم…"
+    "Search by name…": "ابحث بالاسم…",
+    "A subsidiary company has held 50,000 EGP of yours since before you began using CashVero. It is not an invoice and will never be collected against one, but it is money of yours that they hold. Record it as a Due From that company.": "شركة تابعة تحتفظ بـ 50,000 ج.م. لك منذ ما قبل بدء استخدامك لكاش فيرو. وهي ليست فاتورة ولن تُحصَّل مقابل فاتورة أبداً، لكنها أموال لك تحتفظ بها هي. سجّلها كـ «مستحق لنا» على تلك الشركة.",
+    "Which kind of partner this is. It decides which list the name select offers, and which statement the movement appears in. Only types that keep a statement are listed.": "نوع الطرف. وهو يحدد القائمة التي يعرضها اختيار الاسم، وكشف الحساب الذي تظهر فيه الحركة. ولا تُعرض إلا الأنواع التي لها كشف حساب.",
+    "The due becomes a real row on that partner's statement, carrying its comment, and the running balance after it follows on — exactly like any other movement.": "يصبح المستحق سطراً حقيقياً في كشف حساب ذلك الطرف، يحمل تعليقه، ويستمر الرصيد المتحرك بعده — تماماً كأي حركة أخرى.",
+    "Only partner types that keep a statement of their own are offered here, so every due you record is one somebody can go and read back.": "لا تُتاح هنا إلا أنواع الأطراف التي لها كشف حساب خاص بها، فكل مستحق تسجّله يمكن لأحد أن يرجع ويقرأه.",
+    "Customers and suppliers are not on the list. They keep no partner statement — theirs is built from invoices — so an amount that is not an invoice has nowhere honest to sit in it. A customer or supplier balance carried in from before belongs in the opening invoices repeater, where it can be settled and aged.": "العملاء والموردون غير موجودين في القائمة. فليس لهم كشف حساب أطراف — إذ يُبنى كشفهم من الفواتير — والمبلغ الذي ليس فاتورة لا مكان صادقاً له فيه. أما رصيد العميل أو المورد المرحَّل من قبل فمكانه مكرِّر الفواتير الافتتاحية، حيث يمكن تسويته وحساب تقادمه.",
+    "Record #": "رقم السجل",
+    "Printed At": "تاريخ الطباعة",
+    "Transaction Details": "تفاصيل الحركة",
+    "Settled Invoices": "الفواتير المسوّاة",
+    "Total Settlement": "إجمالي التسوية",
+    "Prepared By": "أعدّه",
+    "Reviewed By": "راجعه",
+    "Approved By": "اعتمده"
 }

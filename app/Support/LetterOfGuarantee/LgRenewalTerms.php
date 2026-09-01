@@ -217,10 +217,17 @@ class LgRenewalTerms
      * ledger and gives the difference back — the mirror image of what
      * cancellation does.
      *
-     * The two cases the original issuance skips are skipped here for
-     * the same reasons: an opening-balance LG's cover was never posted
-     * (it is already inside the opening balance), and a cover held
-     * against a CD/TD never moves through a current account at all.
+     * An opening-balance LG is NOT skipped, though its original issuance
+     * was. The two are different events: the opening cover of, say,
+     * 10,000 was never posted because it is already inside the opening
+     * balance — correctly — but raising it to 15,000 on renewal is a
+     * transaction happening now, and the bank really does take the extra
+     * 5,000. Lowering it really does refund the difference. Skipping the
+     * renewal because of how the LG was first recorded left that money
+     * missing from both ledgers.
+     *
+     * A cover held against a CD/TD is still skipped: it is secured by the
+     * deposit itself and never moves through a current account.
      */
     protected static function postCashCoverDifference(
         LgRenewalDateHistory $history,
@@ -235,7 +242,7 @@ class LgRenewalTerms
             return;
         }
 
-        if ($letterOfGuaranteeIssuance->isOpeningBalance() || $letterOfGuaranteeIssuance->isCdOrTd()) {
+        if ($letterOfGuaranteeIssuance->isCdOrTd()) {
             return;
         }
 

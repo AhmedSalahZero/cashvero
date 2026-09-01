@@ -86,17 +86,19 @@ trait HasNonCustomerOrSupplier
             return ;
         }
         /**
-         * * بنمرر ال ids كقيم مش كموديل
-         * * لأن الصف نفسه ممكن يكون اتحذف قبل ما الاستدعاء يتنفذ
+         * * الحذف مش زي الإنشاء : لو الحذف في اودو فشل ما ينفعش نكون
+         * * حذفنا الصف عندنا . فبنناديه جوه الترانزاكشن نفسها عشان
+         * * الاستثناء يعمل rollback للداتا المحلية ، و اودو نفسه بيرجع
+         * * لحالته الاصلية جوه unlink (راجع HasAtomicOdooDeletion) —
+         * * فالنتيجة اما الحذف يتم عندنا و عند اودو ، او مايتمش خالص
+         *
+         * * (الإنشاء و التعديل لسه بيعدّوا على OdooSync::defer لأن فشلهم
+         * * ما يستاهلش نلغي بيه عملية محلية صح)
          */
         if ($journalEntryId) {
-            OdooSync::defer(function () use ($company, $journalEntryId) {
-                (new MoneyPaymentOdooService($company))->unlink($journalEntryId);
-            }, null, 'Unlink Odoo journal entry #'.$journalEntryId);
+            (new MoneyPaymentOdooService($company))->unlink($journalEntryId);
         } elseif ($odooId) {
-            OdooSync::defer(function () use ($company, $odooId) {
-                (new OdooPayment($company))->cancelDownPayment($odooId);
-            }, null, 'Cancel Odoo down payment #'.$odooId);
+            (new OdooPayment($company))->cancelDownPayment($odooId);
         }
     }
 

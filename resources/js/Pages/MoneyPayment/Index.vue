@@ -373,6 +373,7 @@ function submitUnmarkAsPaid() {
                             <td class="px-4 py-3 min-w-32">
                                 <div class="flex items-center gap-1 flex-wrap">
                                     <RecordLogButton subject="MoneyPayment" :id="row.id" :company-id="company.id" />
+                                    <a v-if="row.print_url" :href="row.print_url" target="_blank" rel="noopener" class="cvr-action-btn" :title="$t('Print')">🖨️</a>
                                     <button v-if="row.has_comment" @click="commentTarget = row" class="cvr-action-btn" :title="$t('User Comment')">💬</button>
                                     <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Odoo Error')">🐞</button>
                                     <button v-if="row.is_fully_integrated_with_odoo" @click="integratedTarget = row" class="cvr-action-btn" :title="$t('Fully Integrated')">👍</button>

@@ -320,6 +320,10 @@ class MoneyReceivedController
         $common = [
             'id' => $moneyReceived->id,
             'type_formatted' => $moneyReceived->getMoneyTypeFormatted(),
+            'transaction_type' => $moneyReceived->getTransactionType(),
+            'transaction_type_formatted' => $this->formatMoneyReceivedTransactionType($moneyReceived->getTransactionType()),
+            'exchange_rate_formatted' => number_format((float) $moneyReceived->getExchangeRate(), 6),
+            'amount_in_invoice_currency_formatted' => number_format((float) $moneyReceived->getAmountInInvoiceCurrency(), 2).' '.strtoupper((string) ($moneyReceived->getCurrency() ?: $moneyReceived->getReceivingCurrency())),
             'customer_name' => $moneyReceived->getCustomerName(),
             'receiving_date' => $moneyReceived->getReceivingDate(),
             'receiving_date_formatted' => $moneyReceived->getReceivingDateFormatted(),
@@ -334,6 +338,7 @@ class MoneyReceivedController
             'is_fully_integrated_with_odoo' => $company->hasOdooIntegrationCredentials() && $moneyReceived->fullyIntegratedWithOdoo(),
             'odoo_reference_names' => $company->hasOdooIntegrationCredentials() && $moneyReceived->fullyIntegratedWithOdoo() ? $moneyReceived->getOdooReferenceNames() : [],
             'edit_url' => route('edit.money.receive', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
+            'print_url' => route('print.money.receive', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
             'delete_url' => route('delete.money.receive', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
             'resend_odoo_url' => route('resend.with.odoo', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
         ];
@@ -401,6 +406,169 @@ class MoneyReceivedController
             ]),
             default => $common,
         };
+    }
+
+    public function print(Company $company, MoneyReceived $moneyReceived)
+    {
+        $type = $moneyReceived->getType();
+        $row = $this->mapMoneyReceivedRow($moneyReceived, $type, $company);
+
+        $detailFieldLabels = match ($type) {
+            MoneyReceived::CHEQUE => [
+                'transaction_type_formatted' => __('Transaction'),
+                'exchange_rate_formatted' => __('Exchange Rate'),
+                'amount_in_invoice_currency_formatted' => __('Amount In Invoice Currency'),
+                'cheque_number' => __('Cheque Number'),
+                'drawee_bank_name' => __('Drawee Bank'),
+                'due_date_formatted' => __('Due Date'),
+                'due_after_days' => __('Due After Days'),
+                'due_status' => __('Due Status'),
+            ],
+            MoneyReceived::CHEQUE_REJECTED => [
+                'transaction_type_formatted' => __('Transaction'),
+                'exchange_rate_formatted' => __('Exchange Rate'),
+                'amount_in_invoice_currency_formatted' => __('Amount In Invoice Currency'),
+                'cheque_number' => __('Cheque Number'),
+                'drawee_bank_name' => __('Drawee Bank'),
+                'due_date_formatted' => __('Due Date'),
+                'status_formatted' => __('Status'),
+            ],
+            MoneyReceived::CHEQUE_UNDER_COLLECTION => [
+                'transaction_type_formatted' => __('Transaction'),
+                'exchange_rate_formatted' => __('Exchange Rate'),
+                'amount_in_invoice_currency_formatted' => __('Amount In Invoice Currency'),
+                'cheque_number' => __('Cheque Number'),
+                'deposit_date_formatted' => __('Deposit Date'),
+                'drawl_bank_name' => __('Drawl Bank'),
+                'account_type_name' => __('Account Type'),
+                'account_number_label' => __('Account Number'),
+                'due_date_formatted' => __('Due Date'),
+                'clearance_days' => __('Clearance Days'),
+                'expected_collection_date_formatted' => __('Expected Collection Date'),
+                'due_status' => __('Due Status'),
+            ],
+            MoneyReceived::CHEQUE_COLLECTED => [
+                'transaction_type_formatted' => __('Transaction'),
+                'exchange_rate_formatted' => __('Exchange Rate'),
+                'amount_in_invoice_currency_formatted' => __('Amount In Invoice Currency'),
+                'cheque_number' => __('Cheque Number'),
+                'due_date_formatted' => __('Due Date'),
+                'deposit_date_formatted' => __('Deposit Date'),
+                'drawl_bank_name' => __('Drawl Bank'),
+                'account_type_name' => __('Account Type'),
+                'account_number_label' => __('Account Number'),
+                'actual_collection_date_formatted' => __('Actual Collection Date'),
+            ],
+            MoneyReceived::INCOMING_TRANSFER => [
+                'transaction_type_formatted' => __('Transaction'),
+                'exchange_rate_formatted' => __('Exchange Rate'),
+                'amount_in_invoice_currency_formatted' => __('Amount In Invoice Currency'),
+                'receiving_bank_name' => __('Receiving Bank'),
+                'account_type_name' => __('Account Type'),
+                'account_number_label' => __('Account Number'),
+            ],
+            MoneyReceived::CASH_IN_SAFE => [
+                'transaction_type_formatted' => __('Transaction'),
+                'exchange_rate_formatted' => __('Exchange Rate'),
+                'amount_in_invoice_currency_formatted' => __('Amount In Invoice Currency'),
+                'branch_name' => __('Branch'),
+                'receipt_number' => __('Receipt Number'),
+            ],
+            MoneyReceived::CASH_IN_BANK => [
+                'transaction_type_formatted' => __('Transaction'),
+                'exchange_rate_formatted' => __('Exchange Rate'),
+                'amount_in_invoice_currency_formatted' => __('Amount In Invoice Currency'),
+                'receiving_bank_name' => __('Receiving Bank'),
+                'account_type_name' => __('Account Type'),
+                'account_number_label' => __('Account Number'),
+            ],
+            default => [],
+        };
+
+        $details = $this->buildMoneyReceivedPrintDetails($row, $detailFieldLabels);
+        $settlements = $this->moneyReceivedSettlementsForPrint($moneyReceived);
+
+        return Inertia::render('MoneyReceived/Print', [
+            'company' => ['id' => $company->id, 'name' => $company->getName()],
+            'record' => [
+                'id' => $moneyReceived->id,
+                'type' => $moneyReceived->getMoneyTypeFormatted(),
+                'partner_name' => $moneyReceived->getCustomerName(),
+                'date' => $moneyReceived->getReceivingDateFormatted(),
+                'amount' => $moneyReceived->getReceivedAmountFormatted(),
+                'currency' => strtoupper($moneyReceived->getReceivingCurrency()),
+                'details' => $details,
+                'settlements' => $settlements,
+                'settlement_total' => number_format(collect($settlements)->sum('settlement_amount'), 2),
+            ],
+            'printedAt' => now()->format('d-m-Y H:i'),
+        ]);
+    }
+
+    protected function buildMoneyReceivedPrintDetails(array $row, array $fieldLabels): array
+    {
+        return collect($fieldLabels)->map(function ($label, $key) use ($row) {
+            $value = $this->normalizePrintDetailValue($row[$key] ?? null);
+            return ['label' => $label, 'value' => $value];
+        })->filter(fn ($item) => filled($item['value']))->values()->all();
+    }
+
+    protected function normalizePrintDetailValue($value): ?string
+    {
+        if (is_array($value)) {
+            if (array_key_exists('status', $value)) {
+                return (string) $value['status'];
+            }
+
+            return collect($value)->filter(fn ($item) => filled($item))->map(fn ($item) => is_scalar($item) ? (string) $item : null)->filter()->implode(' - ');
+        }
+
+        if (is_object($value)) {
+            if (method_exists($value, '__toString')) {
+                return (string) $value;
+            }
+
+            return null;
+        }
+
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return is_scalar($value) ? (string) $value : null;
+    }
+
+    protected function formatMoneyReceivedTransactionType(?string $transactionType): ?string
+    {
+        return match ($transactionType) {
+            'refund-custody' => __('Refund Custody'),
+            'pay-loan' => __('Pay Loan'),
+            'funding-from' => __('Funding From'),
+            'insurance-from' => __('Insurance From'),
+            null, '' => null,
+            default => (string) $transactionType,
+        };
+    }
+
+    protected function moneyReceivedSettlementsForPrint(MoneyReceived $moneyReceived): array
+    {
+        $lines = $moneyReceived->settlements()->with('invoice')->get()->map(function ($settlement) use ($moneyReceived) {
+            $invoice = $settlement->invoice;
+            return [
+                'invoice_number' => $invoice?->invoice_number ?: '-',
+                'invoice_date' => $invoice?->invoice_date ? Carbon::make($invoice->invoice_date)->format('d-m-Y') : '-',
+                'invoice_due_date' => $invoice?->invoice_due_date ? Carbon::make($invoice->invoice_due_date)->format('d-m-Y') : '-',
+                'currency' => strtoupper((string) ($invoice?->currency ?: $moneyReceived->getCurrency())),
+                'settlement_amount' => (float) $settlement->getSettlementAmount(),
+                'withhold_amount' => (float) $settlement->getWithholdAmount(),
+            ];
+        })->values();
+
+        if ($lines->count() > 1) {
+            $lines = $lines->filter(fn ($line) => $line['settlement_amount'] > 0)->values();
+        }
+
+        return $lines->all();
     }
 
     

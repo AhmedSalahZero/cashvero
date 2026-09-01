@@ -14,13 +14,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * of the opening position rather than a transaction that happened on a
  * particular day.
  *
- * Where it SHOWS depends on the partner type it was entered under:
- *   - shareholder / employee / subsidiary / other partner / tax — those
- *     have a real ledger table, so a statement row is written there and
- *     the running balance cascades like any other movement;
- *   - customer / supplier — those have no ledger table; their statement
- *     is derived from invoices, so the due is injected into that report
- *     instead (see HasBalances::appendOtherDues).
+ * It is only recordable against a partner type that keeps a ledger of
+ * its own — subsidiary company, shareholder, employee, other partner, and
+ * taxes. A statement row is written there and the running balance
+ * cascades like any other movement.
+ *
+ * Customers and suppliers are deliberately NOT offered: they keep no
+ * ledger, their statement is derived from invoices, and an amount that
+ * is not an invoice has no honest place in it. An earlier version
+ * injected such dues into that report at read time; that was withdrawn
+ * at the project owner's decision.
  */
 class OtherDue extends Model
 {
@@ -31,15 +34,19 @@ class OtherDue extends Model
     public const DUE_TO = 'due_to';
 
     /**
-     * Partner types whose statement is a real ledger table, mapped to the
-     * model that writes it. Anything not listed here (customer, supplier)
-     * has its statement derived from invoices instead.
+     * The only partner types a due can be recorded against, mapped to the
+     * model that writes their statement row. These are exactly the types
+     * the Partner Statement report reads, so every due entered is a due
+     * somebody can go and look at.
      */
     public const LEDGER_STATEMENTS = [
-        'is_employee' => EmployeeStatement::class,
-        'is_shareholder' => ShareholderStatement::class,
         'is_subsidiary_company' => SubsidiaryCompanyStatement::class,
+        'is_shareholder' => ShareholderStatement::class,
+        'is_employee' => EmployeeStatement::class,
         'is_other_partner' => OtherPartnerStatement::class,
+        // Taxes keep their own ledger and their own statement screen
+        // (TaxesInsuranceStatementController), so a due here is readable
+        // there just as the other four are on the Partner Statement.
         'is_tax' => TaxStatement::class,
     ];
 
@@ -74,8 +81,9 @@ class OtherDue extends Model
     }
 
     /**
-     * The ledger model for this due's partner type, or null when the
-     * partner type keeps no ledger (customer / supplier).
+     * The ledger model for this due's partner type, or null for a type
+     * that is no longer offered — a row left over from before the list
+     * was narrowed. Nothing is written for those.
      */
     public function statementModel(): ?string
     {

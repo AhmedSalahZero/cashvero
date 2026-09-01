@@ -368,6 +368,8 @@ class MoneyPaymentController
         $common = [
             'id' => $moneyPayment->id,
             'type_formatted' => $moneyPayment->getMoneyTypeFormatted(),
+            'exchange_rate_formatted' => number_format((float) $moneyPayment->getExchangeRate(), 6),
+            'amount_in_invoice_currency_formatted' => number_format((float) $moneyPayment->getAmountInInvoiceCurrency(), 2).' '.strtoupper((string) ($moneyPayment->getCurrency() ?: $moneyPayment->getPaymentCurrency())),
             'partner_name' => $moneyPayment->getSupplierName(),
             'delivery_date' => $moneyPayment->getDeliveryDate(),
             'delivery_date_formatted' => $moneyPayment->getDeliveryDateFormatted(),
@@ -382,6 +384,7 @@ class MoneyPaymentController
             'is_fully_integrated_with_odoo' => $company->hasOdooIntegrationCredentials() && $moneyPayment->fullyIntegratedWithOdoo(),
             'odoo_reference_names' => $company->hasOdooIntegrationCredentials() && $moneyPayment->fullyIntegratedWithOdoo() ? $moneyPayment->getOdooReferenceNames() : [],
             'edit_url' => route('edit.money.payment', ['company' => $company->id, 'moneyPayment' => $moneyPayment->id]),
+            'print_url' => route('print.money.payment', ['company' => $company->id, 'moneyPayment' => $moneyPayment->id]),
             'delete_url' => route('delete.money.payment', ['company' => $company->id, 'moneyPayment' => $moneyPayment->id]),
             // ⚠️ No resend_odoo_url here — see class docblock. The
             // shared _user_odoo_modal partial's "Resend" button posts
@@ -421,6 +424,120 @@ class MoneyPaymentController
             ]),
             default => $common,
         };
+    }
+
+    public function print(Company $company, MoneyPayment $moneyPayment)
+    {
+        $type = $moneyPayment->getType();
+        $row = $this->mapMoneyPaymentRow($moneyPayment, $type, $company);
+
+        $detailFieldLabels = match ($type) {
+            MoneyPayment::PAYABLE_CHEQUE => [
+                'exchange_rate_formatted' => __('Exchange Rate'),
+                'amount_in_invoice_currency_formatted' => __('Amount In Invoice Currency'),
+                'status_formatted' => __('Status'),
+                'cheque_number' => __('Cheque Number'),
+                'payment_bank_name' => __('Payment Bank'),
+                'account_type_name' => __('Account Type'),
+                'account_number' => __('Account Number'),
+                'due_date_formatted' => __('Due Date'),
+                'due_after_days' => __('Due After Days'),
+                'due_status' => __('Due Status'),
+            ],
+            MoneyPayment::OUTGOING_TRANSFER => [
+                'exchange_rate_formatted' => __('Exchange Rate'),
+                'amount_in_invoice_currency_formatted' => __('Amount In Invoice Currency'),
+                'payment_bank_name' => __('Payment Bank'),
+                'account_type_name' => __('Account Type'),
+                'account_number' => __('Account Number'),
+            ],
+            MoneyPayment::CASH_PAYMENT => [
+                'exchange_rate_formatted' => __('Exchange Rate'),
+                'amount_in_invoice_currency_formatted' => __('Amount In Invoice Currency'),
+                'branch_name' => __('Branch'),
+                'receipt_number' => __('Receipt Number'),
+            ],
+            MoneyPayment::LEASING => [
+                'exchange_rate_formatted' => __('Exchange Rate'),
+                'amount_in_invoice_currency_formatted' => __('Amount In Invoice Currency'),
+                'leasing_company_name' => __('Leasing Company'),
+                'leasing_contract_name' => __('Contract Name'),
+            ],
+            default => [],
+        };
+
+        $details = $this->buildMoneyPaymentPrintDetails($row, $detailFieldLabels);
+        $settlements = $this->moneyPaymentSettlementsForPrint($moneyPayment);
+
+        return Inertia::render('MoneyPayment/Print', [
+            'company' => ['id' => $company->id, 'name' => $company->getName()],
+            'record' => [
+                'id' => $moneyPayment->id,
+                'type' => $moneyPayment->getMoneyTypeFormatted(),
+                'partner_name' => $moneyPayment->getSupplierName(),
+                'date' => $moneyPayment->getDeliveryDateFormatted(),
+                'amount' => $moneyPayment->getPaidAmountFormatted(),
+                'currency' => strtoupper($moneyPayment->getPaymentCurrency()),
+                'details' => $details,
+                'settlements' => $settlements,
+                'settlement_total' => number_format(collect($settlements)->sum('settlement_amount'), 2),
+            ],
+            'printedAt' => now()->format('d-m-Y H:i'),
+        ]);
+    }
+
+    protected function buildMoneyPaymentPrintDetails(array $row, array $fieldLabels): array
+    {
+        return collect($fieldLabels)->map(function ($label, $key) use ($row) {
+            $value = $this->normalizePrintDetailValue($row[$key] ?? null);
+            return ['label' => $label, 'value' => $value];
+        })->filter(fn ($item) => filled($item['value']))->values()->all();
+    }
+
+    protected function normalizePrintDetailValue($value): ?string
+    {
+        if (is_array($value)) {
+            if (array_key_exists('status', $value)) {
+                return (string) $value['status'];
+            }
+
+            return collect($value)->filter(fn ($item) => filled($item))->map(fn ($item) => is_scalar($item) ? (string) $item : null)->filter()->implode(' - ');
+        }
+
+        if (is_object($value)) {
+            if (method_exists($value, '__toString')) {
+                return (string) $value;
+            }
+
+            return null;
+        }
+
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return is_scalar($value) ? (string) $value : null;
+    }
+
+    protected function moneyPaymentSettlementsForPrint(MoneyPayment $moneyPayment): array
+    {
+        $lines = $moneyPayment->settlements()->with('invoice')->get()->map(function ($settlement) use ($moneyPayment) {
+            $invoice = $settlement->invoice;
+            return [
+                'invoice_number' => $invoice?->invoice_number ?: '-',
+                'invoice_date' => $invoice?->invoice_date ? Carbon::make($invoice->invoice_date)->format('d-m-Y') : '-',
+                'invoice_due_date' => $invoice?->invoice_due_date ? Carbon::make($invoice->invoice_due_date)->format('d-m-Y') : '-',
+                'currency' => strtoupper((string) ($invoice?->currency ?: $moneyPayment->getCurrency())),
+                'settlement_amount' => (float) $settlement->getSettlementAmount(),
+                'withhold_amount' => (float) $settlement->getWithholdAmount(),
+            ];
+        })->values();
+
+        if ($lines->count() > 1) {
+            $lines = $lines->filter(fn ($line) => $line['settlement_amount'] > 0)->values();
+        }
+
+        return $lines->all();
     }
 
     /**

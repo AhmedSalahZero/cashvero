@@ -150,6 +150,7 @@ class BuyOrSellCurrenciesController
                 'has_odoo_error' => (bool) $model->hasOdooError(),
                 'odoo_error' => $model->getOdooError(),
                 'odoo_reference_names' => $model->getOdooReferenceNames(),
+                'print_url' => route('buy-or-sell-currencies.print', ['company' => $company->id, 'buy_or_sell_currency' => $model->id]),
                 'edit_url' => route('buy-or-sell-currencies.edit', ['company' => $company->id, 'buy_or_sell_currency' => $model->id]),
                 'delete_url' => route('buy-or-sell-currencies.destroy', ['company' => $company->id, 'buy_or_sell_currency' => $model->id]),
             ];
@@ -227,6 +228,37 @@ class BuyOrSellCurrenciesController
             'createUrl' => route('buy-or-sell-currencies.create', ['company' => $company->id]),
         ]);
     }
+
+	public function print(Company $company, BuyOrSellCurrency $buyOrSellCurrency)
+	{
+		$details = [
+			['label' => __('From Bank'), 'value' => $buyOrSellCurrency->getFromBankName()],
+			['label' => __('From Account Type'), 'value' => $buyOrSellCurrency->getFromAccountTypeName()],
+			['label' => __('From Account Number'), 'value' => $buyOrSellCurrency->getFromAccountNumber()],
+			['label' => __('To Bank'), 'value' => $buyOrSellCurrency->getToBankName()],
+			['label' => __('To Account Type'), 'value' => $buyOrSellCurrency->getToAccountTypeName()],
+			['label' => __('To Account Number'), 'value' => $buyOrSellCurrency->getToAccountNumber()],
+			['label' => __('From Branch'), 'value' => $buyOrSellCurrency->getFromBranchName()],
+			['label' => __('To Branch'), 'value' => $buyOrSellCurrency->getToBranchName()],
+		];
+
+		return \Inertia\Inertia::render('BuyOrSellCurrencies/Print', [
+			'company' => ['id' => $company->id, 'name' => $company->getName()],
+			'record' => [
+				'id' => $buyOrSellCurrency->id,
+				'type' => BuyOrSellCurrency::getAllTypes()[$buyOrSellCurrency->getType()] ?? $buyOrSellCurrency->getType(),
+				'date' => $buyOrSellCurrency->getTransactionDateFormatted(),
+				'amount_to_sell' => $buyOrSellCurrency->getAmountToSellFormatted(),
+				'currency_to_sell' => strtoupper($buyOrSellCurrency->getCurrencyToSell()),
+				'exchange_rate' => number_format($buyOrSellCurrency->getExchangeRate(), 6),
+				'amount_to_buy' => $buyOrSellCurrency->getAmountToBuyFormatted(),
+				'currency_to_buy' => strtoupper($buyOrSellCurrency->getCurrencyToBuy()),
+				'user_comment' => $buyOrSellCurrency->getUserComment(),
+				'details' => collect($details)->filter(fn ($item) => filled($item['value']))->values()->all(),
+			],
+			'printedAt' => now()->format('d-m-Y H:i'),
+		]);
+	}
 	/**
 	 * Add Sell Or Buy Currency form.
 	 *
