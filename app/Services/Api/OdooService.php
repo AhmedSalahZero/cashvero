@@ -816,26 +816,38 @@ class OdooService
 
 		return $result;
 	}
-	protected function getInvoices(string $startDate,string $endDate)
+	/**
+	 * The fields the invoice import actually reads.
+	 *
+	 * This list used to be entirely commented out, leaving $fields = [] —
+	 * and an empty field list makes Odoo return EVERY readable field of
+	 * account.move (around 200 in Odoo 18 Enterprise, including the HTML
+	 * narration and the computed invoice_payments_widget / tax_totals).
+	 * The importer consumes twelve of them. Naming them keeps the payload
+	 * to what is used; every entry below is read in startImportInvoices().
+	 */
+	public const INVOICE_FIELDS = [
+		'id',
+		'name',                                 // invoice_number
+		'move_type',                            // in_invoice / out_invoice
+		'invoice_date',
+		'invoice_date_due',
+		'invoice_origin',                       // so_number / po_number
+		'invoice_currency_rate',                // exchange rate
+		'amount_untaxed_in_currency_signed',
+		'partner_id',
+		'currency_id',
+		'tax_totals',                           // vat + withhold
+		'invoice_payments_widget',              // collected / paid
+	];
+
+	/**
+	 * @param  array<int, string>|null  $fields  narrow the read further —
+	 *         syncDeletedInvoices only needs the ids.
+	 */
+	protected function getInvoices(string $startDate,string $endDate, ?array $fields = null)
 	{
-		$fields= [
-			// 'partner_id',
-			// 'id',
-			// 'invoice_date',
-			// 'name',
-			// 'move_type',
-			// 'currency_id',
-			// 'amount_residual',
-			// 'amount_untaxed_in_currency_signed',
-			// 'amount_tax',
-			// 'invoice_date_due',
-			// 'date',
-			// 'invoice_currency_rate',//exchange rate
-			// 'invoice_origin' ,// so_number
-			// 'write_date',
-			// 'state',
-			// 'invoice_line_ids' // product ids 
-		];
+		$fields = $fields ?? self::INVOICE_FIELDS;
 		$filters = array(array(array('move_type', 'in', [
 			'in_invoice',
 			'out_invoice'
@@ -875,7 +887,8 @@ class OdooService
 		$supplierInvoices  = SupplierInvoice::where('company_id',$companyId)->where('invoice_date','>=',$startDate)->where('invoice_date','<=',$endDate)->where('odoo_id','>',0)->get();
 		
 		$deletedIds= [];
-		$odooInvoices = $this->getInvoices($startDate, $endDate);
+		// Only the ids are compared here, so ask for nothing else.
+		$odooInvoices = $this->getInvoices($startDate, $endDate, ['id']);
 		if (!is_array($odooInvoices)) {
 			return;
 		}

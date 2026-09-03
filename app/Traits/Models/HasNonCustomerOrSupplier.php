@@ -36,7 +36,33 @@ trait HasNonCustomerOrSupplier
     {
             $isMoneyReceived = $this instanceof MoneyReceived ;
             $odooPaymentService = new OdooPayment($company);
-            if ($this->isChequeAndNotCustomerOrSupplier()) {
+            /**
+             * Every cheque goes through createDownPayment(), which builds a
+             * real account.payment on the cheque payment method — and that
+             * method's outstanding account is Notes Receivable / Notes
+             * Payable, the same account the collection later clears.
+             *
+             * This used to read isChequeAndNotCustomerOrSupplier(), which
+             * excluded customers and suppliers. Their cheques therefore fell
+             * through to the raw journal entry below, which debits the
+             * BRANCH'S CASH account (getChequeOdooId() -> branch->getOdooId()).
+             * The collection then credited Notes Receivable — a different
+             * account — so the safe was never relieved and the same money
+             * appeared twice in Odoo: once in the safe, once in the bank.
+             *
+             * Verified against the live Odoo 18 Enterprise instance: payment
+             * method line 414 ("Cheque Rec" on the Cash On Hand journal)
+             * carries outstanding account 406 (130501 Notes Receivable),
+             * which is exactly what chequeCollection() credits — so the two
+             * sides now net to zero.
+             *
+             * Blast radius, measured over every row: only a cheque whose
+             * partner IS a customer or supplier AND which reaches this
+             * method at all (i.e. a down payment) changes behaviour. Cash
+             * expenses are unaffected — their partner type is null, so both
+             * predicates already agreed.
+             */
+            if ($this->isChequeOrChequePayment()) {
                 $result = $odooPaymentService->createDownPayment($this);
                 return ;
             }

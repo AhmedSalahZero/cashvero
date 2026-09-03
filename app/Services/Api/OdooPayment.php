@@ -130,23 +130,18 @@ class OdooPayment
             );
             
             
-            $this->models->execute_kw(
-                $this->db,
-                $this->uid,
-                $this->password,
-                'account.payment',
-                'action_post',
-                [[$paymentId]],
-            );
-    
             if (is_array($paymentId) && isset($paymentId['faultString'])) {
-                session()->flash('fail', $paymentId['faultString']);
+                session()->flash('fail', OdooSync::userFacingMessage(new Exception($paymentId['faultString'])));
                 $moneyModel->update([
                     'synced_with_odoo'=>false ,
                     'odoo_error_message'=>$paymentId['faultString']
                 ]);
                 return ;
             }
+            // Posts only after the create fault is ruled out, and stops if
+            // Odoo refuses to post — see postOrFail().
+            $this->postOrFail($paymentId, 'account.payment');
+
             $odooAccountPayment = $this->fetchData('account.payment', [], [[['id','=',$paymentId]]]);
             $moneyModel->update([
                 'odoo_id'=>$paymentId,
@@ -156,7 +151,7 @@ class OdooPayment
                 'odoo_error_message'=>null
             ]);
         } catch (\Exception $e) {
-            session()->flash('fail', __('Error While Connecting With Odoo : ' . $e->getMessage()));
+            session()->flash('fail', OdooSync::userFacingMessage($e));
             $moneyModel->update([
                 'synced_with_odoo'=>false ,
                 'odoo_error_message'=>$e->getMessage()
@@ -228,22 +223,18 @@ class OdooPayment
             );
             
             
-            $this->models->execute_kw(
-                $this->db,
-                $this->uid,
-                $this->password,
-                'account.payment',
-                'action_post',
-                [[$paymentId]],
-            );
             if (is_array($paymentId) && isset($paymentId['faultString'])) {
-                session()->flash('fail', $paymentId['faultString']);
+                session()->flash('fail', OdooSync::userFacingMessage(new Exception($paymentId['faultString'])));
                 $moneyModel->update([
                     'synced_with_odoo'=>false ,
                     'odoo_error_message'=>$paymentId['faultString']
                 ]);
                 return ;
             }
+            // Posts only after the create fault is ruled out, and stops if
+            // Odoo refuses to post — see postOrFail().
+            $this->postOrFail($paymentId, 'account.payment');
+
             $odooAccountPayment = $this->fetchData('account.payment', [], [[['id','=',$paymentId]]]);
             $moneyModel->update([
                 'synced_with_odoo'=>true ,
@@ -256,7 +247,7 @@ class OdooPayment
             ]);
                 
         } catch (\Exception $e) {
-            session()->flash('fail', __('Error While Connecting With Odoo : ' . $e->getMessage()));
+            session()->flash('fail', OdooSync::userFacingMessage($e));
             $moneyModel->update([
                 'synced_with_odoo'=>false ,
                 'odoo_error_message'=>$e->getMessage()
@@ -342,7 +333,7 @@ class OdooPayment
             ['context' => $context]
         );
         if (is_array($paymentResult) && isset($paymentResult['faultString'])) {
-            session()->flash('fail', $paymentResult['faultString']);
+            session()->flash('fail', OdooSync::userFacingMessage(new Exception($paymentResult['faultString'])));
             $moneyModel->update([
                 'synced_with_odoo'=>false ,
                 'odoo_error_message'=>$paymentResult['faultString']
@@ -468,12 +459,7 @@ class OdooPayment
             
             // Step 2: If payment is in draft, post it
             if ($paymentState === 'draft') {
-                $this->execute(
-                    'account.payment',
-                    'action_post',
-                    [[$accountPayment_id]],
-                    []
-                );
+                $this->postOrFail($accountPayment_id, 'account.payment');
                 $paymentState = 'posted';
             }
 
@@ -594,7 +580,7 @@ class OdooPayment
                     );
                     // Handle success
                 } catch (Exception $e) {
-                    session()->flash('fail', $e->getMessage());
+                    session()->flash('fail', OdooSync::userFacingMessage($e));
                 
                     // Log or handle error
                     Log::error('Odoo reconciliation failed: ' . $e->getMessage());
@@ -641,7 +627,7 @@ class OdooPayment
             ];
 
         } catch (\Exception $e) {
-            session()->flash('fail', 'Error in chequeCollection: ' . $e->getMessage());
+            session()->flash('fail', OdooSync::userFacingMessage($e, 'Cheque collection'));
             return [
                 'error' => true,
                 'message' => 'Failed to process cheque collection: ' . $e->getMessage()
@@ -704,12 +690,7 @@ class OdooPayment
         
             // Step 2: If payment is in draft, post it
             if ($paymentState === 'draft') {
-                $this->execute(
-                    'account.payment',
-                    'action_post',
-                    [[$accountPayment_id]],
-                    []
-                );
+                $this->postOrFail($accountPayment_id, 'account.payment');
                 $paymentState = 'posted';
             }
 
@@ -841,7 +822,7 @@ class OdooPayment
                      * failure is visible when it happens on the
                      * collection side. Brought in line with that.
                      */
-                    session()->flash('fail', $e->getMessage());
+                    session()->flash('fail', OdooSync::userFacingMessage($e));
 
                     // Log or handle error
                     Log::error('Odoo reconciliation failed: ' . $e->getMessage());
@@ -1560,11 +1541,7 @@ public function transferAdvanceToReceivableOrPayable(int $odooCurrencyId , float
             [$moveData]
         );
 	
-        $this->execute(
-            'account.move',
-            'action_post',
-            [[$newMoveId]]
-        );
+        $this->postOrFail($newMoveId, 'account.move', 'Advance transfer');
 
         /**
          * The readable reference (e.g. "TA/2026/08/0002") is only
@@ -2237,4 +2214,47 @@ private function reconcileAdvanceWithMultipleTransfers($advanceMoveId, $transfer
 
 
 
+
+    /**
+     * Posts an Odoo record and refuses to continue if Odoo would not post it.
+     *
+     * Two failures used to pass silently at every call site:
+     *
+     *   1. create() can answer with a faultString instead of an id, and
+     *      action_post was invoked anyway — with the fault array standing in
+     *      for the id.
+     *   2. action_post's own result was discarded. create() only validates
+     *      field constraints; posting validates far more (a locked or closed
+     *      period, an unbalanced move, a journal with no default account, a
+     *      sequence conflict). So Odoo could refuse to post while the caller
+     *      went on to write synced_with_odoo = true — leaving the record
+     *      shown as synced here and sitting in draft there, absent from the
+     *      ledger with nothing to indicate it.
+     *
+     * Throwing is what the callers already expect: each sits inside a
+     * try/catch that records the failure on the row and tells the user.
+     *
+     * @param  int|array  $recordId  whatever create() returned
+     * @return int the posted record's id
+     */
+    protected function postOrFail($recordId, string $model = 'account.payment', string $context = '')
+    {
+        $label = $context !== '' ? $context.': ' : '';
+
+        if (is_array($recordId) && isset($recordId['faultString'])) {
+            throw new Exception($label.$recordId['faultString']);
+        }
+
+        if (! is_numeric($recordId)) {
+            throw new Exception($label.__('Odoo did not return a record id.'));
+        }
+
+        $result = $this->execute($model, 'action_post', [[(int) $recordId]]);
+
+        if (is_array($result) && isset($result['faultString'])) {
+            throw new Exception($label.$result['faultString']);
+        }
+
+        return (int) $recordId;
+    }
 }

@@ -1448,38 +1448,57 @@ class MoneyReceivedController
         ] ;
 
     
-        $moneyReceived->cheque->update($updateChequeData);
-
-        while ($currentStatement = $moneyReceived->getCurrentStatement()) {
-            $currentStatement->delete();
-            $moneyReceived = $moneyReceived->refresh();
-        }
         $hasOdooIntegration = $company->hasOdooIntegrationCredentials();
         $OdooPaymentService = null ;
-        if ($hasOdooIntegration && !$isOpenBalance) {
-            $OdooPaymentService = new OdooPayment($company);
-            $hasSettlements = $moneyReceived->settlements->count();
-            $items = $hasSettlements ? $moneyReceived->settlements : [$moneyReceived];
-            if ($moneyReceived->isInvoiceSettlementWithDownPayment()) {
-                $items->push($moneyReceived);
+
+        /**
+         * Moving the cheque back to under-collection changes the cheque's
+         * status AND removes the bank statement rows that recorded its
+         * collection. Those two have to happen together: a failure between
+         * them used to leave the cheque marked UNDER_COLLECTION while the
+         * statement rows still asserted the collection, so the bank balance
+         * disagreed with the cheque's own state and nothing showed why.
+         *
+         * The Odoo unlinks sit inside deliberately — the same rule the rest
+         * of this codebase follows for deletions (see
+         * unlinkNonCustomerOrSupplierOdooExpense): if Odoo refuses to remove
+         * its side, the local rows must come back too, so the two never
+         * disagree. Creates stay outside and after the commit.
+         */
+        OdooSync::transaction(function () use ($company, &$moneyReceived, &$OdooPaymentService, $updateChequeData, $isOpenBalance, $hasOdooIntegration) {
+            $moneyReceived->cheque->update($updateChequeData);
+
+            while ($currentStatement = $moneyReceived->getCurrentStatement()) {
+                $currentStatement->delete();
+                $moneyReceived = $moneyReceived->refresh();
             }
-            foreach ($items as $settlementOrMoneyModel) {
-                if ($settlementOrMoneyModel->account_bank_statement_line_id) {
-                    $OdooPaymentService->unlinkBankCollection($settlementOrMoneyModel->account_bank_statement_line_id);
+
+            if ($hasOdooIntegration && !$isOpenBalance) {
+                $OdooPaymentService = new OdooPayment($company);
+                $hasSettlements = $moneyReceived->settlements->count();
+                $items = $hasSettlements ? $moneyReceived->settlements : [$moneyReceived];
+                if ($moneyReceived->isInvoiceSettlementWithDownPayment()) {
+                    $items->push($moneyReceived);
+                }
+                foreach ($items as $settlementOrMoneyModel) {
+                    if ($settlementOrMoneyModel->account_bank_statement_line_id) {
+                        $OdooPaymentService->unlinkBankCollection($settlementOrMoneyModel->account_bank_statement_line_id);
+                    }
                 }
             }
-        }
 
-        if ($hasOdooIntegration && $isOpenBalance) {
-            $moneyReceived->unlinkNonCustomerOrSupplierOdooExpense();
-            $moneyReceived->update([
-            'odoo_reference'=>null,
-            'journal_entry_id'=>null ,
-            'account_bank_statement_line_id'=>null
-            ]);
-        }
+            if ($hasOdooIntegration && $isOpenBalance) {
+                $moneyReceived->unlinkNonCustomerOrSupplierOdooExpense();
+                $moneyReceived->update([
+                    'odoo_reference'=>null,
+                    'journal_entry_id'=>null ,
+                    'account_bank_statement_line_id'=>null
+                ]);
+            }
+        });
 
-        
+        // Re-creating the down payment in Odoo is a CREATE, so it stays out
+        // of the transaction — no XML-RPC round trip with the DB held open.
         $moneyReceived->handleOdooDownPayments($OdooPaymentService, $hasOdooIntegration);
         
         return redirect()->route('view.money.receive', ['company'=>$company->id,'active'=>MoneyReceived::CHEQUE_UNDER_COLLECTION])->with('success', __('Cheque Is Under Collection'));

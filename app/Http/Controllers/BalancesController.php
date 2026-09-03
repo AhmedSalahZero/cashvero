@@ -705,7 +705,7 @@ class BalancesController
 					 */
 					$invoiceCurrency = null ;
 					$invoicePartnerId = $downPaymentStdClass->{$clientIdColumnName};
-					$invoicePartnerName = Partner::find($invoicePartnerId)->getName();
+					$invoicePartnerName = optional(Partner::find($invoicePartnerId))->getName();
 					$addNewRecord = true;
 				}
 				
