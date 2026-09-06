@@ -107,6 +107,7 @@ class RoutePermissionMap
         'view.money.receive' => 'money_received.view',
         'view.money.receive.json' => 'money_received.view',
         'print.money.receive' => 'money_received.view',
+        'money.received.settlements.info' => 'money_received.view',
         'create.money.receive' => 'money_received.create',
         'store.money.receive' => 'money_received.create',
         'edit.money.receive' => 'money_received.update',
@@ -128,6 +129,7 @@ class RoutePermissionMap
         /* ─────────────────────── Money Payment ──────────────────── */
         'view.money.payment' => 'money_payment.view',
         'print.money.payment' => 'money_payment.view',
+        'money.payment.settlements.info' => 'money_payment.view',
         'create.money.payment' => 'money_payment.create',
         'store.money.payment' => 'money_payment.create',
         'edit.money.payment' => 'money_payment.update',

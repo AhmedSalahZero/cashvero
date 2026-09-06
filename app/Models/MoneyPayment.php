@@ -788,6 +788,23 @@ class MoneyPayment extends Model implements IHaveCreditOverdraftStatement, IHave
         return $this->opening_balance_id !== null ;
     }
     
+    /**
+     * * المتبقي بعد تسوية الفواتير بيتسجل كدفعة مقدمة ، و الصف بياخد
+     * * money_type = INVOICE_SETTLEMENT_WITH_DOWN_PAYMENT عشان مسارات
+     * * اودو تعرف تبعت الجزء ده لوحده
+     *
+     * * الشرط كان بيقارن type (نوع الصرف : cash-in-safe /
+     * * outgoing-transfer / cheque ...) بـ 'is_supplier' — قيمة من
+     * * partner_type اصلا ، فما كانش بيتحقق ولا مرة و الدفعة المقدمة
+     * * كانت بتتسجل عندنا و ما بتروحش اودو
+     */
+    public static function requestHasInvoiceSettlementWithDownPayment(\Illuminate\Http\Request $request): bool
+    {
+        return $request->get('unapplied_amount', 0) > 0
+            && ! $request->get('is_down_payment')
+            && $request->get('partner_type', 'is_supplier') === 'is_supplier';
+    }
+    
     public function isInvoiceSettlementWithDownPayment():bool
     {
         return $this->getMoneyType() == self::INVOICE_SETTLEMENT_WITH_DOWN_PAYMENT;

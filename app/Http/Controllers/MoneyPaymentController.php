@@ -385,6 +385,7 @@ class MoneyPaymentController
             'odoo_reference_names' => $company->hasOdooIntegrationCredentials() && $moneyPayment->fullyIntegratedWithOdoo() ? $moneyPayment->getOdooReferenceNames() : [],
             'edit_url' => route('edit.money.payment', ['company' => $company->id, 'moneyPayment' => $moneyPayment->id]),
             'print_url' => route('print.money.payment', ['company' => $company->id, 'moneyPayment' => $moneyPayment->id]),
+            'settlements_info_url' => route('money.payment.settlements.info', ['company' => $company->id, 'moneyPayment' => $moneyPayment->id]),
             'delete_url' => route('delete.money.payment', ['company' => $company->id, 'moneyPayment' => $moneyPayment->id]),
             // ⚠️ No resend_odoo_url here — see class docblock. The
             // shared _user_odoo_modal partial's "Resend" button posts
@@ -939,7 +940,7 @@ class MoneyPaymentController
         $data['user_id'] = auth()->user()->id ;
         $data['company_id'] = $company->id ;
         $isDownPayment =  $request->get('is_down_payment') && $request->has('purchases_orders_amounts');
-        $isDownPaymentFromMoneyPayment = $request->get('unapplied_amount', 0) > 0 && !$request->get('is_down_payment') && $moneyType == 'is_supplier'  ;
+        $isDownPaymentFromMoneyPayment = MoneyPayment::requestHasInvoiceSettlementWithDownPayment($request);
         $data['money_type'] =  !$isDownPayment ? 'money-payment' : 'down-payment';
         $data['money_type'] = $isDownPaymentFromMoneyPayment ? MoneyPayment::INVOICE_SETTLEMENT_WITH_DOWN_PAYMENT : $data['money_type'];
         $currency = $data['currency'] ;
@@ -1523,4 +1524,13 @@ class MoneyPaymentController
 		return redirect()->back()->with('success',__('Done'));
 	
 	}
+
+    /**
+     * * تفاصيل الفواتير المسوّاة — بتترد كـ JSON و بتتعرض في بوب اب
+     * * للقراءة فقط من صفحة الـ index
+     */
+    public function settlementsInfo(Company $company, MoneyPayment $moneyPayment)
+    {
+        return response()->json($moneyPayment->getSettlementsInfo());
+    }
 }

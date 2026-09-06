@@ -339,6 +339,7 @@ class MoneyReceivedController
             'odoo_reference_names' => $company->hasOdooIntegrationCredentials() && $moneyReceived->fullyIntegratedWithOdoo() ? $moneyReceived->getOdooReferenceNames() : [],
             'edit_url' => route('edit.money.receive', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
             'print_url' => route('print.money.receive', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
+            'settlements_info_url' => route('money.received.settlements.info', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
             'delete_url' => route('delete.money.receive', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
             'resend_odoo_url' => route('resend.with.odoo', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
         ];
@@ -897,7 +898,7 @@ class MoneyReceivedController
         $companyId = $company->id;
         $receivingCurrency = $data['receiving_currency'] ;
         $isDownPayment = $request->get('is_down_payment') && $request->has('sales_orders_amounts');
-        $isDownPaymentFromMoneyReceived = $request->get('unapplied_amount', 0) > 0 && !$request->get('is_down_payment') && $moneyType =='is_customer';
+        $isDownPaymentFromMoneyReceived = MoneyReceived::requestHasInvoiceSettlementWithDownPayment($request);
         $data['money_type'] =  !$isDownPayment ? 'money-received' : 'down-payment';
         $data['money_type'] = $isDownPaymentFromMoneyReceived ? MoneyReceived::INVOICE_SETTLEMENT_WITH_DOWN_PAYMENT : $data['money_type'];
         $data['partner_id'] = $partnerId;
@@ -1773,6 +1774,15 @@ class MoneyReceivedController
             $OdooPaymentService->RecreateDownPayment($moneyReceived);
         }
         return back();
+    }
+
+    /**
+     * * تفاصيل الفواتير المسوّاة — بتترد كـ JSON و بتتعرض في بوب اب
+     * * للقراءة فقط من صفحة الـ index
+     */
+    public function settlementsInfo(Company $company, MoneyReceived $moneyReceived)
+    {
+        return response()->json($moneyReceived->getSettlementsInfo());
     }
     
     

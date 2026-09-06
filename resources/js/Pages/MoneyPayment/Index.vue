@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import RecordLogButton from '@/Components/RecordLogButton.vue';
+import SettlementsInfoButton from '@/Components/SettlementsInfoButton.vue';
 import { todayDate } from '@/composables/today';
 /* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
    الحماية الحقيقية على السيرفر في الـ Form Request. */
@@ -373,6 +374,7 @@ function submitUnmarkAsPaid() {
                             <td class="px-4 py-3 min-w-32">
                                 <div class="flex items-center gap-1 flex-wrap">
                                     <RecordLogButton subject="MoneyPayment" :id="row.id" :company-id="company.id" />
+                                    <SettlementsInfoButton v-if="row.settlements_info_url" :url="row.settlements_info_url" />
                                     <a v-if="row.print_url" :href="row.print_url" target="_blank" rel="noopener" class="cvr-action-btn" :title="$t('Print')">🖨️</a>
                                     <button v-if="row.has_comment" @click="commentTarget = row" class="cvr-action-btn" :title="$t('User Comment')">💬</button>
                                     <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Odoo Error')">🐞</button>

@@ -810,6 +810,11 @@ Route::group(
                     Route::get('money-received', 'MoneyReceivedController@index')->name('view.money.receive');
                     Route::get('money-received/json', 'MoneyReceivedController@indexJson')->name('view.money.receive.json');
                     Route::post('resend-odoo-money/{moneyReceived}', 'MoneyReceivedController@resendToOdoo')->name('resend.with.odoo');
+                    /**
+                     * * تفاصيل الفواتير المسوّاة — بوب اب للقراءة فقط في صفحة الـ index
+                     */
+                    Route::get('money-received-settlements-info/{moneyReceived}', 'MoneyReceivedController@settlementsInfo')->name('money.received.settlements.info');
+                    Route::get('money-payment-settlements-info/{moneyPayment}', 'MoneyPaymentController@settlementsInfo')->name('money.payment.settlements.info');
                     Route::get('money-received/create/{model?}', 'MoneyReceivedController@create')->name('create.money.receive');
                     Route::get('money-received/print/{moneyReceived}', 'MoneyReceivedController@print')->name('print.money.receive');
                     Route::post('money-received/create', 'MoneyReceivedController@store')->name('store.money.receive');

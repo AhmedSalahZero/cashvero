@@ -73,10 +73,10 @@ class StoreCashExpenseRequest extends FormRequest
 			'unapplied_amount'=>'sometimes|gte:0',
 			'net_balance_rules'=>new SettlementPlusWithoutCanNotBeGreaterNetBalance($this->get('settlements',[])),
 			
-			// 'cheque_number'=>$type == CashExpense::PAYABLE_CHEQUE ? ['required',new UniqueChequeNumberRule(Request()->input('delivery_bank_id.payable_cheque'),Request()->get('current_cheque_id'),__('Cheque Number Already Exist'))] : [],
+			// 'cheque_number'=>$type == CashExpense::PAYABLE_CHEQUE ? ['required',new UniqueChequeNumberRule(Request()->input('account_number.payable_cheque'),Request()->get('current_cheque_id'),__('Cheque Number Already Exist'))] : [],
 			'due_date'=>$type == CashExpense::PAYABLE_CHEQUE ? ['required',new DateMustBeGreaterThanOrEqualDate(null,$openingBalanceDate , __('Cheque Due Date Must Be Greater Than Or Equal Account Opening Date') )]:[],
 			
-			'cheque_number'=>$type == CashExpense::PAYABLE_CHEQUE ? ['required',new UniqueChequeNumberRule(Request()->input('delivery_bank_id.payable_cheque'),Request()->get('current_cheque_id'),__('Cheque Number Already Exist'))] : [],
+			'cheque_number'=>$type == CashExpense::PAYABLE_CHEQUE ? ['required',new UniqueChequeNumberRule(Request()->input('account_number.payable_cheque'),Request()->get('current_cheque_id'),__('Cheque Number Already Exist'))] : [],
 			'receipt_number'=>$type== CashExpense::CASH_PAYMENT ? ['required',new UniqueReceiptNumberForReceivingBranchRule('cash_payments',$this->delivery_branch_id?:0,$this->cash_id,__('Receipt Number For This Branch Already Exist'))] : [],
 			'amount_can_not_be_greater_than_end_balance_at_payment_date'=>new AmountCanNotBeGreaterThanEndBalanceAtPaymentDate($type,$this->input('paid_amount.'.$type),$this->route('company'),$this->input('account_type.'.$type),$this->input('account_number.'.$type),$financialInstitutionId,$this->payment_date,$this->delivery_branch_id),
         ];

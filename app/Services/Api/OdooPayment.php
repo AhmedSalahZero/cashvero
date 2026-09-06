@@ -54,31 +54,9 @@ class OdooPayment
             if (!$company->withinIntegrationDate($paymentDate)) {
                 return ;
             }
-            $journalId = $this->getJournalId($moneyModel) ;
-        
-            /**
-             * * $bankOrSafeId
-             */
-            $paymentAmount = $moneyModel->isInvoiceSettlementWithDownPayment() ? $moneyModel->downPaymentSettlements->sum('down_payment_amount') : $moneyModel->getAmount()  ;
-            
-            if ($moneyModel->isChequeAndNotCustomerOrSupplier()) {
-                $paymentAmount=$moneyModel->getAmount();
-            }
-            $currencyName = $moneyModel->getReceivingOrPaymentCurrency();
-            $odooCurrencyId = Currency::getOdooId($currencyName);
-            
-            /**
-             * @var Company $company;
-             */
-            
-            $odooPartnerId = $moneyModel->partner ? $moneyModel->partner->getOdooId() : null;
-            $inBoundOrOutBound =$moneyModel->getInboundOrOutbound();
-            $customerOrSupplier = $moneyModel->getCustomerOrSupplier();
 
-
-            $paymentMethodLineId = $this->getPaymentMethodLineId($moneyModel);
-            if (! $paymentMethodLineId) {
-                $this->failWithMissingPaymentMethodLine($moneyModel, $journalId);
+            $paymentData = $this->buildDownPaymentData($moneyModel);
+            if ($paymentData === null) {
                 return ;
             }
 
@@ -87,37 +65,6 @@ class OdooPayment
                 'active_model' => 'account.move',
                    'active_ids' => [],
             ];
-
-            $paymentData = [
-                'amount' => $paymentAmount,
-                'journal_id' => $journalId,
-                'date' => $paymentDate,
-                'currency_id'=>$odooCurrencyId,
-                'partner_id' => $odooPartnerId,
-                'payment_type' => $inBoundOrOutBound,
-                'partner_type' => $customerOrSupplier ,
-                'payment_method_line_id'=>$paymentMethodLineId,
-                'memo'=>$moneyModel->generateDownPaymentMessage(),
-            ];
-
-            /**
-             * * الشيكات للشركاء اللي مش عميل/مورد (موظف - مساهم - شركة تابعة - جهة ضريبية ...)
-             * * كانت بتتبعت من غير ما نقول لأودو الحساب المقابل، فأودو كان بياخد حساب
-             * * الدائنين/المدينين الافتراضي بتاع الشريك والقيد ما بيوصلش لحساب العملية
-             * * (السلفة - العهدة - التمويل - الاستثمار ... إلخ) لا عند الإصدار ولا عند الصرف
-             * * destination_account_id بيخلي أودو يقيّد على حساب العملية مباشرةً:
-             * *   صرف : من ح/ العملية    إلي ح/ أوراق الدفع
-             * *   قبض : من ح/ أوراق القبض إلي ح/ العملية
-             * * والطرف التاني (أوراق الدفع/القبض) بييجي من الـ payment method زي ما هو
-             * * فالتسوية وقت صرف الشيك في markPayableChequeAsPaidInOdoo فضلت شغالة زي ما هي
-             */
-            if ($moneyModel->isChequeAndNotCustomerOrSupplier()) {
-                $odooIdWithRef = $moneyModel->getOdooIdWithRefOfTransaction();
-                if (!empty($odooIdWithRef['id'])) {
-                    $paymentData['destination_account_id'] = (int) $odooIdWithRef['id'];
-                    $paymentData['memo'] = $odooIdWithRef['ref'] ?: $paymentData['memo'];
-                }
-            }
 
             $paymentId = $this->models->execute_kw(
                 $this->db,
@@ -157,11 +104,99 @@ class OdooPayment
                 'odoo_error_message'=>$e->getMessage()
             ]);
         }
-        
 
-         
+
+
     }
-    
+
+    /**
+     * Shapes the account.payment 'create' vals for a down payment — no XML-RPC
+     * call, so it can be exercised in a test without talking to Odoo. Returns
+     * null (having already recorded the failure) when there is no payment
+     * method line configured for the journal used.
+     */
+    protected function buildDownPaymentData($moneyModel): ?array
+    {
+        $journalId = $this->getJournalId($moneyModel) ;
+
+        /**
+         * * $bankOrSafeId
+         */
+        $paymentAmount = $moneyModel->isInvoiceSettlementWithDownPayment() ? $moneyModel->downPaymentSettlements->sum('down_payment_amount') : $moneyModel->getAmount()  ;
+
+        if ($moneyModel->isChequeAndNotCustomerOrSupplier()) {
+            $paymentAmount=$moneyModel->getAmount();
+        }
+        $currencyName = $moneyModel->getReceivingOrPaymentCurrency();
+        $odooCurrencyId = Currency::getOdooId($currencyName);
+
+        $odooPartnerId = $moneyModel->partner ? $moneyModel->partner->getOdooId() : null;
+        $inBoundOrOutBound =$moneyModel->getInboundOrOutbound();
+        $customerOrSupplier = $moneyModel->getCustomerOrSupplier();
+
+
+        $paymentMethodLineId = $this->getPaymentMethodLineId($moneyModel);
+        if (! $paymentMethodLineId) {
+            $this->failWithMissingPaymentMethodLine($moneyModel, $journalId);
+            return null;
+        }
+
+        $paymentData = [
+            'amount' => $paymentAmount,
+            'journal_id' => $journalId,
+            'date' => $moneyModel->getReceivingOrPaymentMoneyDate(),
+            'currency_id'=>$odooCurrencyId,
+            'partner_id' => $odooPartnerId,
+            'payment_type' => $inBoundOrOutBound,
+            'partner_type' => $customerOrSupplier ,
+            'payment_method_line_id'=>$paymentMethodLineId,
+            'memo'=>$moneyModel->generateDownPaymentMessage(),
+        ];
+
+        /**
+         * * الشيكات للشركاء اللي مش عميل/مورد (موظف - مساهم - شركة تابعة - جهة ضريبية ...)
+         * * كانت بتتبعت من غير ما نقول لأودو الحساب المقابل، فأودو كان بياخد حساب
+         * * الدائنين/المدينين الافتراضي بتاع الشريك والقيد ما بيوصلش لحساب العملية
+         * * (السلفة - العهدة - التمويل - الاستثمار ... إلخ) لا عند الإصدار ولا عند الصرف
+         * * destination_account_id بيخلي أودو يقيّد على حساب العملية مباشرةً:
+         * *   صرف : من ح/ العملية    إلي ح/ أوراق الدفع
+         * *   قبض : من ح/ أوراق القبض إلي ح/ العملية
+         * * والطرف التاني (أوراق الدفع/القبض) بييجي من الـ payment method زي ما هو
+         * * فالتسوية وقت صرف الشيك في markPayableChequeAsPaidInOdoo فضلت شغالة زي ما هي
+         *
+         * * العميل/المورد الحقيقي كان مستثنى من البلوك ده، فكان بيسيب
+         * * destination_account_id فاضي، وأودو بيحسبه تلقائيًا (compute
+         * * field قابل للتعديل) من property_account_receivable_id بتاع
+         * * الشريك (130470) بدل حساب السلف (203400 Customers Advance
+         * * Payments / advances_to_suppliers_id) — نفس فكرة تكرار
+         * * المبلغ اللي أصلحناها في الـ debit، لكن على الـ credit
+         *
+         * * أودو نفسه بيسمح بالنوعين هنا (asset_receivable أو
+         * * liability_payable) في domain حقل destination_account_id -
+         * * فكونه الحساب طبيعته payable مش مشكلة ، ده بالظبط اللي
+         * * أودو مصمم يقبله في الحقل ده (تأكدت منه على أودو الحي)
+         *
+         * * الميمو اتسيب لوحده للعميل/المورد الحقيقي : عنده أصلاً رسالة
+         * * أحسن من generateDownPaymentMessage() ، والـ ref العام
+         * * 'Down Payment' هنا مقصود بس للفئات التانية فوق
+         */
+        $isChequeAndNotCustomerOrSupplier = $moneyModel->isChequeAndNotCustomerOrSupplier();
+        $isCustomerOrSupplierDownPaymentCheque = $moneyModel->isChequeOrChequePayment()
+            && in_array($moneyModel->getPartnerType(), ['is_customer', 'is_supplier'], true);
+
+        if ($isChequeAndNotCustomerOrSupplier || $isCustomerOrSupplierDownPaymentCheque) {
+            $odooIdWithRef = $moneyModel->getOdooIdWithRefOfTransaction();
+            if (!empty($odooIdWithRef['id'])) {
+                $paymentData['destination_account_id'] = (int) $odooIdWithRef['id'];
+                if ($isChequeAndNotCustomerOrSupplier) {
+                    $paymentData['memo'] = $odooIdWithRef['ref'] ?: $paymentData['memo'];
+                }
+            }
+        }
+
+        return $paymentData;
+    }
+
     public function createDownPaymentFromSettlement($settlement)
     {
     

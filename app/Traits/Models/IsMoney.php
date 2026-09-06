@@ -495,6 +495,59 @@ trait IsMoney
         }
     }
 
+    /**
+     * * تفاصيل الفواتير المسوّاة على الحركة دي — للعرض في بوب اب للقراءة
+     * * فقط في صفحة الـ index
+     *
+     * * قبل كده مكانش فيه اي طريقة يشوف بيها المستخدم الفواتير اللي
+     * * اتسوّت غير انه يفتح شاشة التعديل
+     *
+     * @return array<string, mixed>
+     */
+    public function getSettlementsInfo(): array
+    {
+        /**
+         * * بنحترم العلاقة لو كانت متحمّلة قبل كده (eager loading في
+         * * صفحة الـ index) و ما نعملش استعلام تاني من غير داعي
+         */
+        $settlements = $this->relationLoaded('settlements')
+            ? $this->settlements
+            : $this->settlements()->with('invoice')->get();
+
+        $rows = $settlements->map(function ($settlement) {
+            $invoice = $settlement->invoice;
+
+            return [
+                'invoice_number' => $invoice ? $invoice->getInvoiceNumber() : __('N/A'),
+                'invoice_date' => $invoice ? $invoice->getInvoiceDateFormatted() : __('N/A'),
+                'due_date' => $invoice ? $invoice->getInvoiceDueDateFormatted() : __('N/A'),
+                'invoice_amount' => number_format((float) ($invoice ? $invoice->getInvoiceAmount() : 0), 2),
+                'settlement_amount' => number_format((float) $settlement->settlement_amount, 2),
+                'withhold_amount' => number_format((float) $settlement->withhold_amount, 2),
+                /**
+                 * * التسوية اللي جاية من دفعة مقدمة اتعملت قبل كده مش من
+                 * * فلوس الحركة دي نفسها — بنميّزها عشان الارقام تبان مفهومة
+                 */
+                'is_from_down_payment' => (bool) $settlement->is_from_down_payment,
+            ];
+        })->all();
+
+        $downPaymentAmount = null;
+
+        if ($this->isInvoiceSettlementWithDownPayment()) {
+            $downPaymentAmount = number_format((float) $this->downPaymentSettlements->sum('down_payment_amount'), 2);
+        }
+
+        return [
+            'rows' => $rows,
+            'currency' => $this->getCurrency(),
+            'total_amount' => number_format((float) $this->getAmount(), 2),
+            'total_settlement' => number_format((float) $settlements->sum('settlement_amount'), 2),
+            'total_withhold' => number_format((float) $settlements->sum('withhold_amount'), 2),
+            'down_payment_amount' => $downPaymentAmount,
+        ];
+    }
+
     public function handleOdooDownPayments($OdooPaymentService, $hasOdooIntegration)
     {
         
