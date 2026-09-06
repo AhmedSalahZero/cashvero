@@ -41,6 +41,8 @@ class SettlementsInfoTest extends TestCase
             'invoice_date' => '2026-01-10',
             'invoice_due_date' => '2026-02-10',
             'invoice_amount' => 350,
+            'vat_amount' => 50,
+            'net_invoice_amount' => 400,
         ]));
 
         $second = new Settlement;
@@ -50,6 +52,8 @@ class SettlementsInfoTest extends TestCase
             'invoice_date' => '2026-03-01',
             'invoice_due_date' => '2026-04-01',
             'invoice_amount' => 900,
+            'vat_amount' => 90,
+            'net_invoice_amount' => 990,
         ]));
 
         $money = new MoneyReceived;
@@ -89,7 +93,7 @@ class SettlementsInfoTest extends TestCase
         $this->assertSame('INV/2026/00001', $first['invoice_number']);
         $this->assertSame('10-01-2026', $first['invoice_date'], 'التاريخ بصيغة العرض');
         $this->assertSame('10-02-2026', $first['due_date']);
-        $this->assertSame('350.00', $first['invoice_amount'], 'مبلغ الفاتورة من الفاتورة');
+        $this->assertSame('400.00', $first['invoice_amount'], 'مبلغ الفاتورة بعد الضريبة (٣٥٠ + ٥٠) مش المبلغ الخام');
         $this->assertSame('350.00', $first['settlement_amount'], 'مبلغ التسوية من التسوية');
         $this->assertSame('15.00', $first['withhold_amount']);
         $this->assertFalse($first['is_from_down_payment']);
@@ -100,7 +104,7 @@ class SettlementsInfoTest extends TestCase
         $info = $this->moneyReceivedWithTwoSettledInvoices()->getSettlementsInfo();
 
         $this->assertTrue($info['rows'][1]['is_from_down_payment'], 'التسوية الجاية من دفعة مقدمة قديمة لازم تتميّز');
-        $this->assertSame('900.00', $info['rows'][1]['invoice_amount'], 'مبلغ الفاتورة مش مبلغ التسوية');
+        $this->assertSame('990.00', $info['rows'][1]['invoice_amount'], 'مبلغ الفاتورة بعد الضريبة مش مبلغ التسوية');
         $this->assertSame('250.00', $info['rows'][1]['settlement_amount']);
     }
 
@@ -124,6 +128,7 @@ class SettlementsInfoTest extends TestCase
             'invoice_date' => '2026-05-01',
             'invoice_due_date' => '2026-06-01',
             'invoice_amount' => 1000,
+            'net_invoice_amount' => 1000,
         ]));
 
         $money = new MoneyReceived;
@@ -179,6 +184,8 @@ class SettlementsInfoTest extends TestCase
             'invoice_date' => '2026-07-09',
             'invoice_due_date' => '2026-08-09',
             'invoice_amount' => 600,
+            'vat_amount' => 60,
+            'net_invoice_amount' => 660,
         ]));
 
         $money = new MoneyPayment;

@@ -521,7 +521,15 @@ trait IsMoney
                 'invoice_number' => $invoice ? $invoice->getInvoiceNumber() : __('N/A'),
                 'invoice_date' => $invoice ? $invoice->getInvoiceDateFormatted() : __('N/A'),
                 'due_date' => $invoice ? $invoice->getInvoiceDueDateFormatted() : __('N/A'),
-                'invoice_amount' => number_format((float) ($invoice ? $invoice->getInvoiceAmount() : 0), 2),
+                /**
+                 * * الصافي بعد الضريبة (المبلغ + الضريبة − الخصم) مش المبلغ
+                 * * الخام قبل الضريبة : ده اللي التسوية بتتحسب عليه فعلا
+                 * * (net_balance) و ده اللي شاشة الحركة نفسها بتعرضه تحت
+                 * * نفس العنوان "Invoice Amount" — فكان نفس العنوان بيدي
+                 * * رقمين مختلفين ، و مبلغ التسوية كان ممكن يبان اكبر من
+                 * * "مبلغ الفاتورة" المعروض جنبه
+                 */
+                'invoice_amount' => number_format((float) ($invoice ? $invoice->getNetInvoiceAmount() : 0), 2),
                 'settlement_amount' => number_format((float) $settlement->settlement_amount, 2),
                 'withhold_amount' => number_format((float) $settlement->withhold_amount, 2),
                 /**
