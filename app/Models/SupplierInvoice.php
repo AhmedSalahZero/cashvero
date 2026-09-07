@@ -8,6 +8,7 @@ use App\Traits\Models\HasForecastedProjectCollection;
 use App\Traits\Models\IsInvoice;
 use App\Traits\StaticBoot;
 use Carbon\Carbon;
+use App\Traits\Models\CannotBeDeletedWhileSettled;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
@@ -148,7 +149,7 @@ use Illuminate\Support\Facades\DB;
  */
 class SupplierInvoice extends Model implements IInvoice
 {
-    use StaticBoot , IsInvoice, HasForecastedProjectCollection;
+    use StaticBoot , IsInvoice, HasForecastedProjectCollection, CannotBeDeletedWhileSettled;
     
     
     protected $dates = [

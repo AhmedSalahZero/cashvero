@@ -1,4 +1,6 @@
 {
+    "Invoice :number cannot be deleted because :count settlement(s) are recorded against it.": "لا يمكن حذف الفاتورة :number لوجود :count تسوية مسجلة عليها.",
+    ":deleted row(s) deleted. :blocked could not be deleted:": "تم حذف :deleted صف. :blocked لم يمكن حذفها:",
     "Invoice Not Found": "الفاتورة غير موجودة",
     "No Invoice Linked": "غير مرتبطة بفاتورة",
     "The invoice linked to this settlement no longer exists.": "الفاتورة المرتبطة بهذه التسوية لم تعد موجودة.",

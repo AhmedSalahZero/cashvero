@@ -897,15 +897,35 @@ class OdooService
 			foreach($invoices as $invoice){
 				$invoiceOdooId = $invoice->getOdooId();
 				if(!in_array($invoiceOdooId,$odooInvoicesIds)){
+					/**
+					 * * الفاتورة اتمسحت في اودو ، بس لو عندنا تسويات نازلة
+					 * * عليها فمسحها هنا كان بيسيب التسويات يتيمة — مبالغ
+					 * * محسوبة على رصيد الشريك من غير ما نعرف مقابل ايه
+					 *
+					 * * التعارض ده لازم بني ادم يحله (يشيل التسوية الاول ،
+					 * * او يرجّع الفاتورة في اودو) ، فبنسيبها و نكمّل بدل
+					 * * ما نمسح غلط او نوقف الاستيراد كله
+					 */
+					try {
+						$invoice->delete();
+					} catch (\InvalidArgumentException $e) {
+						Log::warning('Kept a locally settled invoice that was deleted in Odoo', [
+							'invoice' => getModelNameWithoutNamespace($invoice).'#'.$invoice->getKey(),
+							'odoo_id' => $invoiceOdooId,
+							'company_id' => $companyId,
+							'reason' => $e->getMessage(),
+						]);
+
+						continue;
+					}
+
 					$deletedIds[] = [
 						'id'=>$invoiceOdooId,
 						'type'=>getModelNameWithoutNamespace($invoice)
 					];
-					$invoice->delete();
-					
 				}
 			}
-			
+
 		}
 	}
 	public function chartOfAccount(string $chartOfAccountCode) 
