@@ -959,7 +959,9 @@ class MoneyReceived extends Model implements IHasDebitCurrentAccountStatement
 		}
 
 		if($partnerType != 'is_customer'){
-			return __('Money Received From [ :partnerType ]',['partnerType'=>$this->getPartnerTypeFormatted()]);	
+			return $this->withTransactionType(
+				__('Money Received From [ :partnerType ]',['partnerType'=>$this->getPartnerTypeFormatted()])
+			);
 		}
 		return camelizeWithSpace($moneyType)  ;
 	}

@@ -251,6 +251,15 @@ class MoneyReceivedController
             // above for their tab-pill badges, matching how the original
             // Blade page ran all 7 queries but only rendered one table.
             $paginatorArray = $paginator->toArray();
+            /**
+             * * hasSettlementDetailsToShow() بيسأل عن التسويات و الدفعة
+             * * المقدمة ، فمن غير التحميل المسبق ده كان هيعمل استعلامين
+             * * لكل صف في الصفحة
+             */
+            if ($activeTab === $type) {
+                $paginator->getCollection()->loadMissing(['settlements', 'downPaymentSettlements', 'contract']);
+            }
+
             $paginatorArray['data'] = $activeTab === $type
                 ? $paginator->getCollection()->map(fn (MoneyReceived $moneyReceived) => $this->mapMoneyReceivedRow($moneyReceived, $type, $company))->all()
                 : [];
@@ -339,7 +348,13 @@ class MoneyReceivedController
             'odoo_reference_names' => $company->hasOdooIntegrationCredentials() && $moneyReceived->fullyIntegratedWithOdoo() ? $moneyReceived->getOdooReferenceNames() : [],
             'edit_url' => route('edit.money.receive', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
             'print_url' => route('print.money.receive', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
-            'settlements_info_url' => route('money.received.settlements.info', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
+            /**
+             * * الزرار بيتبنى من وجود الـ url ، فبنسيبه فاضي لما البوب اب
+             * * ما يكونش عنده حاجة يعرضها بدل ما المستخدم يدوس على فاضي
+             */
+            'settlements_info_url' => $moneyReceived->hasSettlementDetailsToShow()
+                ? route('money.received.settlements.info', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id])
+                : null,
             'delete_url' => route('delete.money.receive', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
             'resend_odoo_url' => route('resend.with.odoo', ['company' => $company->id, 'moneyReceived' => $moneyReceived->id]),
         ];

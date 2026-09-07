@@ -308,6 +308,15 @@ class MoneyPaymentController
             $paginator->appends(array_merge($request->except('page'), ['active' => $type]));
 
             $paginatorArray = $paginator->toArray();
+            /**
+             * * hasSettlementDetailsToShow() بيسأل عن التسويات و الدفعة
+             * * المقدمة ، فمن غير التحميل المسبق ده كان هيعمل استعلامين
+             * * لكل صف في الصفحة
+             */
+            if ($activeTab === $type) {
+                $paginator->getCollection()->loadMissing(['settlements', 'downPaymentSettlements', 'contract']);
+            }
+
             $paginatorArray['data'] = $activeTab === $type
                 ? $paginator->getCollection()->map(fn (MoneyPayment $moneyPayment) => $this->mapMoneyPaymentRow($moneyPayment, $type, $company))->all()
                 : [];
@@ -385,7 +394,13 @@ class MoneyPaymentController
             'odoo_reference_names' => $company->hasOdooIntegrationCredentials() && $moneyPayment->fullyIntegratedWithOdoo() ? $moneyPayment->getOdooReferenceNames() : [],
             'edit_url' => route('edit.money.payment', ['company' => $company->id, 'moneyPayment' => $moneyPayment->id]),
             'print_url' => route('print.money.payment', ['company' => $company->id, 'moneyPayment' => $moneyPayment->id]),
-            'settlements_info_url' => route('money.payment.settlements.info', ['company' => $company->id, 'moneyPayment' => $moneyPayment->id]),
+            /**
+             * * الزرار بيتبنى من وجود الـ url ، فبنسيبه فاضي لما البوب اب
+             * * ما يكونش عنده حاجة يعرضها بدل ما المستخدم يدوس على فاضي
+             */
+            'settlements_info_url' => $moneyPayment->hasSettlementDetailsToShow()
+                ? route('money.payment.settlements.info', ['company' => $company->id, 'moneyPayment' => $moneyPayment->id])
+                : null,
             'delete_url' => route('delete.money.payment', ['company' => $company->id, 'moneyPayment' => $moneyPayment->id]),
             // ⚠️ No resend_odoo_url here — see class docblock. The
             // shared _user_odoo_modal partial's "Resend" button posts

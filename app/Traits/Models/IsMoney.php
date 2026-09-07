@@ -625,6 +625,28 @@ trait IsMoney
     }
 
     /**
+     * * هل بوب اب تفاصيل التسوية عنده حاجة يعرضها أصلا ؟
+     *
+     * * زرار الـ i كان بيظهر على كل صف حتى لما البوب اب يفتح فاضي — مفيش
+     * * فواتير مسوّاة و لا دفعة مقدمة — فالمستخدم يدوس على فاضي
+     *
+     * * بيحترم العلاقات المحمّلة مسبقًا (الـ index بيعملها loadMissing)
+     * * عشان ما يعملش استعلام لكل صف
+     */
+    public function hasSettlementDetailsToShow(): bool
+    {
+        $settlements = $this->relationLoaded('settlements')
+            ? $this->settlements
+            : $this->settlements()->get();
+
+        if ($settlements->isNotEmpty()) {
+            return true;
+        }
+
+        return $this->getDownPaymentInfo() !== null;
+    }
+
+    /**
      * * وصف الدفعة المقدمة نفسها : نوعها (عام / على عقد) و العقد لو موجود
      *
      * * قبل كده البوب اب مكانش بيقول حاجة عن الدفعة المقدمة غير مبلغها ، و
@@ -811,6 +833,31 @@ trait IsMoney
 	public function getTransactionType()
     {
         return $this->transaction_type;
+    }
+
+    /**
+     * * نوع العملية بشكل مقروء : refund-custody تبقى "رد عهدة"
+     *
+     * * عمود الـ Type في القوائم كان بيقول "استلام من [ موظف ]" بس ، من
+     * * غير ما يقول استلام ايه — عهدة راجعة ولا سداد قرض ، و دول حاجتين
+     * * مختلفين تمامًا . النوع متخزن فعلا في transaction_type و كان
+     * * متسيب من غير عرض
+     */
+    public function getTransactionTypeFormatted(): string
+    {
+        $transactionType = $this->getTransactionType();
+
+        return $transactionType ? __(camelizeWithSpace($transactionType)) : '';
+    }
+
+    /**
+     * * بيلزّق نوع العملية جنب الوصف لو موجود : "[ رد عهدة ]"
+     */
+    protected function withTransactionType(string $label): string
+    {
+        $transactionType = $this->getTransactionTypeFormatted();
+
+        return $transactionType === '' ? $label : $label.' [ '.$transactionType.' ]';
     }
     // public function markOpeningReceivedChequeAsPaidInOdoo()
     // {

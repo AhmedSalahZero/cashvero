@@ -828,7 +828,9 @@ class MoneyPayment extends Model implements IHaveCreditOverdraftStatement, IHave
             $moneyType = __('Invoice Settlement & Down Payment');
         }
         if ($partnerType != 'is_supplier') {
-            return __('Money Paid To [ :partnerType ]', ['partnerType'=>$this->getPartnerTypeFormatted()]);
+            return $this->withTransactionType(
+                __('Money Paid To [ :partnerType ]', ['partnerType'=>$this->getPartnerTypeFormatted()])
+            );
         }
         return camelizeWithSpace($moneyType) ;
     }

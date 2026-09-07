@@ -261,15 +261,26 @@ class SettlementsInfoTest extends TestCase
         }
     }
 
-    public function test_the_controllers_send_the_url_with_every_row(): void
+    /**
+     * * الـ url بيتبعت مع الصف اللي عنده تفاصيل بس
+     *
+     * * كان بيتبعت مع كل صف ، فزرار الـ i كان بيظهر حتى على الصفوف اللي
+     * * البوب اب بيفتح فاضي عليها
+     */
+    public function test_the_controllers_send_the_url_only_when_there_is_something_to_show(): void
     {
         foreach ([
-            ['MoneyReceivedController.php', 'money.received.settlements.info'],
-            ['MoneyPaymentController.php', 'money.payment.settlements.info'],
-        ] as [$file, $route]) {
+            ['MoneyReceivedController.php', 'money.received.settlements.info', 'moneyReceived'],
+            ['MoneyPaymentController.php', 'money.payment.settlements.info', 'moneyPayment'],
+        ] as [$file, $route, $variable]) {
             $source = file_get_contents(app_path('Http/Controllers/'.$file));
 
-            $this->assertStringContainsString("'settlements_info_url' => route('".$route."'", $source, $file);
+            $this->assertStringContainsString("route('".$route."'", $source, $file.' still builds the url');
+            $this->assertStringContainsString(
+                "'settlements_info_url' => \$".$variable."->hasSettlementDetailsToShow()",
+                $source,
+                $file.' must only send the url when the popup has content'
+            );
         }
     }
 
