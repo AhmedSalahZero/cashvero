@@ -621,6 +621,22 @@ trait IsMoney
             ? (float) $allocations->sum('down_payment_amount')
             : ($isDownPayment ? (float) $this->getAmount() : 0.0);
 
+        /**
+         * * مفيش دفعة مقدمة نوصفها أصلا : لا صفوف توزيع و لا مبلغ
+         *
+         * * في الداتا حركات كتير (عهدة لموظف ، تمويل شركة تابعة ، ضرائب ...)
+         * * الـ money_type بتاعها اتكتب invoice-settlement-with-down-payment
+         * * بالغلط من كود قديم — الشرط الحالي في
+         * * requestHasInvoiceSettlementWithDownPayment بيمنع ده دلوقتي لأنه
+         * * بيشترط ان الشريك مورد ، بس الصفوف القديمة فضلت زي ما هي
+         *
+         * * من غير الشرط ده البوب اب كان بيقول "دفعة مقدمة : عام ٠٫٠٠"
+         * * لحركة ملهاش دفعة مقدمة خالص
+         */
+        if ($amount <= 0) {
+            return null;
+        }
+
         return [
             'type' => $type,
             'type_label' => $labels[$type] ?? __('General'),

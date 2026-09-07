@@ -190,6 +190,47 @@ class DownPaymentInfoTest extends TestCase
         $this->assertSame('740,374.10', $info['amount']);
     }
 
+    /**
+     * * حركات كتير في الداتا (عهدة لموظف ، تمويل شركة تابعة ، ضرائب ...)
+     * * الـ money_type بتاعها اتكتب invoice-settlement-with-down-payment
+     * * بالغلط من كود قديم ، و هي ملهاش دفعة مقدمة خالص — فما ينفعش البوب
+     * * اب يقول عنها "دفعة مقدمة : عام ٠٫٠٠"
+     */
+    public function test_a_row_flagged_as_settlement_with_down_payment_but_carrying_none_reports_nothing(): void
+    {
+        $money = new MoneyPayment;
+        $money->forceFill([
+            'money_type' => MoneyPayment::INVOICE_SETTLEMENT_WITH_DOWN_PAYMENT,
+            'down_payment_type' => null,
+            'partner_type' => 'is_employee',
+            'transaction_type' => 'custody',
+            'paid_amount' => 10000,
+            'currency' => 'EGP',
+        ]);
+        $money->setRelation('settlements', collect([]));
+        $money->setRelation('downPaymentSettlements', collect([]));
+        $money->setRelation('contract', null);
+
+        $this->assertNull(
+            $money->getSettlementsInfo()['down_payment'],
+            'مفيش صف توزيع و لا مبلغ — يبقى مفيش دفعة مقدمة نوصفها'
+        );
+    }
+
+    /**
+     * * و برضه لو المتبقي طلع صفر فعلا في تسوية حقيقية
+     */
+    public function test_a_zero_remainder_reports_no_down_payment(): void
+    {
+        $money = $this->moneyReceived([
+            'money_type' => MoneyReceived::INVOICE_SETTLEMENT_WITH_DOWN_PAYMENT,
+            'down_payment_type' => null,
+            'received_amount' => 1000,
+        ]);
+
+        $this->assertNull($money->getSettlementsInfo()['down_payment']);
+    }
+
     /* ───────────── اللي ما يتغيّرش ───────────── */
 
     /**
