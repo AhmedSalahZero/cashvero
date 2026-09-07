@@ -553,6 +553,83 @@ trait IsMoney
             'total_settlement' => number_format((float) $settlements->sum('settlement_amount'), 2),
             'total_withhold' => number_format((float) $settlements->sum('withhold_amount'), 2),
             'down_payment_amount' => $downPaymentAmount,
+            'down_payment' => $this->getDownPaymentInfo(),
+        ];
+    }
+
+    /**
+     * * وصف الدفعة المقدمة نفسها : نوعها (عام / على عقد) و العقد لو موجود
+     *
+     * * قبل كده البوب اب مكانش بيقول حاجة عن الدفعة المقدمة غير مبلغها ، و
+     * * الدفعة المقدمة الصافية (من غير تسوية فواتير) مكانش بيبان لها اي
+     * * تفاصيل خالص — بس "مفيش فواتير مسوّاة"
+     *
+     * * بيشتغل في الحالتين :
+     * *   - دفعة مقدمة صافية : النوع متخزن في العمود down_payment_type
+     * *   - تسوية فواتير مع دفعة مقدمة : العمود ده بيفضل NULL دايمًا في
+     * *     الداتا الحقيقية ، فبنستنتج النوع من صفوف التوزيع نفسها
+     * *     (فيها contract_id ولا لأ)
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getDownPaymentInfo(): ?array
+    {
+        $isDownPayment = $this->isDownPayment();
+
+        if (! $isDownPayment && ! $this->isInvoiceSettlementWithDownPayment()) {
+            return null;
+        }
+
+        $allocations = $this->downPaymentSettlements;
+
+        $allocationRows = $allocations->map(function ($allocation) {
+            $contract = $allocation->contract;
+
+            return [
+                'contract_name' => $contract?->getName(),
+                'contract_code' => $contract?->getCode(),
+                'amount' => number_format((float) $allocation->down_payment_amount, 2),
+            ];
+        })->all();
+
+        /**
+         * * العقد المربوط بالحركة نفسها له الأولوية ، و لو مش موجود بنرجع
+         * * لعقد صف التوزيع
+         */
+        $contract = $this->contract;
+        $contractName = $contract?->getName() ?: ($allocationRows[0]['contract_name'] ?? null);
+        $contractCode = $contract?->getCode() ?: ($allocationRows[0]['contract_code'] ?? null);
+
+        /**
+         * * النوع المتخزن هو المرجع لو موجود ، لأنه اللي المستخدم اختاره
+         * * فعلا في الشاشة — و بنستنتج بس لما يكون فاضي
+         */
+        $storedType = $this->getDownPaymentType();
+        $type = $storedType ?: ($contractName ? self::DOWN_PAYMENT_OVER_CONTRACT : self::DOWN_PAYMENT_GENERAL);
+
+        $labels = [
+            self::DOWN_PAYMENT_OVER_CONTRACT => __('Over Contract'),
+            self::DOWN_PAYMENT_GENERAL => __('General'),
+            self::SETTLEMENT_OF_OPENING_BALANCE => __('Settlement Of Opening Balance'),
+        ];
+
+        /**
+         * * الدفعة المقدمة الصافية ملهاش صف توزيع في كل الحالات ، فبنرجع
+         * * لمبلغ الحركة نفسها عشان ما نعرضش صفر
+         */
+        $amount = $allocations->count()
+            ? (float) $allocations->sum('down_payment_amount')
+            : ($isDownPayment ? (float) $this->getAmount() : 0.0);
+
+        return [
+            'type' => $type,
+            'type_label' => $labels[$type] ?? __('General'),
+            'is_over_contract' => $type === self::DOWN_PAYMENT_OVER_CONTRACT,
+            'is_with_invoice_settlement' => ! $isDownPayment,
+            'contract_name' => $contractName,
+            'contract_code' => $contractCode,
+            'amount' => number_format($amount, 2),
+            'allocations' => $allocationRows,
         ];
     }
 

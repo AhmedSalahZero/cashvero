@@ -31,6 +31,12 @@ const currency = ref('');
 const totalSettlement = ref('');
 const totalWithhold = ref('');
 const downPayment = ref(null);
+/**
+ * The down payment's own description — type (general / over a contract) and
+ * the contract behind it. A plain down payment settles no invoices at all,
+ * so without this the popup had nothing to show it but "No Settled Invoices".
+ */
+const downPaymentInfo = ref(null);
 
 async function show() {
     open.value = true;
@@ -51,6 +57,7 @@ async function show() {
         totalSettlement.value = data.total_settlement ?? '';
         totalWithhold.value = data.total_withhold ?? '';
         downPayment.value = data.down_payment_amount ?? null;
+        downPaymentInfo.value = data.down_payment ?? null;
     } catch {
         error.value = t('Something Went Wrong');
     } finally {
@@ -78,11 +85,11 @@ function close() {
                 <div v-else-if="error" class="py-8 text-center cvr-text-danger">{{ error }}</div>
 
                 <template v-else>
-                    <div v-if="rows.length === 0" class="py-8 text-center cvr-text-muted">
+                    <div v-if="rows.length === 0 && !downPaymentInfo" class="py-8 text-center cvr-text-muted">
                         {{ $t('No Settled Invoices') }}
                     </div>
 
-                    <div v-else class="overflow-auto">
+                    <div v-if="rows.length" class="overflow-auto">
                         <table class="min-w-full text-sm">
                             <thead>
                                 <tr class="cvr-table-head">
@@ -119,9 +126,37 @@ function close() {
                         </table>
                     </div>
 
-                    <p v-if="downPayment" class="mt-4 cvr-text-secondary">
-                        {{ $t('Down Payment') }}: {{ downPayment }} {{ currency }}
-                    </p>
+                    <!--
+                        Shown for a plain down payment as well as for one that
+                        came alongside an invoice settlement — in both cases the
+                        question being answered is the same: general, or against
+                        which contract.
+                    -->
+                    <div v-if="downPaymentInfo" class="mt-4 p-3 rounded border cvr-text-secondary">
+                        <div class="font-medium cvr-text-primary mb-2">{{ $t('Down Payment') }}</div>
+
+                        <div class="flex flex-wrap gap-x-8 gap-y-1">
+                            <div>
+                                <span class="cvr-text-muted">{{ $t('Down Payment Type') }}:</span>
+                                {{ downPaymentInfo.type_label }}
+                            </div>
+
+                            <div v-if="downPaymentInfo.contract_name">
+                                <span class="cvr-text-muted">{{ $t('Contract Name') }}:</span>
+                                {{ downPaymentInfo.contract_name }}
+                            </div>
+
+                            <div v-if="downPaymentInfo.contract_code">
+                                <span class="cvr-text-muted">{{ $t('Contract Code') }}:</span>
+                                {{ downPaymentInfo.contract_code }}
+                            </div>
+
+                            <div>
+                                <span class="cvr-text-muted">{{ $t('Down Payment Amount') }}:</span>
+                                {{ downPaymentInfo.amount }} {{ currency }}
+                            </div>
+                        </div>
+                    </div>
                 </template>
 
                 <div class="flex justify-end mt-4">

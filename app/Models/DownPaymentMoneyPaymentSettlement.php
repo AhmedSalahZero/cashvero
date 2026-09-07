@@ -51,6 +51,16 @@ class DownPaymentMoneyPaymentSettlement extends Model
 	{
 		return $this->belongsTo(MoneyPayment::class , 'money_payment_id','id');
 	}
+
+	/**
+	 * * العقد اللي الدفعة المقدمة اتوزعت عليه — بيفضل null لو الدفعة عامة
+	 * * (مش على عقد) ، و ده اللي بوب اب تفاصيل التسوية بيفرّق بيه بين
+	 * * "عام" و "على عقد"
+	 */
+	public function contract()
+	{
+		return $this->belongsTo(Contract::class , 'contract_id','id');
+	}
 	
 
 	// public function getAmount()
