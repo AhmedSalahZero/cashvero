@@ -104,7 +104,14 @@ function close() {
                             <tbody>
                                 <tr v-for="(row, i) in rows" :key="i" class="cvr-table-row">
                                     <td class="px-3 py-2">
-                                        {{ row.invoice_number }}
+                                        <!--
+                                            A row whose invoice is missing still carries a real
+                                            settlement amount, so it is flagged rather than left
+                                            looking like an invoice worth nothing.
+                                        -->
+                                        <span :class="row.has_invoice === false ? 'cvr-text-danger' : ''">
+                                            {{ row.invoice_number }}
+                                        </span>
                                         <span v-if="row.is_from_down_payment" class="cvr-text-muted">
                                             ({{ $t('From Down Payment') }})
                                         </span>

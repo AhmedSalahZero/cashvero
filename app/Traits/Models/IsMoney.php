@@ -5,11 +5,13 @@ use App\Models\Branch;
 use App\Models\CashExpense;
 use App\Models\Company;
 use App\Models\Currency;
+use App\Models\CustomerInvoice;
 use App\Models\FinancialInstitution;
 use App\Models\ForeignExchangeRate;
 use App\Models\MoneyPayment;
 use App\Models\MoneyReceived;
 use App\Models\Partner;
+use App\Models\SupplierInvoice;
 use App\Services\Api\CashExpenseOdooService;
 use App\Services\Api\OdooPayment;
 use App\Services\Api\OdooSync;
@@ -71,9 +73,38 @@ trait IsMoney
         $totalWithholdAmount= 0 ;
 		$storedSettlements = [];
 		$shouldSyncWithOdoo = $company->hasOdooIntegrationCredentials() && $syncWithOdoo ;
+
+        /**
+         * * التسوية معناها "المبلغ ده اتسدد من الفاتورة الفلانية" — من غير
+         * * فاتورة موجودة الصف ما بيعنيش حاجة
+         *
+         * * قبل كده الشرط الوحيد كان ان المبلغ اكبر من صفر ، فأي صف جاي من
+         * * الفورم من غير invoice_id كان بيتخزن و الـ invoice_id يفضل NULL ،
+         * * و بوب اب تفاصيل التسوية كان بيعرضه "N/A ... 0.00" و جنبه مبلغ
+         * * تسوية حقيقي — رقم مالوش معنى
+         *
+         * * راجعنا كل المسارات اللي بتنادي الدالة دي : كلها بتبعت فاتورة
+         * * حقيقية (فورم الماني ريسيد/الماني بايمنت ، فورم تسوية الدفعة
+         * * المقدمة ، و الكوماند) ما عدا مسار النقل عند التعديل اللي بينقل
+         * * الصفوف القديمة زي ما هي — و دي كلها is_from_down_payment = 1
+         * * و مفيش فيها ولا صف من غير فاتورة . يبقى مفيش مسار شرعي بيبعت
+         * * تسوية من غير فاتورة ، فالاستثناء هنا معناه باج مش حالة عادية
+         */
+        $existingInvoiceIds = $this->existingInvoiceIdsForSettlements($settlements);
+
         foreach ($settlements as $settlementArr) {
             $settlementArr['settlement_amount'] = isset($settlementArr['settlement_amount']) ?  unformat_number($settlementArr['settlement_amount']) :  0 ;
             if ($settlementArr['settlement_amount'] > 0) {
+                $invoiceId = $settlementArr['invoice_id'] ?? null;
+
+                if (! $invoiceId || ! isset($existingInvoiceIds[$invoiceId])) {
+                    throw new \RuntimeException(
+                        'Refusing to store a settlement of '.$settlementArr['settlement_amount']
+                        .' on '.class_basename($this).'#'.($this->id ?? 'new')
+                        .': invoice_id '.var_export($invoiceId, true).' does not exist.'
+                    );
+                }
+
                 $settlementArr['company_id'] = $company->id ;
                 $settlementArr['partner_id'] = $partnerId;
                 $settlementArr['is_from_down_payment'] = $isFromDownPayment ;
@@ -100,6 +131,29 @@ trait IsMoney
 			'settlements'=>$storedSettlements
 			] ;
     }
+
+    /**
+     * * بيرجّع الفواتير الموجودة فعلا من اللي التسويات بتشاور عليها ، في
+     * * استعلام واحد بدل استعلام لكل صف
+     *
+     * * الماني ريسيد بيتسوّى بفواتير عملاء و الماني بايمنت بفواتير موردين
+     *
+     * @param  array<int, array<string, mixed>>  $settlements
+     * @return array<int|string, int>  المفاتيح هي الـ ids الموجودة
+     */
+    protected function existingInvoiceIdsForSettlements(array $settlements): array
+    {
+        $ids = array_values(array_unique(array_filter(array_column($settlements, 'invoice_id'))));
+
+        if ($ids === []) {
+            return [];
+        }
+
+        $invoiceClass = $this instanceof MoneyReceived ? CustomerInvoice::class : SupplierInvoice::class;
+
+        return array_flip($invoiceClass::whereIn('id', $ids)->pluck('id')->all());
+    }
+
     public function getTotalSettlementAmount()
     {
         return $this->settlements->sum('settlement_amount');
@@ -518,9 +572,20 @@ trait IsMoney
             $invoice = $settlement->invoice;
 
             return [
-                'invoice_number' => $invoice ? $invoice->getInvoiceNumber() : __('N/A'),
-                'invoice_date' => $invoice ? $invoice->getInvoiceDateFormatted() : __('N/A'),
-                'due_date' => $invoice ? $invoice->getInvoiceDueDateFormatted() : __('N/A'),
+                /**
+                 * * الصف اللي فاتورته مش موجودة كان بيبان "N/A ... 0.00" و
+                 * * جنبه مبلغ تسوية حقيقي ، فالمستخدم يفتكر ان فيه فاتورة
+                 * * بصفر — بنقول السبب صراحةً بدل ما نسيبه يخمّن
+                 *
+                 * * صفوف قديمة اتخزنت من غير فاتورة (المسار ده اتقفل دلوقتي
+                 * * في storeNewSettlement) و صفوف فاتورتها اتمسحت بعدين
+                 */
+                'has_invoice' => (bool) $invoice,
+                'invoice_number' => $invoice
+                    ? $invoice->getInvoiceNumber()
+                    : ($settlement->invoice_id ? __('Invoice Not Found') : __('No Invoice Linked')),
+                'invoice_date' => $invoice ? $invoice->getInvoiceDateFormatted() : '—',
+                'due_date' => $invoice ? $invoice->getInvoiceDueDateFormatted() : '—',
                 /**
                  * * الصافي بعد الضريبة (المبلغ + الضريبة − الخصم) مش المبلغ
                  * * الخام قبل الضريبة : ده اللي التسوية بتتحسب عليه فعلا
@@ -529,7 +594,9 @@ trait IsMoney
                  * * رقمين مختلفين ، و مبلغ التسوية كان ممكن يبان اكبر من
                  * * "مبلغ الفاتورة" المعروض جنبه
                  */
-                'invoice_amount' => number_format((float) ($invoice ? $invoice->getNetInvoiceAmount() : 0), 2),
+                'invoice_amount' => $invoice
+                    ? number_format((float) $invoice->getNetInvoiceAmount(), 2)
+                    : '—',
                 'settlement_amount' => number_format((float) $settlement->settlement_amount, 2),
                 'withhold_amount' => number_format((float) $settlement->withhold_amount, 2),
                 /**

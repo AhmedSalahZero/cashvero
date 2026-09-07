@@ -1,4 +1,8 @@
 {
+    "Invoice Not Found": "الفاتورة غير موجودة",
+    "No Invoice Linked": "غير مرتبطة بفاتورة",
+    "The invoice linked to this settlement no longer exists.": "الفاتورة المرتبطة بهذه التسوية لم تعد موجودة.",
+    "The invoice linked to this settlement is not linked to Odoo.": "الفاتورة المرتبطة بهذه التسوية غير مرتبطة بأودو.",
     "Loading": "جارٍ التحميل",
     "From Down Payment": "من دفعة مقدمة",
     "No Settled Invoices": "لا توجد فواتير مسوّاة",

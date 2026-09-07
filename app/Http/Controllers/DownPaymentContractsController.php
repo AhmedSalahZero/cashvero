@@ -334,10 +334,40 @@ public function storeDownPaymentSettlement(
         foreach ($settlements as $settlement) {
             $amountInCurrency = $settlement->getAmount();
             $invoiceId = $settlement->invoice_id;
-            $invoice = $isMoneyReceived 
-                ? CustomerInvoice::find($invoiceId) 
+            $invoice = $isMoneyReceived
+                ? CustomerInvoice::find($invoiceId)
                 : SupplierInvoice::find($invoiceId);
-            
+
+            /**
+             * * قبل كده كان بينده ->odoo_id على طول ، فلو الفاتورة مش موجودة
+             * * (اتمسحت ، أو الصف قديم و الـ invoice_id فيه فاضي) الصفحة كانت
+             * * بتضرب "Call to a member function odoo_id on null" و التسوية
+             * * كلها بتقف من غير ما حد يعرف السبب
+             *
+             * * دلوقتي بنعدّي الصف ده و نسجّل السبب عليه ، فباقي الفواتير
+             * * تكمّل تسوية عادي
+             */
+            if (! $invoice || ! $invoice->odoo_id) {
+                $reason = ! $invoice
+                    ? __('The invoice linked to this settlement no longer exists.')
+                    : __('The invoice linked to this settlement is not linked to Odoo.');
+
+                // ⚠️ Log here is App\Models\Log (an Eloquent model), not the
+                // facade — the facade has to be named in full.
+                \Illuminate\Support\Facades\Log::warning('Skipped an advance settlement with no usable invoice', [
+                    'settlement_id' => $settlement->id,
+                    'invoice_id' => $invoiceId,
+                    'down_payment' => class_basename($downPayment).'#'.$downPayment->id,
+                ]);
+
+                $settlement->update([
+                    'synced_with_odoo' => false,
+                    'odoo_error_message' => $reason,
+                ]);
+
+                continue;
+            }
+
             $invoiceMatches[] = [
                 'amount' => $amountInCurrency,
                 'invoice_id' => $invoice->odoo_id,

@@ -168,9 +168,14 @@ class SettlementsInfoTest extends TestCase
 
         $info = $money->getSettlementsInfo();
 
-        $this->assertSame(__('N/A'), $info['rows'][0]['invoice_number']);
-        $this->assertSame('0.00', $info['rows'][0]['invoice_amount']);
-        $this->assertSame('100.00', $info['rows'][0]['settlement_amount']);
+        /**
+         * * قبل كده كان بيعرض "N/A" و "0.00" ، فالمستخدم يقرا الصف على انه
+         * * فاتورة قيمتها صفر جنبها تسوية بـ ١٠٠ — دلوقتي بيقول السبب
+         */
+        $this->assertFalse($info['rows'][0]['has_invoice']);
+        $this->assertSame(__('No Invoice Linked'), $info['rows'][0]['invoice_number']);
+        $this->assertSame('—', $info['rows'][0]['invoice_amount']);
+        $this->assertSame('100.00', $info['rows'][0]['settlement_amount'], 'مبلغ التسوية الحقيقي زي ما هو');
     }
 
     /* ───────────── جهة الصرف ───────────── */

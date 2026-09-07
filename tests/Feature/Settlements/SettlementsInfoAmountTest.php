@@ -152,18 +152,25 @@ class SettlementsInfoAmountTest extends TestCase
     }
 
     /**
-     * A settlement whose invoice row is missing must still render as 0.00
-     * rather than blowing up — the guard that was there before the change
-     * has to survive it.
+     * A settlement whose invoice is missing must render safely — and must
+     * NOT show 0.00, which reads as "an invoice worth nothing" sitting next
+     * to a real settlement amount. It says why instead.
      */
-    public function test_a_missing_invoice_still_renders_zero(): void
+    public function test_a_missing_invoice_renders_a_reason_not_a_zero(): void
     {
-        $source = file_get_contents(app_path('Traits/Models/IsMoney.php'));
+        $settlement = new \App\Models\Settlement;
+        $settlement->forceFill(['settlement_amount' => 26150, 'withhold_amount' => 0, 'is_from_down_payment' => 0]);
+        $settlement->setRelation('invoice', null);
 
-        $this->assertStringContainsString(
-            "'invoice_amount' => number_format((float) (\$invoice ? \$invoice->getNetInvoiceAmount() : 0), 2)",
-            $source,
-            'The null-invoice guard must stay in place around the after-tax amount.'
-        );
+        $money = new MoneyReceived;
+        $money->forceFill(['money_type' => 'money-received', 'received_amount' => 26150, 'currency' => 'USD']);
+        $money->setRelation('settlements', collect([$settlement]));
+
+        $row = $money->getSettlementsInfo()['rows'][0];
+
+        $this->assertFalse($row['has_invoice']);
+        $this->assertSame(__('No Invoice Linked'), $row['invoice_number']);
+        $this->assertSame('—', $row['invoice_amount'], 'ما ينفعش يبان 0.00 و كأن الفاتورة بصفر');
+        $this->assertSame('26,150.00', $row['settlement_amount'], 'مبلغ التسوية الحقيقي لازم يفضل باين');
     }
 }
