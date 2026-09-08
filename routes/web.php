@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\DailyLogController;
 use App\Http\Controllers\RecordActivityController;
 
 use App\Http\Controllers\DeleteAllRowsFromCaching;
@@ -113,6 +114,11 @@ Route::group(
                  * the map cannot express "depends on the {subject}".
                  */
                 Route::get('record-activity/{subject}/{id}', RecordActivityController::class)->name('record.activity');
+                /**
+                 * * السجل اليومي : كل التعديلات المسجّلة في مكان واحد ،
+                 * * مقسّمة على تابات حسب نوع السجل
+                 */
+                Route::get('daily-logs', DailyLogController::class)->name('daily-logs.index');
 
                 Route::get('checkIfJobFinished/{modelName}', 'SalesGatheringTestController@activeJob')->name('active.job');
 
@@ -122,6 +128,11 @@ Route::group(
                 Route::put('salesGatheringImport/{model}/cached-row/{rowId}', 'SalesGatheringTestController@updateCachedRow')->name('salesGatheringTest.updateCachedRow');
                 Route::any('salesGatheringImport/{model}', 'SalesGatheringTestController@import')->name('salesGatheringImport');
                 Route::get('SalesGathering/insertToMainTable/{modelName}', 'SalesGatheringTestController@insertToMainTable')->name('salesGatheringTest.insertToMainTable');
+                /**
+                 * * بيرجّع شاشة الرفع لحالتها الأولى لما الـ job يقف أو يفشل
+                 * * عشان المستخدم يقدر يرفع الملف تاني
+                 */
+                Route::get('SalesGathering/reset-import/{model}', 'SalesGatheringTestController@resetImport')->name('salesGatheringTest.resetImport');
 
                 Route::get('salesGathering/export/{model}', 'SalesGatheringController@export')->name('salesGathering.export');
 
@@ -320,15 +331,29 @@ Route::group(
                     Route::get('internal-money-transfers/{type}/create', 'InternalMoneyTransferController@create')->name('internal-money-transfers.create');
                     Route::post('internal-money-transfers/{type}/store', 'InternalMoneyTransferController@store')->name('internal-money-transfers.store');
                     Route::get('internal-money-transfers/{type}/{internal_money_transfer}/edit', 'InternalMoneyTransferController@edit')->name('internal-money-transfers.edit');
+                    // نسخ تحويل موجود في فورمة إنشاء جديدة
+                    Route::get('internal-money-transfers/{type}/{internal_money_transfer}/copy', 'InternalMoneyTransferController@copy')->name('internal-money-transfers.copy');
                     Route::get('internal-money-transfers/{type}/{internal_money_transfer}/print', 'InternalMoneyTransferController@print')->name('internal-money-transfers.print');
                     Route::put('internal-money-transfers/{type}/{internal_money_transfer}/update', 'InternalMoneyTransferController@update')->name('internal-money-transfers.update');
                     Route::delete('internal-money-transfers/{type}/{internal_money_transfer}/delete', 'InternalMoneyTransferController@destroy')->name('internal-money-transfers.destroy');
                  
                  
+                    /**
+                     * * المصروفات النقدية المتعددة — شاشة مستقلة عن
+                     * * المصروفات العادية ، و بتختفي لو الشركة على أودو
+                     */
+                    Route::get('multiple-cash-expenses', 'MultipleCashExpenseController@index')->name('multiple-cash-expenses.index');
+                    Route::get('multiple-cash-expenses/create', 'MultipleCashExpenseController@create')->name('multiple-cash-expenses.create');
+                    Route::post('multiple-cash-expenses/store', 'MultipleCashExpenseController@store')->name('multiple-cash-expenses.store');
+                    Route::get('multiple-cash-expenses/{multiple_cash_expense}/edit', 'MultipleCashExpenseController@edit')->name('multiple-cash-expenses.edit');
+                    Route::put('multiple-cash-expenses/{multiple_cash_expense}/update', 'MultipleCashExpenseController@update')->name('multiple-cash-expenses.update');
+                    Route::delete('multiple-cash-expenses/{multiple_cash_expense}/delete', 'MultipleCashExpenseController@destroy')->name('multiple-cash-expenses.destroy');
                     Route::get('buy-or-sell-currencies', 'BuyOrSellCurrenciesController@index')->name('buy-or-sell-currencies.index');
                     Route::get('buy-or-sell-currencies/create', 'BuyOrSellCurrenciesController@create')->name('buy-or-sell-currencies.create');
                     Route::post('buy-or-sell-currencies/store', 'BuyOrSellCurrenciesController@store')->name('buy-or-sell-currencies.store');
                     Route::get('buy-or-sell-currencies/{buy_or_sell_currency}/edit', 'BuyOrSellCurrenciesController@edit')->name('buy-or-sell-currencies.edit');
+                    // نسخ عملية موجودة في فورمة إنشاء جديدة
+                    Route::get('buy-or-sell-currencies/{buy_or_sell_currency}/copy', 'BuyOrSellCurrenciesController@copy')->name('buy-or-sell-currencies.copy');
                     Route::get('buy-or-sell-currencies/{buy_or_sell_currency}/print', 'BuyOrSellCurrenciesController@print')->name('buy-or-sell-currencies.print');
                     Route::put('buy-or-sell-currencies/{buy_or_sell_currency}/update', 'BuyOrSellCurrenciesController@update')->name('buy-or-sell-currencies.update');
                     Route::delete('buy-or-sell-currencies/{buy_or_sell_currency}/delete', 'BuyOrSellCurrenciesController@destroy')->name('buy-or-sell-currencies.destroy');

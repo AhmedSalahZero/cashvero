@@ -151,6 +151,13 @@ class RoutePermissionMap
         'store.cash.expense' => 'cash_expense.create',
         // Opens the create form pre-filled from an existing row.
         'copy.cash.expense' => 'cash_expense.create',
+        // المصروفات النقدية المتعددة — موديول مستقل
+        'multiple-cash-expenses.index' => 'multiple_cash_expense.view',
+        'multiple-cash-expenses.create' => 'multiple_cash_expense.create',
+        'multiple-cash-expenses.store' => 'multiple_cash_expense.create',
+        'multiple-cash-expenses.edit' => 'multiple_cash_expense.update',
+        'multiple-cash-expenses.update' => 'multiple_cash_expense.update',
+        'multiple-cash-expenses.destroy' => 'multiple_cash_expense.delete',
         'edit.cash.expense' => 'cash_expense.update',
         'update.cash.expense' => 'cash_expense.update',
         'delete.cash.expense' => 'cash_expense.delete',
@@ -162,6 +169,8 @@ class RoutePermissionMap
         'internal-money-transfers.index' => 'internal_money_transfer.view',
         'internal-money-transfers.print' => 'internal_money_transfer.view',
         'internal-money-transfers.create' => 'internal_money_transfer.create',
+        // النسخ بيفتح فورمة إنشاء ، فنفس صلاحية الإنشاء
+        'internal-money-transfers.copy' => 'internal_money_transfer.create',
         'internal-money-transfers.store' => 'internal_money_transfer.create',
         'internal-money-transfers.edit' => 'internal_money_transfer.update',
         'internal-money-transfers.update' => 'internal_money_transfer.update',
@@ -180,6 +189,8 @@ class RoutePermissionMap
         'buy-or-sell-currencies.index' => 'buy_or_sell_currency.view',
         'buy-or-sell-currencies.print' => 'buy_or_sell_currency.view',
         'buy-or-sell-currencies.create' => 'buy_or_sell_currency.create',
+        // النسخ بيفتح فورمة إنشاء ، فنفس صلاحية الإنشاء
+        'buy-or-sell-currencies.copy' => 'buy_or_sell_currency.create',
         'buy-or-sell-currencies.store' => 'buy_or_sell_currency.create',
         'buy-or-sell-currencies.edit' => 'buy_or_sell_currency.update',
         'buy-or-sell-currencies.update' => 'buy_or_sell_currency.update',
@@ -677,6 +688,10 @@ class RoutePermissionMap
         'salesGatheringTest.editCachedRow' => ['customer_invoice_data.import', 'supplier_invoice_data.import', 'loan_schedule_data.import'],
         'salesGatheringTest.updateCachedRow' => ['customer_invoice_data.import', 'supplier_invoice_data.import', 'loan_schedule_data.import'],
         'salesGatheringTest.insertToMainTable' => ['customer_invoice_data.import', 'supplier_invoice_data.import', 'loan_schedule_data.import'],
+        // تفريغ رفع واقف/فاشل — نفس صلاحية الرفع نفسه
+        'salesGatheringTest.resetImport' => ['customer_invoice_data.import', 'supplier_invoice_data.import', 'loan_schedule_data.import'],
+        // صفحة السجل اليومي — صلاحيتها الخاصة
+        'daily-logs.index' => 'daily_log.view',
         'create.sales.form' => ['customer_invoice_data.import', 'supplier_invoice_data.import', 'loan_schedule_data.import'],
         'edit.sales.form' => ['customer_invoice_data.import', 'supplier_invoice_data.import', 'loan_schedule_data.import'],
         'admin.store.analysis' => ['customer_invoice_data.import', 'supplier_invoice_data.import', 'loan_schedule_data.import'],

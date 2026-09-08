@@ -113,6 +113,8 @@ class ReferencedRecordGuard
                 ['table' => 'money_received', 'column' => 'contract_id', 'label' => 'Money Received'],
                 ['table' => 'money_payments', 'column' => 'contract_id', 'label' => 'Money Payments'],
                 ['table' => 'cash_expense_contract', 'column' => 'contract_id', 'label' => 'Cash Expenses'],
+                // توزيع بند في مصروف نقدي متعدد على العقد ده
+                ['table' => 'multiple_cash_expense_allocations', 'column' => 'contract_id', 'label' => 'Multiple Cash Expenses'],
                 ['table' => 'down_payment_settlements', 'column' => 'contract_id', 'label' => 'Down Payment Settlements'],
                 ['table' => 'down_payment_money_payment_settlements', 'column' => 'contract_id', 'label' => 'Down Payment Settlements'],
                 ['table' => 'settlement_allocations', 'column' => 'contract_id', 'label' => 'Settlement Allocations'],
@@ -161,6 +163,8 @@ class ReferencedRecordGuard
                     'movement' => true,
                     'label' => 'Bank Statement Transactions',
                 ],
+                // البنك اللي المصروف النقدي المتعدد اتصرف منه
+                ['table' => 'multiple_cash_expenses', 'column' => 'delivery_bank_id', 'label' => 'Multiple Cash Expenses'],
             ],
 
             'financial_institution_accounts' => [

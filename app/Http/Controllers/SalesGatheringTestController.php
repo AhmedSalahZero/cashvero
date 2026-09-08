@@ -90,6 +90,68 @@ class SalesGatheringTestController extends Controller
 	 * not yet committed. See class docblock for the full two-phase
 	 * flow and the new duplicate-detection behavior.
 	 */
+
+    /**
+     * * بيوصف الرفع الواقف : فشل و السبب ايه ، ولا واقف من غير ما يبلّغ
+     *
+     * * بيرجع null طول ما الرفع ماشي طبيعي ، فالصفحة ما تزعجش حد من غير
+     * * داعي
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function stuckImportPayload(Company $company, string $modelName, $activeJob, $activeJobForSaving): ?array
+    {
+        $job = collect([$activeJob, $activeJobForSaving])
+            ->filter()
+            ->first(fn (ActiveJob $candidate) => $candidate->needsAttention());
+
+        if (! $job) {
+            return null;
+        }
+
+        return [
+            'failed' => $job->hasFailed(),
+            'message' => $job->statusMessage(),
+            'startedAt' => optional($job->created_at)->format('Y-m-d H:i'),
+            'resetUrl' => route('salesGatheringTest.resetImport', [
+                'company' => $company->id,
+                'model' => $modelName,
+            ]),
+        ];
+    }
+
+    /**
+     * * بيرجّع شاشة الرفع لحالتها الأولى عشان المستخدم يرفع من جديد
+     *
+     * * بيشيل صف الـ job الواقف و الكاش المرتبط بيه بس — البيانات المتخزنة
+     * * فعلا في الجداول ما بتتلمسش
+     */
+    public function resetImport(Company $company, string $model)
+    {
+        $jobs = ActiveJob::where('company_id', $company->id)->where('model', $model)->get();
+
+        foreach ($jobs as $job) {
+            CachingCompany::where('job_id', $job->id)->where('model', $model)->get()
+                ->each(function (CachingCompany $cache) use ($company, $model) {
+                    Cache::forget($cache->key_name);
+                    Cache::forget(getTotalUploadCacheKey($company->id, $cache->job_id, $model));
+                    $cache->delete();
+                });
+
+            $job->delete();
+        }
+
+        Cache::forget(generateCacheKeyForValidationRow($company->id, $model));
+        Cache::forget(getSkippedDuplicatesCacheKey($company->id, $model));
+        Cache::forget(getShowCompletedTestMessageCacheKey($company->id, $model));
+        Cache::forget(getCanReloadUploadPageCachingForCompany($company->id, $model));
+        Cache::forget(generateCacheFailedName($company->id, auth()->id(), $model));
+
+        return redirect()
+            ->route('view.uploading', ['company' => $company->id, 'model' => $model])
+            ->with('success', __('The stuck import was cleared. You can upload the file again.'));
+    }
+
 	public function import(Company $company,string $modelName = 'SalesGathering')
 	{
 		$loanId = request('medium_term_loan_id') ?? request('loanId');
@@ -223,6 +285,12 @@ class SalesGatheringTestController extends Controller
 				'duplicateCount' => $duplicateCount,
 				'isParsing' => (bool) $activeJob,
 				'isSaving' => (bool) $activeJobForSaving,
+				/**
+				 * * لو الرفع فشل أو وقف ، الصفحة كانت بتفضل تقول "جاري
+				 * * المعالجة" للأبد و المستخدم مش عارف ليه و لا يقدر يرفع
+				 * * تاني — دلوقتي بنقوله السبب و نديله زرار يبدأ من جديد
+				 */
+				'stuckImport' => $this->stuckImportPayload($company, $modelName, $activeJob, $activeJobForSaving),
 				'canReview' => $canViewPleaseReviewMessage,
 				'currentFileNameLabel' => $currentFileNameLabel,
 				'redirectUrlAfterSave' => $redirectUrlAfterSave,
@@ -250,6 +318,16 @@ class SalesGatheringTestController extends Controller
 					'status'  => 'test_table',
 					'model'=>$modelName,
 					
+				]);
+			} else {
+				/**
+				 * * الصف القديم بيتعاد استخدامه ، فلازم نشيل عنه أثر الفشل
+				 * * القديم — من غير كده الرفع الجديد يفضل باين كإنه فاشل
+				 */
+				$active_job->update([
+					'failed_at' => null,
+					'failure_reason' => null,
+					'created_at' => now(),
 				]);
 			}
 			$validationCacheKey = generateCacheKeyForValidationRow($company_id,$modelName);

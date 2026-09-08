@@ -190,6 +190,21 @@ class PermissionRegistry
                 'export' => ['view cash expenses'],
             ],
         ],
+        /**
+         * * المصروفات النقدية المتعددة — موديل مستقل ، فصلاحياته مستقلة
+         * * كمان : ممكن حد يصرف مصروفات عادية و ما يبقاش مسموحله دي
+         */
+        'multiple_cash_expense' => [
+            'label' => 'Multiple Cash Expenses',
+            'group' => 'transactions',
+            'hint' => 'One payment covering several expense lines at once. Each line lands on the cash/bank statement on its own. Not linked to Odoo — the screen is hidden for companies on Odoo.',
+            'actions' => [
+                'view' => ['multiple_cash_expense.view'],
+                'create' => ['multiple_cash_expense.create'],
+                'update' => ['multiple_cash_expense.update'],
+                'delete' => ['multiple_cash_expense.delete'],
+            ],
+        ],
         'internal_money_transfer' => [
             'label' => 'Internal Money Transfer',
             'group' => 'transactions',
@@ -955,6 +970,17 @@ class PermissionRegistry
         ],
 
         /* ──────────────────── Administration ────────────────────── */
+        /**
+         * * صفحة السجل اليومي : بتجمّع كل التعديلات المسجّلة على كل
+         * * الموديلات في مكان واحد ، فهي أوسع من صلاحية أي موديل لوحده
+         * * و لازم تتحدد لوحدها — مش كل حد يشوف كل حاجة
+         */
+        'daily_log' => [
+            'label' => 'Daily Logs',
+            'group' => 'administration',
+            'hint' => 'The Daily Logs page: every recorded change across the system, grouped by record type. Whoever can open it sees the activity of every module listed there.',
+            'actions' => ['view' => ['view daily logs']],
+        ],
         'user' => [
             'label' => 'Users',
             'group' => 'administration',

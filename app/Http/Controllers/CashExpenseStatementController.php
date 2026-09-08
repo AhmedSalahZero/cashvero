@@ -117,19 +117,64 @@ class CashExpenseStatementController
         $currency = $request->get('currency');
         $cashExpenseCategoryIds = $request->get('cash_expense_category_name_id', []);
 
-        $freshQuery = fn () => DB::table(self::STATEMENT_TABLE)
+        /**
+         * * المصروف العادي : صف واحد لكل مصروف
+         */
+        $singleExpenses = fn () => DB::table(self::STATEMENT_TABLE)
             ->where('cash_expenses.company_id', $company->id)
-            ->where('currency', $currency)
-            ->where('payment_date', '>=', $startDate)
-            ->where('payment_date', '<=', $endDate)
-            ->whereIn('cash_expense_category_name_id', $cashExpenseCategoryIds)
-            // `payment_date` alone is not a stable sort: same-day expenses
-            // could swap places between page 1 and page 2 and be shown twice
-            // or not at all. The id tiebreaker makes the order total.
-            ->orderByRaw('payment_date asc, cash_expenses.id asc')
+            ->where('cash_expenses.currency', $currency)
+            ->where('cash_expenses.payment_date', '>=', $startDate)
+            ->where('cash_expenses.payment_date', '<=', $endDate)
+            ->whereIn('cash_expenses.cash_expense_category_name_id', $cashExpenseCategoryIds)
             ->join('cash_expense_category_names', 'cash_expense_category_names.id', '=', 'cash_expenses.cash_expense_category_name_id')
             ->join('cash_expense_categories', 'cash_expense_categories.id', '=', 'cash_expense_category_names.cash_expense_category_id')
-            ->selectRaw('cash_expenses.*,cash_expense_category_names.name as sub_category_name , cash_expense_categories.name as main_category_name');
+            ->selectRaw(
+                "cash_expenses.id, cash_expenses.company_id, cash_expenses.payment_date, cash_expenses.currency,"
+                ." cash_expenses.paid_amount, cash_expenses.exchange_rate, cash_expenses.comment_en, cash_expenses.comment_ar,"
+                ." cash_expenses.user_comment,"
+                ." cash_expense_category_names.name as sub_category_name, cash_expense_categories.name as main_category_name"
+            );
+
+        /**
+         * * المصروف المتعدد : **بند بند** ، مش صف واحد بالإجمالي
+         *
+         * * ده نفس المبدأ اللي بيحكم نزوله في كشف الخزنة/البنك — كل بند
+         * * مصروف قائم بذاته ، فلازم يبان في كشف المصروفات زي أي مصروف
+         * * عادي . من غير كده الحركات دي كانت بتختفي من التقرير خالص
+         *
+         * * البيانات المشتركة (التاريخ ، العملة ، سعر الصرف ، الملاحظة)
+         * * بتيجي من الحركة الأم ، و المبلغ و التصنيف من البند نفسه
+         */
+        $multipleExpenseItems = fn () => DB::table('multiple_cash_expense_items')
+            ->join('multiple_cash_expenses', 'multiple_cash_expenses.id', '=', 'multiple_cash_expense_items.multiple_cash_expense_id')
+            ->join('cash_expense_category_names', 'cash_expense_category_names.id', '=', 'multiple_cash_expense_items.cash_expense_category_name_id')
+            ->join('cash_expense_categories', 'cash_expense_categories.id', '=', 'cash_expense_category_names.cash_expense_category_id')
+            ->where('multiple_cash_expenses.company_id', $company->id)
+            ->where('multiple_cash_expenses.currency', $currency)
+            ->where('multiple_cash_expenses.payment_date', '>=', $startDate)
+            ->where('multiple_cash_expenses.payment_date', '<=', $endDate)
+            ->whereIn('multiple_cash_expense_items.cash_expense_category_name_id', $cashExpenseCategoryIds)
+            ->selectRaw(
+                "multiple_cash_expense_items.id, multiple_cash_expenses.company_id, multiple_cash_expenses.payment_date,"
+                ." multiple_cash_expenses.currency, multiple_cash_expense_items.paid_amount, multiple_cash_expenses.exchange_rate,"
+                ." multiple_cash_expenses.comment_en, multiple_cash_expenses.comment_ar, multiple_cash_expenses.user_comment,"
+                ." cash_expense_category_names.name as sub_category_name, cash_expense_categories.name as main_category_name"
+            );
+
+        /**
+         * * الاتحاد بيتلف في جدول مشتق بدل ما يتساب مكشوف
+         *
+         * * العد و الجمع و التقسيم الصفحي بيتطبّقوا على الاستعلام الخارجي ،
+         * * و مع UNION مكشوف الـ SELECT كان هيتحط على أول جزء بس — يعني
+         * * إجمالي غلط . التغليف بيخلي كل ده يشتغل على النتيجة كاملة
+         *
+         * * و `payment_date` لوحده مش ترتيب ثابت : مصروفين بنفس اليوم ممكن
+         * * يتبادلوا بين صفحة و التانية فيتكرروا أو يختفوا — الـ id
+         * * بيثبّت الترتيب
+         */
+        $freshQuery = fn () => DB::query()
+            ->fromSub($singleExpenses()->unionAll($multipleExpenseItems()), 'expense_rows')
+            ->orderByRaw('payment_date asc, id asc');
 
         if (! $freshQuery()->exists()) {
             return null;
@@ -186,7 +231,7 @@ class CashExpenseStatementController
         // clause now rather than sums of a fully hydrated collection.
         $paginator = $this->paginateStatement($data['query'], self::ROWS_PER_PAGE);
         $sums = $this->statementSums($data['query'], [
-            'total_paid' => self::STATEMENT_TABLE.'.paid_amount',
+            'total_paid' => 'paid_amount',
         ]);
 
         $kpis = [

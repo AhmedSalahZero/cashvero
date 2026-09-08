@@ -15,6 +15,7 @@ const userName = computed(() => page.props.auth?.user?.name || 'User');
 const userInitial = computed(() => userName.value.charAt(0).toUpperCase());
 const isSuperAdmin = computed(() => !!page.props.auth?.isSuperAdmin);
 const profileUrl = computed(() => page.props.profileUrl);
+const dailyLogsUrl = computed(() => page.props.dailyLogsUrl);
 const logoutUrl = computed(() => page.props.logoutUrl);
 /**
  * Admin shortcuts the CURRENT USER may actually reach. Built from
@@ -411,6 +412,22 @@ if (page.flash?.success || page.flash?.error) {
                             </Link>
                         </div>
                     </div>
+
+                    <!--
+                        Daily Logs — sits next to the bell because both answer
+                        "what happened?". Rendered only when the server sent a
+                        URL, which it does only for someone allowed to open the
+                        page (see HandleInertiaRequests) — so the icon can never
+                        disagree with what the route itself permits.
+                    -->
+                    <Link
+                        v-if="dailyLogsUrl"
+                        :href="dailyLogsUrl"
+                        class="cvr-action-btn"
+                        :title="$t('Daily Logs')"
+                    >
+                        <NavIcon name="file-stack" :size="18" />
+                    </Link>
 
                     <!-- Notifications bell -->
                     <div class="relative">

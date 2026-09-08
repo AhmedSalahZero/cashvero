@@ -364,11 +364,29 @@ class ImportData implements
 
 		return [
 			ImportFailed::class => function (ImportFailed $event) use ($error) {
-				ActiveJob::where('id', $this->job_id)->where('model',$this->uploadModelName)->delete();
+				/**
+				 * * قبل كده كان بيمسح صف active_jobs على طول ، فالسبب كان
+				 * * بيعيش بس في الكاش (مربوط باليوزر) و بيضيع بمسح الكاش
+				 * * أو لو يوزر تاني فتح الصفحة
+				 *
+				 * * دلوقتي بنعلّم الصف انه فشل و نسجّل السبب عليه ، فالصفحة
+				 * * تقدر تقول للمستخدم حصل ايه و تديله زرار يبدأ من جديد
+				 */
+				$reason = trim(__('Excel Import Failed') . ' ' . $error);
+				$underlying = $event->getException();
+
+				if ($underlying) {
+					$reason .= ' — ' . $underlying->getMessage();
+				}
+
+				ActiveJob::where('id', $this->job_id)
+					->where('model', $this->uploadModelName)
+					->get()
+					->each(fn (ActiveJob $activeJob) => $activeJob->markFailed($reason));
+
 				CachingCompany::where('job_id', $this->job_id)->where('model',$this->uploadModelName)->delete();
 				$key = generateCacheFailedName($this->companyId, $this->userId,$this->uploadModelName);
-				$err = __('Excel Import Failed') . ' ' . $error;
-				Cache::forever($key, $err);
+				Cache::forever($key, $reason);
 			},
 		];
 	}

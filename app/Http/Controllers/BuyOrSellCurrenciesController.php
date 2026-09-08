@@ -153,6 +153,7 @@ class BuyOrSellCurrenciesController
                 'print_url' => route('buy-or-sell-currencies.print', ['company' => $company->id, 'buy_or_sell_currency' => $model->id]),
                 'edit_url' => route('buy-or-sell-currencies.edit', ['company' => $company->id, 'buy_or_sell_currency' => $model->id]),
                 'delete_url' => route('buy-or-sell-currencies.destroy', ['company' => $company->id, 'buy_or_sell_currency' => $model->id]),
+                'copy_url' => route('buy-or-sell-currencies.copy', ['company' => $company->id, 'buy_or_sell_currency' => $model->id]),
             ];
         };
 
@@ -282,13 +283,30 @@ class BuyOrSellCurrenciesController
 	 * currency) are also pre-existing and untouched — the new Vue page
 	 * calls them exactly as the old jQuery did, just via axios.
 	 */
-	protected function buildFormProps(Company $company, ?BuyOrSellCurrency $model): array
+	/**
+	 * * نفس فكرة الـ Copy في المصروفات النقدية : الفورمة بتتفتح مليانة من
+	 * * عملية قديمة ، لكنها فورمة إنشاء — الحفظ بيعمل صف جديد و العملية
+	 * * الأصلية ما بتتلمسش
+	 */
+	private const COPY_CLEARED_FIELDS = [
+		/**
+		 * * هوية الصف المنسوخ : لو فضلت ، الفورمة هتتبعت كتعديل للأصل
+		 */
+		'id',
+		/**
+		 * * التاريخ بيتساب فاضي عشان يتكتب بتاريخ العملية الجديدة فعلا
+		 * * مش يورث تاريخ اللي اتنسخ منه بالغلط
+		 */
+		'transaction_date',
+	];
+
+	protected function buildFormProps(Company $company, ?BuyOrSellCurrency $model, bool $isCopy = false): array
 	{
 		$commonVars = $this->getCommonViewVars($company, $model);
 
-		return [
+		$props = [
 			'company' => ['id' => $company->id],
-			'mode' => $model ? 'edit' : 'create',
+			'mode' => $model && ! $isCopy ? 'edit' : 'create',
 			'locale' => app()->getLocale(),
 			'allTypes' => BuyOrSellCurrency::getAllTypes(),
 			'currencies' => getCurrencies(),
@@ -314,7 +332,7 @@ class BuyOrSellCurrenciesController
 				'to_branch_id' => $model->getToBranchId(),
 				'user_comment' => $model->getUserComment(),
 			] : null,
-			'submitUrl' => $model
+			'submitUrl' => $model && ! $isCopy
 				? route('buy-or-sell-currencies.update', ['company' => $company->id, 'buy_or_sell_currency' => $model->id])
 				: route('buy-or-sell-currencies.store', ['company' => $company->id]),
 			'backUrl' => route('buy-or-sell-currencies.index', ['company' => $company->id]),
@@ -330,6 +348,14 @@ class BuyOrSellCurrenciesController
 			// the From Branch changed.
 			'getCashSafeBalanceUrl' => route('get.current.end.balance.of.cash.in.safe.statement', ['company' => $company->id]),
 		];
+
+		if ($isCopy && $props['model']) {
+			foreach (self::COPY_CLEARED_FIELDS as $field) {
+				$props['model'][$field] = null;
+			}
+		}
+
+		return $props;
 	}
 	public function getCommonViewVars(Company $company,$model = null)
 	{
@@ -404,6 +430,15 @@ class BuyOrSellCurrenciesController
 		// handled above this point is untouched.
 		return redirect()->route('buy-or-sell-currencies.index', ['company' => $company->id, 'active' => $activeTab])->with('success', __('Data Store Successfully'));
 		
+	}
+
+	/**
+	 * * "نسخ" — فورمة الإنشاء بتتفتح مليانة من عملية موجودة عشان العملية
+	 * * اللي بتتكرر ما تتكتبش من الأول كل مرة
+	 */
+	public function copy(Company $company, BuyOrSellCurrency $buyOrSellCurrency)
+	{
+		return \Inertia\Inertia::render('BuyOrSellCurrencies/Form', array_merge($this->buildFormProps($company, $buyOrSellCurrency, true), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CURRENCY_EXCHANGE_FORM])]));
 	}
 
 	public function edit(Company $company,BuyOrSellCurrency $buyOrSellCurrency)

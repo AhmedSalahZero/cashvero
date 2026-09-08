@@ -136,6 +136,7 @@ class InternalMoneyTransferController
                 'print_url' => route('internal-money-transfers.print', ['company' => $company->id, 'type' => $model->getType(), 'internal_money_transfer' => $model->id]),
                 'edit_url' => route('internal-money-transfers.edit', ['company' => $company->id, 'type' => $model->getType(), 'internal_money_transfer' => $model->id]),
                 'delete_url' => route('internal-money-transfers.destroy', ['company' => $company->id, 'type' => $model->getType(), 'internal_money_transfer' => $model->id]),
+                'copy_url' => route('internal-money-transfers.copy', ['company' => $company->id, 'type' => $model->getType(), 'internal_money_transfer' => $model->id]),
             ];
         };
 
@@ -265,14 +266,35 @@ class InternalMoneyTransferController
 	 * Inertia needs. getCommonViewVars() and every getter called on
 	 * $model below are pre-existing and UNCHANGED.
 	 */
-	protected function buildFormProps(Company $company, string $type, ?InternalMoneyTransfer $model): array
+	/**
+	 * * نفس فكرة الـ Copy في المصروفات النقدية : الفورمة بتتفتح مليانة من
+	 * * تحويل قديم ، لكنها فورمة إنشاء — الحفظ بيعمل صف جديد و التحويل
+	 * * الأصلي ما بيتلمسش
+	 */
+	private const COPY_CLEARED_FIELDS = [
+		/**
+		 * * هوية الصف المنسوخ : لو فضلت ، الفورمة هتتبعت كتعديل للأصل
+		 */
+		'id',
+		/**
+		 * * رقم الشيك بيخص التحويل الأصلي — نسخه معناه رقم شيك مكرر
+		 */
+		'cheque_number',
+		/**
+		 * * التاريخ بيتساب فاضي عشان يتكتب بتاريخ التحويل الجديد فعلا
+		 * * مش يورث تاريخ اللي اتنسخ منه بالغلط
+		 */
+		'transfer_date',
+	];
+
+	protected function buildFormProps(Company $company, string $type, ?InternalMoneyTransfer $model, bool $isCopy = false): array
 	{
 		$commonVars = $this->getCommonViewVars($company, $type, $model);
 
-		return [
+		$props = [
 			'company' => ['id' => $company->id],
 			'type' => $type,
-			'mode' => $model ? 'edit' : 'create',
+			'mode' => $model && ! $isCopy ? 'edit' : 'create',
 			'locale' => app()->getLocale(),
 			'allTypes' => $this->allTypes(),
 			'currencies' => getCurrencies(),
@@ -296,7 +318,7 @@ class InternalMoneyTransferController
 				'to_branch_id' => $model->getToBranchId(),
 				'user_comment' => $model->getUserComment(),
 			] : null,
-			'submitUrl' => $model
+			'submitUrl' => $model && ! $isCopy
 				? route('internal-money-transfers.update', ['company' => $company->id, 'type' => $type, 'internal_money_transfer' => $model->id])
 				: route('internal-money-transfers.store', ['company' => $company->id, 'type' => $type]),
 			'backUrl' => route('internal-money-transfers.index', ['company' => $company->id]),
@@ -304,6 +326,14 @@ class InternalMoneyTransferController
 			'getBankBalanceUrl' => route('update.balance.and.net.balance.based.on.account.number', ['company' => $company->id]),
 			'getCashSafeBalanceUrl' => route('get.current.end.balance.of.cash.in.safe.statement', ['company' => $company->id]),
 		];
+
+		if ($isCopy && $props['model']) {
+			foreach (self::COPY_CLEARED_FIELDS as $field) {
+				$props['model'][$field] = null;
+			}
+		}
+
+		return $props;
 	}
 	public function getCommonViewVars(Company $company,string $type,$model = null)
 	{
@@ -377,6 +407,15 @@ class InternalMoneyTransferController
 	
 		return redirect()->route('internal-money-transfers.index',['company'=>$company->id,'active'=>$activeTab])->with('success',__('Data Store Successfully'));
 		
+	}
+
+	/**
+	 * * "نسخ" — فورمة الإنشاء بتتفتح مليانة من تحويل موجود عشان التحويل
+	 * * اللي بيتكرر ما يتكتبش من الأول كل مرة
+	 */
+	public function copy(Company $company, string $type, InternalMoneyTransfer $internalMoneyTransfer)
+	{
+		return \Inertia\Inertia::render('InternalMoneyTransfer/Form', array_merge($this->buildFormProps($company, $type, $internalMoneyTransfer, true), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::INTERNAL_TRANSFER_FORM])]));
 	}
 
 	public function edit(Company $company,string $type,InternalMoneyTransfer $internalMoneyTransfer)

@@ -127,6 +127,13 @@ class SidebarMenu
                 self::item(__('Factoring Without Recourse'), $user->hasPermissionKey('factoring_without_recourse.view'), route('factoring.without-recourse.index', ['company' => $companyId]), icon: 'refresh-cw'),
                 self::item(__('LC Settlement Internal Transfer'), $user->hasPermissionKey('lc_settlement_transfer.view'), route('lc-settlement-internal-money-transfers.index', ['company' => $companyId]), icon: 'arrow-left-right'),
                 self::item(__('Cash Expense'), $user->hasPermissionKey('cash_expense.view'), route('view.cash.expense', ['company' => $companyId]), icon: 'credit-card'),
+                /**
+                 * * المصروفات النقدية المتعددة — ملهاش تكامل مع أودو ،
+                 * * فبتختفي خالص لو الشركة شغالة على أودو . البيانات
+                 * * القديمة بتفضل زي ما هي في الكشوف ، الشاشة بس اللي
+                 * * بتتخفي (نفس الشرط في الكونترولر)
+                 */
+                self::item(__('Multiple Cash Expenses'), $user->hasPermissionKey('multiple_cash_expense.view') && ! $company->hasOdooCredentials(), route('multiple-cash-expenses.index', ['company' => $companyId]), inertia: true, icon: 'file-stack'),
                 self::item(__('Internal Money Transfer'), $user->hasPermissionKey('internal_money_transfer.view'), route('internal-money-transfers.index', ['company' => $companyId]), icon: 'arrow-left-right'),
                 self::item(__('Sell Or Buy Currency'), $user->hasPermissionKey('buy_or_sell_currency.view'), route('buy-or-sell-currencies.index', ['company' => $companyId]), icon: 'coins'),
                 self::item(__('Foreign Exchange Rate'), $user->hasPermissionKey('foreign_exchange_rate.view'), route('view.foreign.exchange.rate', ['company' => $companyId]), icon: 'currency'),

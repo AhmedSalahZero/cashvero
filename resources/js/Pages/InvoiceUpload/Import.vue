@@ -44,6 +44,14 @@ const props = defineProps({
     duplicateCount: Number,
     isParsing: Boolean,
     isSaving: Boolean,
+    /**
+     * Set when the import failed or stopped responding: { failed, message,
+     * startedAt, resetUrl }. Null while an import is running normally.
+     *
+     * Without this the page sat on "Processing…" forever with no reason
+     * shown and no way back to the upload form.
+     */
+    stuckImport: { type: Object, default: null },
     canReview: Boolean,
     currentFileNameLabel: String,
     redirectUrlAfterSave: String,
@@ -92,7 +100,7 @@ function submitUpload() {
    visible yet — and then stop polling entirely, looking stuck.
    This keeps polling (via real Inertia reloads, so all props stay
    in sync) until we reach a genuinely stable state. ───────────────── */
-const waitingForParse = ref(props.isParsing);
+const waitingForParse = ref(props.isParsing && !props.stuckImport);
 const parseGaveUp = ref(false);
 let parseTimer = null;
 let parseAttempts = 0;
@@ -211,26 +219,38 @@ onBeforeUnmount(() => {
             </div>
             <Link v-if="lastUploadFailedUrl" :href="lastUploadFailedUrl" class="inline-block text-sm cvr-num-red hover:underline mb-4">{{ $t('View last upload\'s failed rows →') }}</Link>
 
+            <!-- Stuck / failed import: the only state that offers a way out -->
+            <div v-if="stuckImport" class="cvr-card-bg border rounded-lg p-6 mb-6" style="border-color: var(--cvr-num-red)">
+                <p class="cvr-num-red font-medium mb-1">
+                    {{ stuckImport.failed ? $t('The last import failed.') : $t('The last import stopped responding.') }}
+                </p>
+                <p class="text-sm cvr-text-secondary mb-1">{{ stuckImport.message }}</p>
+                <p v-if="stuckImport.startedAt" class="text-xs cvr-text-muted mb-4">{{ $t('Started at') }}: {{ stuckImport.startedAt }}</p>
+                <Link :href="stuckImport.resetUrl" class="cvr-btn-primary px-3 py-1.5 rounded text-sm inline-block">
+                    {{ $t('Clear and upload again') }}
+                </Link>
+            </div>
+
             <!-- State: parsing -->
-            <div v-if="isParsing && !parseGaveUp" class="cvr-card-bg cvr-border border rounded-lg p-6 mb-6">
+            <div v-if="!stuckImport && isParsing && !parseGaveUp" class="cvr-card-bg cvr-border border rounded-lg p-6 mb-6">
                 <p class="cvr-num-green font-medium mb-3">{{ $t('Uploading and parsing your file…') }}</p>
                 <div class="h-2 rounded-full bg-white/5 overflow-hidden">
                     <div class="h-full rounded-full animate-pulse" style="width: 100%; background-color: var(--cvr-green-bright)"></div>
                 </div>
             </div>
-            <div v-else-if="isParsing && parseGaveUp" class="cvr-card-bg cvr-border border rounded-lg p-6 mb-6 flex items-center justify-between gap-3 flex-wrap">
+            <div v-else-if="!stuckImport && isParsing && parseGaveUp" class="cvr-card-bg cvr-border border rounded-lg p-6 mb-6 flex items-center justify-between gap-3 flex-wrap">
                 <p class="text-sm">{{ $t('This is taking longer than expected. Your file may still be processing in the background.') }}</p>
                 <button type="button" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap" @click="checkParseAgain">{{ $t('Check Again') }}</button>
             </div>
 
             <!-- State: saving -->
-            <div v-else-if="isSaving && !saveGaveUp" class="cvr-card-bg cvr-border border rounded-lg p-6 mb-6">
+            <div v-else-if="!stuckImport && isSaving && !saveGaveUp" class="cvr-card-bg cvr-border border rounded-lg p-6 mb-6">
                 <p class="cvr-num-green font-medium mb-3">{{ $t('Saving to the database…') }} {{ savingPercent.toFixed(0) }}%</p>
                 <div class="h-2 rounded-full bg-white/5 overflow-hidden">
                     <div class="h-full rounded-full transition-all" :style="{ width: savingPercent + '%', backgroundColor: 'var(--cvr-green-bright)' }"></div>
                 </div>
             </div>
-            <div v-else-if="isSaving && saveGaveUp" class="cvr-card-bg cvr-border border rounded-lg p-6 mb-6 flex items-center justify-between gap-3 flex-wrap">
+            <div v-else-if="!stuckImport && isSaving && saveGaveUp" class="cvr-card-bg cvr-border border rounded-lg p-6 mb-6 flex items-center justify-between gap-3 flex-wrap">
                 <p class="text-sm">{{ $t('This is taking longer than expected (') }}{{ savingPercent.toFixed(0) }}{{ $t('% when we stopped checking). Your data may still be saving in the background.') }}</p>
                 <button type="button" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap" @click="checkSaveAgain">{{ $t('Check Again') }}</button>
             </div>

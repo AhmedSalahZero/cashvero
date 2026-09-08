@@ -150,6 +150,15 @@ class HandleInertiaRequests extends Middleware
              * checks on the route itself — so the menu can no longer
              * disagree with what the server allows.
              */
+            /**
+             * * أيقونة السجل اليومي جنب الجرس — بتتبعت بس لما اليوزر
+             * * يكون مسموحله يفتح الصفحة ، بنفس منطق adminUrls تحت :
+             * * الأيقونة ما تقدرش تخالف اللي السيرفر بيسمح بيه
+             */
+            'dailyLogsUrl' => $company && $request->user()
+                && PermissionResolver::allows($request->user(), 'daily_log.view')
+                    ? route('daily-logs.index', ['company' => $company->id])
+                    : null,
             'adminUrls' => $request->user() ? array_filter([
                 'companies' => PermissionResolver::allows($request->user(), 'company.view')
                     ? route('companySection.index') : null,

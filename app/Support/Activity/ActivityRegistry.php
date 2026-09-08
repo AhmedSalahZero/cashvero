@@ -330,7 +330,14 @@ class ActivityRegistry
      */
     public static function labelFor(string $class): string
     {
-        return self::all()[$class]['label'] ?? class_basename($class);
+        /**
+         * * الاسم ده بيتعرض للمستخدم جوه جملة السجل ("أنشأ <الاسم>") و في
+         * * عمود السجل في صفحة السجل اليومي ، فلازم يترجم
+         *
+         * * قبل كده كان بيرجع الاسم الإنجليزي زي ما هو ، فالجملة كانت
+         * * بتطلع نص عربي نص إنجليزي : "أنشأ Money Payment"
+         */
+        return __(self::all()[$class]['label'] ?? class_basename($class));
     }
 
     /**
@@ -375,9 +382,17 @@ class ActivityRegistry
 
         // Fall back to a readable form of the column name:
         // `financial_institution_id` → "Financial Institution".
+        /**
+         * * الاسم ده بيتعرض للمستخدم في سطور التغييرات ، فلازم يعدّي على
+         * * الترجمة زي أي نص تاني
+         *
+         * * قبل كده كان بيترجع إنجليزي زي ما هو ، فالحقول اللي مالهاش اسم
+         * * معرّف في السجل (زي purchase_order_id) كانت بتطلع "Purchase
+         * * Order" وسط كلام عربي — حتى لو الترجمة موجودة أصلا في ar.json
+         */
         $readable = preg_replace('/_id$/', '', $field);
 
-        return ucwords(str_replace('_', ' ', $readable));
+        return __(ucwords(str_replace('_', ' ', $readable)));
     }
 
     /**
@@ -410,6 +425,22 @@ class ActivityRegistry
             return json_encode($value, JSON_UNESCAPED_UNICODE);
         }
 
-        return (string) $value;
+        /**
+         * * القيم المتخزنة زي "lg-facility" أو "running" كانت بتتعرض خام
+         *
+         * * بنجرّب الترجمة على القيمة زي ما هي الأول ، و لو مفيش بنحوّلها
+         * * لصيغة مقروءة و نجرّب تاني — فالقيمة تفضل مفهومة حتى من غير
+         * * ترجمة ("lg-facility" تبقى "Lg Facility")
+         */
+        $raw = (string) $value;
+        $translated = __($raw);
+
+        if ($translated !== $raw) {
+            return $translated;
+        }
+
+        $readable = ucwords(str_replace(['-', '_'], ' ', $raw));
+
+        return __($readable);
     }
 }

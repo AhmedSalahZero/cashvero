@@ -237,7 +237,7 @@ const odooErrorTarget = ref(null);
                                             {{ row[col] }}
                                         </td>
                                     </template>
-                                    <td v-if="canUpdate || canDelete" class="px-3 py-3">
+                                    <td v-if="canUpdate || canDelete || canCreate" class="px-3 py-3">
                                         <div class="flex items-center gap-2">
                                             <RecordLogButton subject="BuyOrSellCurrency" :id="row.id" :company-id="company.id" />
                                             <a v-if="row.print_url" :href="row.print_url" target="_blank" rel="noopener" class="cvr-action-btn" :title="$t('Print')">🖨️</a>
@@ -245,6 +245,13 @@ const odooErrorTarget = ref(null);
                                             <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Odoo Error')">🐞</button>
                                             <button v-if="row.is_fully_integrated_with_odoo" @click="odooRefTarget = row" class="cvr-action-btn" :title="$t('Fully Integrated')">👍</button>
                                             <Link v-if="canUpdate" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</Link>
+                                            <!--
+                                                Copy — opens the CREATE form already filled in from
+                                                this row, ready to save as a new record. Gated by
+                                                canCreate (what it leads to), not canUpdate: it
+                                                never changes the row it was opened from.
+                                            -->
+                                            <Link v-if="canCreate && row.copy_url" :href="row.copy_url" class="cvr-action-btn" :title="$t('Copy')">📋</Link>
                                             <button v-if="canDelete" @click="confirmDelete(row)" class="cvr-action-btn" :title="$t('Delete')">🗑️</button>
                                         </div>
                                     </td>
