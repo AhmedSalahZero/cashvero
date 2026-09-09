@@ -80,6 +80,40 @@ trait HasDepositAccount
 			.' ('.Carbon::make($openingDate)->format('d-m-Y').')';
 	}
 
+	/**
+	 * * صفوف الكشف اللي عملية الاستحقاق أو الكسر هي اللي عملتها — و دي
+	 * * بس اللي المفروض تتحذف لما نتراجع عنها
+	 *
+	 * * قبل كده التراجع كان بيحذف **كل** صفوف الوديعة ما عدا الخصم
+	 * * الأصلي ، يعني الفوايد الدورية اللي المستخدم نزّلها بإيده على مدار
+	 * * شهور كانت بتروح معاها — و قيودها بتفضل في اودو ، فالداتا المحلية
+	 * * و اودو يفضلوا مختلفين
+	 *
+	 * * اللي بيفضل:
+	 * *   - الفوايد الدورية (is_period_cd_or_td_interest) : حدث مستقل
+	 * *     نزل قبل الاستحقاق بشهور
+	 * *   - التجديد (is_td_renewal) : حدث مستقل برضه
+	 * *   - الخصم الأصلي (deducted-for-deposit) : الفلوس لسه برة الحساب
+	 * *     لأن الوديعة رجعت running
+	 *
+	 * * اللي بيتحذف: أصل الوديعة (TD Amount) و فايدة الاستحقاق
+	 * * (is_break_interest) — دول اللي applyDeposit / applyBreak عملوهم
+	 *
+	 * * بنستخدم reject مش where لأن where بتقارن بـ == السايبة و
+	 * * null == 0 بترجع true في PHP ، فصف فايدة قديمة قيمتها null كان
+	 * * ممكن يتحذف
+	 *
+	 * @return \Illuminate\Database\Eloquent\Collection
+	 */
+	public function statementRowsFromMaturityOrBreak()
+	{
+		return $this->currentAccountBankStatements
+			->reject(fn ($statement) => $statement->type === CurrentAccountBankStatement::DEDUCTED_FOR_CURRENT_ACCOUNT)
+			->reject(fn ($statement) => (bool) $statement->is_period_cd_or_td_interest)
+			->reject(fn ($statement) => (bool) $statement->is_td_renewal)
+			->values();
+	}
+
 	public function isOpeningBalance():bool
 	{
 		return is_null($this->deducted_from_account_id) || $this->deducted_from_account_id ==0 ;

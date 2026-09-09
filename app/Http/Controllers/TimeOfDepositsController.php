@@ -642,7 +642,11 @@ class TimeOfDepositsController
 		/**
 		 * !!!!
 		 */
-		CurrentAccountBankStatement::deleteButTriggerChangeOnLastElement($timeOfDeposit->currentAccountBankStatements->where('type','!=',CurrentAccountBankStatement::DEDUCTED_FOR_CURRENT_ACCOUNT));
+		/**
+		 * * الفوايد الدورية و التجديد و الخصم الأصلي بيفضلوا — يتحذف بس
+		 * * اللي عملية الاستحقاق/الكسر عملته
+		 */
+		CurrentAccountBankStatement::deleteButTriggerChangeOnLastElement($timeOfDeposit->statementRowsFromMaturityOrBreak());
 		if($breakInterestStatement){
 			$timeOfDeposit->reverseOdooDeposit($breakInterestStatement);
 		}
@@ -760,7 +764,11 @@ class TimeOfDepositsController
 		
 		$breakInterestStatement = $timeOfDeposit->currentAccountBankStatements->where('is_break_interest',1)->first();
 		
-		CurrentAccountBankStatement::deleteButTriggerChangeOnLastElement($timeOfDeposit->currentAccountBankStatements->where('type','!=',CurrentAccountBankStatement::DEDUCTED_FOR_CURRENT_ACCOUNT));
+		/**
+		 * * الفوايد الدورية و التجديد و الخصم الأصلي بيفضلوا — يتحذف بس
+		 * * اللي عملية الاستحقاق/الكسر عملته
+		 */
+		CurrentAccountBankStatement::deleteButTriggerChangeOnLastElement($timeOfDeposit->statementRowsFromMaturityOrBreak());
 		if($breakInterestStatement){
 			$timeOfDeposit->reverseOdooDeposit($breakInterestStatement);
 		}
