@@ -26,7 +26,23 @@ class UpdateInvoiceDeductionRequest extends FormRequest
 		$InvoiceId = Request()->route('modelId');
 		$invoiceModelName = Request()->route('modelType');
 		$invoice = ('App\Models\\'.$invoiceModelName)::find($InvoiceId);
-		$netBalance=$invoice->getNetBalance(); 
+
+		/**
+		 * * الحفظ هنا بيستبدل كل خصومات الفاتورة (detach ثم إنشاء من جديد) ،
+		 * * فالخصومات المحفوظة حاليًا مش "مستهلكة" — هي نفسها اللي بتتعاد
+		 * * كتابتها
+		 *
+		 * * الكونترولر بيحسبها صح :
+		 * *     currentBalance = net_balance + مجموع الخصومات المحفوظة
+		 * * لكن القاعدة كانت بتقارن بـ net_balance لوحده — و ده رصيد
+		 * * **متخصوم منه الخصومات دي أصلا** . النتيجة : تفتح البوب اب و
+		 * * تحفظ نفس القيم من غير ما تغيّر حاجة فترفض ، لأنها بتعتبر
+		 * * الخصم القديم خصم جديد فوق القديم
+		 *
+		 * * دلوقتي القاعدة بتقارن بنفس السقف اللي الكونترولر بيسمح بيه
+		 */
+		$alreadyDeducted = (float) $invoice->deductions->sum('pivot.amount');
+		$netBalance = $invoice->getNetBalance() + $alreadyDeducted; 
         return [
 			'deductions.*.deduction_id'=>'required|numeric',
 			'deductions.*.date'=>['required','date',

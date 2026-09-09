@@ -45,11 +45,26 @@ trait IsInvoice
  
     public function getNetBalance()
     {
-        return $this->net_balance ?: 0 ;
+        /**
+         * * net_balance عمود double و بيتحسب بالجمع و الطرح مرة ورا مرة ،
+         * * فبيتراكم عليه انحراف الفاصلة العائمة : أرصدة زي
+         * * 110579.89000000013 أو -0.00000000011641532182693481 موجودة
+         * * فعلا في الداتا
+         *
+         * * التقريب لخانتين هنا مش تجميل : الرقم ده بيتقارن بـ > 0 (عشان
+         * * نعرف الفاتورة لسه عليها رصيد ولا لأ) و بيتبني عليه التحقق من
+         * * الخصومات — فرصيد زي 0.0000001 كان بيخلي فاتورة مسدّدة تبان
+         * * كإن عليها باقي
+         */
+        return round((float) ($this->net_balance ?: 0), 2);
     }
 	public function getNetBalanceFormatted()
 	{
-		return number_format($this->getNetBalance(),0);
+		/**
+		 * * بخانتين عشرية زي باقي المبالغ في النظام — الصفر خانات كان
+		 * * بيخفي كسور حقيقية في الرصيد
+		 */
+		return number_format($this->getNetBalance(),2);
 	}
 	public function getExchangeRate()
 	{

@@ -467,6 +467,13 @@ class CertificatesOfDepositsController
 		if(!$periodInterestDate){
 			return redirect()->back()->with('fail',__('Period Interest Date Is Required'));
 		}
+		/**
+		 * * ممنوع تتكتب حركة في الكشف بتاريخ قبل رصيد أول المدة بتاع
+		 * * الحساب — دي كانت بتخلي الكشف يبدأ برصيد مش الافتتاحي
+		 */
+		if ($error = $certificatesOfDeposit->getDateBeforeAccountOpeningError($periodInterestDate)) {
+			return redirect()->back()->with('fail', $error);
+		}
 		$certificatesOfDeposit->applyPeriodicInterestInStatement($financialInstitution,$periodInterestAmount,$periodInterestDate);
 		$type = $request->get('type',CertificatesOfDeposit::RUNNING);
 		$activeTab = $type ;
@@ -524,6 +531,13 @@ class CertificatesOfDepositsController
 			return redirect()->back()->with('fail',__('Deposit Date Is Required'));
 		}
 		$actualDepositDate = $actualDepositDate->format('Y-m-d') ;
+		/**
+		 * * ممنوع تتكتب حركة في الكشف بتاريخ قبل رصيد أول المدة بتاع
+		 * * الحساب — دي كانت بتخلي الكشف يبدأ برصيد مش الافتتاحي
+		 */
+		if ($error = $certificatesOfDeposit->getDateBeforeAccountOpeningError($actualDepositDate)) {
+			return redirect()->back()->with('fail', $error);
+		}
 		$actualInterestAmount  = number_unformat($request->get('actual_interest_amount')) ;
 		/**
 		 * * حساب التسوية اللي اصل الوديعة هيترد عليه — اليوزر بيختاره من البوب اب
@@ -607,6 +621,13 @@ class CertificatesOfDepositsController
 			return redirect()->back()->with('fail',__('Break Date Is Required'));
 		}
 		$breakDate = $breakDate->format('Y-m-d') ;
+		/**
+		 * * ممنوع تتكتب حركة في الكشف بتاريخ قبل رصيد أول المدة بتاع
+		 * * الحساب — دي كانت بتخلي الكشف يبدأ برصيد مش الافتتاحي
+		 */
+		if ($error = $certificatesOfDeposit->getDateBeforeAccountOpeningError($breakDate)) {
+			return redirect()->back()->with('fail', $error);
+		}
 		$breakInterestAmount  = $request->get('break_interest_amount') ;
 		$breakChargeAmount  = $request->get('break_charge_amount',0) ;
 		$amount  = $request->get('amount') ;

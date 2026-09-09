@@ -26,8 +26,19 @@ class DeductionAmountRule implements ImplicitRule
      */
     public function passes($attribute, $value)
     {
-		$amounts = array_sum(array_column(Request()->get('deductions'),'amount'));
-        return $this->net_balance  >= $amounts ; 
+		/**
+		 * * المبالغ بتيجي من الفورمة كنصوص ، و ممكن تكون متفرمتة
+		 * * (1,000.00) — الجمع المباشر عليها بيرمي فاتال في PHP 8.4
+		 */
+		$amounts = array_sum(\App\Helpers\HArr::unformatValues(
+			array_column(Request()->get('deductions', []), 'amount')
+		));
+
+		/**
+		 * * مقارنة الفلوس بفرق ضئيل : الرصيد رقم عشري بيتراكم عليه انحراف ،
+		 * * فمساواة تامة ممكن ترفض حفظ نفس القيمة بفرق مليار جزء من الجنيه
+		 */
+		return round($this->net_balance, 2) + 0.001 >= round($amounts, 2);
     }
 
     /**

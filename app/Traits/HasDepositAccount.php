@@ -2,6 +2,7 @@
 namespace App\Traits;
 
 use App\Models\AccountType;
+use Carbon\Carbon;
 use App\Models\Currency;
 use App\Models\CurrentAccountBankStatement;
 use App\Models\FinancialInstitutionAccount;
@@ -41,6 +42,44 @@ trait HasDepositAccount
 			
 		}
 	}
+	/**
+	 * * أي حركة بتتكتب في كشف الحساب الجاري بتاريخ قبل تاريخ رصيد أول
+	 * * المدة بتاع الحساب بتخلي الكشف يبدأ برصيد مش الرصيد الافتتاحي
+	 * * المعتمد ، و بتفضل ظاهرة في الكشف للأبد
+	 *
+	 * * الفوايد الدورية و الاستحقاق و الكسر كلهم بياخدوا التاريخ من
+	 * * المستخدم و بيكتبوه في نفس الكشف ، و مكانش فيه أي فحص — عشان كده
+	 * * وديعة الـ opening رقم 37 نزّلت فوايد بتواريخ 2025-03 و 2025-04
+	 * * على حساب رصيده الافتتاحي 2025-07-31
+	 *
+	 * * بترجّع رسالة الخطأ لو التاريخ قبل رصيد أول المدة ، و null لو سليم
+	 */
+	public function getDateBeforeAccountOpeningError($date): ?string
+	{
+		$account = $this->maturityAmountAddedToAccount;
+
+		/**
+		 * * من غير حساب استحقاق مفيش تاريخ نقارن بيه — الحركة نفسها مش
+		 * * هتتكتب في كشف ، فما بنمنعش حاجة
+		 */
+		if (! $account) {
+			return null;
+		}
+
+		$openingDate = $account->getOpeningBalanceDate();
+
+		if (! $openingDate || ! $date) {
+			return null;
+		}
+
+		if (! Carbon::make($date)->startOfDay()->lessThan(Carbon::make($openingDate)->startOfDay())) {
+			return null;
+		}
+
+		return __('Transaction Date Must Be Greater Than Or Equal Account Opening Balance Date')
+			.' ('.Carbon::make($openingDate)->format('d-m-Y').')';
+	}
+
 	public function isOpeningBalance():bool
 	{
 		return is_null($this->deducted_from_account_id) || $this->deducted_from_account_id ==0 ;
