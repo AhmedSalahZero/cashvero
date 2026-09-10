@@ -40,7 +40,20 @@ function goToPage(url) {
                 <span aria-hidden="true">{{ $i18n.locale === 'ar' ? '→' : '←' }}</span> {{ $t('Back') }}
             </Link>
 
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Cash Cover Statement') }}</h1>
+            <div class="flex items-start justify-between flex-wrap gap-3 mb-1">
+                <h1 class="text-xl font-semibold cvr-text-primary">{{ $t('Cash Cover Statement') }}</h1>
+                <!-- One group: loose siblings of a justify-between row get
+                     spread apart with a gap between them. -->
+                <div class="flex items-center gap-2">
+                    <a v-if="urls.exportUrl" :href="urls.exportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
+                        {{ $t('⬇️ Export to Excel') }}
+                    </a>
+                    <!-- Print covers the WHOLE range, not the page on screen. -->
+                    <a v-if="urls.printUrl" :href="urls.printUrl" target="_blank" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
+                        {{ $t('🖨️ Print') }}
+                    </a>
+                </div>
+            </div>
             <p class="text-sm cvr-text-muted mb-4">
                 {{ instrumentLabel }} — {{ bankName }} — {{ currency }} — {{ startDate }} → {{ endDate }}
             </p>

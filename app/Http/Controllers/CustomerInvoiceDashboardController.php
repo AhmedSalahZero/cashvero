@@ -41,6 +41,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use App\Traits\Reports\PrintsReport;
 
 /**
  * CustomerInvoiceDashboardController
@@ -86,6 +87,8 @@ use Inertia\Inertia;
  */
 class CustomerInvoiceDashboardController extends Controller
 {
+    use PrintsReport;
+
 	use HasBalances;
 
 	private const INVOICE_ROWS_PER_PAGE = 50;
@@ -764,6 +767,9 @@ class CustomerInvoiceDashboardController extends Controller
 			// The export carries the search, so what downloads is what is
 			// on screen rather than the whole unfiltered report.
 			'exportUrl'=>route('export.invoice.report', ['company' => $company->id, 'partnerId' => $partnerId, 'currency' => $currency, 'modelType' => $modelType, 'search' => $search ?: null]),
+			// Print covers every invoice in the report, not the page on
+			// screen, and honours the same search.
+			'printUrl'=>route('print.invoice.report', ['company' => $company->id, 'partnerId' => $partnerId, 'currency' => $currency, 'modelType' => $modelType, 'search' => $search ?: null]),
 			'backUrl'=>route('view.balances', ['company' => $company->id, 'modelType' => $modelType]),
         ]);
     }
@@ -782,7 +788,19 @@ class CustomerInvoiceDashboardController extends Controller
      * Money Received/Payment) are on-screen-only and have no place in
      * a static export.
      */
-    public function exportInvoiceReport(Company $company, Request $request, int $partnerId, string $currency, $modelType)
+
+    /**
+     * The headings and the rows for EVERY invoice in the report, shared
+     * by the Excel export and by Print.
+     *
+     * Both deliberately re-run the query unpaginated: the page on screen
+     * is 25 rows, and neither a workbook nor a printout of 25 rows is
+     * what anybody asked for. The search box is honoured, so what prints
+     * is what the report is currently showing — all of it.
+     *
+     * @return array{0: array<int, string>, 1: \Illuminate\Support\Collection, 2: \App\Models\Partner, 3: string}|\Illuminate\Http\RedirectResponse
+     */
+    private function invoiceReportPayload(Company $company, Request $request, int $partnerId, string $currency, $modelType)
     {
         $fullClassName = ('\App\Models\\' . $modelType);
         $clientIdColumnName = $fullClassName::CLIENT_ID_COLUMN_NAME;
@@ -830,10 +848,54 @@ class CustomerInvoiceDashboardController extends Controller
             return $line;
         });
 
+
+        return [$headings, $rows, $customer, $totalCollectionOrPaidText];
+    }
+
+    public function exportInvoiceReport(Company $company, Request $request, int $partnerId, string $currency, $modelType)
+    {
+        $payload = $this->invoiceReportPayload($company, $request, $partnerId, $currency, $modelType);
+
+        if (! is_array($payload)) {
+            return $payload;
+        }
+
+        [$headings, $rows, $customer, $totalCollectionOrPaidText] = $payload;
+
         $fileNameParts = ['Invoice-Report', $customer->getName(), $currency];
         $fileName = preg_replace('/[^A-Za-z0-9\-]+/', '-', implode('-', $fileNameParts)).'.xlsx';
 
         return (new InvoiceReportExport($headings, $rows, $totalCollectionOrPaidText))->download($fileName);
+    }
+
+    /**
+     * Print — every invoice in the report, both for customers and for
+     * suppliers (the same route serves both through $modelType).
+     */
+    public function printInvoiceReport(Company $company, Request $request, int $partnerId, string $currency, $modelType)
+    {
+        $payload = $this->invoiceReportPayload($company, $request, $partnerId, $currency, $modelType);
+
+        if (! is_array($payload)) {
+            return $payload;
+        }
+
+        [$headings, $rows, $customer] = $payload;
+
+        $search = trim((string) $request->get('search', ''));
+
+        return $this->renderReportPrint(
+            company: $company,
+            title: $modelType === 'SupplierInvoice' ? __('Supplier Invoice Report') : __('Customer Invoice Report'),
+            headings: $headings,
+            rows: $rows,
+            meta: [
+                ['label' => $modelType === 'SupplierInvoice' ? __('Supplier Name') : __('Customer Name'), 'value' => $customer->getName()],
+                ['label' => __('Currency'), 'value' => strtoupper($currency)],
+                ['label' => __('Search'), 'value' => $search],
+            ],
+            numericHeadings: $this->numericHeadingsFor($headings),
+        );
     }
 
 	

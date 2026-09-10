@@ -12,6 +12,7 @@ use App\Traits\GeneralFunctions;
 use App\Traits\PaginatesRawCollections;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use App\Traits\Reports\PrintsReport;
 
 /**
  * FactoringStatementController
@@ -67,6 +68,8 @@ use Illuminate\Http\Request;
  */
 class FactoringStatementController
 {
+    use PrintsReport;
+
     use GeneralFunctions;
     use PaginatesRawCollections;
 
@@ -242,6 +245,11 @@ class FactoringStatementController
                 'exportUrl' => route('export.factoring.statement', array_merge(['company' => $company->id], $request->only([
                     'start_date', 'end_date', 'factoring_company_id', 'factoring_contract_id', 'currency',
                 ]))),
+                // Print carries the same filters, and like the export it covers
+                // the whole range rather than the page on screen.
+                'printUrl' => route('print.factoring.statement', array_merge(['company' => $company->id], $request->only([
+                    'start_date', 'end_date', 'factoring_company_id', 'factoring_contract_id', 'currency',
+                ]))),
             ],
         ]);
     }
@@ -252,7 +260,17 @@ class FactoringStatementController
      * App\Exports\Statements\FactoringStatementExport — no new export
      * library introduced.
      */
-    public function exportExcel(Company $company, Request $request)
+
+    /**
+     * The headings and the rows for the WHOLE range, in one place.
+     *
+     * Shared by the Excel export and by Print so the two can never show
+     * different numbers, and so both stay unpaginated — which is the
+     * whole point of each.
+     *
+     * @return array{0: array<int, string>, 1: \Illuminate\Support\Collection, 2: array<int, string|null>}|\Illuminate\Http\RedirectResponse
+     */
+    private function reportPayload(Company $company, Request $request)
     {
         $data = $this->fetchStatementRows($company, $request);
         if (is_null($data)) {
@@ -270,8 +288,44 @@ class FactoringStatementController
         ]);
 
         $fileNameParts = ['Factoring-Statement', $data['factoringCompanyName'], $data['currency']];
+        return [$headings, $rows, $fileNameParts];
+    }
+
+    public function exportExcel(Company $company, Request $request)
+    {
+        $payload = $this->reportPayload($company, $request);
+
+        if (! is_array($payload)) {
+            return $payload;
+        }
+
+        [$headings, $rows, $fileNameParts] = $payload;
         $fileName = preg_replace('/[^A-Za-z0-9\-]+/', '-', implode('-', $fileNameParts)).'.xlsx';
 
         return (new FactoringStatementExport($headings, $rows))->download($fileName);
+    }
+
+    /**
+     * Print — the whole report, every page of it, from the same payload
+     * the workbook is built from.
+     */
+    public function print(Company $company, Request $request)
+    {
+        $payload = $this->reportPayload($company, $request);
+
+        if (! is_array($payload)) {
+            return $payload;
+        }
+
+        [$headings, $rows] = $payload;
+
+        return $this->renderReportPrint(
+            company: $company,
+            title: __('Factoring Statement'),
+            headings: $headings,
+            rows: $rows,
+            meta: $this->requestMeta($request),
+            numericHeadings: $this->numericHeadingsFor($headings),
+        );
     }
 }

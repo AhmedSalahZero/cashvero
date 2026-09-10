@@ -673,15 +673,18 @@ Route::group(
                     Route::get('safe-statement', 'SafeStatementController@index')->name('view.safe.statement');
                     Route::get('safe-statement/result', 'SafeStatementController@result')->name('result.safe.statement');
                     Route::get('safe-statement/export', 'SafeStatementController@exportExcel')->name('export.safe.statement');
+                    Route::get('safe-statement/print', 'SafeStatementController@print')->name('print.safe.statement');
 
                     Route::get('cash-expense-statement', 'CashExpenseStatementController@index')->name('view.cash.expense.statement');
                     Route::get('cash-expense-statement/result', 'CashExpenseStatementController@result')->name('result.cash.expense.statement');
                     Route::get('cash-expense-statement/export', 'CashExpenseStatementController@exportExcel')->name('export.cash.expense.statement');
+                    Route::get('cash-expense-statement/print', 'CashExpenseStatementController@print')->name('print.cash.expense.statement');
                     
                     Route::get('partners-statement', 'PartnersStatementController@index')->name('view.partners.statement');
                     Route::get('partners-statement/partners-by-type', 'PartnersStatementController@getPartnersByType')->name('partners.statement.partners.by.type');
                     Route::get('partners-statement/result', 'PartnersStatementController@result')->name('result.partners.statement');
                     Route::get('partners-statement/export', 'PartnersStatementController@exportExcel')->name('export.partners.statement');
+                    Route::get('partners-statement/print', 'PartnersStatementController@print')->name('print.partners.statement');
 
                     /**
                      * Feature (client requested, 2026-08-15): Taxes & Insurance
@@ -697,10 +700,12 @@ Route::group(
                     Route::get('bank-statement', 'BankStatementController@result')->name('result.bank.statement');
                     Route::get('bank-statement/account-numbers', 'BankStatementController@getAccountNumbers')->name('bank.statement.account.numbers');
                     Route::get('bank-statement/export', 'BankStatementController@exportExcel')->name('export.bank.statement');
+                    Route::get('bank-statement/print', 'BankStatementController@print')->name('print.bank.statement');
 
                     Route::get('factoring-statement', 'FactoringStatementController@index')->name('view.factoring.statement');
                     Route::get('factoring-statement/result', 'FactoringStatementController@result')->name('result.factoring.statement');
                     Route::get('factoring-statement/export', 'FactoringStatementController@exportExcel')->name('export.factoring.statement');
+                    Route::get('factoring-statement/print', 'FactoringStatementController@print')->name('print.factoring.statement');
                     Route::get('factoring-statement/currencies', 'FactoringStatementController@getCurrencies')->name('factoring.statement.currencies');
                     Route::get('factoring-statement/contracts', 'FactoringStatementController@getContracts')->name('factoring.statement.contracts');
 
@@ -715,6 +720,7 @@ Route::group(
                     Route::get('factoring-charges-statement', 'FactoringChargesStatementController@index')->name('view.factoring.charges.statement');
                     Route::get('factoring-charges-statement/result', 'FactoringChargesStatementController@result')->name('result.factoring.charges.statement');
                     Route::get('factoring-charges-statement/export', 'FactoringChargesStatementController@exportExcel')->name('export.factoring.charges.statement');
+                    Route::get('factoring-charges-statement/print', 'FactoringChargesStatementController@print')->name('print.factoring.charges.statement');
                     Route::get('factoring-charges-statement/currencies', 'FactoringChargesStatementController@getCurrencies')->name('factoring.charges.statement.currencies');
                     Route::get('factoring-charges-statement/contracts', 'FactoringChargesStatementController@getContracts')->name('factoring.charges.statement.contracts');
                     
@@ -724,14 +730,17 @@ Route::group(
                     Route::get('show-lg-by-beneficiary-name-report', 'LgByBeneficiaryNameReportController@index')->name('view.lg.by.beneficiary.name.report');
                     Route::get('lg-by-beneficiary-name-report', 'LgByBeneficiaryNameReportController@result')->name('result.lg.by.beneficiary.name.report');
                     Route::get('lg-by-beneficiary-name-report/export', 'LgByBeneficiaryNameReportController@exportExcel')->name('export.lg.by.beneficiary.name.report');
+                    Route::get('lg-by-beneficiary-name-report/print', 'LgByBeneficiaryNameReportController@print')->name('print.lg.by.beneficiary.name.report');
                     
                     Route::get('show-lg-by-bank-name-report', 'LgByBankNameReportController@index')->name('view.lg.by.bank.name.report');
                     Route::get('lg-by-bank-name-report', 'LgByBankNameReportController@result')->name('result.lg.by.bank.name.report');
                     Route::get('lg-by-bank-name-report/export', 'LgByBankNameReportController@exportExcel')->name('export.lg.by.bank.name.report');
+                    Route::get('lg-by-bank-name-report/print', 'LgByBankNameReportController@print')->name('print.lg.by.bank.name.report');
                     
                     Route::get('lg-lc-bank-statement', 'LGLCSBanktatementController@index')->name('view.lg.lc.bank.statement');
                     Route::get('lg-lc-bank-statement/result', 'LGLCSBanktatementController@result')->name('result.lg.lc.bank.statement');
                     Route::get('lg-lc-bank-statement/export', 'LGLCSBanktatementController@exportExcel')->name('export.lg.lc.bank.statement');
+                    Route::get('lg-lc-bank-statement/print', 'LGLCSBanktatementController@print')->name('print.lg.lc.bank.statement');
 
                     /**
                      * Cash Cover Statement — the money frozen behind letters
@@ -740,6 +749,8 @@ Route::group(
                      */
                     Route::get('cash-cover-statement', 'CashCoverStatementController@index')->name('view.cash.cover.statement');
                     Route::get('cash-cover-statement/result', 'CashCoverStatementController@result')->name('result.cash.cover.statement');
+                    Route::get('cash-cover-statement/export', 'CashCoverStatementController@exportExcel')->name('export.cash.cover.statement');
+                    Route::get('cash-cover-statement/print', 'CashCoverStatementController@print')->name('print.cash.cover.statement');
                     Route::get('get-lg-lc-types', 'LGLCSBanktatementController@getLgOrLcType')->name('get.lc.or.lg.types');
 
                     /**
@@ -774,6 +785,7 @@ Route::group(
                     // Route::get('/cashvero-dashboard-update-lg-dashboard','CustomerInvoiceDashboardController@updateLgDashboard')->name('update.lg.table.and.charts');
                     Route::get('/customer-balances/invoices-report/{partnerId}/{currency}/{modelType}', 'CustomerInvoiceDashboardController@showInvoiceReport')->name('view.invoice.report');
                     Route::get('/customer-balances/invoices-report/{partnerId}/{currency}/{modelType}/export', 'CustomerInvoiceDashboardController@exportInvoiceReport')->name('export.invoice.report');
+                    Route::get('/customer-balances/invoices-report/{partnerId}/{currency}/{modelType}/print', 'CustomerInvoiceDashboardController@printInvoiceReport')->name('print.invoice.report');
                     Route::get('/customer-balances/invoices-statement-report/{partnerId}/{currency}/{modelType}', 'CustomerInvoiceDashboardController@showInvoiceStatementReport')->name('view.invoice.statement.report');
                     Route::get('/customer-balances/invoices-statement-report/{partnerId}/{currency}/{modelType}/export', 'CustomerInvoiceDashboardController@exportInvoiceStatementReport')->name('export.invoice.statement.report');
                     Route::get('/customer-balances/total-net-balance-details/{currency}/{modelType}', 'BalancesController@showTotalNetBalanceDetailsReport')->name('show.total.net.balance.in');
@@ -811,6 +823,7 @@ Route::group(
                     Route::get('withdrawals-settlements-report', 'WithdrawalsSettlementReportController@index')->name('view.withdrawals.settlement.report');
                     Route::post('withdrawals-settlements-report', 'WithdrawalsSettlementReportController@result')->name('result.withdrawals.settlement.report');
                     Route::get('withdrawals-settlements-report/export', 'WithdrawalsSettlementReportController@exportExcel')->name('export.withdrawals.settlement.report');
+                    Route::get('withdrawals-settlements-report/print', 'WithdrawalsSettlementReportController@print')->name('print.withdrawals.settlement.report');
                     Route::get('withdrawals-settlements-report/banks', 'WithdrawalsSettlementReportController@banksByAccountType')->name('withdrawals.settlement.banks');
 
                     Route::get('refresh-withdrawal-dues-report', 'WithdrawalsSettlementReportController@refreshReport')->name('refresh.withdrawal.report'); // ajax

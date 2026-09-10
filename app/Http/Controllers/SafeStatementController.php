@@ -8,6 +8,7 @@ use App\Models\Company;
 use App\Support\ShareholderAccounts\AccountNumberLabel;
 use App\Traits\GeneralFunctions;
 use App\Traits\PaginatesStatementQueries;
+use App\Traits\Reports\PrintsReport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -64,6 +65,7 @@ class SafeStatementController
 {
     use GeneralFunctions;
     use PaginatesStatementQueries;
+    use PrintsReport;
 
     private const STATEMENT_TABLE = 'cash_in_safe_statements';
 
@@ -202,6 +204,11 @@ class SafeStatementController
                 'exportUrl' => route('export.safe.statement', array_merge(['company' => $company->id], $request->only([
                     'start_date', 'end_date', 'branch_id', 'currency',
                 ]))),
+                // Print carries the same filters, and like the export it
+                // covers the whole range rather than the page on screen.
+                'printUrl' => route('print.safe.statement', array_merge(['company' => $company->id], $request->only([
+                    'start_date', 'end_date', 'branch_id', 'currency',
+                ]))),
             ],
         ]);
     }
@@ -214,18 +221,21 @@ class SafeStatementController
      * Maatwebsite\Excel ExportData class SalesGatheringController@export
      * already uses — no new export library introduced.
      */
-    public function exportExcel(Company $company, Request $request)
+    /**
+     * The column headings and the rows for the WHOLE range.
+     *
+     * Shared by the Excel export and by Print so the two can never show
+     * different numbers — and so both stay unpaginated, which is the
+     * whole point of each.
+     *
+     * @return array{0: array<int, string>, 1: \Illuminate\Support\Collection}
+     */
+    private function reportPayload(array $data): array
     {
-        $data = $this->fetchStatementRows($company, $request);
-        if (is_null($data)) {
-            return redirect()->back()->with('fail', __('No Data Found'));
-        }
         $lang = app()->getLocale();
 
         $headings = ['#', 'Date', 'Beginning Balance', 'Debit', 'Credit', 'End Balance', 'Reviewed', 'Comment'];
 
-        // The workbook is the whole range, not the page on screen, so the
-        // export runs the same query unpaginated.
         $rows = $data['query']()->get()->values()->map(function ($row, $index) use ($lang) {
             $mapped = $this->mapStatementRow($row, $lang);
 
@@ -240,6 +250,44 @@ class SafeStatementController
                 'Comment' => trim($mapped['comment'].' '.$mapped['userComment']),
             ];
         });
+
+        return [$headings, $rows];
+    }
+
+    /**
+     * Print — the whole statement, every page of it.
+     */
+    public function print(Company $company, Request $request)
+    {
+        $data = $this->fetchStatementRows($company, $request);
+
+        if (is_null($data)) {
+            return redirect()->back()->with('fail', __('No Data Found'));
+        }
+
+        [$headings, $rows] = $this->reportPayload($data);
+
+        return $this->renderReportPrint(
+            company: $company,
+            title: __('Safe Statement'),
+            headings: $headings,
+            rows: $rows,
+            meta: [
+                $this->periodMeta($request->get('start_date'), $request->get('end_date')),
+                ['label' => __('Branch'), 'value' => $data['branchName']],
+                ['label' => __('Currency'), 'value' => strtoupper((string) $data['currency'])],
+            ],
+            numericHeadings: ['Beginning Balance', 'Debit', 'Credit', 'End Balance'],
+        );
+    }
+
+    public function exportExcel(Company $company, Request $request)
+    {
+        $data = $this->fetchStatementRows($company, $request);
+        if (is_null($data)) {
+            return redirect()->back()->with('fail', __('No Data Found'));
+        }
+        [$headings, $rows] = $this->reportPayload($data);
 
         $fileNameParts = ['Safe-Statement', $data['branchName'], strtoupper((string) $data['currency'])];
         $fileName = preg_replace('/[^A-Za-z0-9\-]+/', '-', implode('-', $fileNameParts)).'.xlsx';

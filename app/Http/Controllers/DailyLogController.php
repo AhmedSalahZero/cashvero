@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Support\Activity\ActivityRegistry;
 use App\Support\Permissions\PermissionRegistry;
 use App\Support\Permissions\PermissionResolver;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -21,14 +22,18 @@ use Inertia\Inertia;
  * السجل اللي بتدوّر عليه الأول عشان تشوف تاريخه . الصفحة دي بتقلب
  * السؤال : "إيه اللي حصل النهاردة ؟"
  *
- * التقسيم الصفحي بيتعمل في قاعدة البيانات (paginate) مش في الميموري :
- * جدول record_activities بيكبر مع الوقت ، و تحميله كله عشان نعرض ٢٥ صف
- * كان هيبقى أبطأ كل يوم عن اللي قبله
+ * و عشان كده بتفتح على النهاردة بس ، و بتعرض كل الأنواع اللي ليها حركة
+ * في الفترة تحت بعضها ، و التابات فوق بقت روابط بتنزّلك على القسم بدل
+ * ما تبدّل الصفحة . النوع اللي مالوش حركة في الفترة مش بيتعرض أصلا .
+ *
+ * كل الفلاتر — الفترة ، النوع ، الشخص ، البحث — بتتطبّق في قاعدة
+ * البيانات ، و كل قسم ليه سقف صفوف : جدول record_activities بيكبر مع
+ * الوقت ، و تحميله كله لعشر أقسام مع بعض كان هيبقى أبطأ كل يوم
  */
 class DailyLogController extends Controller
 {
-    /** كام صف في الصفحة الواحدة */
-    private const PER_PAGE = 25;
+    /** أقصى عدد صفوف بتتعرض في القسم الواحد قبل ما نقول "فيه أكتر" */
+    private const ROWS_PER_SECTION = 50;
 
     public function __invoke(Request $request, Company $company)
     {
@@ -44,53 +49,108 @@ class DailyLogController extends Controller
             abort(404);
         }
 
-        $activeTab = $request->get('tab');
-
-        if (! isset($tabs[$activeTab])) {
-            $activeTab = array_key_first($tabs);
-        }
+        /**
+         * * الافتراضي : النهاردة بس .
+         *
+         * * السؤال اللي الصفحة دي بتجاوب عليه هو "إيه اللي حصل النهاردة" ،
+         * * فأول ما تفتح لازم تجاوب عليه من غير ما حد يملا فلاتر . و لإن
+         * * الافتراضي ده بيتحسب هنا مش في الـ query string ، الرابط اللي
+         * * فيه فترة محفوظة بيفضل شغّال زي ما هو
+         */
+        $today = Carbon::today()->format('Y-m-d');
+        $from = $request->filled('from') ? (string) $request->get('from') : $today;
+        $to = $request->filled('to') ? (string) $request->get('to') : $today;
 
         /**
-         * * رقم الصفحة بيتبعت صراحةً بدل ما نسيب الـ paginator ياخده من
-         * * الـ request العام — كده الصفحة بتشتغل صح مهما كان اللي نادى
-         * * الكونترولر
+         * * فترة مقلوبة (البداية بعد النهاية) مش خطأ يستاهل رسالة —
+         * * بنقلبها و نكمّل
          */
-        $paginator = $this->activityQuery($company, $tabs[$activeTab]['classes'], $request)
-            ->paginate(self::PER_PAGE, ['*'], 'page', max(1, (int) $request->get('page', 1)))
-            ->withQueryString();
+        if ($from > $to) {
+            [$from, $to] = [$to, $from];
+        }
+
+        $filters = [
+            'search' => trim((string) $request->get('search', '')),
+            'event' => (string) $request->get('event', ''),
+            'user' => (string) $request->get('user', ''),
+            'from' => $from,
+            'to' => $to,
+        ];
+
+        /**
+         * * الصفحة بقت أقسام تحت بعضها بدل تاب واحدة في المرة : كل موديل
+         * * ليه حركة في الفترة دي بيتعرض بجدوله ، و التابات فوق بقت روابط
+         * * بتنزّلك على القسم .
+         *
+         * * القسم اللي مالوش ولا حركة في الفترة مش بيتعرض أصلا — و لا تابه
+         */
+        $sections = [];
+
+        foreach ($tabs as $key => $tab) {
+            $query = $this->activityQuery($company, $tab['classes'], $filters);
+
+            $total = (clone $query)->count();
+
+            if ($total === 0) {
+                continue;
+            }
+
+            $sections[] = [
+                'key' => $key,
+                'label' => $tab['label'],
+                'total' => $total,
+                /**
+                 * * سقف على مستوى الـ SQL : الصفحة ممكن تعرض عشر أقسام مع
+                 * * بعض ، فتحميل كل صفوف كل قسم كان هيبقى أبطأ كل يوم
+                 */
+                'shown' => min($total, self::ROWS_PER_SECTION),
+                'hasMore' => $total > self::ROWS_PER_SECTION,
+                'entries' => $query->limit(self::ROWS_PER_SECTION)->get()
+                    ->map(fn (RecordActivity $activity) => array_merge(
+                        $activity->toTimelineArray(),
+                        ['record' => ActivityRegistry::labelFor($activity->subject_type).' #'.$activity->subject_id]
+                    ))->values(),
+            ];
+        }
 
         return Inertia::render('DailyLogs/Index', [
             'company' => ['id' => $company->id, 'name' => $company->getName()],
-            'tabs' => collect($tabs)->map(fn (array $tab, string $key) => [
-                'key' => $key,
-                'label' => $tab['label'],
-            ])->values(),
-            'activeTab' => $activeTab,
-            'filters' => [
-                'search' => (string) $request->get('search', ''),
-                'event' => (string) $request->get('event', ''),
-                'from' => (string) $request->get('from', ''),
-                'to' => (string) $request->get('to', ''),
-            ],
+            'sections' => $sections,
+            'filters' => $filters,
             'events' => [
                 RecordActivity::EVENT_CREATED => __('Created'),
                 RecordActivity::EVENT_UPDATED => __('Updated'),
                 RecordActivity::EVENT_DELETED => __('Deleted'),
             ],
-            'entries' => collect($paginator->items())->map(fn (RecordActivity $activity) => array_merge(
-                $activity->toTimelineArray(),
-                ['record' => ActivityRegistry::labelFor($activity->subject_type).' #'.$activity->subject_id]
-            ))->values(),
-            'pagination' => [
-                'currentPage' => $paginator->currentPage(),
-                'lastPage' => $paginator->lastPage(),
-                'total' => $paginator->total(),
-                'from' => $paginator->firstItem(),
-                'to' => $paginator->lastItem(),
-                'links' => $paginator->linkCollection()->toArray(),
-            ],
+            'users' => $this->usersWithActivity($company),
+            'rowsPerSection' => self::ROWS_PER_SECTION,
             'indexUrl' => route('daily-logs.index', ['company' => $company->id]),
         ]);
+    }
+
+    /**
+     * * الأشخاص اللي ليهم حركة مسجّلة في الشركة دي — عشان الفلتر يبقى
+     * * قايمة اختيار مش خانة كتابة يتهجّى فيها الاسم
+     *
+     * * بيتقرا من جدول الحركات نفسه ، فمش بيعرض مستخدمين عمرهم ما عملوا
+     * * حاجة
+     *
+     * @return list<array{id: int|string, name: string}>
+     */
+    private function usersWithActivity(Company $company): array
+    {
+        $ids = RecordActivity::query()
+            ->where(fn ($q) => $q->where('company_id', $company->id)->orWhereNull('company_id'))
+            ->whereNotNull('user_id')
+            ->distinct()
+            ->pluck('user_id');
+
+        return User::whereIn('id', $ids)
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (User $user) => ['id' => $user->id, 'name' => $user->name])
+            ->values()
+            ->all();
     }
 
     /**
@@ -148,7 +208,7 @@ class DailyLogController extends Controller
     /**
      * * الاستعلام الأساسي — كل الفلاتر بتتطبّق هنا في قاعدة البيانات
      */
-    private function activityQuery(Company $company, array $classes, Request $request)
+    private function activityQuery(Company $company, array $classes, array $filters)
     {
         return RecordActivity::query()
             ->with('user:id,name')
@@ -158,11 +218,16 @@ class DailyLogController extends Controller
              * * فبتظهر مع أي شركة بدل ما تختفي خالص
              */
             ->where(fn ($q) => $q->where('company_id', $company->id)->orWhereNull('company_id'))
-            ->when($request->filled('event'), fn ($q) => $q->where('event', $request->get('event')))
-            ->when($request->filled('from'), fn ($q) => $q->whereDate('created_at', '>=', $request->get('from')))
-            ->when($request->filled('to'), fn ($q) => $q->whereDate('created_at', '<=', $request->get('to')))
-            ->when($request->filled('search'), function ($q) use ($request) {
-                $term = trim((string) $request->get('search'));
+            ->when($filters['event'] !== '', fn ($q) => $q->where('event', $filters['event']))
+            ->whereDate('created_at', '>=', $filters['from'])
+            ->whereDate('created_at', '<=', $filters['to'])
+            /**
+             * * فلتر الشخص : "وريني عمل إيه النهاردة" . بيقارن بالـ id مش
+             * * بالاسم ، فالمستخدم اللي اتغيّر اسمه بيفضل شغله كله تحته
+             */
+            ->when($filters['user'] !== '', fn ($q) => $q->where('user_id', $filters['user']))
+            ->when($filters['search'] !== '', function ($q) use ($filters) {
+                $term = $filters['search'];
 
                 $q->where(function ($inner) use ($term) {
                     $inner->where('user_name', 'like', "%{$term}%")

@@ -4,6 +4,7 @@ namespace Tests\Feature\DailyLogs;
 
 use App\Http\Controllers\DailyLogController;
 use App\Models\Company;
+use Carbon\Carbon;
 use App\Models\RecordActivity;
 use App\Models\User;
 use App\Support\Activity\ActivityRegistry;
@@ -83,97 +84,212 @@ class DailyLogsPageTest extends TestCase
         return $response->toResponse($request)->getOriginalContent()->getData()['page']['props'];
     }
 
-    /* ───────────── التابات ───────────── */
+    /* ───────────── الأقسام ───────────── */
 
-    public function test_it_offers_a_tab_per_logged_record_type(): void
+    /**
+     * * فترة واسعة عشان نضمن إن فيه حركة — الصفحة بتفتح على النهاردة بس ،
+     * * و الداتا اللي على الجهاز ممكن ما يكونش فيها حاجة النهاردة
+     */
+    private const WIDE = '?from=2000-01-01&to=2099-12-31';
+
+    public function test_it_shows_a_section_per_logged_record_type(): void
     {
-        $props = $this->props();
+        $props = $this->props(self::WIDE);
 
-        $this->assertNotEmpty($props['tabs'], 'لازم يكون فيه تابات');
-        $this->assertNotEmpty($props['activeTab']);
+        $this->assertNotEmpty($props['sections'], 'لازم يكون فيه أقسام على فترة واسعة');
 
-        foreach ($props['tabs'] as $tab) {
-            $this->assertArrayHasKey('key', $tab);
-            $this->assertArrayHasKey('label', $tab);
-            $this->assertNotSame('', $tab['label'], 'كل تاب لازم يكون ليها اسم مقروء');
+        foreach ($props['sections'] as $section) {
+            $this->assertArrayHasKey('key', $section);
+            $this->assertArrayHasKey('label', $section);
+            $this->assertArrayHasKey('entries', $section);
+            $this->assertNotSame('', $section['label'], 'كل قسم لازم يكون ليه اسم مقروء');
         }
     }
 
-    /** * كل تاب لازم تكون موديول حقيقي في سجل الصلاحيات */
-    public function test_every_tab_maps_to_a_real_permission_module(): void
+    /** * كل قسم لازم يكون موديول حقيقي في سجل الصلاحيات */
+    public function test_every_section_maps_to_a_real_permission_module(): void
     {
         $modules = array_column(PermissionRegistry::all(), 'module');
 
-        foreach ($this->props()['tabs'] as $tab) {
-            $this->assertContains($tab['key'], $modules,
-                'التاب "'.$tab['key'].'" مش مربوطة بموديول صلاحيات');
+        foreach ($this->props(self::WIDE)['sections'] as $section) {
+            $this->assertContains($section['key'], $modules,
+                'القسم "'.$section['key'].'" مش مربوط بموديول صلاحيات');
         }
-    }
-
-    /** * تاب مش موجودة ما تكسرش الصفحة — بترجع لأول تاب */
-    public function test_an_unknown_tab_falls_back_to_the_first_one(): void
-    {
-        $props = $this->props('?tab=definitely_not_a_tab');
-
-        $this->assertSame($props['tabs'][0]['key'], $props['activeTab']);
-    }
-
-    /* ───────────── التقسيم الصفحي ───────────── */
-
-    /**
-     * * التقسيم لازم يكون في قاعدة البيانات : الصفحة التانية بتجيب صفوف
-     * * مختلفة فعلا ، و العدد الكلي بيتحسب من غير ما نحمّل الجدول كله
-     */
-    public function test_paging_happens_in_the_database(): void
-    {
-        $tab = $this->tabWithRows();
-
-        if ($tab === null) {
-            $this->markTestSkipped('No tab with more than one page of activity.');
-        }
-
-        $page1 = $this->props('?tab='.$tab.'&page=1');
-        $page2 = $this->props('?tab='.$tab.'&page=2');
-
-        $this->assertSame(1, $page1['pagination']['currentPage']);
-        $this->assertSame(2, $page2['pagination']['currentPage'], 'رقم الصفحة لازم يتقرا فعلا');
-
-        $this->assertNotSame(
-            $page1['entries'][0]['id'],
-            $page2['entries'][0]['id'],
-            'الصفحة التانية لازم تجيب صفوف مختلفة'
-        );
-
-        $this->assertGreaterThan(count($page1['entries']), $page1['pagination']['total'],
-            'الإجمالي أكبر من صفحة واحدة، يعني فعلا مقسّمة');
     }
 
     /**
-     * * الصفحة ما ترجعش الجدول كله : لو حد كبّر حجم الصفحة عشان "يسهّلها"
-     * * الجدول ده بيكبر مع الوقت و الصفحة هتبقى أبطأ كل يوم
-     *
-     * * الاختبار ده مستقل عن الداتا : بيتأكد من الحجم نفسه ، مش من عدد
-     * * الصفحات اللي صدف إنه موجود
+     * * السؤال اللي الصفحة بتجاوب عليه هو "إيه اللي حصل النهاردة" ،
+     * * فلازم تفتح على النهاردة من غير ما حد يملا حاجة
      */
-    public function test_a_page_never_returns_more_than_the_page_size(): void
+    public function test_it_opens_on_today_only(): void
     {
-        $reflection = new \ReflectionClass(DailyLogController::class);
-        $perPage = $reflection->getConstant('PER_PAGE');
+        $props = $this->props();
+        $today = Carbon::today()->format('Y-m-d');
 
-        $this->assertIsInt($perPage);
-        $this->assertGreaterThan(0, $perPage);
-        $this->assertLessThanOrEqual(100, $perPage, 'حجم الصفحة لازم يفضل صغير');
+        $this->assertSame($today, $props['filters']['from']);
+        $this->assertSame($today, $props['filters']['to']);
+    }
 
-        $busiest = $this->busiestTab();
+    /** * و الفترة اللي في الرابط بتغلب الافتراضي */
+    public function test_an_explicit_period_overrides_today(): void
+    {
+        $props = $this->props('?from=2024-01-01&to=2024-01-31');
 
-        if ($busiest === null) {
-            $this->markTestSkipped('No activity on file.');
+        $this->assertSame('2024-01-01', $props['filters']['from']);
+        $this->assertSame('2024-01-31', $props['filters']['to']);
+    }
+
+    /** * فترة مقلوبة بتتظبط بدل ما ترجّع صفر بالغلط */
+    public function test_a_backwards_period_is_swapped(): void
+    {
+        $props = $this->props('?from=2024-01-31&to=2024-01-01');
+
+        $this->assertSame('2024-01-01', $props['filters']['from']);
+        $this->assertSame('2024-01-31', $props['filters']['to']);
+    }
+
+    /**
+     * * القسم اللي مالوش حركة في الفترة مش بيتعرض أصلا — و ده هو نفسه
+     * * اللي بيقرر التابات اللي فوق ، فمفيش تاب بتودّيك على فاضي
+     */
+    public function test_only_types_with_activity_in_the_period_are_shown(): void
+    {
+        foreach ($this->props(self::WIDE)['sections'] as $section) {
+            $this->assertGreaterThan(0, $section['total'],
+                'القسم "'.$section['key'].'" اتعرض من غير ولا حركة');
+            $this->assertNotEmpty($section['entries']);
+        }
+    }
+
+    /** * فترة في المستقبل مالهاش حركة ، فمفيش أقسام خالص */
+    public function test_a_period_with_no_activity_shows_no_sections(): void
+    {
+        $props = $this->props('?from=2099-01-01&to=2099-12-31');
+
+        $this->assertSame([], $props['sections']);
+    }
+
+    /* ───────────── سقف الصفوف ───────────── */
+
+    /**
+     * * الصفحة ممكن تعرض عشر أقسام مع بعض ، فكل قسم ليه سقف بيتطبّق في
+     * * قاعدة البيانات . الاختبار ده مستقل عن الداتا : بيتأكد من السقف
+     * * نفسه ، مش من عدد الصفوف اللي صدف إنه موجود
+     */
+    public function test_each_section_is_capped(): void
+    {
+        $cap = (new \ReflectionClass(DailyLogController::class))->getConstant('ROWS_PER_SECTION');
+
+        $this->assertIsInt($cap);
+        $this->assertGreaterThan(0, $cap);
+        $this->assertLessThanOrEqual(100, $cap, 'السقف لازم يفضل صغير');
+
+        foreach ($this->props(self::WIDE)['sections'] as $section) {
+            $this->assertLessThanOrEqual($cap, count($section['entries']),
+                'القسم "'.$section['key'].'" رجّع صفوف أكتر من السقف');
+            $this->assertSame(min($section['total'], $cap), $section['shown']);
+            $this->assertSame($section['total'] > $cap, $section['hasMore'],
+                'لازم نقول للمستخدم إن فيه أكتر من اللي بيشوفه');
+        }
+    }
+
+    /**
+     * * الإجمالي بيتحسب من قاعدة البيانات مش من الصفوف المحمّلة — و إلا
+     * * ما كنّاش هنعرف إن فيه أكتر من السقف أصلا
+     */
+    public function test_the_total_is_counted_in_the_database(): void
+    {
+        $cap = (new \ReflectionClass(DailyLogController::class))->getConstant('ROWS_PER_SECTION');
+
+        DB::beginTransaction();
+
+        try {
+            /**
+             * * بنبني حركات أكتر من السقف عشان الاختبار يشتغل فعلا بدل ما
+             * * يتخطّى — الداتا اللي على الجهاز ممكن ما توصلش للسقف
+             */
+            $class = ActivityRegistry::models()[0];
+            $rows = [];
+
+            for ($i = 0; $i < $cap + 10; $i++) {
+                $rows[] = [
+                    'subject_type' => $class,
+                    'subject_id' => 900000 + $i,
+                    'company_id' => $this->company()->id,
+                    'user_id' => null,
+                    'user_name' => 'Cap Test',
+                    'event' => 'created',
+                    'description' => 'cap test',
+                    'created_at' => '2031-05-05 10:00:00',
+                ];
+            }
+
+            DB::table('record_activities')->insert($rows);
+
+            $props = $this->props('?from=2031-05-05&to=2031-05-05');
+
+            $this->assertCount(1, $props['sections'], 'المفروض قسم واحد بس في اليوم ده');
+
+            $section = $props['sections'][0];
+
+            $this->assertSame($cap + 10, $section['total'], 'الإجمالي بيتعدّ في القاعدة، مش من الصفوف المحمّلة');
+            $this->assertCount($cap, $section['entries'], 'المحمّل لازم يقف عند السقف');
+            $this->assertTrue($section['hasMore']);
+            $this->assertSame($cap, $section['shown']);
+        } finally {
+            DB::rollBack();
+        }
+    }
+
+    /* ───────────── فلتر الشخص ───────────── */
+
+    /** * القايمة بتتبني من الحركات نفسها ، فمفيش أسماء ما عملتش حاجة */
+    public function test_the_user_filter_is_offered(): void
+    {
+        $props = $this->props(self::WIDE);
+
+        if ($props['users'] === []) {
+            $this->markTestSkipped('No activity with a user on file.');
         }
 
-        $props = $this->props('?tab='.$busiest);
+        foreach ($props['users'] as $user) {
+            $this->assertArrayHasKey('id', $user);
+            $this->assertArrayHasKey('name', $user);
+        }
+    }
 
-        $this->assertLessThanOrEqual($perPage, count($props['entries']),
-            'الصفحة رجّعت صفوف أكتر من حجمها — يعني مش بتقسّم فعلا');
+    /** * "وريني الشخص ده عمل إيه" — كل صف راجع لازم يكون بتاعه */
+    public function test_filtering_by_a_person_returns_only_their_work(): void
+    {
+        $props = $this->props(self::WIDE);
+
+        if ($props['users'] === []) {
+            $this->markTestSkipped('No activity with a user on file.');
+        }
+
+        $all = array_sum(array_column($props['sections'], 'total'));
+
+        foreach ($props['users'] as $candidate) {
+            $filtered = $this->props(self::WIDE.'&user='.$candidate['id']);
+            $theirs = array_sum(array_column($filtered['sections'], 'total'));
+
+            if ($theirs === 0) {
+                continue;
+            }
+
+            $this->assertLessThanOrEqual($all, $theirs, 'الفلتر لازم يضيّق مش يوسّع');
+
+            foreach ($filtered['sections'] as $section) {
+                foreach ($section['entries'] as $entry) {
+                    $this->assertSame($candidate['name'], $entry['actor'],
+                        'الفلتر رجّع شغل شخص تاني');
+                }
+            }
+
+            return;
+        }
+
+        $this->markTestSkipped('No user on file has activity in range.');
     }
 
     /**
@@ -197,55 +313,26 @@ class DailyLogsPageTest extends TestCase
         (new DailyLogController)($request, $this->company());
     }
 
-    /**
-     * * اسم أول تاب فيها صفوف تكفي لأكتر من صفحة — و إلا الاختبار
-     * * ما يقدرش يثبت إن التقسيم شغال فعلا
-     */
-    private function tabWithRows(): ?string
-    {
-        foreach ($this->props()['tabs'] as $tab) {
-            if ($this->props('?tab='.$tab['key'])['pagination']['lastPage'] > 1) {
-                return $tab['key'];
-            }
-        }
-
-        return null;
-    }
-
     /* ───────────── الفلاتر ───────────── */
 
     public function test_the_event_filter_narrows_the_result(): void
     {
-        $tab = $this->busiestTab();
+        $total = fn (array $props) => array_sum(array_column($props['sections'], 'total'));
 
-        if ($tab === null) {
+        $all = $this->props(self::WIDE);
+        $created = $this->props(self::WIDE.'&event=created');
+
+        if ($total($all) === 0) {
             $this->markTestSkipped('No activity on file.');
         }
 
-        $all = $this->props('?tab='.$tab);
-        $created = $this->props('?tab='.$tab.'&event=created');
-        $deleted = $this->props('?tab='.$tab.'&event=deleted');
+        $this->assertLessThanOrEqual($total($all), $total($created));
 
-        $this->assertLessThanOrEqual($all['pagination']['total'], $created['pagination']['total']);
-        $this->assertLessThanOrEqual($all['pagination']['total'], $deleted['pagination']['total']);
-
-        foreach ($created['entries'] as $entry) {
-            $this->assertSame('created', $entry['event'], 'الفلتر لازم يستبعد باقي الأحداث');
+        foreach ($created['sections'] as $section) {
+            foreach ($section['entries'] as $entry) {
+                $this->assertSame('created', $entry['event'], 'الفلتر لازم يستبعد باقي الأحداث');
+            }
         }
-    }
-
-    public function test_a_date_range_in_the_future_returns_nothing(): void
-    {
-        $tab = $this->busiestTab();
-
-        if ($tab === null) {
-            $this->markTestSkipped('No activity on file.');
-        }
-
-        $props = $this->props('?tab='.$tab.'&from=2099-01-01&to=2099-12-31');
-
-        $this->assertSame(0, $props['pagination']['total']);
-        $this->assertSame([], $props['entries']);
     }
 
     /* ───────────── الصلاحيات و التوصيلات ───────────── */
@@ -454,8 +541,8 @@ class DailyLogsPageTest extends TestCase
 
         try {
             $english = array_values(array_filter(
-                $this->props()['tabs'],
-                fn (array $tab) => (bool) preg_match('/[A-Za-z]/', $tab['label'])
+                $this->props(self::WIDE)['sections'],
+                fn (array $section) => (bool) preg_match('/[A-Za-z]/', $section['label'])
             ));
 
             $this->assertSame([], $english,
@@ -483,16 +570,4 @@ class DailyLogsPageTest extends TestCase
 
     /* ───────────── مساعدات ───────────── */
 
-    private function busiestTab(): ?string
-    {
-        $props = $this->props();
-
-        foreach ($props['tabs'] as $tab) {
-            if ($this->props('?tab='.$tab['key'])['pagination']['total'] > 0) {
-                return $tab['key'];
-            }
-        }
-
-        return null;
-    }
 }

@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\DB;
+use App\Traits\Reports\PrintsReport;
 
 /**
  * PartnersStatementController
@@ -75,6 +76,8 @@ use Illuminate\Support\Facades\DB;
  */
 class PartnersStatementController
 {
+    use PrintsReport;
+
     use GeneralFunctions;
 
     private const PARTNERS_PER_PAGE = 10;
@@ -384,6 +387,11 @@ class PartnersStatementController
                 'exportUrl' => route('export.partners.statement', array_merge(['company' => $company->id], $request->only([
                     'start_date', 'end_date', 'partner_type', 'currency', 'partner_id',
                 ]))),
+                // Print carries the same filters, and like the export it covers
+                // the whole range rather than the page on screen.
+                'printUrl' => route('print.partners.statement', array_merge(['company' => $company->id], $request->only([
+                    'start_date', 'end_date', 'partner_type', 'currency', 'partner_id',
+                ]))),
             ],
         ]);
     }
@@ -393,7 +401,17 @@ class PartnersStatementController
      * partner with activity (full range, not the current page). Flattened
      * to one sheet with a Partner column for sorting/filtering/pivoting.
      */
-    public function exportExcel(Company $company, Request $request)
+
+    /**
+     * The headings and the rows for the WHOLE range, in one place.
+     *
+     * Shared by the Excel export and by Print so the two can never show
+     * different numbers, and so both stay unpaginated — which is the
+     * whole point of each.
+     *
+     * @return array{0: array<int, string>, 1: \Illuminate\Support\Collection, 2: array<int, string|null>, 3: mixed}|\Illuminate\Http\RedirectResponse
+     */
+    private function reportPayload(Company $company, Request $request)
     {
         $filters = $this->resolveFilters($company, $request);
         if (is_null($filters)) {
@@ -431,9 +449,45 @@ class PartnersStatementController
             }
         }
 
-        $fileNameParts = ['Partners-Statement', strtoupper((string) $filters['currency'])];
+
+        return [$headings, $rows, ['Partners-Statement', strtoupper((string) $filters['currency'])], $endingBalanceTotal];
+    }
+
+    public function exportExcel(Company $company, Request $request)
+    {
+        $payload = $this->reportPayload($company, $request);
+
+        if (! is_array($payload)) {
+            return $payload;
+        }
+
+        [$headings, $rows, $fileNameParts, $extra] = $payload;
         $fileName = preg_replace('/[^A-Za-z0-9\-]+/', '-', implode('-', $fileNameParts)).'.xlsx';
 
-        return (new PartnersStatementExport($headings, $rows, $endingBalanceTotal))->download($fileName);
+        return (new PartnersStatementExport($headings, $rows, $extra))->download($fileName);
+    }
+
+    /**
+     * Print — the whole report, every page of it, from the same payload
+     * the workbook is built from.
+     */
+    public function print(Company $company, Request $request)
+    {
+        $payload = $this->reportPayload($company, $request);
+
+        if (! is_array($payload)) {
+            return $payload;
+        }
+
+        [$headings, $rows] = $payload;
+
+        return $this->renderReportPrint(
+            company: $company,
+            title: __('Partners Statement'),
+            headings: $headings,
+            rows: $rows,
+            meta: $this->requestMeta($request),
+            numericHeadings: $this->numericHeadingsFor($headings),
+        );
     }
 }

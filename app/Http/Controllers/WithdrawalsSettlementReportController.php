@@ -11,6 +11,7 @@ use App\Traits\PaginatesStatementQueries;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Traits\Reports\PrintsReport;
 
 /**
  * WithdrawalsSettlementReportController
@@ -66,6 +67,8 @@ use Illuminate\Support\Facades\DB;
  */
 class WithdrawalsSettlementReportController
 {
+    use PrintsReport;
+
     const NUMBER_OF_INTERNAL_MONTHS = 6;
     use GeneralFunctions;
     use PaginatesStatementQueries;
@@ -304,6 +307,15 @@ class WithdrawalsSettlementReportController
                     'financial_institution_ids' => $financialInstitutionIds,
                     'account_type' => $accountTypeId,
                 ])),
+                // Print carries the same filters, and like the export it covers
+                // the whole range rather than the page on screen.
+                'printUrl' => route('print.withdrawals.settlement.report', array_merge(['company' => $company->id], [
+                    'withdrawal_start_date' => $startDate,
+                    'withdrawal_end_date' => $endDate,
+                    'currency' => $currency,
+                    'financial_institution_ids' => $financialInstitutionIds,
+                    'account_type' => $accountTypeId,
+                ])),
             ],
         ]);
     }
@@ -314,7 +326,17 @@ class WithdrawalsSettlementReportController
      * shared AbstractStatementExport base — no new export library
      * introduced.
      */
-    public function exportExcel(Company $company, Request $request)
+
+    /**
+     * The headings and the rows for the WHOLE range, in one place.
+     *
+     * Shared by the Excel export and by Print so the two can never show
+     * different numbers, and so both stay unpaginated — which is the
+     * whole point of each.
+     *
+     * @return array{0: array<int, string>, 1: \Illuminate\Support\Collection, 2: array<int, string|null>, 3: mixed}|\Illuminate\Http\RedirectResponse
+     */
+    private function reportPayload(Company $company, Request $request)
     {
         $startDate = $request->get('withdrawal_start_date', $request->get('start_date'));
         $endDate = $request->get('withdrawal_end_date', $request->get('end_date'));
@@ -345,9 +367,45 @@ class WithdrawalsSettlementReportController
             ];
         });
 
-        $fileNameParts = ['Withdrawal-Statement', $tableNameFormatted, strtoupper((string) $currency)];
+
+        return [$headings, $rows, ['Withdrawal-Statement', $tableNameFormatted, strtoupper((string) $currency)], null];
+    }
+
+    public function exportExcel(Company $company, Request $request)
+    {
+        $payload = $this->reportPayload($company, $request);
+
+        if (! is_array($payload)) {
+            return $payload;
+        }
+
+        [$headings, $rows, $fileNameParts, $extra] = $payload;
         $fileName = preg_replace('/[^A-Za-z0-9\-]+/', '-', implode('-', $fileNameParts)).'.xlsx';
 
         return (new WithdrawalStatementExport($headings, $rows))->download($fileName);
+    }
+
+    /**
+     * Print — the whole report, every page of it, from the same payload
+     * the workbook is built from.
+     */
+    public function print(Company $company, Request $request)
+    {
+        $payload = $this->reportPayload($company, $request);
+
+        if (! is_array($payload)) {
+            return $payload;
+        }
+
+        [$headings, $rows] = $payload;
+
+        return $this->renderReportPrint(
+            company: $company,
+            title: __('Withdrawal Statement'),
+            headings: $headings,
+            rows: $rows,
+            meta: $this->requestMeta($request),
+            numericHeadings: $this->numericHeadingsFor($headings),
+        );
     }
 }

@@ -12,6 +12,7 @@ use App\Traits\PaginatesStatementQueries;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Traits\Reports\PrintsReport;
 
 /**
  * LgByBankNameReportController
@@ -37,6 +38,8 @@ use Illuminate\Support\Facades\DB;
  */
 class LgByBankNameReportController
 {
+    use PrintsReport;
+
     use GeneralFunctions;
     use LgListReportRows;
     use PaginatesStatementQueries;
@@ -222,6 +225,11 @@ class LgByBankNameReportController
                 'exportUrl' => route('export.lg.by.bank.name.report', array_merge(['company' => $company->id], $request->only([
                     'start_date', 'currency_name', 'bank_id', 'status',
                 ]))),
+                // Print carries the same filters, and like the export it covers
+                // the whole range rather than the page on screen.
+                'printUrl' => route('print.lg.by.bank.name.report', array_merge(['company' => $company->id], $request->only([
+                    'start_date', 'currency_name', 'bank_id', 'status',
+                ]))),
             ],
         ]);
     }
@@ -232,7 +240,17 @@ class LgByBankNameReportController
      * App\Exports\Statements\LgListReportExport — no new export library
      * introduced.
      */
-    public function exportExcel(Company $company, Request $request)
+
+    /**
+     * The headings and the rows for the WHOLE range, in one place.
+     *
+     * Shared by the Excel export and by Print so the two can never show
+     * different numbers, and so both stay unpaginated — which is the
+     * whole point of each.
+     *
+     * @return array{0: array<int, string>, 1: \Illuminate\Support\Collection, 2: array<int, string|null>, 3: mixed}|\Illuminate\Http\RedirectResponse
+     */
+    private function reportPayload(Company $company, Request $request)
     {
         $data = $this->fetchRows($company, $request);
         if (is_null($data)) {
@@ -262,9 +280,45 @@ class LgByBankNameReportController
             ];
         });
 
-        $fileNameParts = ['LG-By-Bank-Name', strtoupper((string) $data['currency'])];
+
+        return [$headings, $rows, ['LG-By-Bank-Name', strtoupper((string) $data['currency'])], null];
+    }
+
+    public function exportExcel(Company $company, Request $request)
+    {
+        $payload = $this->reportPayload($company, $request);
+
+        if (! is_array($payload)) {
+            return $payload;
+        }
+
+        [$headings, $rows, $fileNameParts, $extra] = $payload;
         $fileName = preg_replace('/[^A-Za-z0-9\-]+/', '-', implode('-', $fileNameParts)).'.xlsx';
 
         return (new LgListReportExport($headings, $rows))->download($fileName);
+    }
+
+    /**
+     * Print — the whole report, every page of it, from the same payload
+     * the workbook is built from.
+     */
+    public function print(Company $company, Request $request)
+    {
+        $payload = $this->reportPayload($company, $request);
+
+        if (! is_array($payload)) {
+            return $payload;
+        }
+
+        [$headings, $rows] = $payload;
+
+        return $this->renderReportPrint(
+            company: $company,
+            title: __('LG By Bank Name'),
+            headings: $headings,
+            rows: $rows,
+            meta: $this->requestMeta($request),
+            numericHeadings: $this->numericHeadingsFor($headings),
+        );
     }
 }

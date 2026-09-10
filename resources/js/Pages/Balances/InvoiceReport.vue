@@ -31,6 +31,7 @@ const props = defineProps({
     totalCollectionOrPaidText: String,
     downPaymentSettlementUrl: String,
     exportUrl: String,
+    printUrl: String,
     backUrl: String,
     invoices: Object,
     filters: { type: Object, default: () => ({}) },
@@ -144,6 +145,11 @@ function submitDeductions(invoice) {
                 </Link>
                 <a v-if="exportUrl && invoices.total" :href="exportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap">
                     {{ $t('⬇️ Export to Excel') }}
+                </a>
+                <!-- Print covers every invoice in the report, not the page on
+                     screen, and honours the same search. -->
+                <a v-if="printUrl && invoices.total" :href="printUrl" target="_blank" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap">
+                    {{ $t('🖨️ Print') }}
                 </a>
             </div>
             <p class="text-sm cvr-text-muted mb-4">{{ $t('Every invoice for this customer in this currency') }}</p>

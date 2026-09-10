@@ -154,6 +154,11 @@ function submitInterest() {
                     <a :href="urls.exportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
                         {{ $t('⬇️ Export to Excel') }}
                     </a>
+                    <!-- Print covers the WHOLE range, like the export - not the
+                         page currently on screen. -->
+                    <a v-if="urls.printUrl" :href="urls.printUrl" target="_blank" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
+                        {{ $t('🖨️ Print') }}
+                    </a>
                     <Link v-if="!isCurrentAccount" :href="urls.withdrawalsSettlementReportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
                         {{ $t('📖 Withdrawals Settlement Report') }}
                     </Link>

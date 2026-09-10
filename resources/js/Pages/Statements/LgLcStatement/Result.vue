@@ -62,9 +62,20 @@ function goToPage(url) {
                         · {{ String(currency).toUpperCase() }}
                     </span>
                 </h1>
-                <a :href="urls.exportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
-                    {{ $t('⬇️ Export to Excel') }}
-                </a>
+                <!-- The two actions are one group. Left as loose siblings they
+                     become separate flex items of a justify-between row, which
+                     spreads them apart and drops a gap between them. -->
+                <div class="flex items-center gap-2">
+                    <a :href="urls.exportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
+                        {{ $t('⬇️ Export to Excel') }}
+                    </a>
+                    <!-- Print covers the WHOLE range, like the export - not the
+                         page currently on screen. Opens its own sheet so the
+                         app chrome never lands on the paper. -->
+                    <a v-if="urls.printUrl" :href="urls.printUrl" target="_blank" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm">
+                        {{ $t('🖨️ Print') }}
+                    </a>
+                </div>
             </div>
             <p class="text-sm cvr-text-muted mb-6">{{ kpis.transactionCount }} {{ $t('transactions in this date range.') }}</p>
 

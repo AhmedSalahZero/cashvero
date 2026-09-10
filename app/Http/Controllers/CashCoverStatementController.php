@@ -7,6 +7,8 @@ use App\Models\FinancialInstitution;
 use App\Traits\PaginatesStatementQueries;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Exports\Statements\CashCoverStatementExport;
+use App\Traits\Reports\PrintsReport;
 
 /**
  * CashCoverStatementController
@@ -30,6 +32,8 @@ use Illuminate\Support\Facades\DB;
  */
 class CashCoverStatementController
 {
+    use PrintsReport;
+
     use PaginatesStatementQueries;
 
     private const ROWS_PER_PAGE = 50;
@@ -95,8 +99,106 @@ class CashCoverStatementController
             'paginator' => $paginator->toArray(),
             'urls' => [
                 'backUrl' => route('view.cash.cover.statement', ['company' => $company->id]),
+                // Print carries the same filters and covers the whole range,
+                // not the page on screen.
+                'exportUrl' => route('export.cash.cover.statement', array_merge(
+                    ['company' => $company->id],
+                    $request->except(['page'])
+                )),
+                'printUrl' => route('print.cash.cover.statement', array_merge(
+                    ['company' => $company->id],
+                    $request->except(['page'])
+                )),
             ],
         ]);
+    }
+
+    /**
+     * The headings and the rows for the WHOLE range.
+     *
+     * Shared by Print and by the Excel export, the same way every other
+     * statement in this family shares one — so the two can never show
+     * different numbers, and neither is page-bound.
+     *
+     * The figures stay RAW here: a workbook needs real numbers for its
+     * SUM formulas and number formats. The print sheet formats them at
+     * render instead.
+     *
+     * @return array{0: array<int, string>, 1: \Illuminate\Support\Collection, 2: array<int, string|null>}|\Illuminate\Http\RedirectResponse
+     */
+    private function reportPayload(Company $company, Request $request)
+    {
+        $data = $this->fetchData($company, $request);
+
+        if (is_null($data)) {
+            return redirect()->back()->with('fail', __('No Data Found'));
+        }
+
+        $headings = ['#', 'Date', 'Type', 'Source', 'Movement', 'Debit', 'Credit', 'End Balance'];
+
+        $rows = $data['query']()->get()->values()->map(function ($row, $index) use ($data) {
+            $mapped = $this->mapRow($row, $data['typeColumn']);
+
+            return [
+                '#' => $index + 1,
+                'Date' => $mapped['date'],
+                'Type' => $mapped['type'],
+                'Source' => $mapped['source'],
+                'Movement' => $mapped['movement'],
+                'Debit' => $mapped['debit'],
+                'Credit' => $mapped['credit'],
+                'End Balance' => $mapped['end_balance'],
+            ];
+        });
+
+        return [$headings, $rows, [
+            'Cash-Cover-Statement',
+            $data['instrumentLabel'],
+            $data['bankName'],
+            strtoupper((string) $data['currency']),
+        ]];
+    }
+
+    /**
+     * Excel export — this report was the only statement in the family
+     * built without one, which read as a missing button rather than a
+     * deliberate omission.
+     */
+    public function exportExcel(Company $company, Request $request)
+    {
+        $payload = $this->reportPayload($company, $request);
+
+        if (! is_array($payload)) {
+            return $payload;
+        }
+
+        [$headings, $rows, $fileNameParts] = $payload;
+        $fileName = preg_replace('/[^A-Za-z0-9\-]+/', '-', implode('-', array_filter($fileNameParts))).'.xlsx';
+
+        return (new CashCoverStatementExport($headings, $rows))->download($fileName);
+    }
+
+    /**
+     * Print — the whole statement, every page of it.
+     */
+    public function print(Company $company, Request $request)
+    {
+        $payload = $this->reportPayload($company, $request);
+
+        if (! is_array($payload)) {
+            return $payload;
+        }
+
+        [$headings, $rows] = $payload;
+
+        return $this->renderReportPrint(
+            company: $company,
+            title: __('Cash Cover Statement'),
+            headings: $headings,
+            rows: $rows,
+            meta: $this->requestMeta($request),
+            numericHeadings: $this->numericHeadingsFor($headings),
+        );
     }
 
     /**
