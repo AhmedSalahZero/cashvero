@@ -614,6 +614,49 @@ class CustomerInvoiceDashboardController extends Controller
      * PHP methods client-side) and pre-resolve the URLs the page
      * needs (no Ziggy — see Style Guide §8).
      */
+    /**
+     * The money columns a typed amount is matched against. Deliberately
+     * the three the report actually shows as "an amount" — the invoice,
+     * the invoice after tax, and what is still owed on it.
+     */
+    private const SEARCHABLE_AMOUNT_COLUMNS = ['invoice_amount', 'net_invoice_amount', 'net_balance'];
+
+    /**
+     * The Invoice Report's one search box: an invoice number, or an amount.
+     *
+     * Applied in SQL rather than over the fetched page, because this
+     * report is paginated at the database level — filtering the 25 rows
+     * that happen to be on screen would search a page, not the invoices.
+     *
+     * The money columns are varchar, so an amount is matched two ways:
+     * as a number, which makes 313,680 find a stored "313680.00"
+     * whatever the two are written like; and as a prefix of the stored
+     * text, so a partial amount narrows the list instead of returning
+     * nothing at all.
+     *
+     * Shared by CustomerInvoice and SupplierInvoice — the columns are
+     * the ones IsInvoice defines, so both sides search identically.
+     */
+    private function applyInvoiceReportSearch($query, string $search)
+    {
+        if ($search === '') {
+            return $query;
+        }
+
+        return $query->where(function ($q) use ($search) {
+            $q->where('invoice_number', 'like', '%'.$search.'%');
+
+            $numeric = str_replace([',', ' '], '', $search);
+
+            if (is_numeric($numeric)) {
+                foreach (self::SEARCHABLE_AMOUNT_COLUMNS as $column) {
+                    $q->orWhereRaw('ROUND(CAST(`'.$column.'` AS DECIMAL(20, 4)), 2) = ROUND(?, 2)', [(float) $numeric])
+                        ->orWhere($column, 'like', $numeric.'%');
+                }
+            }
+        });
+    }
+
     public function showInvoiceReport(Company $company, Request $request, int $partnerId, string $currency, $modelType)
     {
 
@@ -635,15 +678,23 @@ class CustomerInvoiceDashboardController extends Controller
          * twice or skipped. The Excel export below still runs the same
          * query unpaginated.
          */
+        $search = trim((string) $request->get('search', ''));
+
         $invoices = ('App\Models\\' . $modelType)::where('company_id', $company->id)
         ->where($clientIdColumnName, $partnerId)
         ->where('currency', $currency)
+        ->when($search !== '', fn ($q) => $this->applyInvoiceReportSearch($q, $search))
 		->with(['deductions', 'dueDateHistories'])
 		->orderByRaw('invoice_date asc , invoice_due_date desc , net_balance desc , id asc')
         ->paginate(self::INVOICE_ROWS_PER_PAGE)
         ->withQueryString();
         $customer = Partner::find($partnerId);
-        if (!$invoices->total()) {
+        /*
+         * A search that matches nothing is not "no data" — bouncing back
+         * would throw the user off the report and lose what they typed.
+         * Only an empty report with no search sends them back.
+         */
+        if (!$invoices->total() && $search === '') {
             return  redirect()->back()->with('fail', __('No Data Found'));
         }
 		$hasProjectNameColumn = $modelType == 'CustomerInvoice'?  CustomerInvoice::hasProjectNameColumn() : false;
@@ -706,7 +757,13 @@ class CustomerInvoiceDashboardController extends Controller
 			// modelType come from the route itself), so the "Export to Excel"
 			// button is a plain link — matches the pre-resolved-URL, no-Ziggy
 			// convention used by every other report's export button.
-			'exportUrl'=>route('export.invoice.report', ['company' => $company->id, 'partnerId' => $partnerId, 'currency' => $currency, 'modelType' => $modelType]),
+			'filters'=>['search' => $search],
+			// Where the search box submits to: this same report, minus the
+			// page number, so a new term always lands on page 1.
+			'indexUrl'=>route('view.invoice.report', ['company' => $company->id, 'partnerId' => $partnerId, 'currency' => $currency, 'modelType' => $modelType]),
+			// The export carries the search, so what downloads is what is
+			// on screen rather than the whole unfiltered report.
+			'exportUrl'=>route('export.invoice.report', ['company' => $company->id, 'partnerId' => $partnerId, 'currency' => $currency, 'modelType' => $modelType, 'search' => $search ?: null]),
 			'backUrl'=>route('view.balances', ['company' => $company->id, 'modelType' => $modelType]),
         ]);
     }
@@ -730,9 +787,12 @@ class CustomerInvoiceDashboardController extends Controller
         $fullClassName = ('\App\Models\\' . $modelType);
         $clientIdColumnName = $fullClassName::CLIENT_ID_COLUMN_NAME;
 
+        $search = trim((string) $request->get('search', ''));
+
         $invoices = ('App\Models\\' . $modelType)::where('company_id', $company->id)
             ->where($clientIdColumnName, $partnerId)
             ->where('currency', $currency)
+            ->when($search !== '', fn ($q) => $this->applyInvoiceReportSearch($q, $search))
             ->orderByRaw('invoice_date asc , invoice_due_date desc , net_balance desc')
             ->get();
         $customer = Partner::find($partnerId);

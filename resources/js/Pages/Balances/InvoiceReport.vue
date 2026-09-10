@@ -11,8 +11,8 @@
  * errors now surface through page.props.errors, same as every other
  * form in this app; the balance math itself is unchanged).
  */
-import { ref, computed } from 'vue';
-import { Link, useForm } from '@inertiajs/vue3';
+import { ref, computed, watch } from 'vue';
+import { Link, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Pagination from '@/Components/Pagination.vue';
 
@@ -33,6 +33,27 @@ const props = defineProps({
     exportUrl: String,
     backUrl: String,
     invoices: Object,
+    filters: { type: Object, default: () => ({}) },
+    indexUrl: String,
+});
+
+/* ── Search: invoice number or amount.
+
+   Server side, because this report is paginated in SQL — filtering the
+   rows already on screen would search one page, not the invoices. Same
+   debounced round trip the other index screens use. ── */
+const search = ref(props.filters.search || '');
+
+let searchTimer = null;
+watch(search, () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+        router.get(props.indexUrl, { search: search.value || undefined }, {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+        });
+    }, 350);
 });
 
 function formatAmount(value) {
@@ -125,7 +146,27 @@ function submitDeductions(invoice) {
                     {{ $t('⬇️ Export to Excel') }}
                 </a>
             </div>
-            <p class="text-sm cvr-text-muted mb-6">{{ $t('Every invoice for this customer in this currency') }}</p>
+            <p class="text-sm cvr-text-muted mb-4">{{ $t('Every invoice for this customer in this currency') }}</p>
+
+            <div class="cvr-card-bg cvr-border border rounded-lg p-3 mb-4 flex items-end gap-3 flex-wrap">
+                <div class="flex-1 min-w-[14rem]">
+                    <label class="cvr-form-label">{{ $t('Search') }}</label>
+                    <input
+                        v-model="search"
+                        type="text"
+                        :placeholder="$t('Search by invoice number or amount...')"
+                        class="cvr-input w-full px-3 py-2 rounded"
+                    />
+                </div>
+                <button
+                    v-if="search"
+                    @click="search = ''"
+                    class="cvr-btn-secondary px-3 py-2 rounded border text-sm whitespace-nowrap"
+                >{{ $t('Clear') }}</button>
+                <p v-if="filters.search" class="text-sm cvr-text-muted pb-2">
+                    {{ invoices.total }} {{ $t('Results') }}
+                </p>
+            </div>
 
             <!-- Table -->
             <div class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto">
