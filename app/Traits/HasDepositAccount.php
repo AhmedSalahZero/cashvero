@@ -4,6 +4,7 @@ namespace App\Traits;
 use App\Models\AccountType;
 use Carbon\Carbon;
 use App\Models\Currency;
+use App\Models\ForeignExchangeRate;
 use App\Models\CurrentAccountBankStatement;
 use App\Models\FinancialInstitutionAccount;
 use App\Models\TimeOfDeposit;
@@ -114,6 +115,43 @@ trait HasDepositAccount
 			->values();
 	}
 
+	/**
+	 * * المبلغ محوّل للعملة الأساسية بتاعة الشركة بسعر الصرف في تاريخ
+	 * * الحركة
+	 *
+	 * * قيد أودو محتاج الرقمين : debit/credit **دايمًا** بعملة الشركة ،
+	 * * و amount_currency بالعملة الأجنبية . قبل كده كان بيتبعت المبلغ
+	 * * بالعملة الأجنبية في خانة debit مع currency_id أجنبي و من غير
+	 * * amount_currency خالص — فأودو كان بيعيد حساب الخانتين من بعض و
+	 * * يطلّعهم أصفار (نفس الباج اللي اتصلح في خطابات الضمان)
+	 *
+	 * * لو عملة الوديعة هي نفسها عملة الشركة بيرجّع المبلغ زي ما هو
+	 */
+	public function getAmountInMainFunctionalCurrency(float $amount, ?string $date = null): float
+	{
+		$company = $this->company;
+
+		if (! $company) {
+			return $amount;
+		}
+
+		$mainFunctionalCurrency = $company->getMainFunctionalCurrency();
+		$currency = $this->getCurrency();
+
+		if (! $currency || $currency === $mainFunctionalCurrency) {
+			return $amount;
+		}
+
+		$rate = ForeignExchangeRate::getExchangeRateForCurrencyAndClosestDate(
+			$currency,
+			$mainFunctionalCurrency,
+			$date ?: $this->getStartDate(),
+			$company->id
+		);
+
+		return $amount * ($rate ?: 1);
+	}
+
 	public function isOpeningBalance():bool
 	{
 		return is_null($this->deducted_from_account_id) || $this->deducted_from_account_id ==0 ;
@@ -222,7 +260,7 @@ trait HasDepositAccount
 			$toOdooId = $fromFinancialInstitution->getOdooIdForAccount($toAccountTypeId,$toAccountNumber);
 			$ref = $isBreakOrApplyDeposit ? $this->getBreakReference() : $this->getCreateReference();
 			$message = $ref;
-			$result = $timeOfCertificateOdooService->createAndPostJournalEntry($date,$amount*-1,$odooCurrencyId,$fromJournalId,$fromOdooId,$toOdooId,$ref,null,$message,$isBreakOrApplyDeposit);
+			$result = $timeOfCertificateOdooService->createAndPostJournalEntry($date,$amount*-1,$odooCurrencyId,$fromJournalId,$fromOdooId,$toOdooId,$ref,null,$message,$isBreakOrApplyDeposit,$this->getAmountInMainFunctionalCurrency($amount*-1,$date));
 			// $this->{$storeAccountBankStatementLineColumnName} = $result['account_bank_statement_line_id'];
 			$this->{$journalColumnName} = $result['journal_entry_id'];
 			$this->{$referenceColumnName} = $result['reference'];
@@ -259,7 +297,7 @@ trait HasDepositAccount
 			$ref =$this instanceof TimeOfDeposit ? __('Time Of Deposit Renewal Interest') : __('Certificate Of Deposit Renewal Interest');
 			$message=$ref;
 			$interestAmount = $newInterestRate;
-			$result = $timeOfCertificateOdooService->createMoneyDepositInBank($date,$interestAmount,$odooCurrencyId,$debitJournalId,$debitOdooId,$creditAccountTypeId,$ref,null,$message);
+			$result = $timeOfCertificateOdooService->createMoneyDepositInBank($date,$interestAmount,$odooCurrencyId,$debitJournalId,$debitOdooId,$creditAccountTypeId,$ref,null,$message,$this->getAmountInMainFunctionalCurrency($interestAmount,$date));
 			$this->renewal_account_bank_statement_line_id = $result['account_bank_statement_line_id'];
 			$this->renewal_journal_entry_id = $result['journal_entry_id'];
 			$this->save();

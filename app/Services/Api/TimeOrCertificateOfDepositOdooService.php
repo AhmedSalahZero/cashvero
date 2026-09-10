@@ -9,10 +9,15 @@ class TimeOrCertificateOfDepositOdooService
 {
     use AuthTrait,HasJournal;
     
-    public function createAndPostJournalEntry(string $date, float $amount, int $odooCurrencyId, int $creditJournalId, int $creditOdooAccountId, int $debitOdooAccountId, ?string $ref, ?int $partnerId, ?string $message , $isBreakOrApplyDeposit =false)
+    /**
+     * * $amountInMainFunctionalCurrency هو اللي بيتحط في debit/credit ،
+     * * لأن أودو بيعتبرهم **دايمًا** بعملة الشركة الأساسية ، و $amount
+     * * بيتحط في amount_currency بالعملة اللي في currency_id
+     */
+    public function createAndPostJournalEntry(string $date, float $amount, int $odooCurrencyId, int $creditJournalId, int $creditOdooAccountId, int $debitOdooAccountId, ?string $ref, ?int $partnerId, ?string $message , $isBreakOrApplyDeposit =false, ?float $amountInMainFunctionalCurrency = null)
     {
         $id = null ;  // in edit mode
-        $journalEntryData =   $this->getDataFormatted($date, $amount, $odooCurrencyId, $creditJournalId, $debitOdooAccountId, $creditOdooAccountId, $ref, $partnerId, $message, $id,$isBreakOrApplyDeposit) ;
+        $journalEntryData =   $this->getDataFormatted($date, $amount, $odooCurrencyId, $creditJournalId, $debitOdooAccountId, $creditOdooAccountId, $ref, $partnerId, $message, $id,$isBreakOrApplyDeposit, $amountInMainFunctionalCurrency) ;
 
         $context = [
             'check_move_validity' => true,
@@ -53,12 +58,25 @@ class TimeOrCertificateOfDepositOdooService
     }
     
     
-    protected function getDataFormatted(string $date, float $amount, int $odooCurrencyId, int $creditJournalId, int $creditOdooAccountId, int $debitOdooAccountId, ?string $ref, ?int $partnerId, ?string $message, ?int $id = null , $isBreakOrApplyDeposit = false  ):array
+    protected function getDataFormatted(string $date, float $amount, int $odooCurrencyId, int $creditJournalId, int $creditOdooAccountId, int $debitOdooAccountId, ?string $ref, ?int $partnerId, ?string $message, ?int $id = null , $isBreakOrApplyDeposit = false, ?float $amountInMainFunctionalCurrency = null  ):array
     {
         $inEditMode = is_null($id) ? 0 : 1;
         $id = is_null($id) ? 0 : $id ;
-		$debitAmount = $isBreakOrApplyDeposit ? 0 : abs($amount)   ;
-		$creditAmount = $isBreakOrApplyDeposit ? abs($amount) : 0  ;
+        /**
+         * * من غير قيمة صريحة بنفترض إن الحركة بعملة الشركة نفسها
+         */
+        $amountInMainFunctionalCurrency = is_null($amountInMainFunctionalCurrency) ? $amount : $amountInMainFunctionalCurrency;
+		/**
+		 * * 0.0 مش 0 عشان الحمولة تفضل عشرية بالكامل زي باقي البنّائين
+		 */
+		$debitAmount = $isBreakOrApplyDeposit ? 0.0 : abs($amountInMainFunctionalCurrency)   ;
+		$creditAmount = $isBreakOrApplyDeposit ? abs($amountInMainFunctionalCurrency) : 0.0  ;
+        /**
+         * * الإشارة بتمشي مع اتجاه السطر : موجب مع المدين و سالب مع
+         * * الدائن . السطر الأول بيتقلب حسب isBreakOrApplyDeposit فالإشارة
+         * * بتتقلب معاه ، و التاني عكسه دايمًا
+         */
+        $currencyAmount = $isBreakOrApplyDeposit ? -abs($amount) : abs($amount) ;
         return [
                'journal_id' => $creditJournalId, // account journal id (safe or bank journal id )
                'amount' =>$isBreakOrApplyDeposit ? -$amount : $amount ,
@@ -70,6 +88,7 @@ class TimeOrCertificateOfDepositOdooService
                         'account_id' => $creditOdooAccountId, // lg cash cover odoo id (create lg cash cover)
                         'debit' => $debitAmount,
                         'credit' => $creditAmount,
+                        'amount_currency' => $currencyAmount,
                         'currency_id' => $odooCurrencyId,
                         'name' => $message , // cash cover
                         'partner_id' => $partnerId,
@@ -78,6 +97,7 @@ class TimeOrCertificateOfDepositOdooService
                         'account_id' => $debitOdooAccountId , // chart of account odoo id
                         'debit' => $creditAmount,
                         'credit' => $debitAmount,
+                        'amount_currency' => -$currencyAmount,
                         'currency_id' => $odooCurrencyId,
                         'name' => $message ,
                         'partner_id' => $partnerId,
@@ -85,10 +105,14 @@ class TimeOrCertificateOfDepositOdooService
                 ],
             ];
     }
-    public function createMoneyDepositInBank(string $date, float $amount, int $odooCurrencyId, int $debitJournalId, int $debitOdooAccountId, int $creditOdooAccountId, ?string $ref, ?int $partner_id, ?string $message)
+    /**
+     * * زي createAndPostJournalEntry : debit/credit بعملة الشركة و
+     * * amount_currency بالعملة الأجنبية
+     */
+    public function createMoneyDepositInBank(string $date, float $amount, int $odooCurrencyId, int $debitJournalId, int $debitOdooAccountId, int $creditOdooAccountId, ?string $ref, ?int $partner_id, ?string $message, ?float $amountInMainFunctionalCurrency = null)
     {
         $id = null ;  // in edit mode
-        $journalEntryData = $this->getMoneyDepositDataFormatted($date, $amount, $odooCurrencyId, $debitJournalId, $debitOdooAccountId, $creditOdooAccountId, $ref, $partner_id, $message, $id) ;
+        $journalEntryData = $this->getMoneyDepositDataFormatted($date, $amount, $odooCurrencyId, $debitJournalId, $debitOdooAccountId, $creditOdooAccountId, $ref, $partner_id, $message, $id, $amountInMainFunctionalCurrency) ;
 
         $context = [
             'check_move_validity' => true,
@@ -126,10 +150,11 @@ class TimeOrCertificateOfDepositOdooService
             'journal_entry_id'=>$journalEntryId
         ];
     }
-    protected function getMoneyDepositDataFormatted(string $date, float $amount, int $odooCurrencyId, int $debitJournalId, int $debitOdooAccountId, int $creditOdooAccountId, ?string $ref, ?int $partner_id, ?string $message, ?int $id = null):array
+    protected function getMoneyDepositDataFormatted(string $date, float $amount, int $odooCurrencyId, int $debitJournalId, int $debitOdooAccountId, int $creditOdooAccountId, ?string $ref, ?int $partner_id, ?string $message, ?int $id = null, ?float $amountInMainFunctionalCurrency = null):array
     {
         $inEditMode = is_null($id) ? 0 : 1;
         $id = is_null($id) ? 0 : $id ;
+        $amountInMainFunctionalCurrency = is_null($amountInMainFunctionalCurrency) ? $amount : $amountInMainFunctionalCurrency;
         
         
         return [
@@ -141,8 +166,9 @@ class TimeOrCertificateOfDepositOdooService
                'line_ids' => [
                     [$inEditMode, $id, [
                         'account_id' => $debitOdooAccountId, // lg cash cover odoo id (create lg cash cover)
-                        'debit' => abs($amount),
+                        'debit' => abs($amountInMainFunctionalCurrency),
                         'credit' => 0.0,
+                        'amount_currency' => abs($amount),
                         'currency_id' => $odooCurrencyId,
                         'name' => $message , // cash cover
                         'partner_id' => $partner_id,
@@ -150,7 +176,8 @@ class TimeOrCertificateOfDepositOdooService
                     [$inEditMode, $id+1, [
                         'account_id' => $creditOdooAccountId, // chart of account odoo id
                         'debit' => 0.0,
-                        'credit' => abs($amount),
+                        'credit' => abs($amountInMainFunctionalCurrency),
+                        'amount_currency' => -abs($amount),
                         'currency_id' => $odooCurrencyId,
                         'name' => $message ,
                         'partner_id' => $partner_id,

@@ -185,7 +185,7 @@ class LgRenewalDateHistory extends Model
         $message = $ref;
         $analytic_distribution = $letterOfGuaranteeIssuance->formatAnalysisDistribution() ;
         $debitOdooAccountId = $odooSetting->getLetterOfGuaranteeCommissionFeesId();
-        $result = $odooLetterOfGuaranteeIssuance->createLgIssuanceCashCover($renewalDate, $renewalFeesAmount, $journalId, $odooCurrencyId, $debitOdooAccountId, $accountOdooId, $letterOfGuaranteeIssuance->getBeneficiaryOdooId(), $ref, $message, $analytic_distribution);
+        $result = $odooLetterOfGuaranteeIssuance->createLgIssuanceCashCover($renewalDate, $renewalFeesAmount, $journalId, $odooCurrencyId, $debitOdooAccountId, $accountOdooId, $letterOfGuaranteeIssuance->getBeneficiaryOdooId(), $ref, $message, $analytic_distribution, $letterOfGuaranteeIssuance->getAmountInMainFunctionalCurrency($renewalFeesAmount, $renewalDate));
         $this->renewal_fees_account_bank_statement_odoo_id=$result['account_bank_statement_line_id'];
         $this->renewal_fees_journal_entry_id=$result['journal_entry_id'];
         $this->save();

@@ -383,6 +383,140 @@ class InternalSettlementTest extends TestCase
         $this->assertSame(500.0, (float) DB::table('customer_invoices')->where('id', $c2)->value('net_balance'));
     }
 
+    /**
+     * Cents survive the whole round trip.
+     *
+     * The dialog used to render every figure to whole units, so a
+     * settlement of 70,880.01 read as "70,880" on both sides and nobody
+     * could see whether the two sides really agreed. The arithmetic was
+     * always right - this pins that down, and the presentation tests
+     * below pin down what is shown.
+     */
+    public function test_a_settlement_with_cents_closes_both_invoices_exactly(): void
+    {
+        $customer = $this->customerInvoice('C-1', 70880.01);
+        $supplier = $this->supplierInvoice('S-1', 70880.01);
+
+        $this->submit([
+            'customer_allocations' => [$customer => 70880.01],
+            'supplier_allocations' => [$supplier => 70880.01],
+        ]);
+
+        $this->assertSame(0.0, $this->customerOpen(), 'القروش لازم تتصفّى، مش تسيب باقي');
+        $this->assertSame(0.0, $this->supplierOpen());
+        $this->assertSame(70880.01, InternalSettlement::firstOrFail()->getAmount());
+    }
+
+    /** ... and a cent of mismatch is still refused, not rounded away. */
+    public function test_a_single_cent_of_mismatch_is_refused(): void
+    {
+        $customer = $this->customerInvoice('C-1', 1000);
+        $supplier = $this->supplierInvoice('S-1', 1000);
+
+        $response = $this->submit([
+            'customer_allocations' => [$customer => 500.02],
+            'supplier_allocations' => [$supplier => 500],
+        ]);
+
+        $this->assertNotNull($this->failure($response), 'فرق قرشين مالوش يعدّي');
+        $this->assertSame(1000.0, $this->customerOpen(), 'مفيش حاجة اتحركت');
+    }
+
+    // ---------------------------------------------------------------
+    // what the dialog shows
+    // ---------------------------------------------------------------
+
+    /**
+     * Settling a balance in full used to strand the settlement that did it.
+     *
+     * The "Settle" button is gated on can_settle, which is false once the
+     * net balance reaches zero - and that button is the only way into the
+     * dialog holding the edit and delete actions for settlements already
+     * recorded. So the last settlement a partner needed could never be
+     * corrected or taken back.
+     */
+    public function test_a_settlement_that_clears_the_balance_can_still_be_edited_and_deleted(): void
+    {
+        $customer = $this->customerInvoice('C-1', 1000);
+        $supplier = $this->supplierInvoice('S-1', 1000);
+
+        $this->submit([
+            'customer_allocations' => [$customer => 1000],
+            'supplier_allocations' => [$supplier => 1000],
+        ]);
+
+        $settlement = InternalSettlement::firstOrFail();
+
+        // The row now reads zero, so can_settle would be false ...
+        $this->assertSame(0.0, $this->customerOpen(), 'المفروض الرصيد اتصفّى بالكامل');
+
+        // ... and yet the settlement must still be reachable and editable.
+        $this->submit([
+            'customer_allocations' => [$customer => 600],
+            'supplier_allocations' => [$supplier => 600],
+        ], $settlement->fresh());
+
+        $this->assertSame(400.0, $this->customerOpen(), 'تخفيض التسوية لازم يرجّع الفرق');
+        $this->assertSame(600.0, $settlement->fresh()->getAmount());
+
+        $this->controller()->destroyInternalSettlement(
+            Company::findOrFail(self::COMPANY), $settlement->fresh()
+        );
+
+        $this->assertSame(1000.0, $this->customerOpen(), 'الحذف لازم يرجّع الرصيد كامل');
+        $this->assertSame(0, InternalSettlement::count());
+    }
+
+    /** The button that reaches them must not be gated on can_settle alone. */
+    public function test_the_settlements_column_stays_reachable_once_nothing_is_left_open(): void
+    {
+        $page = file_get_contents(resource_path('js/Pages/Balances/Index.vue'));
+
+        preg_match('/v-if="canSettleInternally && ([^"]+)"/', $page, $m);
+
+        $this->assertNotEmpty($m, 'زرار التسوية الداخلية مش موجود بالشكل المتوقع');
+        $this->assertStringContainsString('row.settlements', $m[1],
+            'الزرار لازم يفضل ظاهر طالما فيه تسويات متسجلة ، حتى لو الرصيد اتصفّى');
+        $this->assertNotSame('row.can_settle', trim($m[1]),
+            'الاعتماد على can_settle لوحده هو اللي بيخفي الزرار بعد التسوية الكاملة');
+    }
+
+    /**
+     * Every amount on the balances page goes through one formatter, and
+     * it used to drop the decimals - which mattered most in the settle
+     * dialog, where the two sides are compared to the cent.
+     */
+    public function test_amounts_are_rendered_with_two_decimals(): void
+    {
+        $page = file_get_contents(resource_path('js/Pages/Balances/Index.vue'));
+
+        $this->assertStringContainsString('minimumFractionDigits: 2', $page);
+        $this->assertStringContainsString('maximumFractionDigits: 2', $page);
+        $this->assertStringNotContainsString('maximumFractionDigits: 0', $page,
+            'التقريب لأرقام صحيحة كان بيخفي القروش في مقارنة الجهتين');
+    }
+
+    /**
+     * The recorded settlements list is how an existing settlement is
+     * reached at all. Its edit action was a bare "✎" - a monochrome text
+     * glyph, in the muted colour, on a transparent button - and readers
+     * did not recognise it as a control.
+     */
+    public function test_the_recorded_settlements_offer_a_visible_edit_action(): void
+    {
+        $page = file_get_contents(resource_path('js/Pages/Balances/Index.vue'));
+
+        $this->assertStringContainsString('openSettle(settleTarget, settlement)', $page,
+            'لازم يفضل فيه طريقة لفتح تسوية متسجلة للتعديل');
+        $this->assertStringNotContainsString('class="cvr-action-btn" :title="$t(\'Edit\')">✎<', $page,
+            'الأيقونة العارية دي هي اللي العميل ما شافهاش');
+        $this->assertMatchesRegularExpression(
+            '/openSettle\(settleTarget, settlement\)"[^>]*>\s*✏️ \{\{ \$t\(.Edit.\) \}\}/s',
+            $page,
+            'زرار التعديل لازم يبقى مكتوب عليه Edit مش أيقونة لوحدها'
+        );
+    }
+
     /** An invoice paid in full by a settlement reads as collected. */
     public function test_an_invoice_settled_in_full_is_marked_collected(): void
     {

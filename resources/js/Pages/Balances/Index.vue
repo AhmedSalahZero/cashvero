@@ -290,8 +290,19 @@ function destroySettlement() {
     });
 }
 
+/* Money, always to the piastre.
+
+   This used to round to whole units, which quietly lied in the one place
+   it matters most: the settle dialog compares the two sides to the cent
+   (sidesMatch allows 0.01), so allocating 70,880.01 against 70,880.01
+   showed "70,880 / 70,880" and a mismatch of a cent looked like a match.
+   The open column, the allocated totals, the recorded settlements and
+   the over-allocation message all read from here too. */
 function formatAmount(value) {
-    return Number(value || 0).toLocaleString('en-EG', { maximumFractionDigits: 0 });
+    return Number(value || 0).toLocaleString('en-EG', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
 }
 </script>
 
@@ -395,11 +406,24 @@ function formatAmount(value) {
                             <td class="px-4 py-3 text-center whitespace-nowrap">
                                 <template v-if="row.is_dual_role">
                                     <span v-if="row.internal_settlements" class="cvr-num cvr-text-secondary me-2">{{ formatAmount(row.internal_settlements) }}</span>
+                                    <!--
+                                        can_settle answers "can a NEW settlement start
+                                        here", and goes false the moment the balance
+                                        reaches zero. But this button is also the only
+                                        way into the dialog that lists the settlements
+                                        already recorded — with their edit and delete
+                                        actions — so keying it to can_settle alone
+                                        stranded them: settle a balance in full and the
+                                        settlement that did it became unreachable.
+                                        The label says which of the two it is; the
+                                        server still refuses a new settlement with
+                                        nothing open to offset.
+                                    -->
                                     <button
-                                        v-if="canSettleInternally && row.can_settle"
+                                        v-if="canSettleInternally && (row.can_settle || row.settlements?.length)"
                                         @click="openSettle(row)"
                                         class="cvr-btn-secondary px-3 py-1 rounded border text-xs whitespace-nowrap"
-                                    >⇄ {{ $t('Settle') }}</button>
+                                    >⇄ {{ row.can_settle ? $t('Settle') : $t('Settlements') }}</button>
                                     <span v-else-if="!row.internal_settlements" class="cvr-text-muted">—</span>
                                 </template>
                                 <span v-else class="cvr-text-muted">—</span>
@@ -614,9 +638,20 @@ function formatAmount(value) {
                                             {{ settlement.customer_invoice_numbers?.join(' / ') }}
                                             <span v-if="settlement.supplier_invoice_numbers?.length"> → {{ settlement.supplier_invoice_numbers.join(' / ') }}</span>
                                         </td>
+                                        <!-- Labelled rather than icon-only: this list sits
+                                             inside a dense dialog, and the edit action was a
+                                             bare "✎" glyph - monochrome, muted, on a
+                                             transparent button - which readers did not see
+                                             as something they could click. -->
                                         <td class="py-1 text-end whitespace-nowrap">
-                                            <button @click="openSettle(settleTarget, settlement)" class="cvr-action-btn" :title="$t('Edit')">✎</button>
-                                            <button @click="settlementToDelete = settlement" class="cvr-action-btn" :title="$t('Delete')">🗑️</button>
+                                            <button @click="openSettle(settleTarget, settlement)"
+                                                class="cvr-btn-secondary px-2 py-1 rounded border text-xs whitespace-nowrap me-1">
+                                                ✏️ {{ $t('Edit') }}
+                                            </button>
+                                            <button @click="settlementToDelete = settlement"
+                                                class="cvr-btn-danger px-2 py-1 rounded border text-xs whitespace-nowrap">
+                                                🗑️ {{ $t('Delete') }}
+                                            </button>
                                         </td>
                                     </tr>
                                 </tbody>

@@ -667,7 +667,7 @@ class BankStatementController
             $currency = $letterOfGuaranteeIssuance->getLgCurrency();
             $odooCurrencyId = Currency::getOdooId($currency);
             $analytic_distribution = $letterOfGuaranteeIssuance->formatAnalysisDistribution();
-            $result = $odooLetterOfGuaranteeIssuanceService->createLgIssuanceCashCover($date, $commissionFees, $journalId, $odooCurrencyId, $debitOdooAccountId, $accountOdooId, $letterOfGuaranteeIssuance->getBeneficiaryOdooId(), $ref, $message, $analytic_distribution);
+            $result = $odooLetterOfGuaranteeIssuanceService->createLgIssuanceCashCover($date, $commissionFees, $journalId, $odooCurrencyId, $debitOdooAccountId, $accountOdooId, $letterOfGuaranteeIssuance->getBeneficiaryOdooId(), $ref, $message, $analytic_distribution, $letterOfGuaranteeIssuance->getAmountInMainFunctionalCurrency($commissionFees, $date));
          //   $letterOfGuaranteeIssuance->commission_fees_account_bank_statement_odoo_id=$result['account_bank_statement_line_id'];
 	      $bankStatementRecord->lg_commission_fees_journal_entry_id=$result['journal_entry_id'];
 	     $bankStatementRecord->odoo_lg_commission_fees_reference=$result['reference'];

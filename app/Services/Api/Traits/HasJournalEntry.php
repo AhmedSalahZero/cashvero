@@ -8,10 +8,18 @@ use Exception;
 trait HasJournalEntry
 {
 
-    public function createAndPostJournalEntry(string $date, float $amount, int $odooCurrencyId, int $journalId, int $debitOdooAccountId, int $creditOdooAccountId, ?string $ref, ?int $partnerId, ?string $message, $analytic_distribution= [])
+    /**
+     * * $amountInMainFunctionalCurrency هو اللي بيتحط في debit/credit ،
+     * * لأن أودو بيعتبر الخانتين دول **دايمًا** بعملة الشركة الأساسية ،
+     * * و $amount بيتحط في amount_currency بالعملة اللي في currency_id
+     *
+     * * لو مبعتش التاني بيتساوي بالأول — و ده الصح لما تكون عملة الحركة
+     * * هي نفسها عملة الشركة
+     */
+    public function createAndPostJournalEntry(string $date, float $amount, int $odooCurrencyId, int $journalId, int $debitOdooAccountId, int $creditOdooAccountId, ?string $ref, ?int $partnerId, ?string $message, $analytic_distribution= [], ?float $amountInMainFunctionalCurrency = null)
     {
         $id = null ;  // in edit mode
-        $journalEntryData = $this->getDataFormatted($date, $amount, $odooCurrencyId, $journalId, $debitOdooAccountId, $creditOdooAccountId, $ref, $partnerId, $message, $id, $analytic_distribution) ;
+        $journalEntryData = $this->getDataFormatted($date, $amount, $odooCurrencyId, $journalId, $debitOdooAccountId, $creditOdooAccountId, $ref, $partnerId, $message, $id, $analytic_distribution, $amountInMainFunctionalCurrency) ;
 
         $context = [
             'check_move_validity' => true,
@@ -49,10 +57,14 @@ trait HasJournalEntry
             'reference'=>$statementData[0]['move_id'][1]??null
         ];
     }
-    protected function getDataFormatted(string $date, float $amount, int $odooCurrencyId, int $journalId, int $debitOdooAccountId, int $creditOdooAccountId, ?string $ref, ?int $partnerId, ?string $message, ?int $id = null, $analytic_distribution = []):array
+    protected function getDataFormatted(string $date, float $amount, int $odooCurrencyId, int $journalId, int $debitOdooAccountId, int $creditOdooAccountId, ?string $ref, ?int $partnerId, ?string $message, ?int $id = null, $analytic_distribution = [], ?float $amountInMainFunctionalCurrency = null):array
     {
         $inEditMode = is_null($id) ? 0 : 1;
         $id = is_null($id) ? 0 : $id ;
+        /**
+         * * من غير قيمة صريحة بنفترض إن الحركة بعملة الشركة نفسها
+         */
+        $amountInMainFunctionalCurrency = is_null($amountInMainFunctionalCurrency) ? $amount : $amountInMainFunctionalCurrency;
        
         $distribution_analytic_account_ids = HVero::getAnalysisAccountIds($analytic_distribution, $partnerId);
         return [
@@ -64,8 +76,13 @@ trait HasJournalEntry
                'line_ids' => [
                     [$inEditMode, $id, [
                         'account_id' => $debitOdooAccountId, // lg cash cover odoo id (create lg cash cover)
-                        'debit' => abs($amount),
+                        'debit' => abs($amountInMainFunctionalCurrency),
                         'credit' => 0.0,
+                        /**
+                         * * موجب في المدين و سالب في الدائن — دي الإشارة
+                         * * اللي أودو بيتوقعها
+                         */
+                        'amount_currency' => abs($amount),
                         'currency_id' => $odooCurrencyId,
                         'name' => $message , // cash cover
                         'partner_id' => $partnerId,
@@ -76,7 +93,8 @@ trait HasJournalEntry
                     [$inEditMode, $id+1, [
                         'account_id' => $creditOdooAccountId, // chart of account odoo id
                         'debit' => 0.0,
-                        'credit' => abs($amount),
+                        'credit' => abs($amountInMainFunctionalCurrency),
+                        'amount_currency' => -abs($amount),
                         'currency_id' => $odooCurrencyId,
                         'name' => $message ,
                         'partner_id' => $partnerId,

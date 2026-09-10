@@ -1180,7 +1180,7 @@ class LetterOfGuaranteeIssuanceController
                 $ref = $letterOfGuaranteeIssuance->generateIssuanceRef();
                 $message = $letterOfGuaranteeIssuance->generateIssuanceMessage();
                 $analytic_distribution = $letterOfGuaranteeIssuance->formatAnalysisDistribution() ;
-                $result = $odooLetterOfGuaranteeIssuance->createLgIssuanceCashCover($issuanceDate, $cashCoverAmount, $journalId, $odooCurrencyId, $lgOdooAccountId, $accountOdooId, $letterOfGuaranteeIssuance->getBeneficiaryOdooId(), $ref, $message, $analytic_distribution);
+                $result = $odooLetterOfGuaranteeIssuance->createLgIssuanceCashCover($issuanceDate, $cashCoverAmount, $journalId, $odooCurrencyId, $lgOdooAccountId, $accountOdooId, $letterOfGuaranteeIssuance->getBeneficiaryOdooId(), $ref, $message, $analytic_distribution, $letterOfGuaranteeIssuance->getAmountInMainFunctionalCurrency($cashCoverAmount, $issuanceDate));
                 $letterOfGuaranteeIssuance->account_bank_statement_odoo_id=$result['account_bank_statement_line_id'];
                 $letterOfGuaranteeIssuance->journal_entry_id=$result['journal_entry_id'];
                 $letterOfGuaranteeIssuance->save();
