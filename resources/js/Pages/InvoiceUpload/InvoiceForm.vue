@@ -197,10 +197,23 @@ function submit() {
                             <option v-for="(name, id) in f.options" :key="id" :value="id">{{ name }}</option>
                         </select>
 
-                        <select v-else-if="f.type === 'business_sector_select'" v-model="form[f.field]" class="cvr-input w-full px-3 py-2 rounded">
-                            <option value="">{{ $t('Select') }}</option>
-                            <option v-for="(name, id) in f.options" :key="id" :value="id">{{ name }}</option>
-                        </select>
+                        <!-- Business Sector, Sales Person, Business Unit … any
+                             field backed by a managed list. Typed by hand they
+                             split a report in two the first time somebody writes
+                             the same name differently. -->
+                        <template v-else-if="f.type === 'managed_list_select'">
+                            <select v-model="form[f.field]" class="cvr-input w-full px-3 py-2 rounded">
+                                <option value="">{{ $t('Select') }}</option>
+                                <option v-for="(name, id) in f.options" :key="id" :value="id">{{ name }}</option>
+                            </select>
+                            <!-- An empty list is a dead end otherwise: the field
+                                 can no longer be typed into, so say where it is
+                                 filled in. -->
+                            <p v-if="!f.options || Object.keys(f.options).length === 0" class="text-xs cvr-text-muted mt-1">
+                                {{ $t('No options yet.') }}
+                                <a v-if="f.manage_url" :href="f.manage_url" target="_blank" class="underline">{{ $t('Manage the list') }}</a>
+                            </p>
+                        </template>
 
                         <select v-else-if="f.type === 'project_select'" v-model="form[f.field]" @change="onProjectChange" class="cvr-input w-full px-3 py-2 rounded">
                             <option value="">{{ $t('Select') }}</option>

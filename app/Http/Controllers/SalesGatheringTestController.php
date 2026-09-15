@@ -746,6 +746,7 @@ class SalesGatheringTestController extends Controller
 		$fields = collect($exportables)->map(function ($label, $fieldName) use ($model, $isCustomer, $dateWords, $numericFields, $numericNegativeFields, $company, $currentContractId, $currentSalesOrderId, $currentPurchaseOrderId) {
 			$type = 'text';
 			$options = null;
+			$manageUrl = null;
 			$value = $model ? ($model->{$fieldName} ?? null) : null;
 			$submitField = $fieldName;
 
@@ -759,10 +760,34 @@ class SalesGatheringTestController extends Controller
 				$submitField = 'supplier_id';
 				$options = \App\Models\Partner::where('company_id', $company->id)->where('is_supplier', 1)->pluck('name', 'id');
 				$value = $model->supplier_id ?? null;
-			} elseif (str_contains($label, 'Business Sector')) {
-				$type = 'business_sector_select';
-				$options = \App\Models\CashVeroBusinessSector::where('company_id', $company->id)->pluck('name', 'name');
-				$value = $model->business_sector ?? null;
+			} elseif (array_key_exists($fieldName, self::MANAGED_LIST_FIELDS)) {
+				/**
+				 * * الحقول دي ليها قوايم مُدارة بشاشاتها الخاصة (قطاع
+				 * * العمل ، مندوب المبيعات ، وحدة العمل) . كتابتها بإيد
+				 * * معناها إن "أحمد" و "احمد" و "Ahmed " يبقوا تلات
+				 * * مناديب مختلفين ، و كل تقرير بيجمّع بالاسم ده بالظبط —
+				 * * فتقرير المندوب بيتقسم من غير ما حد ياخد باله .
+				 *
+				 * * الاختيار بيتحفظ بالاسم زي ما كان (القيمة = الاسم) ،
+				 * * فالبيانات القديمة ما تتأثرش
+				 */
+				[$listModel, $manageRoute] = self::MANAGED_LIST_FIELDS[$fieldName];
+				$type = 'managed_list_select';
+				$options = $listModel::where('company_id', $company->id)->orderBy('name')->pluck('name', 'name');
+				$value = $model->{$fieldName} ?? null;
+
+				/**
+				 * * ⚠️ الحقل ده كان نص حر ، فممكن تكون فيه قيم قديمة مش
+				 * * موجودة في القايمة . من غير السطر ده الـ select كان
+				 * * هيفتح فاضي على الصف القديم ، و أول حفظ يمسح القيمة
+				 * * من غير ما حد يقصد
+				 */
+				if ($value !== null && $value !== '' && ! $options->has($value)) {
+					$options = collect([$value => $value])->union($options);
+				}
+
+				// لو القايمة فاضية ، المستخدم لازم يعرف يروح فين يملاها
+				$manageUrl = route($manageRoute, ['company' => $company->id]);
 			} elseif (str_contains($label, 'Project Name') || str_contains($label, 'Contract Name')) {
 				// SupplierInvoice's cascading field is labeled 'Contract Name'
 				// (CustomerInvoice's equivalent is 'Project Name') — same
@@ -836,6 +861,8 @@ class SalesGatheringTestController extends Controller
 				'type' => $type,
 				'value' => $value,
 				'options' => $options,
+				// فين يروح يملا القايمة لو لقاها فاضية
+				'manage_url' => $manageUrl,
 			];
 		})->values();
 
@@ -864,6 +891,19 @@ class SalesGatheringTestController extends Controller
 			'backUrl' => route('view.uploading', ['company' => $company->id, 'model' => $modelName]),
 		]);
 	}
+
+	/**
+	 * * الحقول اللي ورا كل واحد فيها قايمة مُدارة ، فبتتعرض كـ select
+	 * * مش خانة كتابة حرة .
+	 *
+	 * * أي قايمة جديدة بتتضاف هنا و بس — الواجهة بتتعامل مع النوع
+	 * * managed_list_select بشكل عام ، فمفيش حاجة تتكرر لكل حقل
+	 */
+	private const MANAGED_LIST_FIELDS = [
+		'business_sector' => [\App\Models\CashVeroBusinessSector::class, 'business.sectors.index'],
+		'sales_person' => [\App\Models\CashVeroSalesPerson::class, 'sales.persons.index'],
+		'business_unit' => [\App\Models\CashVeroBusinessUnit::class, 'business.units.index'],
+	];
 
 	public function createModel(Company $company ,Request $request, string $modelName )
 	{
