@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from 'vue';
 /**
  * One print sheet for every Statement report.
  *
@@ -27,6 +28,20 @@ function triggerPrint() {
 }
 
 const isNumeric = (heading) => props.numericHeadings.includes(heading);
+
+/* Column count decides how tight the table has to be.
+
+   A statement has 8 columns and fits landscape A4 comfortably; an
+   uploaded table can carry 18, and at the normal size it simply runs off
+   the right edge of the paper — the columns past the margin are printed
+   nowhere. Rather than let that happen silently, the sheet steps its own
+   type and padding down as the table gets wider. */
+const density = computed(() => {
+    const columns = props.headings.length;
+    if (columns > 16) return 'is-xtight';
+    if (columns > 11) return 'is-tight';
+    return '';
+});
 
 /* The payload carries RAW numbers, deliberately: the Excel export shares
    it, and a workbook needs real numbers for its SUM formulas and number
@@ -72,7 +87,11 @@ function cell(row, heading) {
                 </div>
             </section>
 
-            <table class="table">
+            <!-- On screen a wide report scrolls rather than bursting out of
+                 the sheet; on paper it cannot scroll, so the table shrinks to
+                 fit instead (see .is-tight / .is-xtight). -->
+            <div class="table-scroll">
+            <table class="table" :class="density">
                 <thead>
                     <tr>
                         <th v-for="h in headings" :key="h" :class="{ num: isNumeric(h) }">{{ h }}</th>
@@ -92,6 +111,7 @@ function cell(row, heading) {
                     </tr>
                 </tfoot>
             </table>
+            </div>
 
             <!-- A report handed over on paper needs somewhere to sign — the
                  same three lines every other printout in this app carries. -->
@@ -116,11 +136,27 @@ function cell(row, heading) {
 .criteria { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 20px; margin-bottom: 16px; }
 .criteria span { display: block; font-size: 12px; color: #64748b; }
 .criteria strong { font-size: 13px; }
-.table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.table th, .table td { border: 1px solid #e5e7eb; padding: 6px 8px; text-align: start; vertical-align: top; }
+.table-scroll { overflow-x: auto; }
+/* fixed layout: the columns share the page evenly instead of each one
+   widening to fit its longest cell, which is what pushed a wide report
+   past the paper. */
+.table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 12px; }
+.table th, .table td {
+    border: 1px solid #e5e7eb; padding: 6px 8px; text-align: start; vertical-align: top;
+    overflow-wrap: anywhere; word-break: break-word;
+}
+.table.is-tight th, .table.is-tight td { padding: 4px 5px; }
+.table.is-xtight th, .table.is-xtight td { padding: 3px 4px; }
+/* The row number needs a few characters, not an equal share of the page —
+   under fixed layout it would otherwise take as much width as a supplier
+   name and starve the columns that carry the report. */
+.table th:first-child, .table td:first-child { width: 3.5ch; text-align: end; }
 .table thead th { background: #f8fafc; }
 .table tfoot th { background: #f8fafc; }
-.num { text-align: end !important; direction: ltr; white-space: nowrap; }
+.num { text-align: end !important; direction: ltr; }
+/* Figures only refuse to wrap while there is room for them; in a tight
+   table a wrapped figure beats a clipped one. */
+.table:not(.is-tight):not(.is-xtight) .num { white-space: nowrap; }
 .empty { text-align: center; color: #64748b; padding: 24px; }
 /* Signature lines belong on the paper copy, not on screen. */
 .signatures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin-top: 36px; }
@@ -143,6 +179,13 @@ function cell(row, heading) {
     body { font-size: 9pt; }
     .header h1 { font-size: 15pt; }
     .table { font-size: 8pt; }
+    /* Wider reports step down so every column stays on the page. */
+    .table.is-tight { font-size: 6.5pt; }
+    .table.is-xtight { font-size: 5.5pt; }
+
+    /* The scroll wrapper is a screen affordance; on paper it must not
+       clip anything. */
+    .table-scroll { overflow: visible !important; }
 
     /* A statement runs to many pages: the column headings have to repeat
        on each one, or page two is a wall of unlabelled numbers, and the

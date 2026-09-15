@@ -384,7 +384,7 @@ class MoneyPayment extends Model implements IHaveCreditOverdraftStatement, IHave
     }
     public function getPaidAmountFormatted()
     {
-        return number_format($this->getPaidAmount()) ;
+        return number_format($this->getPaidAmount(), 2) ;
     }
     public function getInvoiceCurrency()
     {

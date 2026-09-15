@@ -328,7 +328,7 @@ class BuyOrSellCurrency extends Model
     public function getAmountToSellFormatted()
     {
 	
-        return number_format($this->getAmountToSell(), 0);
+        return number_format($this->getAmountToSell(), 2);
     }
 	
 	public function getAmountToBuy()
@@ -345,7 +345,7 @@ class BuyOrSellCurrency extends Model
 	}
     public function getAmountToBuyFormatted()
     {
-        return number_format($this->getAmountToBuy(), 0);
+        return number_format($this->getAmountToBuy(), 2);
     }
 
     public function toBank()

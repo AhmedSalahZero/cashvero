@@ -11,11 +11,14 @@ use App\Models\LeasingContract;
 use App\Models\Log;
 use App\Models\MediumTermLoan;
 use Illuminate\Http\Request;
+use App\Traits\Reports\PrintsReport;
 use Inertia\Inertia;
 use Schema;
 
 class SalesGatheringController extends Controller
 {
+    use PrintsReport;
+
    
 	protected function getSearchDateFieldName(string $modelName,?string $fieldName){
 		if(!$fieldName){
@@ -64,6 +67,101 @@ class SalesGatheringController extends Controller
      * today; not replicating a dead feature or inventing a working
      * one without a decision first).
      */
+    /**
+     * The columns and cells one uploaded table prints with — the same
+     * fields the user picked for the on-screen table and the export, and
+     * the same date/amount formatting, so the paper matches the screen.
+     *
+     * @return array{0: array<int, string>, 1: \Illuminate\Support\Collection}
+     */
+    private function printPayload(Company $company, string $modelName, $query): array
+    {
+        $exportableFields = (new ExportTable)->customizedTableField($company, $modelName, 'selected_fields');
+
+        if ($modelName === 'CustomerInvoice' || $modelName === 'SupplierInvoice') {
+            unset($exportableFields['withhold_amount']);
+        }
+
+        $dateFields = ['date', 'invoice_due_date', 'invoice_date'];
+        $amountFields = [
+            'invoice_amount', 'vat_amount', 'withhold_amount', 'collected_amount', 'paid_amount', 'net_balance', 'net_invoice_amount',
+            'beginning_balance', 'cheque_amount', 'schedule_payment', 'interest_amount', 'principle_amount', 'end_balance',
+        ];
+
+        $labels = array_values($exportableFields);
+        $fields = array_keys($exportableFields);
+
+        $headings = array_merge(['#'], $labels);
+
+        /**
+         * * من غير paginate : المطلوب الفترة كلها ، مش الصفحة اللي على
+         * * الشاشة
+         */
+        $rows = $query->get()->values()->map(function ($item, $index) use ($labels, $fields, $dateFields, $amountFields) {
+            $line = ['#' => $index + 1];
+
+            foreach ($fields as $i => $field) {
+                $raw = $item->{$field} ?? null;
+
+                if (in_array($field, $dateFields, true)) {
+                    $line[$labels[$i]] = $raw ? date('d-M-Y', strtotime($raw)) : '-';
+                } elseif (in_array($field, $amountFields, true)) {
+                    $line[$labels[$i]] = number_format($raw ?: 0, 2);
+                } else {
+                    $line[$labels[$i]] = $raw ?? '-';
+                }
+            }
+
+            return $line;
+        });
+
+        return [$headings, $rows];
+    }
+
+    /**
+     * Print one uploaded table for a chosen period.
+     *
+     * The period is asked for in a dialog on the page rather than assumed:
+     * these tables hold years of rows, and "print everything" is almost
+     * never what anyone means. The dates are matched against the table's
+     * own main date column — the same one the list is ordered by — so the
+     * period means the same thing here as it does on screen.
+     */
+    public function print(Company $company, Request $request, string $uploadType = 'SalesGathering', ?string $loanId = null)
+    {
+        $uploadingArr = getUploadParamsFromType($uploadType);
+        $fullModelPath = $uploadingArr['fullModel'];
+        $dateColumn = $uploadingArr['orderByDateField'];
+
+        abort_unless($request->user()->can($uploadingArr['exportPermissionName']), 403);
+
+        $from = trim((string) $request->get('from', ''));
+        $to = trim((string) $request->get('to', ''));
+
+        // فترة مقلوبة بتتظبط بدل ما ترجّع صفر بالغلط
+        if ($from !== '' && $to !== '' && $from > $to) {
+            [$from, $to] = [$to, $from];
+        }
+
+        $query = $fullModelPath::company()
+            ->when($from !== '', fn ($q) => $q->whereDate($dateColumn, '>=', $from))
+            ->when($to !== '', fn ($q) => $q->whereDate($dateColumn, '<=', $to))
+            ->when($uploadType === 'LoanSchedule' && $loanId, fn ($q) => $q->where('medium_term_loan_id', $loanId))
+            ->when($uploadType === 'ContractLoanSchedule' && $loanId, fn ($q) => $q->where('leasing_contract_id', $loanId))
+            ->orderBy($dateColumn, in_array($uploadType, ['LoanSchedule', 'ContractLoanSchedule'], true) ? 'asc' : 'desc');
+
+        [$headings, $rows] = $this->printPayload($company, $uploadType, $query);
+
+        return $this->renderReportPrint(
+            company: $company,
+            title: __($uploadingArr['typePrefixName']),
+            headings: $headings,
+            rows: $rows,
+            meta: [$this->periodMeta($from ?: __('N/A'), $to ?: __('N/A'))],
+            numericHeadings: $this->numericHeadingsFor($headings),
+        );
+    }
+
     public function index(Company $company, Request $request, string $uploadType='SalesGathering',?string $loanId = null )
     {
 		$loan = MediumTermLoan::find($loanId);
@@ -235,6 +333,7 @@ class SalesGatheringController extends Controller
 			'currentFrom' => $request->get('from'),
 			'currentTo' => $request->get('to'),
 			'indexUrl' => route('view.uploading', ['company' => $company->id, 'model' => $modelName]),
+			'printUrl' => route('print.uploading', ['company' => $company->id, 'model' => $modelName]),
 			'deleteAllUrl' => route('uploading.destroy.all', ['company' => $company->id, 'modelName' => $modelName]),
 			/**
 			 * The paginator's grand total, not the current page's count:

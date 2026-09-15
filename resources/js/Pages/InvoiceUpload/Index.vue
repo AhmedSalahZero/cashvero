@@ -57,6 +57,7 @@ const props = defineProps({
     createUrl: String,
     importUrl: String,
     exportUrl: String,
+    printUrl: String,
     templateFieldsUrl: String,
     currentField: String,
     currentValue: String,
@@ -189,6 +190,31 @@ function destroyAll() {
         },
     });
 }
+
+/* ── Print: pick a period, then open the printable sheet in its own tab.
+
+   The dates default to whatever the list is already filtered by, so the
+   usual case is one click and Print. Cleared dates mean "everything",
+   which the server honours — it just is not the default. ── */
+const printDialogOpen = ref(false);
+const printFrom = ref('');
+const printTo = ref('');
+
+function openPrintDialog() {
+    printFrom.value = props.currentFrom || '';
+    printTo.value = props.currentTo || '';
+    printDialogOpen.value = true;
+}
+
+function submitPrint() {
+    const params = new URLSearchParams();
+    if (printFrom.value) params.set('from', printFrom.value);
+    if (printTo.value) params.set('to', printTo.value);
+
+    const query = params.toString();
+    window.open(query ? `${props.printUrl}?${query}` : props.printUrl, '_blank');
+    printDialogOpen.value = false;
+}
 </script>
 
 <template>
@@ -200,6 +226,14 @@ function destroyAll() {
                     <Link v-if="canUpload && !companyHasOdoo" :href="createUrl" class="cvr-btn-primary px-3 py-1.5 rounded text-sm whitespace-nowrap">{{ $t('+ Create') }}</Link>
                     <Link v-if="canUpload" :href="importUrl" class="cvr-btn-primary px-3 py-1.5 rounded text-sm whitespace-nowrap">{{ $t('Upload Data') }}</Link>
                     <a v-if="canExport" :href="exportUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap">{{ $t('Export All Data') }}</a>
+                    <!-- Printing asks for a period first: these tables hold
+                         years of rows, and "print everything" is almost never
+                         what anyone means. -->
+                    <button
+                        v-if="canExport && printUrl"
+                        @click="openPrintDialog"
+                        class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap"
+                    >{{ $t('🖨️ Print') }}</button>
                     <a v-if="canUpload" :href="templateFieldsUrl" class="cvr-btn-secondary px-3 py-1.5 rounded border text-sm whitespace-nowrap">{{ $t('Select Template Fields') }}</a>
                     <button
                         v-if="canDelete && !companyHasOdoo && totalRows > 0"
@@ -355,6 +389,34 @@ function destroyAll() {
                             :class="{ 'opacity-60 cursor-not-allowed': deletingAll }"
                         >{{ deletingAll ? $t('Deleting…') : $t('Delete All') }}</button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Choose what to print -->
+        <div v-if="printDialogOpen" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" @click.self="printDialogOpen = false">
+            <div class="cvr-modal rounded-lg p-6 w-full max-w-md">
+                <h2 class="text-lg font-medium cvr-text-primary mb-1">{{ $t('🖨️ Print') }}</h2>
+                <p class="text-sm cvr-text-muted mb-4">{{ $t('Choose the period to print.') }}</p>
+
+                <div class="grid grid-cols-2 gap-3 mb-2">
+                    <div>
+                        <label class="cvr-form-label">{{ $t('From') }}</label>
+                        <input v-model="printFrom" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                    </div>
+                    <div>
+                        <label class="cvr-form-label">{{ $t('To') }}</label>
+                        <input v-model="printTo" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                    </div>
+                </div>
+
+                <p class="text-xs cvr-text-muted mb-4">
+                    {{ $t('Leave both empty to print every row.') }}
+                </p>
+
+                <div class="flex justify-end gap-2">
+                    <button @click="printDialogOpen = false" class="cvr-btn-secondary px-4 py-2 rounded border text-sm">{{ $t('Cancel') }}</button>
+                    <button @click="submitPrint" class="cvr-btn-primary px-4 py-2 rounded text-sm">{{ $t('🖨️ Print') }}</button>
                 </div>
             </div>
         </div>

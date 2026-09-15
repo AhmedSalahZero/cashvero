@@ -141,6 +141,9 @@ Route::group(
 
                 Route::resource('salesGathering', 'SalesGatheringController');
 
+                // ⚠️ لازم تفضل فوق الراوت اللي تحتها : {loanId?} بيبلع أي
+                // سيجمنت ، فـ /print كان هيتقرا كـ loanId
+                Route::get('uploading/{model}/print', 'SalesGatheringController@print')->name('print.uploading');
                 Route::get('uploading/{model}/{loanId?}', 'SalesGatheringController@index')->name('view.uploading');
                 Route::delete('uploading/{modelName}/delete-all', 'SalesGatheringController@destroyAll')->name('uploading.destroy.all');
 

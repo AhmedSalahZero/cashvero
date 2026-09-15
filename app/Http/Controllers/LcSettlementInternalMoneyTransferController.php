@@ -127,7 +127,7 @@ class LcSettlementInternalMoneyTransferController
                 'lc_type' => $lc->getLcType(),
                 'currency' => strtoupper((string) $lc->getLcCashCoverCurrency()),
                 'payment_date_formatted' => $lc->getReceivingOrPaymentMoneyDateFormatted(),
-                'remaining_amount_formatted' => number_format($lc->getRemainingBankSettlementAmount()),
+                'remaining_amount_formatted' => number_format($lc->getRemainingBankSettlementAmount(), 2),
                 'is_settled' => $isSettled,
                 'status_label' => $isSettled ? __('Settled') : __('Pending'),
                 'settlements_count' => $lc->lcSettlementInternalMoneyTransfers->count(),

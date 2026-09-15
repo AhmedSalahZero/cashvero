@@ -121,6 +121,17 @@ const filteredRows = computed(() => {
    Matches the old page's toggleRow() — click the client name to show
    the Sales/Purchase Order breakdown underneath. */
 const expandedIds = ref(new Set());
+
+/* The contract whose per-currency invoice breakdown is open, or null. */
+const linkedBreakdown = ref(null);
+
+/* Same meaning the app gives numbers elsewhere: done = green, still
+   running = amber, over the contract value = red (worth a second look). */
+function completionClass(percentage) {
+    if (percentage > 100) return 'cvr-num-red';
+    if (percentage >= 100) return 'cvr-num-green';
+    return 'cvr-num-amber';
+}
 function toggleExpand(id) {
     const next = new Set(expandedIds.value);
     next.has(id) ? next.delete(id) : next.add(id);
@@ -312,6 +323,8 @@ function submitAllocations() {
                             <th class="px-4 py-3 text-start">{{ $t('Start Date') }}</th>
                             <th class="px-4 py-3 text-start">{{ $t('End Date') }}</th>
                             <th class="px-4 py-3 text-start">{{ $t('Amount') }}</th>
+                            <th class="px-4 py-3 text-end">{{ $t('Linked Invoices') }}</th>
+                            <th class="px-4 py-3 text-end">{{ $t('Completion') }}</th>
                             <th class="px-4 py-3 text-start">{{ $t('Actions') }}</th>
                         </tr>
                     </thead>
@@ -327,6 +340,34 @@ function submitAllocations() {
                                 <td class="px-4 py-3 whitespace-nowrap cvr-text-secondary">{{ row.start_date }}</td>
                                 <td class="px-4 py-3 whitespace-nowrap cvr-text-secondary">{{ row.end_date }}</td>
                                 <td class="px-4 py-3 cvr-num">{{ row.amount_formatted }} {{ row.currency }}</td>
+
+                                <!-- What has actually been invoiced against this
+                                     contract. One currency prints as a figure; more
+                                     than one cannot be added up, so it opens the
+                                     breakdown instead of showing a meaningless sum. -->
+                                <td class="px-4 py-3 text-end whitespace-nowrap">
+                                    <span v-if="!row.linked_invoices.has_any" class="cvr-text-muted">—</span>
+                                    <span v-else-if="row.linked_invoices.summary" class="cvr-num">{{ row.linked_invoices.summary }}</span>
+                                    <button
+                                        v-else
+                                        @click="linkedBreakdown = row"
+                                        class="cvr-btn-secondary px-2 py-1 rounded border text-xs whitespace-nowrap"
+                                    >{{ $t('Details') }} ({{ row.linked_invoices.breakdown.length }})</button>
+                                </td>
+
+                                <!-- A percentage only means something when both sides
+                                     are in the same currency; otherwise the currencies
+                                     themselves are the honest answer. -->
+                                <td class="px-4 py-3 text-end whitespace-nowrap">
+                                    <span v-if="row.linked_invoices.completion_label === null" class="cvr-text-muted">—</span>
+                                    <span v-else-if="row.linked_invoices.completion_percentage === null" class="cvr-text-secondary">
+                                        {{ row.linked_invoices.completion_label }}
+                                    </span>
+                                    <span v-else class="cvr-num" :class="completionClass(row.linked_invoices.completion_percentage)">
+                                        {{ row.linked_invoices.completion_label }}
+                                    </span>
+                                </td>
+
                                 <td class="px-4 py-3">
                                     <div class="flex items-center gap-2">
                                         <RecordLogButton subject="Contract" :id="row.id" :company-id="company.id" />
@@ -401,7 +442,9 @@ function submitAllocations() {
                                     <td class="px-4 py-2 ps-10 cvr-text-muted text-xs" colspan="2">{{ subItem.order_label }}</td>
                                     <td class="px-4 py-2 cvr-text-secondary text-xs">{{ subItem.order_number }}</td>
                                     <td class="px-4 py-2 cvr-text-muted text-xs">{{ $t('Amount') }}</td>
-                                    <td class="px-4 py-2 cvr-num text-xs" colspan="2">{{ subItem.amount_formatted }}</td>
+                                    <!-- colspan follows the header: Amount + the two
+                                         new columns (Linked Invoices, Completion). -->
+                                    <td class="px-4 py-2 cvr-num text-xs" colspan="4">{{ subItem.amount_formatted }}</td>
                                     <td class="px-4 py-2">
                                         <!-- Hidden once the company is on Odoo — allocation comes from there -->
                                         <button
@@ -417,7 +460,7 @@ function submitAllocations() {
                         </template>
 
                         <tr v-if="filteredRows.length === 0">
-                            <td colspan="7" class="px-4 py-8 text-center cvr-text-muted">
+                            <td colspan="9" class="px-4 py-8 text-center cvr-text-muted">
                                 {{ $t('No') }} {{ type.toLowerCase() }} {{ $t('contracts found.') }}
                             </td>
                         </tr>
@@ -650,6 +693,45 @@ function submitAllocations() {
                         <button @click="closeAllocationModal" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
                         <button @click="submitAllocations" class="cvr-btn-primary px-3 py-1.5 rounded">{{ $t('Save Allocations') }}</button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Per-currency breakdown of what has been invoiced against one
+             contract. Only reachable when the currencies differ, because a
+             single total across currencies would be a made-up number. -->
+        <div v-if="linkedBreakdown" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" @click.self="linkedBreakdown = null">
+            <div class="cvr-modal rounded-lg p-6 w-full max-w-lg">
+                <div class="flex items-baseline justify-between flex-wrap gap-2 mb-1">
+                    <h2 class="text-lg font-medium cvr-text-primary">{{ $t('Linked Invoices') }}</h2>
+                    <p class="text-sm cvr-text-muted">{{ linkedBreakdown.name }}</p>
+                </div>
+                <p class="text-sm cvr-text-muted mb-4">
+                    {{ $t('Contract Amount') }}:
+                    <span class="cvr-num cvr-text-secondary">{{ linkedBreakdown.amount_formatted }} {{ linkedBreakdown.currency }}</span>
+                </p>
+
+                <table class="w-full text-sm mb-4">
+                    <thead class="cvr-table-head">
+                        <tr>
+                            <th class="px-3 py-2 text-start">{{ $t('Currency') }}</th>
+                            <th class="px-3 py-2 text-end">{{ $t('Total') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="line in linkedBreakdown.linked_invoices.breakdown" :key="line.currency" class="cvr-table-row">
+                            <td class="px-3 py-2 cvr-text-primary">{{ line.currency }}</td>
+                            <td class="px-3 py-2 text-end cvr-num">{{ line.total_formatted }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <p class="text-xs cvr-text-muted mb-4">
+                    {{ $t('No single total is shown because the invoices are in more than one currency.') }}
+                </p>
+
+                <div class="flex justify-end">
+                    <button @click="linkedBreakdown = null" class="cvr-btn-secondary px-4 py-2 rounded border text-sm">{{ $t('Close') }}</button>
                 </div>
             </div>
         </div>

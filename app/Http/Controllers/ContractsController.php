@@ -235,8 +235,75 @@ class ContractsController
 
 			return collect($totals)->map(fn ($total, $currency) => [
 				'currency' => $currency,
-				'total_formatted' => number_format($total),
+				'total_formatted' => number_format($total, 2),
 			])->values();
+		};
+
+		/**
+		 * * اللي اتفوتر فعلا على العقد ، و نسبة إتمامه .
+		 *
+		 * * القيمة المحسوبة هي صافي الفاتورة (بعد الضريبة) — نفس الرقم
+		 * * اللي بيتعرض في تفاصيل التسوية ، عشان القراءة تفضل واحدة في
+		 * * الشاشتين .
+		 *
+		 * * النسبة بتتحسب بس لما كل الفواتير بعملة العقد نفسه . غير كده
+		 * * (عملات مختلفة ، أو عملة واحدة بس مش عملة العقد) مفيش نسبة
+		 * * ليها معنى — جمع دولار على جنيه من غير تحويل بيدّي رقم غلط —
+		 * * فبنكتب العملات نفسها مكان النسبة .
+		 */
+		$linkedInvoicesFor = function ($invoices, string $contractCurrency, float $contractAmount) {
+			$totals = [];
+
+			foreach ($invoices as $invoice) {
+				$currency = $invoice->getCurrency() ?: '-';
+				$totals[$currency] = ($totals[$currency] ?? 0) + (float) $invoice->getNetInvoiceAmount();
+			}
+
+			ksort($totals);
+
+			$currencies = array_keys($totals);
+			$hasAny = $currencies !== [];
+
+			$isMixed = count($currencies) > 1
+				|| (count($currencies) === 1 && $currencies[0] !== $contractCurrency);
+
+			$breakdown = collect($totals)->map(fn ($total, $currency) => [
+				'currency' => $currency,
+				'total' => round($total, 2),
+				'total_formatted' => number_format($total, 2),
+			])->values();
+
+			/**
+			 * * لما تكون عملة واحدة بنعرض المبلغ على طول ؛ لما تكون أكتر
+			 * * بنعرض زرار بيفتح التفاصيل ، لأن مجموع واحد لعملتين مالوش
+			 * * معنى
+			 */
+			$summary = $hasAny && ! $isMixed
+				? $breakdown[0]['total_formatted'].' '.$breakdown[0]['currency']
+				: null;
+
+			$allCurrencies = array_values(array_unique(array_merge(
+				$contractCurrency ? [$contractCurrency] : [],
+				$currencies
+			)));
+
+			$percentage = null;
+			if ($hasAny && ! $isMixed && $contractAmount > 0) {
+				$percentage = round(($breakdown[0]['total'] / $contractAmount) * 100, 2);
+			} elseif (! $hasAny && $contractAmount > 0) {
+				$percentage = 0.0;
+			}
+
+			return [
+				'has_any' => $hasAny,
+				'is_mixed' => $isMixed,
+				'summary' => $summary,
+				'breakdown' => $breakdown,
+				'completion_percentage' => $percentage,
+				'completion_label' => $percentage !== null
+					? number_format($percentage, 2).'%'
+					: ($hasAny ? implode('-', $allCurrencies) : null),
+			];
 		};
 
 		$contractsForTabs = [];
@@ -279,6 +346,11 @@ class ContractsController
 					// while a collateral limit was left behind.
 					'is_assigned_as_collateral' => (bool) $contract->overdraft_against_assignment_of_contract_id,
 					'invoices' => collect($parent['invoices'])->map($mapInvoice)->values(),
+					'linked_invoices' => $linkedInvoicesFor(
+						$parent['invoices'],
+						(string) $parent['currency'],
+						(float) $contract->getAmount()
+					),
 					'related_contracts' => $relatedContracts,
 					'related_contracts_totals' => $totalsPerCurrency($relatedContracts),
 					'sub_items' => collect($subItems)->map(function ($subItem) use ($type, $mapAllocation) {

@@ -312,7 +312,7 @@ class LetterOfCreditIssuance extends Model
 	}
 	public function getTotalLcOutstandingBalanceFormatted()
 	{
-		return number_format($this->getTotalLcOutstandingBalance());
+		return number_format($this->getTotalLcOutstandingBalance(), 2);
 	}
 	public function getLcTypeOutstandingBalance()
 	{
@@ -320,7 +320,7 @@ class LetterOfCreditIssuance extends Model
 	}
 	public function getLcTypeOutstandingBalanceFormatted()
 	{
-		return number_format($this->getLcTypeOutstandingBalance());
+		return number_format($this->getLcTypeOutstandingBalance(), 2);
 	}
 	public function getLcCode()
 	{
@@ -483,7 +483,7 @@ class LetterOfCreditIssuance extends Model
 	}
 	public function getLcAmountFormatted()
 	{
-		return number_format($this->getLcAmount());
+		return number_format($this->getLcAmount(), 2);
 	}
 	public function getLcCurrency()
 	{
@@ -503,7 +503,7 @@ class LetterOfCreditIssuance extends Model
 	}
 	public function getLcCurrentAmountFormatted()
 	{
-		return number_format($this->getLcCurrentAmount());
+		return number_format($this->getLcCurrentAmount(), 2);
 	}
 	
 	public function getCashCoverRate()
@@ -520,7 +520,7 @@ class LetterOfCreditIssuance extends Model
 	}
 	public function getCashCoverAmountFormatted()
 	{
-		return number_format($this->getCashCoverAmount());
+		return number_format($this->getCashCoverAmount(), 2);
 	}
 	public function getCashCoverDeductedFromAccountTypeId()
 	{
@@ -549,7 +549,7 @@ class LetterOfCreditIssuance extends Model
 	}
 	public function getLcCommissionAmountFormatted()
 	{
-		return number_format($this->getLcCommissionAmount());
+		return number_format($this->getLcCommissionAmount(), 2);
 	}
 	
 	// public function getLcCommissionInterval()
@@ -718,7 +718,7 @@ class LetterOfCreditIssuance extends Model
 	}
 	public function getAmountInMainCurrencyFormatted()
 	{
-		return number_format($this->getLcAmountInMainCurrency());
+		return number_format($this->getLcAmountInMainCurrency(), 2);
 	}
 	public function settlements():HasMany
 	{
@@ -982,7 +982,7 @@ class LetterOfCreditIssuance extends Model
 	}
 	public function getInterestAmountFormatted()
 	{
-		return number_format($this->getInterestAmount()) ; 
+		return number_format($this->getInterestAmount(), 2) ; 
 	}
 	public function getInterestCurrency()
 	{

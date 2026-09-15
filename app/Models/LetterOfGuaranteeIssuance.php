@@ -295,7 +295,7 @@ class LetterOfGuaranteeIssuance extends Model
     }
     public function getTotalLgOutstandingBalanceFormatted()
     {
-        return number_format($this->getTotalLgOutstandingBalance());
+        return number_format($this->getTotalLgOutstandingBalance(), 2);
     }
     public function getLgTypeOutstandingBalance()
     {
@@ -303,7 +303,7 @@ class LetterOfGuaranteeIssuance extends Model
     }
     public function getLgTypeOutstandingBalanceFormatted()
     {
-        return number_format($this->getLgTypeOutstandingBalance());
+        return number_format($this->getLgTypeOutstandingBalance(), 2);
     }
     public function getLgCode()
     {
@@ -469,7 +469,7 @@ class LetterOfGuaranteeIssuance extends Model
     }
     public function getLgAmountFormatted()
     {
-        return number_format($this->getLgAmount());
+        return number_format($this->getLgAmount(), 2);
     }
     /**
      * * المبلغ محوّل للعملة الأساسية بتاعة الشركة بسعر الصرف في تاريخ
@@ -528,7 +528,7 @@ class LetterOfGuaranteeIssuance extends Model
     }
     public function getCashCoverAmountFormatted()
     {
-        return number_format($this->getCashCoverAmount());
+        return number_format($this->getCashCoverAmount(), 2);
     }
     public function getCashCoverDeductedFromAccountTypeId()
     {
@@ -576,7 +576,7 @@ class LetterOfGuaranteeIssuance extends Model
     }
     public function getLgCommissionAmountFormatted()
     {
-        return number_format($this->getLgCommissionAmount());
+        return number_format($this->getLgCommissionAmount(), 2);
     }
     public function getLgCommissionInterval()
     {
@@ -642,7 +642,7 @@ class LetterOfGuaranteeIssuance extends Model
     }
     public function getLgCurrentAmountFormatted()
     {
-        return number_format($this->getLgCurrentAmount());
+        return number_format($this->getLgCurrentAmount(), 2);
     }
     public function isCashCoverCurrentAccount():bool
     {

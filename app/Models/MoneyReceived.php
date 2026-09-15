@@ -472,7 +472,7 @@ class MoneyReceived extends Model implements IHasDebitCurrentAccountStatement
 
 	public function getReceivedAmountFormatted()
     {
-        return number_format($this->getReceivedAmount()) ;
+        return number_format($this->getReceivedAmount(), 2) ;
     }
 	public function getInvoiceCurrency()
 	{

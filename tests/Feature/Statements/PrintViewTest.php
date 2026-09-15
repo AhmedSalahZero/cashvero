@@ -163,6 +163,44 @@ class PrintViewTest extends TestCase
             "These printouts have nowhere to sign:\n  ".implode("\n  ", $offenders));
     }
 
+    /**
+     * A wide report has to stay ON the page.
+     *
+     * The uploaded tables carry up to 18 columns. At the normal size the
+     * table ran past the right margin and the columns beyond it printed
+     * nowhere at all — no warning, just missing data. The shared sheet
+     * now shrinks itself as the column count grows, and lets cells wrap
+     * rather than forcing a width.
+     */
+    public function test_a_wide_table_is_made_to_fit_the_page(): void
+    {
+        $sheet = file_get_contents(resource_path('js/Pages/Statements/Print.vue'));
+
+        $this->assertStringContainsString('table-layout: fixed', $sheet,
+            'من غير عرض ثابت العمود بيتمدد على قد محتواه و الجدول بيفيض');
+        $this->assertStringContainsString('overflow-wrap: anywhere', $sheet,
+            'الخلية لازم يكون ينفع تلف، و إلا بتفرض عرض ما ينفعش يصغر');
+        /* اسم الكلاس لوحده ما بيثبتش حاجة — لازم يكون فعلا بيصغّر الخط
+           جوه @media print ، و إلا الجدول العريض يفضل بنفس الحجم */
+        $at = strpos($sheet, '@media print');
+        $this->assertNotFalse($at, 'مفيش @media print في ورقة الطباعة');
+
+        $printBlock = [1 => substr($sheet, $at)];
+
+        foreach (['is-tight', 'is-xtight'] as $density) {
+            $this->assertMatchesRegularExpression(
+                '/\.table\.'.$density.'\s*\{[^}]*font-size:\s*[\d.]+pt/',
+                $printBlock[1],
+                "الجدول بدرجة {$density} لازم يطبع بخط أصغر"
+            );
+        }
+
+        // و على الشاشة بتتزحلق بدل ما تخرج بره الورقة
+        $this->assertStringContainsString('.table-scroll { overflow-x: auto; }', $sheet);
+        $this->assertStringContainsString('.table-scroll { overflow: visible !important; }', $sheet,
+            'التزحليق ده للشاشة بس — على الورق ما ينفعش يقص حاجة');
+    }
+
     /** Every visible string on the paper has to be translatable. */
     public function test_no_untranslated_text_on_the_printout(): void
     {

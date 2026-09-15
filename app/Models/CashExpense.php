@@ -255,7 +255,7 @@ class CashExpense extends Model  implements IHaveCreditOverdraftStatement
 	}
 	public function getPaidAmountFormatted()
     {
-        return number_format($this->getPaidAmount()) ;
+        return number_format($this->getPaidAmount(), 2) ;
     }
    
 	public function getCurrency()

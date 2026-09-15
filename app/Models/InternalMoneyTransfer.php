@@ -314,7 +314,7 @@ class InternalMoneyTransfer extends Model
 	}
     public function getAmountFormatted()
     {
-        return number_format($this->getAmount(), 0);
+        return number_format($this->getAmount(), 2);
     }
 
     public function toBank()
