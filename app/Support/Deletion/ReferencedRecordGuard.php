@@ -71,6 +71,7 @@ class ReferencedRecordGuard
                 ['table' => 'settlements', 'column' => 'partner_id', 'label' => 'Settlements'],
                 ['table' => 'payment_settlements', 'column' => 'partner_id', 'label' => 'Payment Settlements'],
                 ['table' => 'settlement_allocations', 'column' => 'partner_id', 'label' => 'Settlement Allocations'],
+                ['table' => 'internal_settlements', 'column' => 'partner_id', 'label' => 'Internal Settlements'],
                 ['table' => 'down_payment_settlements', 'column' => 'customer_id', 'label' => 'Down Payment Settlements'],
                 ['table' => 'down_payment_money_payment_settlements', 'column' => 'supplier_id', 'label' => 'Down Payment Settlements'],
                 ['table' => 'po_allocations', 'column' => 'partner_id', 'label' => 'Purchase Order Allocations'],

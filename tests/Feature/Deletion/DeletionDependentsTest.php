@@ -276,6 +276,86 @@ class DeletionDependentsTest extends TestCase
     /**
      * The four master records the guard is meant to cover.
      */
+    /**
+     * * الاختبارات اللي فوق بتثبت إن الحارس *يعرف* العمود . ده بيثبت إنه
+     * * *بيمنع* الحذف فعلا — و ده اللي بيحمي الداتا .
+     *
+     * * الحالة دي حصلت بجد : جدول internal_settlements اتضاف مع ميزة
+     * * التسويات الداخلية و اتنسي يتسجّل في الحارس ، فحذف الشريك كان
+     * * بيسيب صف تسوية بيشاور على شريك مش موجود — و شاشة الأرصدة بتقرا
+     * * التسويات بالشريك و بتنادي getName() على null .
+     */
+    public function test_a_partner_with_an_internal_settlement_cannot_be_deleted(): void
+    {
+        /**
+         * * باقي اختبارات الملف بتستعلم من information_schema باسم القاعدة
+         * * صراحةً ؛ ده بيشتغل بـ Eloquent ، فمحتاج الاتصال نفسه يتحوّل
+         */
+        $original = config('database.connections.mysql.database');
+        config(['database.connections.mysql.database' => $this->database]);
+        DB::purge('mysql');
+
+        $company = \App\Models\Company::first();
+
+        if (! $company) {
+            config(['database.connections.mysql.database' => $original]);
+            DB::purge('mysql');
+            $this->markTestSkipped('No company on file.');
+        }
+
+        DB::beginTransaction();
+
+        try {
+            $partner = new \App\Models\Partner;
+            $partner->forceFill([
+                'company_id' => $company->id,
+                'name' => 'Guard Test '.uniqid(),
+                'is_customer' => 1,
+                'is_supplier' => 1,
+            ])->save();
+
+            // من غير أي حركة الحذف مسموح — الحارس مش بيمنع على طول
+            $this->assertNull($partner->deletionBlockedMessage(),
+                'شريك من غير حركات المفروض ينفع يتحذف');
+
+            DB::table('internal_settlements')->insert([
+                'company_id' => $company->id,
+                'partner_id' => $partner->id,
+                'currency' => 'EGP',
+                'settlement_date' => '2026-01-01',
+                'amount' => 1000,
+                'exchange_rate' => 1,
+                'amount_in_main_currency' => 1000,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $message = $partner->fresh()->deletionBlockedMessage();
+
+            $this->assertNotNull($message, 'التسوية الداخلية المفروض تمنع الحذف');
+            $this->assertStringContainsString('Internal Settlements', $message,
+                'الرسالة لازم تقول للمستخدم إيه اللي ماسك الشريك');
+
+            // و الأكشن نفسه بيرفض و الشريك بيفضل موجود
+            $request = \Illuminate\Http\Request::create('/x', 'DELETE');
+            $request->setLaravelSession(app('session.store'));
+            $request->setUserResolver(fn () => \App\Models\User::first());
+            $this->app->instance('request', $request);
+
+            $response = app(\App\Http\Controllers\PartnersController::class)
+                ->destroy($company, $partner->fresh());
+
+            $this->assertNotNull($response->getSession()->get('fail'),
+                'الكونترولر لازم يرفض الحذف');
+            $this->assertNotNull(\App\Models\Partner::find($partner->id),
+                'الشريك اتحذف رغم إن عليه تسوية');
+        } finally {
+            DB::rollBack();
+            config(['database.connections.mysql.database' => $original]);
+            DB::purge('mysql');
+        }
+    }
+
     public function test_the_guard_covers_the_four_master_records(): void
     {
         $this->assertSame(
