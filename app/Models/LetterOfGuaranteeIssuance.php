@@ -19,6 +19,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
+use App\Traits\Models\IsReviewable;
 
 /**
  * @property int $id
@@ -167,6 +168,31 @@ use Illuminate\Support\Facades\DB;
  */
 class LetterOfGuaranteeIssuance extends Model
 {
+    use IsReviewable;
+
+	/**
+	 * * عملة الخطاب في lg_currency مش في currency ، فالوصف الافتراضي كان
+	 * * بيطلع المبلغ من غير عملة
+	 */
+	public function reviewDescriptor(): string
+	{
+		$parts = [__('LG Issuance').' #'.$this->getKey()];
+
+		if ($beneficiary = $this->getBeneficiaryName()) {
+			$parts[] = (string) $beneficiary;
+		}
+
+		if ($amount = $this->getLgAmountFormatted()) {
+			$parts[] = $amount.' '.(string) $this->getLgCurrency();
+		}
+
+		if ($date = $this->getIssuanceDateFormatted()) {
+			$parts[] = (string) $date;
+		}
+
+		return implode(' · ', array_filter($parts));
+	}
+
     use HasBasicStoreRequest,HasCommissionStatements,HasLetterOfGuaranteeStatements,HasLetterOfGuaranteeCashCoverStatements,HasCurrentAccountCreditStatement,HasUserComment,HasCompany;
     const OPENING_BALANCE = 'opening-balance';
     const NEW_ISSUANCE = 'new-issuance';

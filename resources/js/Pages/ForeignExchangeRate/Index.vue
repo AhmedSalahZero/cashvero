@@ -3,6 +3,7 @@ import { ref, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import RecordLogButton from '@/Components/RecordLogButton.vue';
+import ReviewButton from '@/Components/ReviewButton.vue';
 
 /*
  * ForeignExchangeRate/Index.vue
@@ -20,6 +21,8 @@ import RecordLogButton from '@/Components/RecordLogButton.vue';
  */
 
 const props = defineProps({
+    canReview: { type: Boolean, default: false },
+    reviewFilter: { type: String, default: '' },
     company: Object,
     mainFunctionalCurrency: String,
     existingCurrencies: Array,
@@ -36,6 +39,10 @@ const props = defineProps({
     indexUrl: String,
     storeUrl: String,
 });
+
+/* فلتر حالة المراجعة — بيتبعت مع فلتر التواريخ عشان الاتنين
+   يتطبقوا مع بعض */
+const reviewState = ref(props.reviewFilter || '');
 
 function switchTab(currency) {
     router.get(props.indexUrl, { active: currency }, { preserveState: true, preserveScroll: true });
@@ -77,6 +84,7 @@ function applyDateFilter() {
         value: searchValue.value,
         startDate: dateFilters.value.startDate,
         endDate: dateFilters.value.endDate,
+        review: reviewState.value || undefined,
     }, { preserveState: true, preserveScroll: true });
 }
 
@@ -203,6 +211,12 @@ function destroyRow() {
                     <label class="cvr-form-label">{{ $t('End Date') }}</label>
                     <input v-model="dateFilters.endDate" type="date" class="cvr-input px-3 py-2 rounded" />
                 </div>
+                <!-- فلتر حالة المراجعة -->
+                <select v-model="reviewState" @change="applyDateFilter" class="cvr-input px-3 py-2 rounded text-sm">
+                    <option value="">{{ $t('Review state') }}: {{ $t('All') }}</option>
+                    <option value="reviewed">{{ $t('Reviewed') }}</option>
+                    <option value="not_reviewed">{{ $t('Not reviewed') }}</option>
+                </select>
                 <button @click="applyDateFilter" class="cvr-btn-secondary px-4 py-2 rounded border">{{ $t('Apply') }}</button>
             </div>
 
@@ -231,8 +245,15 @@ function destroyRow() {
                             <td v-if="canUpdate || canDelete" class="px-4 py-3">
                                 <div v-if="rate.is_editable" class="flex items-center gap-2">
                                     <RecordLogButton subject="ForeignExchangeRate" :id="rate.id" :company-id="company.id" />
-                                    <a :href="rate.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</a>
-                                    <button @click="confirmDelete(rate)" class="cvr-action-btn" :title="$t('Delete')">🗑️</button>
+                                    <ReviewButton
+                                        movement="foreign-exchange-rate"
+                                        :id="rate.id"
+                                        :company-id="company.id"
+                                        :state="rate.review"
+                                        :can-review="canReview"
+                                    />
+                                    <a v-if="!row.review?.is_reviewed" :href="rate.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</a>
+                                    <button v-if="!row.review?.is_reviewed" @click="confirmDelete(rate)" class="cvr-action-btn" :title="$t('Delete')">🗑️</button>
                                 </div>
                             </td>
                         </tr>

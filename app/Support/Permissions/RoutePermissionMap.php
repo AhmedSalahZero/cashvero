@@ -147,6 +147,19 @@ class RoutePermissionMap
 
         /* ──────────────────────── Cash Expense ──────────────────── */
         'view.cash.expense' => 'cash_expense.view',
+        /**
+         * * راوت واحد بيخدم كل أنواع الحركات ، فالميدلوير بيسمح لأي حد
+         * * بيراجع أي نوع — و MovementReviewController بيتأكد بعدها من
+         * * صلاحية النوع اللي في الرابط بالظبط
+         */
+        'movement.review.update' => [
+            'money_received.review', 'money_payment.review',
+            'factoring_with_recourse.review', 'factoring_without_recourse.review',
+            'lc_settlement_transfer.review', 'cash_expense.review',
+            'multiple_cash_expense.review', 'internal_money_transfer.review',
+            'buy_or_sell_currency.review', 'foreign_exchange_rate.review',
+            'lg_issuance.review', 'lc_issuance.review',
+        ],
         'print.cash.expense' => 'cash_expense.view',
         'create.cash.expense' => 'cash_expense.create',
         'store.cash.expense' => 'cash_expense.create',

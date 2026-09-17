@@ -946,25 +946,21 @@ final class CashFlowContractDetailPeriodBatchLoader
         // already-correct Company Cash Flow logic
         // (CashFlowCompanyPeriodBatchLoader::applyLetterOfGuaranteeMovements).
 
-        // "Cancelled LGs Cash Cover" (Cash In) — money returned when an LG
-        // is cancelled. Per explicit product decision, this includes LGs of
-        // EITHER issuance type (New Issuance and Opening Balance) — no
-        // category_name filter here, unlike the Issued row below.
-        $cancelledCoverQuery = DB::table('letter_of_guarantee_cash_cover_statements')
-            ->join('letter_of_guarantee_issuances', 'letter_of_guarantee_issuances.id', '=', 'letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id')
-            ->join('partners', 'partners.id', '=', 'letter_of_guarantee_issuances.partner_id')
-            ->where('letter_of_guarantee_cash_cover_statements.company_id', $companyId)
-            ->where('letter_of_guarantee_cash_cover_statements.type', LetterOfGuaranteeIssuance::FOR_CANCELLATION)
-            ->where('letter_of_guarantee_issuances.contract_id', $contractId);
-        $cancelledCoverQuery = LgCashCoverEffectiveDate::joinTo($cancelledCoverQuery);
-        $effectiveDateSql = LgCashCoverEffectiveDate::sql();
-        $cancelledCoverRows = $cancelledCoverQuery
-            ->whereBetween(DB::raw($effectiveDateSql), [$periodStart, $periodEnd])
-            ->where('letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id', '>', 0)
-            ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, letter_of_guarantee_cash_cover_statements.credit as total_amount, letter_of_guarantee_cash_cover_statements.currency as currency, '.$effectiveDateSql.' as movement_date, partners.name as partner_name, letter_of_guarantee_issuances.lg_code as lg_code')
-            ->get();
+        /**
+         * * "Cancelled LGs Cash Cover" (فلوس داخلة) — الكاش كفر الراجع.
+         *
+         * * كان بيقرا حركات الإلغاء بس ، و الإلغاء حدث ماضي دايما ،
+         * * فالصف كان بيفضل فاضي في أي تقرير بيبص لقدام: الكفر بيخرج
+         * * وقت الإصدار و عمره ما بيرجع. دلوقتي بنقرا من جدول الخطابات
+         * * زي ما الودايع بتعمل بالظبط ، فالخطاب اللي هينتهي جوّه فترة
+         * * التقرير بيرجّع كفره المتبقي في تاريخ انتهائه.
+         *
+         * * بيشمل نوعي الإصدار (New Issuance و Opening Balance) بقرار
+         * * منتج صريح ، على عكس صف الإصدار تحت.
+         */
+        $refundRows = LgCashCoverRefunds::between($companyId, $periodStart, $periodEnd, $contractId);
 
-        foreach ($cancelledCoverRows as $row) {
+        foreach ($refundRows as $row) {
             $weekKey = CashFlowWeekBucketer::resolveWeekKey((string) $row->movement_date, $periodsByWeekKey);
             if ($weekKey === null) {
                 continue;
@@ -1007,17 +1003,7 @@ final class CashFlowContractDetailPeriodBatchLoader
         // unaffected. Same treatment as the company-level loader.
         // @see \App\Support\LetterOfGuarantee\LgRenewalTerms
         $subTypeIssued = __('Issued LG Cash Cover');
-        $issuedCoverRows = DB::table('letter_of_guarantee_cash_cover_statements')
-            ->join('letter_of_guarantee_issuances', 'letter_of_guarantee_issuances.id', '=', 'letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id')
-            ->join('partners', 'partners.id', '=', 'letter_of_guarantee_issuances.partner_id')
-            ->where('letter_of_guarantee_cash_cover_statements.company_id', $companyId)
-            ->whereIn('letter_of_guarantee_cash_cover_statements.type', ['debit-lg-amount', LgRenewalTerms::CASH_COVER_TYPE])
-            ->where('letter_of_guarantee_issuances.contract_id', $contractId)
-            ->where('letter_of_guarantee_issuances.category_name', LetterOfGuaranteeIssuance::NEW_ISSUANCE)
-            ->where('letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id', '>', 0)
-            ->whereBetween('letter_of_guarantee_cash_cover_statements.date', [$periodStart, $periodEnd])
-            ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, (letter_of_guarantee_cash_cover_statements.debit - letter_of_guarantee_cash_cover_statements.credit) as total_amount, letter_of_guarantee_cash_cover_statements.currency as currency, letter_of_guarantee_cash_cover_statements.date as movement_date, partners.name as partner_name, letter_of_guarantee_issuances.lg_code as lg_code')
-            ->get();
+        $issuedCoverRows = LgCashCoverIssuances::between($companyId, $periodStart, $periodEnd, $contractId);
 
         foreach ($issuedCoverRows as $row) {
             $weekKey = CashFlowWeekBucketer::resolveWeekKey((string) $row->movement_date, $periodsByWeekKey);

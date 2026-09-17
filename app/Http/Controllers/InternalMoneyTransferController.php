@@ -113,6 +113,8 @@ class InternalMoneyTransferController
         $mapRow = function (InternalMoneyTransfer $model) use ($company) {
             return [
                 'id' => $model->id,
+                // حالة المراجعة — شوف App\Traits\Models\IsReviewable
+                'review' => $model->reviewPayload(),
                 'transfer_date_formatted' => $model->getTransferDateFormatted(),
                 'transfer_days' => $model->getTransferDays(),
                 'amount_formatted' => $model->getAmountFormatted(),
@@ -193,6 +195,7 @@ class InternalMoneyTransferController
             $query = $this->applyTypeFilters($query, $request, $type, $currentType, $config['searchable']);
             $paginator = $query
                 ->with(['fromBank.bank', 'fromAccountType', 'toBank.bank', 'toAccountType', 'fromBranch', 'toBranch'])
+                ->reviewState($request->get('review'))
                 ->orderByDesc('transfer_date')
                 ->paginate($paginationPerPage, ['*'], $config['page'])
                 ->withQueryString();
@@ -206,6 +209,9 @@ class InternalMoneyTransferController
         };
 
         return \Inertia\Inertia::render('InternalMoneyTransfer/Index', [
+            // صلاحية المراجعة — بتقرر يظهر زرار ولا علامة قراءة بس
+            'canReview' => \App\Support\Permissions\PermissionResolver::allows(request()->user(), 'internal_money_transfer.review'),
+            'reviewFilter' => (string) request()->get('review', ''),
             'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::INTERNAL_TRANSFER]),
             'company' => ['id' => $company->id],
             'activeTab' => $currentType,
@@ -420,6 +426,9 @@ class InternalMoneyTransferController
 
 	public function edit(Company $company,string $type,InternalMoneyTransfer $internalMoneyTransfer)
 	{
+		// الحركة المراجَعة مقفولة — الرفض من أول الشاشة مش عند الحفظ
+		$internalMoneyTransfer->abortIfReviewed();
+
 		return \Inertia\Inertia::render('InternalMoneyTransfer/Form', array_merge($this->buildFormProps($company, $type, $internalMoneyTransfer), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::INTERNAL_TRANSFER_FORM])]));
     }
 	

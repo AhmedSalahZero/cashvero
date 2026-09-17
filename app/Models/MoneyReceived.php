@@ -13,7 +13,6 @@ use App\Traits\Models\HasDebitStatements;
 use App\Traits\Models\HasForeignExchangeGainOrLoss;
 use App\Traits\Models\HasNonCustomerOrSupplier;
 use App\Traits\Models\HasPartnerStatement;
-use App\Traits\Models\HasReviewedBy;
 use App\Traits\Models\HasUserComment;
 use App\Traits\Models\IsMoney;
 use Carbon\Carbon;
@@ -25,6 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use App\Traits\Models\IsReviewable;
 
 /**
  * @property PayableCheque $payableCheque
@@ -148,7 +148,9 @@ use Illuminate\Support\Facades\DB;
  */
 class MoneyReceived extends Model implements IHasDebitCurrentAccountStatement
 {
-	use HasCashInSafe,HasDebitCurrentAccountStatement,HasDebitOverdraftStatement,IsMoney,HasForeignExchangeGainOrLoss ,HasDebitStatements,HasPartnerStatement,HasReviewedBy , HasUserComment,HasNonCustomerOrSupplier;
+    use IsReviewable;
+
+	use HasCashInSafe,HasDebitCurrentAccountStatement,HasDebitOverdraftStatement,IsMoney,HasForeignExchangeGainOrLoss ,HasDebitStatements,HasPartnerStatement,HasUserComment,HasNonCustomerOrSupplier;
 
 	const CASH_IN_SAFE  = 'cash-in-safe';
 	const CASH_IN_BANK  = 'cash-in-bank';

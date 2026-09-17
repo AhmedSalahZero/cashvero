@@ -332,7 +332,26 @@ class OdooService
 				'date', //end date
 			]
 		]);
-		
+
+		/**
+		 * * أودو بيرجّع array فيها faultCode بدل ما يرمي استثناء ، و هي
+		 * * array بردو — فمن غير الشرط ده اللوب كان بيمشي على القيم
+		 * * النصية بتاعتها و يضرب
+		 */
+		if (! is_array($projects) || isset($projects['faultCode']) || ! count($projects)) {
+			return;
+		}
+
+		/**
+		 * * قبل كده كل مشروع كان بياخد ٦ نداءات لوحده : بحث و قراءة
+		 * * أوامر البيع ، و تلات مصادر لأوامر الشراء ، و قراءتها. يعني
+		 * * مية مشروع = ستمية نداء XML-RPC بالتتابع ، كل واحد برحلة
+		 * * شبكة كاملة. دلوقتي بنجيبهم كلهم لكل المشاريع مرة واحدة قبل
+		 * * اللوب ، فالعدد ثابت مهما كان عدد المشاريع.
+		 */
+		$salesOrdersByProject = $this->getSalesOrdersByProject(array_column($projects, 'id'));
+		$purchaseOrdersByProject = $this->getPurchaseOrdersByProject($projects, $salesOrdersByProject);
+
 		foreach($projects as $projectArr){
 			$projectAmount = 0 ;
 			$modelType = 'Customer';
@@ -386,25 +405,8 @@ class OdooService
 				$projectFormatted['id'] = $oldProject->id;
 				$projectFormatted['code'] = $oldProject->code;
 			}
-			$salesOrderFilters = array(array(
-				['project_id','=',$currentOdooProjectId]
-			));
-				$salesOrderIds=$this->models->execute_kw($this->db, $this->uid, $this->password, 'sale.order', 'search',$salesOrderFilters
-				// , array('limit' => 10)
-			);
-				$salesOrders = $this->models->execute_kw($this->db, $this->uid, $this->password, 'sale.order', 'read', array($salesOrderIds),[
-					'fields'=>[
-						'id',
-						'name', // الاسم المجرد ، ودا اللي بيتكتب في origin بتاع الـ PO
-						'display_name', // so_number
-						'currency_id',
-						'amount_total',
-						'project_id'
-					]
-				]);
+				$salesOrders = $salesOrdersByProject[$currentOdooProjectId] ?? [];
 				$salesOrderFormatted = [];
-				$salesOrderOdooIds = [];
-				$salesOrderNames = [];
 				foreach($salesOrders as $orderIndex => $salesOrderArr){
 					$projectFormatted['currency']=$salesOrderArr['currency_id'][1];
 					/**
@@ -423,10 +425,6 @@ class OdooService
 					$currentSalesOrderId = $salesOrderArr['id'];
 					$currentSalesOrderAmount = $salesOrderArr['amount_total'];
 					$projectAmount += $currentSalesOrderAmount;
-					$salesOrderOdooIds[] = $currentSalesOrderId;
-					if(! empty($salesOrderArr['name'])){
-						$salesOrderNames[] = $salesOrderArr['name'];
-					}
 
 					$currentSalesOrderArr = [
 						'odoo_id'=>$currentSalesOrderId,
@@ -470,13 +468,188 @@ class OdooService
 					 * * كل PO مربوط بالـ SOs بتاعة المشروع ده بيبقى عقد مورّد
 					 * * تحت عقد العميل ، وفواتير الـ PO بتتربط بعقد المورّد
 					 */
-					$this->syncSupplierContractsFromPurchaseOrders($contract,$salesOrderOdooIds,$salesOrderNames,$projectArr['account_id'][0] ?? null,$currentProjectEndDate,$companyId);
+					$this->storeSupplierContractsFromPurchaseOrders($contract, $purchaseOrdersByProject[$currentOdooProjectId] ?? [], $currentProjectEndDate, $companyId);
 				}
 
 		}
 
 
 
+	}
+
+	/**
+	 * * كل أوامر البيع لكل المشاريع في نداء واحد ، مجمّعة بالمشروع
+	 *
+	 * * أودو بيرجّع النتيجة بترتيب البحث الافتراضي ، و التجميع بيحافظ
+	 * * على الترتيب النسبي جوه كل مشروع — و ده مهم لأن ترتيب أمر البيع
+	 * * هو اللي بيحدد رقم الخانة (start_date_1 .. start_date_5)
+	 *
+	 * * project_id بقى مطلوب في القراءة عشان نجمّع بيه — قبل التجميع
+	 * * كان بيتشال لأن البحث نفسه كان لمشروع واحد
+	 *
+	 * @param  array<int, int>  $projectIds
+	 * @return array<int, array<int, array<string, mixed>>>
+	 */
+	protected function getSalesOrdersByProject(array $projectIds): array
+	{
+		$projectIds = array_values(array_unique(array_filter($projectIds)));
+
+		if (! count($projectIds)) {
+			return [];
+		}
+
+		$salesOrders = $this->readFromOdoo('sale.order', 'search_read', [
+			[['project_id', 'in', $projectIds]],
+			[
+				'id',
+				'name', // الاسم المجرد ، ودا اللي بيتكتب في origin بتاع الـ PO
+				'display_name', // so_number
+				'currency_id',
+				'amount_total',
+				'project_id',
+			],
+		]);
+
+		if (! is_array($salesOrders)) {
+			return [];
+		}
+
+		$byProject = [];
+
+		foreach ($salesOrders as $salesOrder) {
+			if (! is_array($salesOrder['project_id'] ?? null)) {
+				continue;
+			}
+
+			$byProject[$salesOrder['project_id'][0]][] = $salesOrder;
+		}
+
+		return $byProject;
+	}
+
+	/**
+	 * * كل أوامر الشراء لكل المشاريع : تلات نداءات بحث + قراءة واحدة
+	 * * على دفعات ، مجمّعة بالمشروع
+	 *
+	 * @param  array<int, array<string, mixed>>  $projects
+	 * @param  array<int, array<int, array<string, mixed>>>  $salesOrdersByProject
+	 * @return array<int, array<int, array<string, mixed>>>
+	 */
+	protected function getPurchaseOrdersByProject(array $projects, array $salesOrdersByProject): array
+	{
+		$keysByProject = [];
+		$allSalesOrderIds = [];
+		$allSalesOrderNames = [];
+		$allAnalyticAccountIds = [];
+
+		foreach ($projects as $projectArr) {
+			$projectId = $projectArr['id'] ?? null;
+
+			if (is_null($projectId)) {
+				continue;
+			}
+
+			$salesOrderIds = [];
+			$salesOrderNames = [];
+
+			foreach ($salesOrdersByProject[$projectId] ?? [] as $salesOrder) {
+				$salesOrderIds[] = $salesOrder['id'];
+
+				if (! empty($salesOrder['name'])) {
+					$salesOrderNames[] = $salesOrder['name'];
+				}
+			}
+
+			$analyticAccountId = $projectArr['account_id'][0] ?? null;
+
+			$keysByProject[$projectId] = [
+				'sale_orders' => $salesOrderIds,
+				'names' => $salesOrderNames,
+				'analytic_account' => $analyticAccountId,
+			];
+
+			$allSalesOrderIds = array_merge($allSalesOrderIds, $salesOrderIds);
+			$allSalesOrderNames = array_merge($allSalesOrderNames, $salesOrderNames);
+
+			if ($analyticAccountId) {
+				$allAnalyticAccountIds[] = $analyticAccountId;
+			}
+		}
+
+		$bySaleOrder = $this->purchaseOrderIdsBySaleOrder(array_values(array_unique($allSalesOrderIds)));
+		$byOriginName = $this->purchaseOrderIdsByOriginName(array_values(array_unique($allSalesOrderNames)));
+		$byAnalyticAccount = $this->purchaseOrderIdsByAnalyticAccount(array_values(array_unique($allAnalyticAccountIds)));
+
+		$this->warnAboutUngroupedPurchaseOrders($bySaleOrder, $byAnalyticAccount);
+
+		$purchaseOrderIdsByProject = [];
+		$allPurchaseOrderIds = [];
+
+		foreach ($keysByProject as $projectId => $keys) {
+			$purchaseOrderIds = [];
+
+			foreach ($keys['sale_orders'] as $salesOrderId) {
+				$purchaseOrderIds = array_merge($purchaseOrderIds, $bySaleOrder[$salesOrderId] ?? []);
+			}
+
+			foreach ($keys['names'] as $salesOrderName) {
+				$purchaseOrderIds = array_merge($purchaseOrderIds, $byOriginName[$salesOrderName] ?? []);
+			}
+
+			if ($keys['analytic_account']) {
+				$purchaseOrderIds = array_merge($purchaseOrderIds, $byAnalyticAccount[$keys['analytic_account']] ?? []);
+			}
+
+			$purchaseOrderIds = array_values(array_unique($purchaseOrderIds));
+			$purchaseOrderIdsByProject[$projectId] = $purchaseOrderIds;
+			$allPurchaseOrderIds = array_merge($allPurchaseOrderIds, $purchaseOrderIds);
+		}
+
+		$purchaseOrdersById = [];
+
+		foreach ($this->readPurchaseOrders(array_values(array_unique($allPurchaseOrderIds))) as $purchaseOrder) {
+			$purchaseOrdersById[$purchaseOrder['id']] = $purchaseOrder;
+		}
+
+		$byProject = [];
+
+		foreach ($purchaseOrderIdsByProject as $projectId => $purchaseOrderIds) {
+			$byProject[$projectId] = [];
+
+			foreach ($purchaseOrderIds as $purchaseOrderId) {
+				if (isset($purchaseOrdersById[$purchaseOrderId])) {
+					$byProject[$projectId][] = $purchaseOrdersById[$purchaseOrderId];
+				}
+			}
+		}
+
+		return $byProject;
+	}
+
+	/**
+	 * * أودو المفروض يرجّع المصدر اللي اتبحث بيه (sale_order_id /
+	 * * analytic_distribution) لأنه جزء من الدومين نفسه. لو ما رجّعوش
+	 * * ما نقدرش نعرف أمر الشراء ده تبع أنهي مشروع ، فبنسجّله بدل ما
+	 * * نلزقه على مشروع بالتخمين
+	 *
+	 * @param  array<int|string, array<int, int>>  ...$groups
+	 */
+	protected function warnAboutUngroupedPurchaseOrders(array ...$groups): void
+	{
+		$ungrouped = [];
+
+		foreach ($groups as $group) {
+			$ungrouped = array_merge($ungrouped, $group[self::UNGROUPED_SOURCE] ?? []);
+		}
+
+		if (! count($ungrouped)) {
+			return;
+		}
+
+		Log::warning('Odoo returned purchase order lines without the source they were searched by', [
+			'company_id' => $this->company_id ?? null,
+			'purchase_order_ids' => array_values(array_unique($ungrouped)),
+		]);
 	}
 
 	/**
@@ -496,19 +669,14 @@ class OdooService
 	}
 
 	/**
-	 * * في أودو 18 فيه ٣ طرق قياسية للربط ، وبناخد الاتحاد بينهم:
-	 * *   1) purchase.order.line.sale_order_id — بيتملي لما أودو نفسه
-	 * *      يولّد الـ PO من الـ SO (موديول sale_purchase وهو auto_install)
-	 * *   2) purchase.order.origin — المستند المصدر ، بيتكتب من الـ
-	 * *      procurement أو بإيد المشتري
-	 * *   3) analytic_distribution على سطور الـ PO فيها الحساب التحليلي
-	 * *      بتاع المشروع — دي أوسع طريقة وبتمسك أوامر الشراء اللي
-	 * *      اتحجزت على المشروع من غير ما حد يكتب الـ SO عليها
+	 * * مفتاح الصفوف اللي أودو ما رجّعش معاها المصدر اللي اتبحث بيه
 	 *
-	 * @param  array<int>  $salesOrderOdooIds
-	 * @param  array<string>  $salesOrderNames
-	 * @return array<array<string,mixed>>
+	 * * المسار بتاع المشروع الواحد بيضمّها عادي زي ما كان قبل التجميع ،
+	 * * و المسار المجمّع بيتخطّاها و بيسجّل تحذير — أهون من إننا نلزق
+	 * * أمر شراء على مشروع بالتخمين
 	 */
+	protected const UNGROUPED_SOURCE = '*';
+
 	protected function getPurchaseOrdersForProject(array $salesOrderOdooIds, array $salesOrderNames, ?int $projectAnalyticAccountId): array
 	{
 		$purchaseOrderIds = array_merge(
@@ -518,22 +686,32 @@ class OdooService
 		);
 		$purchaseOrderIds = array_values(array_unique($purchaseOrderIds));
 
+		return $this->readPurchaseOrders($purchaseOrderIds);
+	}
+
+	/**
+	 * * قراءة صفوف أوامر الشراء ، مشتركة بين مسار المشروع الواحد و
+	 * * المسار المجمّع
+	 *
+	 * @param  array<int, int>  $purchaseOrderIds
+	 * @return array<int, array<string, mixed>>
+	 */
+	protected function readPurchaseOrders(array $purchaseOrderIds): array
+	{
 		if (! count($purchaseOrderIds)) {
 			return [];
 		}
 
-		$purchaseOrders = $this->readFromOdoo('purchase.order', 'read', [$purchaseOrderIds], [
-			'fields'=>[
-				'id',
-				'name', // po_number
-				'origin',
-				'partner_id', // المورّد
-				'currency_id',
-				'amount_total',
-				'date_order',
-				'state',
-				'invoice_ids', // فواتير المورّد المربوطة بالـ PO — حقل مخزّن في أودو 18
-			],
+		$purchaseOrders = $this->readFromOdooInBatches('purchase.order', $purchaseOrderIds, [
+			'id',
+			'name', // po_number
+			'origin',
+			'partner_id', // المورّد
+			'currency_id',
+			'amount_total',
+			'date_order',
+			'state',
+			'invoice_ids', // فواتير المورّد المربوطة بالـ PO — حقل مخزّن في أودو 18
 		]);
 
 		return is_array($purchaseOrders) ? $purchaseOrders : [];
@@ -545,27 +723,7 @@ class OdooService
 	 */
 	protected function purchaseOrderIdsFromSaleOrderLines(array $salesOrderOdooIds): array
 	{
-		if (! count($salesOrderOdooIds)) {
-			return [];
-		}
-
-		$purchaseOrderLines = $this->readFromOdoo('purchase.order.line', 'search_read', [
-			[['sale_order_id', 'in', array_values($salesOrderOdooIds)]],
-			['order_id'],
-		]);
-
-		if (! is_array($purchaseOrderLines)) {
-			return [];
-		}
-
-		$purchaseOrderIds = [];
-		foreach ($purchaseOrderLines as $purchaseOrderLine) {
-			if (is_array($purchaseOrderLine['order_id'] ?? null)) {
-				$purchaseOrderIds[] = $purchaseOrderLine['order_id'][0];
-			}
-		}
-
-		return array_values(array_unique($purchaseOrderIds));
+		return $this->flattenPurchaseOrderIds($this->purchaseOrderIdsBySaleOrder($salesOrderOdooIds));
 	}
 
 	/**
@@ -574,17 +732,79 @@ class OdooService
 	 */
 	protected function purchaseOrderIdsFromOrigin(array $salesOrderNames): array
 	{
+		return $this->flattenPurchaseOrderIds($this->purchaseOrderIdsByOriginName($salesOrderNames));
+	}
+
+	/**
+	 * @return array<int>
+	 */
+	protected function purchaseOrderIdsFromProjectAnalyticAccount(?int $projectAnalyticAccountId): array
+	{
+		if (is_null($projectAnalyticAccountId)) {
+			return [];
+		}
+
+		return $this->flattenPurchaseOrderIds($this->purchaseOrderIdsByAnalyticAccount([$projectAnalyticAccountId]));
+	}
+
+	/**
+	 * * أوامر الشراء المربوطة بأوامر بيع ، مجمّعة بأمر البيع
+	 *
+	 * * الدالة دي بتتنده مرة واحدة بكل أوامر البيع بتاعة كل المشاريع ،
+	 * * فمحتاجين نرجّع sale_order_id كمان عشان نعرف كل أمر شراء تبع
+	 * * أنهي مشروع
+	 *
+	 * @param  array<int, int>  $salesOrderOdooIds
+	 * @return array<int|string, array<int, int>>
+	 */
+	protected function purchaseOrderIdsBySaleOrder(array $salesOrderOdooIds): array
+	{
+		if (! count($salesOrderOdooIds)) {
+			return [];
+		}
+
+		$purchaseOrderLines = $this->readFromOdoo('purchase.order.line', 'search_read', [
+			[['sale_order_id', 'in', array_values($salesOrderOdooIds)]],
+			['order_id', 'sale_order_id'],
+		]);
+
+		if (! is_array($purchaseOrderLines)) {
+			return [];
+		}
+
+		$grouped = [];
+
+		foreach ($purchaseOrderLines as $purchaseOrderLine) {
+			if (! is_array($purchaseOrderLine['order_id'] ?? null)) {
+				continue;
+			}
+
+			$key = is_array($purchaseOrderLine['sale_order_id'] ?? null)
+				? $purchaseOrderLine['sale_order_id'][0]
+				: self::UNGROUPED_SOURCE;
+
+			$grouped[$key][] = $purchaseOrderLine['order_id'][0];
+		}
+
+		return $this->uniquePurchaseOrderIdsPerKey($grouped);
+	}
+
+	/**
+	 * * origin ممكن يكون فيه أكتر من مستند مفصولين بفاصلة ، فبنفلتر
+	 * * في أودو بـ ilike (فلترة تقريبية سريعة) وبعدين بنتأكد بالظبط
+	 * * في PHP عشان S00001 ماتمسكش S000012
+	 *
+	 * @param  array<int, string>  $salesOrderNames
+	 * @return array<string, array<int, int>>
+	 */
+	protected function purchaseOrderIdsByOriginName(array $salesOrderNames): array
+	{
 		$salesOrderNames = array_values(array_filter($salesOrderNames));
 
 		if (! count($salesOrderNames)) {
 			return [];
 		}
 
-		/**
-		 * * origin ممكن يكون فيه أكتر من مستند مفصولين بفاصلة ، فبنفلتر
-		 * * في أودو بـ ilike (فلترة تقريبية سريعة) وبعدين بنتأكد بالظبط
-		 * * في PHP عشان S00001 ماتمسكش S000012
-		 */
 		$domain = [];
 		foreach ($salesOrderNames as $index => $salesOrderName) {
 			if ($index > 0) {
@@ -599,49 +819,119 @@ class OdooService
 			return [];
 		}
 
-		$purchaseOrderIds = [];
+		$grouped = [];
+
 		foreach ($purchaseOrders as $purchaseOrder) {
 			foreach (explode(',', (string) ($purchaseOrder['origin'] ?? '')) as $origin) {
-				if (in_array(trim($origin), $salesOrderNames, true)) {
-					$purchaseOrderIds[] = $purchaseOrder['id'];
-					break;
+				$origin = trim($origin);
+
+				if (in_array($origin, $salesOrderNames, true)) {
+					$grouped[$origin][] = $purchaseOrder['id'];
 				}
 			}
 		}
 
-		return array_values(array_unique($purchaseOrderIds));
+		return $this->uniquePurchaseOrderIdsPerKey($grouped);
 	}
 
 	/**
-	 * * أوامر الشراء المحجوزة على الحساب التحليلي بتاع المشروع.
-	 * * analytic_distribution في أودو 17+ حقل Json ، وبيقبل البحث بـ in
-	 * * على أرقام الحسابات التحليلية
+	 * * أوامر الشراء المحجوزة على الحسابات التحليلية بتاعة المشاريع.
+	 * * analytic_distribution في أودو 17+ حقل Json ، مفاتيحه أرقام
+	 * * الحسابات التحليلية (و ممكن يكون المفتاح أكتر من رقم مفصولين
+	 * * بفاصلة لما التوزيع على أكتر من محور)
 	 *
-	 * @return array<int>
+	 * @param  array<int, int>  $analyticAccountIds
+	 * @return array<int|string, array<int, int>>
 	 */
-	protected function purchaseOrderIdsFromProjectAnalyticAccount(?int $projectAnalyticAccountId): array
+	protected function purchaseOrderIdsByAnalyticAccount(array $analyticAccountIds): array
 	{
-		if (is_null($projectAnalyticAccountId)) {
+		$analyticAccountIds = array_values(array_unique(array_filter(array_map('intval', $analyticAccountIds))));
+
+		if (! count($analyticAccountIds)) {
 			return [];
 		}
 
 		$purchaseOrderLines = $this->readFromOdoo('purchase.order.line', 'search_read', [
-			[['analytic_distribution', 'in', [$projectAnalyticAccountId]]],
-			['order_id'],
+			[['analytic_distribution', 'in', $analyticAccountIds]],
+			['order_id', 'analytic_distribution'],
 		]);
 
 		if (! is_array($purchaseOrderLines)) {
 			return [];
 		}
 
-		$purchaseOrderIds = [];
+		$grouped = [];
+
 		foreach ($purchaseOrderLines as $purchaseOrderLine) {
-			if (is_array($purchaseOrderLine['order_id'] ?? null)) {
-				$purchaseOrderIds[] = $purchaseOrderLine['order_id'][0];
+			if (! is_array($purchaseOrderLine['order_id'] ?? null)) {
+				continue;
+			}
+
+			$purchaseOrderId = $purchaseOrderLine['order_id'][0];
+			$lineAccountIds = $this->analyticAccountIdsOfLine($purchaseOrderLine['analytic_distribution'] ?? null, $analyticAccountIds);
+
+			if (! count($lineAccountIds)) {
+				$grouped[self::UNGROUPED_SOURCE][] = $purchaseOrderId;
+
+				continue;
+			}
+
+			foreach ($lineAccountIds as $analyticAccountId) {
+				$grouped[$analyticAccountId][] = $purchaseOrderId;
 			}
 		}
 
-		return array_values(array_unique($purchaseOrderIds));
+		return $this->uniquePurchaseOrderIdsPerKey($grouped);
+	}
+
+	/**
+	 * @param  array<int, int>  $wantedAccountIds
+	 * @return array<int, int>
+	 */
+	private function analyticAccountIdsOfLine($analyticDistribution, array $wantedAccountIds): array
+	{
+		if (! is_array($analyticDistribution)) {
+			return [];
+		}
+
+		$analyticAccountIds = [];
+
+		foreach (array_keys($analyticDistribution) as $key) {
+			foreach (explode(',', (string) $key) as $analyticAccountId) {
+				$analyticAccountId = (int) trim($analyticAccountId);
+
+				if ($analyticAccountId && in_array($analyticAccountId, $wantedAccountIds, true)) {
+					$analyticAccountIds[] = $analyticAccountId;
+				}
+			}
+		}
+
+		return array_values(array_unique($analyticAccountIds));
+	}
+
+	/**
+	 * @param  array<int|string, array<int, int>>  $grouped
+	 * @return array<int|string, array<int, int>>
+	 */
+	private function uniquePurchaseOrderIdsPerKey(array $grouped): array
+	{
+		return array_map(
+			static fn (array $purchaseOrderIds): array => array_values(array_unique($purchaseOrderIds)),
+			$grouped
+		);
+	}
+
+	/**
+	 * @param  array<int|string, array<int, int>>  $grouped
+	 * @return array<int, int>
+	 */
+	protected function flattenPurchaseOrderIds(array $grouped): array
+	{
+		if (! count($grouped)) {
+			return [];
+		}
+
+		return array_values(array_unique(array_merge(...array_values($grouped))));
 	}
 
 	/**
@@ -826,6 +1116,80 @@ class OdooService
 	 * The importer consumes twelve of them. Naming them keeps the payload
 	 * to what is used; every entry below is read in startImportInvoices().
 	 */
+	/**
+	 * * حجم الدفعة في قراءة أودو
+	 *
+	 * * أودو بيبني الحقول المحسوبة (زي tax_totals و
+	 * * invoice_payments_widget) في بايثون لكل صف على حدة وقت القراءة ،
+	 * * و بيخلّص الرد بالكامل قبل ما يبعت أول بايت. فقراءة كل الفواتير
+	 * * في نداء واحد كانت بتخلي النداء ده يقعد دقايق و الاستريم يقفل
+	 * * قبل ما يوصل أي حاجة.
+	 */
+	public const READ_BATCH_SIZE = 200;
+
+	/**
+	 * * قراءة صفوف أودو على دفعات بدل نداء واحد عملاق
+	 *
+	 * * لو دفعة واحدة فشلت بنرجّع null — مش نص النتيجة. ده شرط أساسي
+	 * * للسلامة لأن syncDeletedInvoices() بتعتبر أي فاتورة مش موجودة في
+	 * * الراجع ده "اتمسحت من أودو" و بتمسحها عندنا ، فرد ناقص معناه مسح
+	 * * فواتير سليمة.
+	 *
+	 * * بنستخدم execute() مش readFromOdoo() عشان انقطاع الاتصال أو
+	 * * التايم أوت يفضل استثناء طالع للمستخدم زي ما كان بالظبط ، مش
+	 * * يتبلع و الاستيراد يقول "تمّت" و هو ما قراش حاجة.
+	 *
+	 * @param  array<int, int>  $ids
+	 * @param  array<int, string>  $fields
+	 * @return array<int, array<string, mixed>>|null
+	 */
+	protected function readInBatches(string $model, array $ids, array $fields): ?array
+	{
+		$rows = [];
+
+		foreach (array_chunk(array_values(array_unique($ids)), self::READ_BATCH_SIZE) as $chunk) {
+			$batch = $this->execute($model, 'read', [$chunk], ['fields' => $fields]);
+
+			if (! is_array($batch) || isset($batch['faultCode'])) {
+				return null;
+			}
+
+			foreach ($batch as $row) {
+				$rows[] = $row;
+			}
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * * نفس الفكرة بس بالمسار المتسامح (readFromOdoo) اللي بيسجّل الغلط
+	 * * و يرجّع null — ده المسار اللي أوامر الشراء شغالة بيه من الأول ،
+	 * * و مفيش حاجة بتتمسح بناءً عليه
+	 *
+	 * @param  array<int, int>  $ids
+	 * @param  array<int, string>  $fields
+	 * @return array<int, array<string, mixed>>|null
+	 */
+	protected function readFromOdooInBatches(string $model, array $ids, array $fields): ?array
+	{
+		$rows = [];
+
+		foreach (array_chunk(array_values(array_unique($ids)), self::READ_BATCH_SIZE) as $chunk) {
+			$batch = $this->readFromOdoo($model, 'read', [$chunk], ['fields' => $fields]);
+
+			if (! is_array($batch)) {
+				return null;
+			}
+
+			foreach ($batch as $row) {
+				$rows[] = $row;
+			}
+		}
+
+		return $rows;
+	}
+
 	public const INVOICE_FIELDS = [
 		'id',
 		'name',                                 // invoice_number
@@ -856,8 +1220,36 @@ class OdooService
 			array('write_date', '>=', $startDate),
 			array('write_date', '<=', $endDate),
 		));
-		$invoices = $this->fetchData('account.move',$fields,$filters);
-		return is_array($invoices) ? $invoices : null;
+		/**
+		 * * قبل كده fetchData() كانت بتعمل search و بعدين read واحد بكل
+		 * * الـ ids مرة واحدة. الـ search رخيص (أرقام بس) ، الغالي هو
+		 * * الـ read ، فبنقسّمه على دفعات عشان مفيش نداء واحد يقرّب من
+		 * * أي مهلة.
+		 */
+		$invoiceIds = $this->execute('account.move', 'search', $filters);
+
+		if (! is_array($invoiceIds) || isset($invoiceIds['faultCode'])) {
+			return null;
+		}
+
+		if (! count($invoiceIds)) {
+			return [];
+		}
+
+		return $this->readInBatches('account.move', $invoiceIds, $fields);
+		// /**
+		//  * * الكود اللي تحت دا بيجيب المنتجات
+		//  */
+		// $productIds = array_unique(Arr::flatten(array_column($invoices,'invoice_line_ids'))) ;
+		// $filters = [[
+		// 	['id','in',$productIds]
+		// ]];
+		// $fields = [
+		// 	'name','display_name','product_id','quantity','price_unit','price_subtotal'
+		// ];
+		// return $invoices ;
+		
+		
 		// /**
 		//  * * الكود اللي تحت دا بيجيب المنتجات
 		//  */
@@ -879,53 +1271,161 @@ class OdooService
 	
 
 
-	private function syncDeletedInvoices(int $companyId,string $odooEndDate)
+	/**
+	 * * حجم الدفعة في سؤال أودو "الأرقام دي لسه موجودة؟"
+	 *
+	 * * الرد أرقام مجردة من غير أي حقل محسوب ، فالدفعة تقدر تكون أكبر
+	 * * بكتير من دفعة القراءة الكاملة
+	 */
+	public const EXISTENCE_CHECK_BATCH_SIZE = 1000;
+
+	/**
+	 * * بتسأل أودو: من الأرقام دي ، إيه اللي لسه موجود عندك؟
+	 *
+	 * * قبل كده الفحص ده كان بيجيب كل فواتير ٤٥٠ يوم من أودو و يطرحها
+	 * * من اللي عندنا. الطرح ده كان بيمسح فواتير سليمة في تلات حالات:
+	 * *
+	 * *   ١) أي رد غلط من أودو (fault) كان array بردو ، و
+	 * *      array_column عليه بترجّع [] — فكل فاتورة عندنا كانت بتبان
+	 * *      كأنها "اتمسحت من أودو"
+	 * *
+	 * *   ٢) الفلتر عندنا كان على invoice_date و الفلتر عند أودو على
+	 * *      write_date ، و دول عمودين مختلفين تماما. فاتورة اتعدّلت في
+	 * *      أودو بعد نهاية المدى (أو حتى النهاردة ، لأن
+	 * *      write_date <= '2026-09-17' معناها <= الساعة ١٢ بالليل)
+	 * *      كانت بتختفي من رد أودو و تتمسح عندنا و هي موجودة
+	 * *
+	 * *   ٣) رد فاضي — قاعدة غلط أو صلاحيات ناقصة — كان بيمسح كل
+	 * *      الفواتير في المدى
+	 *
+	 * * السؤال بالأرقام مالوش اللبس ده: إحنا بنبعت أرقامنا و أودو
+	 * * بيرجّع اللي لسه موجود منها ، فمفيش أي مدى أو عمود تواريخ في
+	 * * النص. و هو أرخص كمان — بحث بالمفتاح الأساسي من غير أي قراءة.
+	 *
+	 * @param  array<int, int>  $odooIds
+	 * @return array<int, true>|null  مفتاح لكل رقم لسه موجود ، أو null لو أودو ما ردّش صح
+	 */
+	protected function existingInvoiceIdsInOdoo(array $odooIds): ?array
+	{
+		$existing = [];
+
+		foreach (array_chunk(array_values(array_unique($odooIds)), self::EXISTENCE_CHECK_BATCH_SIZE) as $chunk) {
+			$found = $this->execute('account.move', 'search', [[
+				['id', 'in', $chunk],
+				['move_type', 'in', ['in_invoice', 'out_invoice']],
+				['state', '=', 'posted'],
+			]]);
+
+			/**
+			 * * دفعة فشلت = مش عارفين ، مش "مش موجودة". بنرجّع null
+			 * * فالمزامنة كلها بتتوقف من غير ما تمسح حاجة.
+			 */
+			if (! is_array($found) || isset($found['faultCode'])) {
+				return null;
+			}
+
+			foreach ($found as $odooId) {
+				$existing[(int) $odooId] = true;
+			}
+		}
+
+		return $existing;
+	}
+
+	private function syncDeletedInvoices(int $companyId, string $odooEndDate)
 	{
 		$startDate = Carbon::make($odooEndDate)->subDays(450)->format('Y-m-d');
 		$endDate = $odooEndDate;
-		$customerInvoices  = CustomerInvoice::where('company_id',$companyId)->where('invoice_date','>=',$startDate)->where('invoice_date','<=',$endDate)->where('odoo_id','>',0)->get();
-		$supplierInvoices  = SupplierInvoice::where('company_id',$companyId)->where('invoice_date','>=',$startDate)->where('invoice_date','<=',$endDate)->where('odoo_id','>',0)->get();
-		
-		$deletedIds= [];
-		// Only the ids are compared here, so ask for nothing else.
-		$odooInvoices = $this->getInvoices($startDate, $endDate, ['id']);
-		if (!is_array($odooInvoices)) {
+
+		$localOdooIdsByClass = [];
+		$allLocalOdooIds = [];
+
+		foreach ([CustomerInvoice::class, SupplierInvoice::class] as $invoiceClass) {
+			/**
+			 * * pluck بدل get : إحنا محتاجين أرقام نقارن بيها بس ، و
+			 * * get() كانت بتحمّل فواتير ٤٥٠ يوم كلها كـ Eloquent models
+			 * * كاملة (ستين عمود في نسختين لكل صف). الموديلات بتتحمّل
+			 * * دلوقتي للمحذوفة بس — و دي عادة حفنة صفوف.
+			 */
+			$localOdooIds = $invoiceClass::where('company_id', $companyId)
+				->where('invoice_date', '>=', $startDate)
+				->where('invoice_date', '<=', $endDate)
+				->where('odoo_id', '>', 0)
+				->pluck('odoo_id', 'id');
+
+			$localOdooIdsByClass[$invoiceClass] = $localOdooIds;
+
+			foreach ($localOdooIds as $odooId) {
+				$allLocalOdooIds[] = (int) $odooId;
+			}
+		}
+
+		if (! count($allLocalOdooIds)) {
 			return;
 		}
-		$odooInvoicesIds = array_column($odooInvoices, 'id');
-		foreach([$customerInvoices,$supplierInvoices] as $invoices){
-			foreach($invoices as $invoice){
-				$invoiceOdooId = $invoice->getOdooId();
-				if(!in_array($invoiceOdooId,$odooInvoicesIds)){
-					/**
-					 * * الفاتورة اتمسحت في اودو ، بس لو عندنا تسويات نازلة
-					 * * عليها فمسحها هنا كان بيسيب التسويات يتيمة — مبالغ
-					 * * محسوبة على رصيد الشريك من غير ما نعرف مقابل ايه
-					 *
-					 * * التعارض ده لازم بني ادم يحله (يشيل التسوية الاول ،
-					 * * او يرجّع الفاتورة في اودو) ، فبنسيبها و نكمّل بدل
-					 * * ما نمسح غلط او نوقف الاستيراد كله
-					 */
-					try {
-						$invoice->delete();
-					} catch (\InvalidArgumentException $e) {
-						Log::warning('Kept a locally settled invoice that was deleted in Odoo', [
-							'invoice' => getModelNameWithoutNamespace($invoice).'#'.$invoice->getKey(),
-							'odoo_id' => $invoiceOdooId,
-							'company_id' => $companyId,
-							'reason' => $e->getMessage(),
-						]);
 
-						continue;
-					}
+		$existingInOdoo = $this->existingInvoiceIdsInOdoo($allLocalOdooIds);
 
-					$deletedIds[] = [
-						'id'=>$invoiceOdooId,
-						'type'=>getModelNameWithoutNamespace($invoice)
-					];
+		if (is_null($existingInOdoo)) {
+			Log::warning('Skipped the deleted-invoice sync: Odoo did not answer the existence check', [
+				'company_id' => $companyId,
+				'checked_invoices' => count($allLocalOdooIds),
+			]);
+
+			return;
+		}
+
+		/**
+		 * * صمام أمان: لو أودو قال إن ولا رقم واحد من بتوعنا موجود ،
+		 * * ده على الأرجح اتصال بقاعدة غلط أو صلاحيات ناقصة — مش إن
+		 * * الشركة مسحت كل فواتيرها في يوم واحد. بنوقف و نسجّل بدل ما
+		 * * نمسح كل حاجة على رد مشكوك فيه.
+		 */
+		if (! count($existingInOdoo)) {
+			Log::warning('Skipped the deleted-invoice sync: Odoo reported that none of our invoices exist', [
+				'company_id' => $companyId,
+				'checked_invoices' => count($allLocalOdooIds),
+			]);
+
+			return;
+		}
+
+		foreach ($localOdooIdsByClass as $invoiceClass => $localOdooIds) {
+			$deletedLocalIds = [];
+
+			foreach ($localOdooIds as $localId => $odooId) {
+				if (! isset($existingInOdoo[(int) $odooId])) {
+					$deletedLocalIds[] = $localId;
 				}
 			}
 
+			if (! count($deletedLocalIds)) {
+				continue;
+			}
+
+			foreach ($invoiceClass::whereIn('id', $deletedLocalIds)->cursor() as $invoice) {
+				/**
+				 * * الفاتورة اتمسحت في اودو ، بس لو عندنا تسويات نازلة
+				 * * عليها فمسحها هنا كان بيسيب التسويات يتيمة — مبالغ
+				 * * محسوبة على رصيد الشريك من غير ما نعرف مقابل ايه
+				 *
+				 * * التعارض ده لازم بني ادم يحله (يشيل التسوية الاول ،
+				 * * او يرجّع الفاتورة في اودو) ، فبنسيبها و نكمّل بدل
+				 * * ما نمسح غلط او نوقف الاستيراد كله
+				 */
+				try {
+					$invoice->delete();
+				} catch (\InvalidArgumentException $e) {
+					Log::warning('Kept a locally settled invoice that was deleted in Odoo', [
+						'invoice' => getModelNameWithoutNamespace($invoice).'#'.$invoice->getKey(),
+						'odoo_id' => $invoice->odoo_id,
+						'company_id' => $companyId,
+						'reason' => $e->getMessage(),
+					]);
+
+					continue;
+				}
+			}
 		}
 	}
 	public function chartOfAccount(string $chartOfAccountCode) 

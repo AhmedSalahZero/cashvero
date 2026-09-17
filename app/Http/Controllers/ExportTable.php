@@ -230,8 +230,20 @@ class ExportTable extends Controller
 			->where('company_id', $company->id)->first();
 			
 			
-			$modelExportableFields !== null ? $modelExportableFields->update($request->all())
-			: CustomizedFieldsExportation::create($request->all());
+			/**
+			 * * قايمة سماح صريحة بدل $request->all() .
+			 *
+			 * * كل مسار كتابة تاني في التطبيق بيستعمل only([...]) ؛ ده
+			 * * كان المكان الوحيد اللي أي عمود جديد على الجدول بيبقى
+			 * * قابل للكتابة من بره تلقائيا
+			 */
+			$payload = $request->only(['fields', 'model_name']) + [
+				'model_name' => $model,
+				'company_id' => $company->id,
+			];
+
+			$modelExportableFields !== null ? $modelExportableFields->update($payload)
+			: CustomizedFieldsExportation::create($payload);
 			
 			$columnsWithViewingNames = $this->columnsFiltration($model, $company, 'selected_fields', $request->fields);
 			if(isset($columnsWithViewingNames['invoice_status'])){

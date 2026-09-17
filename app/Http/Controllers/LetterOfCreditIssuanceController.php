@@ -208,6 +208,8 @@ class LetterOfCreditIssuanceController
 
         return [
             'id' => $lc->id,
+            // حالة المراجعة — شوف App\Traits\Models\IsReviewable
+            'review' => $lc->reviewPayload(),
             'lc_type' => $lc->getLcType(),
             'transaction_name' => $lc->getTransactionName(),
             'beneficiary_name' => $lc->getSupplierName(),
@@ -364,7 +366,10 @@ class LetterOfCreditIssuanceController
                 }
             }
 
-            $paginator = $query->orderByDesc('id')
+            $paginator = $query
+                // فلتر حالة المراجعة — سكوب مشترك في IsReviewable
+                ->reviewState($request->get('review'))
+                ->orderByDesc('id')
                 ->paginate($paginationPerPage, ['*'], $pageParamByType[$type])
                 ->withQueryString();
 
@@ -374,6 +379,9 @@ class LetterOfCreditIssuanceController
         };
 
         return \Inertia\Inertia::render('LetterOfCreditIssuance/Index', [
+            // صلاحية المراجعة — بتقرر يظهر زرار ولا علامة قراءة بس
+            'canReview' => \App\Support\Permissions\PermissionResolver::allows(request()->user(), 'lc_issuance.review'),
+            'reviewFilter' => (string) request()->get('review', ''),
             'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LC_ISSUANCE]),
             'company' => ['id' => $company->id],
             'activeLcType' => $activeLcType,

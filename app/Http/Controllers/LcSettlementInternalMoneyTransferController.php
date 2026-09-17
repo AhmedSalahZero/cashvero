@@ -102,6 +102,27 @@ class LcSettlementInternalMoneyTransferController
             ])
             ->values();
 
+        /**
+         * * فلتر حالة المراجعة .
+         *
+         * * الصفوف هنا اعتمادات ، لكن اللي بيتراجع هو آخر تسوية على
+         * * الاعتماد — فالفلترة بتتم على حالتها هي ، و الاعتماد اللي
+         * * لسه مفيهوش تسوية بيتعد "غير مراجَع"
+         */
+        $reviewFilter = (string) $request->get('review', '');
+
+        if ($reviewFilter === 'reviewed' || $reviewFilter === 'not_reviewed') {
+            $wantReviewed = $reviewFilter === 'reviewed';
+
+            $allIssuances = $allIssuances
+                ->filter(function (LetterOfCreditIssuance $lc) use ($wantReviewed) {
+                    $settlement = $lc->getLatestLcSettlementInternalMoneyTransfer();
+
+                    return ((bool) $settlement?->isReviewed()) === $wantReviewed;
+                })
+                ->values();
+        }
+
         // Paginated in PHP rather than SQL — isPendingBankSettlement() needs
         // each row's own bank-statement rows loaded to evaluate, so the
         // sorting above can't happen inside the query itself. Lists like
@@ -129,6 +150,12 @@ class LcSettlementInternalMoneyTransferController
                 'payment_date_formatted' => $lc->getReceivingOrPaymentMoneyDateFormatted(),
                 'remaining_amount_formatted' => number_format($lc->getRemainingBankSettlementAmount(), 2),
                 'is_settled' => $isSettled,
+                /**
+                 * * الصف هنا اعتماد ، لكن الحركة اللي تتراجع هي التسوية
+                 * * نفسها — فلو مفيش تسوية لسه مفيش حاجة تتراجع
+                 */
+                'review' => $latestSettlement?->reviewPayload(),
+                'review_id' => $latestSettlement?->id,
                 'status_label' => $isSettled ? __('Settled') : __('Pending'),
                 'settlements_count' => $lc->lcSettlementInternalMoneyTransfers->count(),
                 'last_settlement_date_formatted' => $latestSettlement ? $latestSettlement->getTransferDateFormatted() : null,
@@ -148,6 +175,9 @@ class LcSettlementInternalMoneyTransferController
         })->values();
 
         return Inertia::render('LcSettlementInternalMoneyTransfer/Index', [
+            // صلاحية المراجعة — بتقرر يظهر زرار ولا علامة قراءة بس
+            'canReview' => \App\Support\Permissions\PermissionResolver::allows(request()->user(), 'lc_settlement_transfer.review'),
+            'reviewFilter' => (string) request()->get('review', ''),
             'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LC_SETTLEMENT]),
             'company' => ['id' => $company->id, 'name' => $company->getName()],
             'rows' => $rows,

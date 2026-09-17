@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import RecordLogButton from '@/Components/RecordLogButton.vue';
+import ReviewButton from '@/Components/ReviewButton.vue';
 import SettlementsInfoButton from '@/Components/SettlementsInfoButton.vue';
 import { todayDate } from '@/composables/today';
 /* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
@@ -13,6 +14,8 @@ const page = usePage();
 const errors = computed(() => page.props.errors || {});
 
 const props = defineProps({
+    canReview: { type: Boolean, default: false },
+    reviewFilter: { type: String, default: '' },
     /* Link to this screen's written guide — see App\Support\Instructions\PageInstructions. */
     instructionsUrl: String,
     company: Object,
@@ -26,6 +29,10 @@ const props = defineProps({
     companyHasOdoo: Boolean,
     urls: Object,
 });
+
+/* فلتر حالة المراجعة — قيمته بتترجع من السيرفر عشان تفضل
+   مختارة بعد إعادة التحميل */
+const reviewState = ref(props.reviewFilter || '');
 
 /* ── Tabs ─────────────────────────────────────────────────────────
    Only 3, matching the original exactly — Money Payment has no
@@ -83,6 +90,7 @@ const isDateField = computed(() => ['delivery_date', 'due_date'].includes(filter
 
 function applySearch() {
     router.get(props.urls.index, {
+        review: reviewState.value || undefined,
         active: props.activeTab,
         field: filterField.value || undefined,
         value: isDateField.value ? undefined : filterValue.value,
@@ -257,6 +265,12 @@ function submitUnmarkAsPaid() {
                     </div>
                 </template>
                 <div class="flex items-end gap-2">
+                    <!-- فلتر حالة المراجعة -->
+                    <select v-model="reviewState" @change="applySearch" class="cvr-input px-3 py-2 rounded text-sm">
+                        <option value="">{{ $t('Review state') }}: {{ $t('All') }}</option>
+                        <option value="reviewed">{{ $t('Reviewed') }}</option>
+                        <option value="not_reviewed">{{ $t('Not reviewed') }}</option>
+                    </select>
                     <button @click="applySearch" class="cvr-btn-primary px-3 py-2 rounded text-sm">{{ $t('Search') }}</button>
                     <button @click="resetSearch" class="cvr-btn-secondary px-3 py-2 rounded border text-sm">{{ $t('Reset') }}</button>
                 </div>
@@ -374,6 +388,13 @@ function submitUnmarkAsPaid() {
                             <td class="px-4 py-3 min-w-32">
                                 <div class="flex items-center gap-1 flex-wrap">
                                     <RecordLogButton subject="MoneyPayment" :id="row.id" :company-id="company.id" />
+                                    <ReviewButton
+                                        movement="money-payment"
+                                        :id="row.id"
+                                        :company-id="company.id"
+                                        :state="row.review"
+                                        :can-review="canReview"
+                                    />
                                     <SettlementsInfoButton v-if="row.settlements_info_url" :url="row.settlements_info_url" />
                                     <a v-if="row.print_url" :href="row.print_url" target="_blank" rel="noopener" class="cvr-action-btn" :title="$t('Print')">🖨️</a>
                                     <button v-if="row.has_comment" @click="commentTarget = row" class="cvr-action-btn" :title="$t('User Comment')">💬</button>
@@ -381,16 +402,16 @@ function submitUnmarkAsPaid() {
                                     <button v-if="row.is_fully_integrated_with_odoo" @click="integratedTarget = row" class="cvr-action-btn" :title="$t('Fully Integrated')">👍</button>
 
                                     <template v-if="activeTab === 'payable_cheque'">
-                                        <Link v-if="!row.is_open_balance" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit Cheque')">✏️</Link>
+                                        <Link v-if="!row.review?.is_reviewed && !row.is_open_balance" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit Cheque')">✏️</Link>
                                         <button v-if="permissions.canMarkAsPaid && row.is_due && !row.is_paid" @click="openMarkAsPaid(row)" class="cvr-action-btn" :title="$t('Mark As Paid')">🏦</button>
                                         <button v-if="permissions.canMarkAsPaid && row.is_paid" @click="unmarkTarget = row" class="cvr-action-btn" :title="$t('Mark As Unpaid')">↩️</button>
-                                        <button v-if="!row.is_open_balance && permissions.canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Delete')">🗑️</button>
+                                        <button v-if="!row.review?.is_reviewed && !row.is_open_balance && permissions.canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Delete')">🗑️</button>
                                     </template>
 
                                     <template v-else>
                                         <template v-if="!row.is_open_balance">
-                                            <Link v-if="permissions.canUpdate" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</Link>
-                                            <button v-if="permissions.canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Delete')">🗑️</button>
+                                            <Link v-if="!row.review?.is_reviewed && permissions.canUpdate" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</Link>
+                                            <button v-if="!row.review?.is_reviewed && permissions.canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Delete')">🗑️</button>
                                         </template>
                                     </template>
                                 </div>

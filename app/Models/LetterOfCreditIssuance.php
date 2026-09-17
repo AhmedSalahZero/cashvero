@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
+use App\Traits\Models\IsReviewable;
 
 /**
  * @property int $id
@@ -181,6 +182,8 @@ use Illuminate\Support\Facades\DB;
  */
 class LetterOfCreditIssuance extends Model
 {
+    use IsReviewable;
+
 	use HasBasicStoreRequest,HasCompany,HasForeignExchangeGainOrLoss,HasCommissionStatements,HasLetterOfCreditStatements,HasLetterOfCreditCashCoverStatements,HasCurrentAccountCreditBankStatement,HasDeleteButTriggerChangeOnLastElement,HasUserComment;
 	const LC_FACILITY = 'lc-facility';
 	const AGAINST_TD ='against-td';

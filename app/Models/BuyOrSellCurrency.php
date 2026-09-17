@@ -11,6 +11,7 @@ use App\Support\ShareholderAccounts\AccountNumberLabel;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Traits\Models\IsReviewable;
 
 /**
  * * هنا لو معايا عملة ورايح اغيرها وليكن مثلا من البنك وحطها في حسابي الجاري
@@ -116,6 +117,32 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class BuyOrSellCurrency extends Model
 {
+    use IsReviewable;
+
+	/**
+	 * * الوصف الافتراضي في IsReviewable ما بيلاقيش حاجة هنا : الحركة دي
+	 * * مالهاش "مبلغ" واحد و لا طرف — هي بيع عملة مقابل شرا عملة تانية ،
+	 * * فالوصف لازم يقول الاتنين
+	 */
+	public function reviewDescriptor(): string
+	{
+		$parts = [__('Buy / Sell Currency').' #'.$this->getKey()];
+
+		if ($sell = $this->getAmountToSellFormatted()) {
+			$parts[] = __('Sell').' '.$sell.' '.(string) $this->getCurrencyToSellFormatted();
+		}
+
+		if ($buy = $this->getAmountToBuyFormatted()) {
+			$parts[] = __('Buy').' '.$buy.' '.(string) $this->getCurrencyToBuyFormatted();
+		}
+
+		if ($bank = $this->getFromBankName()) {
+			$parts[] = (string) $bank;
+		}
+
+		return implode(' · ', array_filter($parts));
+	}
+
 	use HasBasicStoreRequest , HasUserComment,HasOdooMoneyTransfer,HasDeleteOdoo,HasCompany;
 	const BANK_TO_BANK = 'bank-to-bank';
 	const BANK_TO_SAFE = 'bank-to-safe';

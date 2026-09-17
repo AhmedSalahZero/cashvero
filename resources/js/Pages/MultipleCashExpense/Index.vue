@@ -10,9 +10,12 @@
 import { ref, watch } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import ReviewButton from '@/Components/ReviewButton.vue';
 
 const props = defineProps({
     company: Object,
+    canReview: { type: Boolean, default: false },
+    reviewFilter: { type: String, default: '' },
     canCreate: Boolean,
     canUpdate: Boolean,
     canDelete: Boolean,
@@ -26,6 +29,7 @@ const props = defineProps({
 const search = ref(props.filters.search || '');
 const from = ref(props.filters.from || '');
 const to = ref(props.filters.to || '');
+const review = ref(props.reviewFilter || '');
 
 const breakdownTarget = ref(null);
 const deleteTarget = ref(null);
@@ -35,6 +39,7 @@ function go(overrides = {}) {
         search: search.value || undefined,
         from: from.value || undefined,
         to: to.value || undefined,
+        review: review.value || undefined,
         ...overrides,
     }, { preserveState: true, preserveScroll: true, replace: true });
 }
@@ -76,6 +81,14 @@ function performDelete() {
                     <input v-model="from" type="date" @change="go({ page: 1 })" class="cvr-input px-3 py-2 rounded" />
                 </div>
                 <div>
+                    <label class="cvr-form-label">{{ $t('Review state') }}</label>
+                    <select v-model="review" @change="go({ page: 1 })" class="cvr-input px-3 py-2 rounded">
+                        <option value="">{{ $t('All') }}</option>
+                        <option value="reviewed">{{ $t('Reviewed') }}</option>
+                        <option value="not_reviewed">{{ $t('Not reviewed') }}</option>
+                    </select>
+                </div>
+                <div>
                     <label class="cvr-form-label">{{ $t('To') }}</label>
                     <input v-model="to" type="date" @change="go({ page: 1 })" class="cvr-input px-3 py-2 rounded" />
                 </div>
@@ -94,6 +107,7 @@ function performDelete() {
                             <th class="px-3 py-2 text-start">{{ $t('Supplier Name') }}</th>
                             <th class="px-3 py-2 text-end">{{ $t('Expenses') }}</th>
                             <th class="px-3 py-2 text-end">{{ $t('Total') }}</th>
+                            <th class="px-3 py-2 text-start">{{ $t('Review') }}</th>
                             <th class="px-3 py-2 text-start">{{ $t('Control') }}</th>
                         </tr>
                     </thead>
@@ -105,11 +119,26 @@ function performDelete() {
                             <td class="px-3 py-2 text-end">{{ row.items_count }}</td>
                             <td class="px-3 py-2 text-end">{{ row.total }} {{ row.currency }}</td>
                             <td class="px-3 py-2">
+                                <ReviewButton
+                                    movement="multiple-cash-expense"
+                                    :id="row.id"
+                                    :company-id="company.id"
+                                    :state="row.review"
+                                    :can-review="canReview"
+                                />
+                            </td>
+                            <td class="px-3 py-2">
                                 <div class="flex items-center gap-2">
                                     <!-- The breakdown of the lines behind this total -->
                                     <button @click="breakdownTarget = row" class="cvr-action-btn" :title="$t('Expenses Breakdown')">ℹ️</button>
-                                    <Link v-if="row.edit_url" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</Link>
-                                    <button v-if="row.delete_url" @click="confirmDelete(row)" class="cvr-action-btn" :title="$t('Delete')">🗑️</button>
+                                    <!-- A reviewed movement is locked: the server refuses the
+                                         edit and the delete, so offering them would only
+                                         produce a 403 the user cannot act on. -->
+                                    <template v-if="!row.review?.is_reviewed">
+                                        <Link v-if="!row.review?.is_reviewed && row.edit_url" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</Link>
+                                        <button v-if="!row.review?.is_reviewed && row.delete_url" @click="confirmDelete(row)" class="cvr-action-btn" :title="$t('Delete')">🗑️</button>
+                                    </template>
+                                    <span v-else class="cvr-text-muted text-xs">{{ $t('Locked by review') }}</span>
                                 </div>
                             </td>
                         </tr>

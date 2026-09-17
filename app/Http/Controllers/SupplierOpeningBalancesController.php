@@ -10,6 +10,7 @@ use App\Models\SupplierInvoice;
 use App\Models\SupplierOpeningBalance;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * SupplierOpeningBalancesController
@@ -163,74 +164,83 @@ class SupplierOpeningBalancesController
 
     public function store(StoreOpeningBalanceRequest $request, Company $company)
     {
+        /**
+         * * ⚠️ زي update .
+         */
+        return DB::transaction(function () use ($request, $company) {
 		
-        // Read-only field in the form now — always mirrors the company's
-        // own Opening Balance Date, not whatever the request sends.
-        $openingBalanceDate = Carbon::make($company->opening_balance_date)->format('Y-m-d');
-        $openingBalance = SupplierOpeningBalance::create([
-            'date' => $openingBalanceDate,
-            'company_id' => $company->id
-        ]);
+            // Read-only field in the form now — always mirrors the company's
+            // own Opening Balance Date, not whatever the request sends.
+            $openingBalanceDate = Carbon::make($company->opening_balance_date)->format('Y-m-d');
+            $openingBalance = SupplierOpeningBalance::create([
+                'date' => $openingBalanceDate,
+                'company_id' => $company->id
+            ]);
 		
 		
-        foreach ($request->get('opening-balances',[]) as $index => $openingBalanceArr) {
-			$invoiceData = self::generateData($openingBalanceDate,$openingBalanceArr,$company);
-			$openingBalance->supplierInvoices()->create($invoiceData);
-        }
+            foreach ($request->get('opening-balances',[]) as $index => $openingBalanceArr) {
+    			$invoiceData = self::generateData($openingBalanceDate,$openingBalanceArr,$company);
+    			$openingBalance->supplierInvoices()->create($invoiceData);
+            }
 		
-		// store opening balances
-		$currentKey = 'advanced-opening-balances';
-        foreach ($request->get($currentKey,[]) as $index => $openingBalanceArr) {
-			$data = self::generateAdvancedData($openingBalanceDate,$openingBalanceArr,$company);
-			$money = $openingBalance->moneyModel()->create($data);
-			$money->downPaymentSettlements()->create(self::generateDownPaymentData($openingBalanceArr,$company,$money->id));
-        } 
+    		// store opening balances
+    		$currentKey = 'advanced-opening-balances';
+            foreach ($request->get($currentKey,[]) as $index => $openingBalanceArr) {
+    			$data = self::generateAdvancedData($openingBalanceDate,$openingBalanceArr,$company);
+    			$money = $openingBalance->moneyModel()->create($data);
+    			$money->downPaymentSettlements()->create(self::generateDownPaymentData($openingBalanceArr,$company,$money->id));
+            } 
 		
        
-		return redirect()
-			->route('suppliers-opening-balance.index', ['company' => $company->id])
-			->with('success', __('Data Store Successfully'));
+    		return redirect()
+    			->route('suppliers-opening-balance.index', ['company' => $company->id])
+    			->with('success', __('Data Store Successfully'));
       
+            });
     }
 
 public function update(Company $company, StoreOpeningBalanceRequest $request, SupplierOpeningBalance $suppliers_opening_balance)
     {
-		
-		// Read-only field — always mirrors the company's Opening Balance Date.
-		$openingBalanceDate = Carbon::make($company->opening_balance_date)->format('Y-m-d');
-        $suppliers_opening_balance->update([
-            'date' => $openingBalanceDate,
-        ]);
         /**
-         * * هنا تحديث ال
-         * * cash in safe
+         * * ⚠️ أرصدة الموردين الافتتاحية — كتابة ناقصة معناها التزامات غلط .
          */
-        $oldIdsFromDatabase = $suppliers_opening_balance->supplierInvoices->pluck('id')->toArray();
-        $idsFromRequest = array_column($request->input('opening-balances', []), 'id') ;
+        return DB::transaction(function () use ($company, $request, $suppliers_opening_balance) {
 		
-		$elementsToDelete = array_diff($oldIdsFromDatabase, $idsFromRequest);
-		foreach($elementsToDelete as $idToDelete){
-			$suppliers_opening_balance->supplierInvoices()->where('supplier_invoices.id', $idToDelete)->delete();
-		}
+    		// Read-only field — always mirrors the company's Opening Balance Date.
+    		$openingBalanceDate = Carbon::make($company->opening_balance_date)->format('Y-m-d');
+            $suppliers_opening_balance->update([
+                'date' => $openingBalanceDate,
+            ]);
+            /**
+             * * هنا تحديث ال
+             * * cash in safe
+             */
+            $oldIdsFromDatabase = $suppliers_opening_balance->supplierInvoices->pluck('id')->toArray();
+            $idsFromRequest = array_column($request->input('opening-balances', []), 'id') ;
 		
-      //  $elementsToDelete = array_diff($oldIdsFromDatabase, $idsFromRequest);
+    		$elementsToDelete = array_diff($oldIdsFromDatabase, $idsFromRequest);
+    		foreach($elementsToDelete as $idToDelete){
+    			$suppliers_opening_balance->supplierInvoices()->where('supplier_invoices.id', $idToDelete)->delete();
+    		}
+		
+          //  $elementsToDelete = array_diff($oldIdsFromDatabase, $idsFromRequest);
 
-        $elementsToUpdate = array_intersect($idsFromRequest, $oldIdsFromDatabase); // origin one
+            $elementsToUpdate = array_intersect($idsFromRequest, $oldIdsFromDatabase); // origin one
 		
-	//	CashInSafeStatement::deleteButTriggerChangeOnLastElement($openingBalance->supplierInvoices->whereIn('id', $elementsToDelete));
+    	//	CashInSafeStatement::deleteButTriggerChangeOnLastElement($openingBalance->supplierInvoices->whereIn('id', $elementsToDelete));
 	
-        foreach ($elementsToUpdate as $id) {
-            $dataToUpdate = findByKey($request->input('opening-balances'), 'id', $id);
-			$invoiceData = self::generateData($openingBalanceDate,$dataToUpdate,$company);
-            $suppliers_opening_balance->supplierInvoices()->where('supplier_invoices.id', $id)->first()->update($invoiceData);
-        }
-        foreach ($request->get('opening-balances', []) as $data) {
-            if (!isset($data['id']) || (isset($data['id']) && $data['id'] == '0' )  ) {
-                unset($data['id']);
-				$invoiceData = self::generateData($openingBalanceDate,$data,$company);
-                $suppliers_opening_balance->supplierInvoices()->create($invoiceData);
+            foreach ($elementsToUpdate as $id) {
+                $dataToUpdate = findByKey($request->input('opening-balances'), 'id', $id);
+    			$invoiceData = self::generateData($openingBalanceDate,$dataToUpdate,$company);
+                $suppliers_opening_balance->supplierInvoices()->where('supplier_invoices.id', $id)->first()->update($invoiceData);
             }
-        }
+            foreach ($request->get('opening-balances', []) as $data) {
+                if (!isset($data['id']) || (isset($data['id']) && $data['id'] == '0' )  ) {
+                    unset($data['id']);
+    				$invoiceData = self::generateData($openingBalanceDate,$data,$company);
+                    $suppliers_opening_balance->supplierInvoices()->create($invoiceData);
+                }
+            }
 		
 		
 		
@@ -239,50 +249,51 @@ public function update(Company $company, StoreOpeningBalanceRequest $request, Su
 		
 		
 		
-		/**
-         * * هنا تحديث ال
-         * * opening-balances
-         */
-		$currentKey = 'advanced-opening-balances';
-        $oldIdsFromDatabase = $suppliers_opening_balance->moneyModel->pluck('id')->toArray();
-        $idsFromRequest = array_column($request->input($currentKey, []), 'id') ;
+    		/**
+             * * هنا تحديث ال
+             * * opening-balances
+             */
+    		$currentKey = 'advanced-opening-balances';
+            $oldIdsFromDatabase = $suppliers_opening_balance->moneyModel->pluck('id')->toArray();
+            $idsFromRequest = array_column($request->input($currentKey, []), 'id') ;
 		
-		$elementsToDelete = array_diff($oldIdsFromDatabase, $idsFromRequest);
-		foreach($elementsToDelete as $idToDelete){
-			/**
-			 * * كان delete على الكويري بيلدر مباشرة
-			 * * فكان بيمسح صف الـ money payment بس ويسيب البنك ستيتمنت وكشوف الشركاء وراه
-			 * * لازم نحمّل الموديل وننده deleteRelations قبل الحذف
-			 */
-			$moneyPaymentToDelete = $suppliers_opening_balance->moneyModel()->where('money_payments.id', $idToDelete)->first();
-			if($moneyPaymentToDelete){
-				$moneyPaymentToDelete->deleteRelations();
-				$moneyPaymentToDelete->delete();
-			}
-		}
+    		$elementsToDelete = array_diff($oldIdsFromDatabase, $idsFromRequest);
+    		foreach($elementsToDelete as $idToDelete){
+    			/**
+    			 * * كان delete على الكويري بيلدر مباشرة
+    			 * * فكان بيمسح صف الـ money payment بس ويسيب البنك ستيتمنت وكشوف الشركاء وراه
+    			 * * لازم نحمّل الموديل وننده deleteRelations قبل الحذف
+    			 */
+    			$moneyPaymentToDelete = $suppliers_opening_balance->moneyModel()->where('money_payments.id', $idToDelete)->first();
+    			if($moneyPaymentToDelete){
+    				$moneyPaymentToDelete->deleteRelations();
+    				$moneyPaymentToDelete->delete();
+    			}
+    		}
 		
-        $elementsToUpdate = array_intersect($idsFromRequest, $oldIdsFromDatabase); // origin one
+            $elementsToUpdate = array_intersect($idsFromRequest, $oldIdsFromDatabase); // origin one
 	
-        foreach ($elementsToUpdate as $id) {
-            $dataToUpdate = findByKey($request->input($currentKey), 'id', $id);
-			$moneyData = self::generateAdvancedData($openingBalanceDate,$dataToUpdate,$company);
-            $suppliers_opening_balance->moneyModel()->where('money_payments.id', $id)->first()->update($moneyData);
-			$moneyPayment = MoneyPayment::find($id);
-			$moneyPayment->downPaymentSettlements()->update(self::generateDownPaymentData($dataToUpdate,$company,$id));
-        }
-        foreach ($request->get($currentKey, []) as $data) {
-            if (!isset($data['id']) || (isset($data['id']) && $data['id'] == '0' )  ) {
-                unset($data['id']);
-				$moneyData = self::generateAdvancedData($openingBalanceDate,$data,$company);
-                $money = $suppliers_opening_balance->moneyModel()->create($moneyData);
-				$money->downPaymentSettlements()->create(self::generateDownPaymentData($data,$company,$money->id));
+            foreach ($elementsToUpdate as $id) {
+                $dataToUpdate = findByKey($request->input($currentKey), 'id', $id);
+    			$moneyData = self::generateAdvancedData($openingBalanceDate,$dataToUpdate,$company);
+                $suppliers_opening_balance->moneyModel()->where('money_payments.id', $id)->first()->update($moneyData);
+    			$moneyPayment = MoneyPayment::find($id);
+    			$moneyPayment->downPaymentSettlements()->update(self::generateDownPaymentData($dataToUpdate,$company,$id));
             }
-        }
+            foreach ($request->get($currentKey, []) as $data) {
+                if (!isset($data['id']) || (isset($data['id']) && $data['id'] == '0' )  ) {
+                    unset($data['id']);
+    				$moneyData = self::generateAdvancedData($openingBalanceDate,$data,$company);
+                    $money = $suppliers_opening_balance->moneyModel()->create($moneyData);
+    				$money->downPaymentSettlements()->create(self::generateDownPaymentData($data,$company,$money->id));
+                }
+            }
 		
-		 return redirect()
-			->route('suppliers-opening-balance.index', ['company' => $company->id])
-			->with('success', __('Item Has Been Updated Successfully'));
+    		 return redirect()
+    			->route('suppliers-opening-balance.index', ['company' => $company->id])
+    			->with('success', __('Item Has Been Updated Successfully'));
 		
+            });
     }
 	public static function generateData(string $openingBalanceDate , array $openingBalanceArr , Company $company):array 
 	{

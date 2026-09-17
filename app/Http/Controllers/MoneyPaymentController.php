@@ -301,6 +301,10 @@ class MoneyPaymentController
 
             $query = $company->{$definition['query']}($startDate, $endDate, $activeTab);
 
+            // الفلتر لازم يتطبّق قبل العدّ و الجمع ، و إلا الإجماليات تحت
+            // الجدول بتقول رقم و الصفوف بتقول رقم تاني
+            $query = $query->reviewState($request->get('review'));
+
             $totalCount = (clone $query)->count();
             $totalAmount = (clone $query)->sum('paid_amount');
 
@@ -335,6 +339,9 @@ class MoneyPaymentController
         $user = auth()->user();
 
         return Inertia::render('MoneyPayment/Index', [
+            // صلاحية المراجعة — بتقرر يظهر زرار ولا علامة قراءة بس
+            'canReview' => \App\Support\Permissions\PermissionResolver::allows(request()->user(), 'money_payment.review'),
+            'reviewFilter' => (string) request()->get('review', ''),
             'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::MONEY_PAYMENT]),
             'company' => ['id' => $company->id, 'name' => $company->getName()],
             'activeTab' => $activeTab,
@@ -376,6 +383,8 @@ class MoneyPaymentController
     {
         $common = [
             'id' => $moneyPayment->id,
+            // حالة المراجعة — شوف App\Traits\Models\IsReviewable
+            'review' => $moneyPayment->reviewPayload(),
             'type_formatted' => $moneyPayment->getMoneyTypeFormatted(),
             'exchange_rate_formatted' => number_format((float) $moneyPayment->getExchangeRate(), 6),
             'amount_in_invoice_currency_formatted' => number_format((float) $moneyPayment->getAmountInInvoiceCurrency(), 2).' '.strtoupper((string) ($moneyPayment->getCurrency() ?: $moneyPayment->getPaymentCurrency())),
@@ -1123,6 +1132,9 @@ class MoneyPaymentController
 	
     public function edit(Company $company, Request $request, moneyPayment $moneyPayment, $supplierInvoiceId = null)
     {
+		// الحركة المراجَعة مقفولة — الرفض من أول الشاشة مش عند الحفظ
+		$moneyPayment->abortIfReviewed();
+
         $isDownPayment = $moneyPayment->isDownPayment();
         $partnerType = $moneyPayment->partner->getSupplierType();
         $currencies = SupplierInvoice::getCurrencies();

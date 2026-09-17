@@ -307,29 +307,6 @@ class DepositSettlementAccountTest extends TestCase
 
         $offered = $deposit->getSettlementAccountOptions()->pluck('id')->all();
 
-        dump([
-            'guardableColumnsCache' => (function () {
-                $r = new \ReflectionProperty(\Illuminate\Database\Eloquent\Model::class, 'guardableColumns');
-                $r->setAccessible(true);
-                $all = $r->getValue();
-                return $all[\App\Models\FinancialInstitutionAccount::class] ?? 'NOT CACHED';
-            })(),
-            'class' => get_class($this->alternativeAccount),
-            'unguarded' => \Illuminate\Database\Eloquent\Model::isUnguarded(),
-            'fillable' => $this->alternativeAccount->getFillable(),
-            'guarded' => $this->alternativeAccount->getGuarded(),
-            'attrs' => $this->alternativeAccount->getAttributes(),
-            'raw_row' => (array) \Illuminate\Support\Facades\DB::table('financial_institution_accounts')->find($this->alternativeAccount->id),
-            'db_name' => \Illuminate\Support\Facades\DB::connection()->getDatabaseName(),
-            'deposit_currency' => $deposit->getCurrency(),
-            'deposit_fi' => $deposit->financial_institution_id,
-            'bank' => $this->bank->id,
-            'alt' => [$this->alternativeAccount->id, $this->alternativeAccount->currency, $this->alternativeAccount->is_active, $this->alternativeAccount->financial_institution_id],
-            'fund' => [$this->fundingAccount->id, $this->fundingAccount->currency, $this->fundingAccount->is_active],
-            'rel_count' => $deposit->financialInstitution->accounts->count(),
-            'rel_has_alt' => $deposit->financialInstitution->accounts->contains('id', $this->alternativeAccount->id),
-            'offered' => $offered,
-        ]);
 
         $this->assertContains($this->fundingAccount->id, $offered);
         $this->assertContains($this->alternativeAccount->id, $offered);

@@ -97,6 +97,7 @@ class ForeignExchangeRateController
             ->when($searchField && $searchValue, function ($query) use ($searchField, $searchValue) {
                 return $query->where($searchField, 'like', '%' . $searchValue . '%');
             })
+            ->reviewState($request->get('review'))
             ->orderByDesc('date')
             ->orderByDesc('id');
 
@@ -115,6 +116,8 @@ class ForeignExchangeRateController
             $exchangeRate = $rate->getExchangeRate();
             return [
                 'id' => $rate->id,
+                // حالة المراجعة — شوف App\Traits\Models\IsReviewable
+                'review' => $rate->reviewPayload(),
                 'date_formatted' => $rate->getDateFormatted(),
                 'from_currency' => $rate->getFromCurrency(),
                 'to_currency' => $rate->getToCurrency(),
@@ -143,6 +146,9 @@ class ForeignExchangeRateController
         }
 
         return \Inertia\Inertia::render('ForeignExchangeRate/Index', [
+            // صلاحية المراجعة — بتقرر يظهر زرار ولا علامة قراءة بس
+            'canReview' => \App\Support\Permissions\PermissionResolver::allows(request()->user(), 'foreign_exchange_rate.review'),
+            'reviewFilter' => (string) request()->get('review', ''),
             'company' => ['id' => $company->id],
             'mainFunctionalCurrency' => $mainFunctionalCurrency,
             'existingCurrencies' => $existingCurrencies,

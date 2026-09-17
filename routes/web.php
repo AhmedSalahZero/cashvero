@@ -120,6 +120,12 @@ Route::group(
                  */
                 Route::get('daily-logs', DailyLogController::class)->name('daily-logs.index');
 
+                /**
+                 * * مراجعة الحركات المالية — راوت واحد لكل الأنواع ، و النوع
+                 * * بيتشاف في قايمة مقفولة جوه الكونترولر
+                 */
+                Route::patch('movement-review/{movement}/{id}', 'MovementReviewController@update')->name('movement.review.update');
+
                 Route::get('checkIfJobFinished/{modelName}', 'SalesGatheringTestController@activeJob')->name('active.job');
 
                 Route::get('/redirect', 'HomeController@redirectFun')->name('home.redirect');

@@ -92,6 +92,8 @@ class CashExpenseController
 		$mapCommon = function (CashExpense $model) use ($company) {
 			return [
 				'id' => $model->id,
+    // حالة المراجعة — شوف App\Traits\Models\IsReviewable
+    'review' => $model->reviewPayload(),
 				'expense_category_name' => $model->getExpenseCategoryName(),
 				'expense_name' => $model->getExpenseName(),
 				'payment_date_formatted' => $model->getPaymentDateFormatted(),
@@ -138,7 +140,7 @@ class CashExpenseController
 		 * that one tab instead of all three.
 		 */
 		$buildTab = function (string $type, string $label, bool $hasBatchCollection) use (
-			$company, $activeTab, $filterDates, $paginationPerPage, $mapCommon
+			$company, $activeTab, $filterDates, $paginationPerPage, $mapCommon, $request
 		) {
 			$startDate = $filterDates[$type]['startDate'] ?? null;
 			$endDate = $filterDates[$type]['endDate'] ?? null;
@@ -156,6 +158,7 @@ class CashExpenseController
 
 			$queryMethod = $queryMethodByType[$type];
 			$paginator = $company->{$queryMethod}($startDate, $endDate, $activeTab)
+				->reviewState($request->get('review'))
 				->paginate($paginationPerPage, ['*'], $pageParamByType[$type])
 				->withQueryString();
 
@@ -209,6 +212,9 @@ class CashExpenseController
 		};
 
 		return \Inertia\Inertia::render('CashExpense/Index', [
+            // صلاحية المراجعة — بتقرر يظهر زرار ولا علامة قراءة بس
+            'canReview' => \App\Support\Permissions\PermissionResolver::allows(request()->user(), 'cash_expense.review'),
+            'reviewFilter' => (string) request()->get('review', ''),
             'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CASH_EXPENSE]),
 			'company' => ['id' => $company->id],
 			'activeTab' => $activeTab,
@@ -618,6 +624,9 @@ class CashExpenseController
 	}
 
 	public function edit(Company $company , Request $request , cashExpense $cashExpense ,$supplierInvoiceId = null){
+		// الحركة المراجَعة مقفولة — الرفض من أول الشاشة مش عند الحفظ
+		$cashExpense->abortIfReviewed();
+
 		return \Inertia\Inertia::render('CashExpense/Form', array_merge($this->buildFormProps($company, $cashExpense), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CASH_EXPENSE_FORM])]));
 	}
 	public function update(Company $company , StoreCashExpenseRequest $request , cashExpense $cashExpense){

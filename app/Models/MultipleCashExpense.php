@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Traits\Models\HasUserComment;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Traits\Models\IsReviewable;
 
 /**
  * * مصروف نقدي متعدد البنود : حركة صرف واحدة فيها أكتر من مصروف
@@ -23,6 +24,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class MultipleCashExpense extends Model
 {
+    use IsReviewable;
+
     use HasUserComment;
 
     /**

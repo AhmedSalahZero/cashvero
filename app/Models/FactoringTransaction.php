@@ -7,6 +7,7 @@ use App\Traits\Models\HandlesFactoringStatement;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Traits\Models\IsReviewable;
 
 /**
  * @property int $id
@@ -33,6 +34,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class FactoringTransaction extends Model
 {
+    use IsReviewable;
+
     use HandlesFactoringBankDebit, HandlesFactoringStatement;
 
     public const WITHOUT_RECOURSE = 'without_recourse';

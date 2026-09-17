@@ -115,6 +115,13 @@ final class ContractCashFlowBatchBuilder
             SupplierInvoice::getSupplierInvoicesForPoUnderCollectionAtDates($result, $company->id, $datesWithWeekNumber, $formStartDate, $formEndDate, $poAllocations, $pastDueSupplierInvoicesForContracts);
         }
 
+        // $result is still bound BY REFERENCE to the last contract's slot
+        // here. Without this unset, the plain `$result = $resultsByContractCode[$code]`
+        // in the summaries loop below writes through that reference: every
+        // contract in turn overwrote the last contract's rows, so the last
+        // contract reported the previous one's inflow/outflow.
+        unset($result);
+
         CashFlowPeriodBatchLoader::applyContractPeriodMovements(
             $resultsByContractCode,
             $foreignExchangeRates,

@@ -141,6 +141,16 @@ class ActivityRegistry
             'module' => 'cash_expense',
             'fields' => ['type' => ['label' => 'Status']],
         ],
+        /**
+         * * كانت ناقصة : الموديل ده اتضاف مع ميزة المصروفات المتعددة و
+         * * اتنسي يتسجّل هنا ، فكل تعديلاته ما كانتش بتتسجّل خالص — لا في
+         * * سجل الصف و لا في صفحة السجل اليومي
+         */
+        Models\MultipleCashExpense::class => [
+            'label' => 'Multiple Cash Expenses',
+            'module' => 'multiple_cash_expense',
+            'fields' => ['type' => ['label' => 'Status']],
+        ],
         Models\InternalMoneyTransfer::class => [
             'label' => 'Internal Money Transfer',
             'module' => 'internal_money_transfer',

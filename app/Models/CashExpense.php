@@ -13,7 +13,6 @@ use App\Traits\HasCompany;
 use App\Traits\Models\HasCreditStatements;
 use App\Traits\Models\HasForeignExchangeGainOrLoss;
 use App\Traits\Models\HasNonCustomerOrSupplier;
-use App\Traits\Models\HasReviewedBy;
 use App\Traits\Models\HasUserComment;
 use App\Traits\Models\IsMoneyOut;
 use Carbon\Carbon;
@@ -22,6 +21,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
+use App\Traits\Models\IsReviewable;
 
 
 
@@ -105,8 +105,10 @@ use Illuminate\Support\Facades\DB;
  */
 class CashExpense extends Model  implements IHaveCreditOverdraftStatement
 {
+    use IsReviewable;
+
 	
-	use IsMoneyOut ,HasForeignExchangeGainOrLoss,HasCreditStatements,HasReviewedBy,HasUserComment,HasNonCustomerOrSupplier,HasCompany;
+	use IsMoneyOut ,HasForeignExchangeGainOrLoss,HasCreditStatements,HasUserComment,HasNonCustomerOrSupplier,HasCompany;
 	const CASH_PAYMENT  = 'cash_payment';
 	const PAYABLE_CHEQUE  = 'payable_cheque';
 	const OUTGOING_TRANSFER  = 'outgoing-transfer';

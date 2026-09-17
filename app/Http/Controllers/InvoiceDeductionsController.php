@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\Deduction;
 use App\Models\InvoiceDeduction;
 use App\Traits\GeneralFunctions;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -49,22 +50,36 @@ class InvoiceDeductionsController
 			]);
 		}
 	
-		$invoice->deductions()->detach();
-		$invoice->update([
-			'total_deductions'=>0
-		]);
-		$invoiceExchangeRate = $invoice->getExchangeRate();
-		foreach($request->get('deductions',[]) as $deductionArr){
-			$deductionArr = array_merge($deductionArr,['invoice_type'=>$invoiceModelName,'invoice_id'=>$invoice->id,'company_id'=>$company->id]);
-			$currentAmountInMainAndCurrencyCurrencyArr = Deduction::calculateAmountInMainCurrency($deductionArr['amount'],$deductionArr['date'],$invoice->getCurrency(),$invoiceExchangeRate,$company);
-			$deductionArr['amount_in_main_currency'] = $currentAmountInMainAndCurrencyCurrencyArr['amount_in_main_currency'];
-			$deductionArr['amount_in_invoice_exchange_rate'] = $currentAmountInMainAndCurrencyCurrencyArr['amount_in_invoice_exchange_rate'];
-			$deductionArr['foreign_gain_or_loss'] = $deductionArr['amount_in_main_currency'] - $deductionArr['amount_in_invoice_exchange_rate'] ;
-			InvoiceDeduction::create($deductionArr);
-		}
-		$invoice->update([
-			'total_deductions'=>$totalDeductions
-		]);
+		/**
+		 * ⚠️ لازم تفضل جوه ترانزاكشن واحدة .
+		 *
+		 * * التعديل هنا معمول كـ "امسح الكل و اكتب من تاني" ، و أول
+		 * * update بيحفظ net_balance المعدّل كمان (Eloquent بيحفظ كل
+		 * * الحقول المتغيّرة مش اللي بتتبعت بس) . فمن غير ترانزاكشن ،
+		 * * لو أي خطوة بعد كده وقعت — سعر صرف ناقص لتاريخ الخصم ،
+		 * * deadlock ، timeout — الفاتورة بتفضل **برصيد مخفّض و من غير
+		 * * أي خصومات تسنده** ، و الفلوس بتختفي من الذمم من غير ما حد
+		 * * ياخد باله .
+		 */
+		DB::transaction(function () use ($request, $company, $invoice, $invoiceModelName, $totalDeductions) {
+			$invoice->deductions()->detach();
+			$invoice->update([
+				'total_deductions'=>0
+			]);
+			$invoiceExchangeRate = $invoice->getExchangeRate();
+			foreach($request->get('deductions',[]) as $deductionArr){
+				$deductionArr = array_merge($deductionArr,['invoice_type'=>$invoiceModelName,'invoice_id'=>$invoice->id,'company_id'=>$company->id]);
+				$currentAmountInMainAndCurrencyCurrencyArr = Deduction::calculateAmountInMainCurrency($deductionArr['amount'],$deductionArr['date'],$invoice->getCurrency(),$invoiceExchangeRate,$company);
+				$deductionArr['amount_in_main_currency'] = $currentAmountInMainAndCurrencyCurrencyArr['amount_in_main_currency'];
+				$deductionArr['amount_in_invoice_exchange_rate'] = $currentAmountInMainAndCurrencyCurrencyArr['amount_in_invoice_exchange_rate'];
+				$deductionArr['foreign_gain_or_loss'] = $deductionArr['amount_in_main_currency'] - $deductionArr['amount_in_invoice_exchange_rate'] ;
+				InvoiceDeduction::create($deductionArr);
+			}
+			$invoice->update([
+				'total_deductions'=>$totalDeductions
+			]);
+		});
+
 		return redirect()->back()->with('success', __('Deductions updated successfully'));
 		
 	}

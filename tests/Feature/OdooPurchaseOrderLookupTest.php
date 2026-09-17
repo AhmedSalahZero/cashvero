@@ -49,7 +49,7 @@ class OdooPurchaseOrderLookupTest extends TestCase
         ]);
 
         $this->assertSame([901, 902], $this->invokeOn($service, 'purchaseOrderIdsFromSaleOrderLines', [[11, 12]]));
-        $this->assertSame([[['sale_order_id', 'in', [11, 12]]], ['order_id']], $service->calls[0][2]);
+        $this->assertSame([[['sale_order_id', 'in', [11, 12]]], ['order_id', 'sale_order_id']], $service->calls[0][2], 'بنقرا sale_order_id كمان عشان نعرف كل PO تبع أنهي أمر بيع لما البحث يتجمّع لكل المشاريع');
         $this->assertSame('purchase.order.line', $service->calls[0][0]);
     }
 
@@ -110,7 +110,7 @@ class OdooPurchaseOrderLookupTest extends TestCase
         ]);
 
         $this->assertSame([905], $this->invokeOn($service, 'purchaseOrderIdsFromProjectAnalyticAccount', [129]));
-        $this->assertSame([[['analytic_distribution', 'in', [129]]], ['order_id']], $service->calls[0][2]);
+        $this->assertSame([[['analytic_distribution', 'in', [129]]], ['order_id', 'analytic_distribution']], $service->calls[0][2], 'و analytic_distribution كمان لنفس السبب');
     }
 
     public function test_a_project_without_an_analytic_account_is_not_queried(): void

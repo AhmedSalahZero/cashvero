@@ -172,6 +172,7 @@ class CashFlowContractPeriodSupplementBatchLoader
         $mainType = __('Letter Of Guarantee');
         $subTypeFees = __('Fees');
         $subTypeCover = __('Cash Cover');
+        $subTypeIssued = __('Issued LG Cash Cover');
         $totalCashInFlowKey = __('Total Cash Inflow');
 
         $feeRows = DB::table('current_account_bank_statements')
@@ -199,36 +200,64 @@ class CashFlowContractPeriodSupplementBatchLoader
             self::applyLgFeeRow($result, $row, $lgsTypes, $mainType, $subTypeFees, $totalCashInFlowKey, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodsByWeekKey, false);
         }
 
-        $coverSumQuery = DB::table('letter_of_guarantee_cash_cover_statements')
-            ->join('letter_of_guarantee_issuances', 'letter_of_guarantee_issuances.id', '=', 'letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id')
-            ->where('letter_of_guarantee_cash_cover_statements.company_id', $companyId);
-        $coverSumQuery = LgCashCoverEffectiveDate::joinTo($coverSumQuery);
-        $effectiveDateSql = LgCashCoverEffectiveDate::sql();
-        $coverSumRows = $coverSumQuery
-            ->selectRaw('letter_of_guarantee_issuances.lg_type, letter_of_guarantee_cash_cover_statements.currency, '.$effectiveDateSql.' as movement_date, sum(debit) as total_amount')
-            ->whereBetween(DB::raw($effectiveDateSql), [$periodStart, $periodEnd])
-            ->where('letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id', '>', 0)
-            ->whereIn('letter_of_guarantee_issuances.contract_id', $contractIds)
-            ->groupByRaw('letter_of_guarantee_issuances.lg_type, letter_of_guarantee_cash_cover_statements.currency, '.$effectiveDateSql)
-            ->get();
+        /**
+         * * صف الكاش كفر كان فيه باجين متراكبين:
+         * *
+         * *   ١) كان بيقرا عمود debit — و ده مبلغ الإصدار ، يعني فلوس
+         * *      بتتحجز و تخرج — و بيحطه في صف فلوس داخلة و يضيفه لـ
+         * *      Total Cash Inflow. عقد عليه خطاب شغال (اتحجز ٤١٬١١٧٫٧٠
+         * *      و مرجعش منه حاجة) كان بيعرض الرقم ده كإيراد.
+         * *
+         * *   ٢) كان فيه استعلامين على نفس الداتا — واحد مجمّع و واحد
+         * *      تفصيلي — و الاتنين بيضيفوا لنفس الصف ، فالرقم كان
+         * *      بيتضاعف. قِسناها: ٤١٬١١٧٫٧٠ كانت بتطلع ٨٢٬٢٣٥٫٤٠.
+         * *
+         * * دلوقتي نداء واحد لنفس الخدمة اللي تقرير العقد و تقرير
+         * * الشركة بيستخدموها ، فالتلاتة ما يقدروش يختلفوا.
+         */
+        $coverRows = LgCashCoverRefunds::between($companyId, $periodStart, $periodEnd, $contractIds);
 
-        foreach ($coverSumRows as $row) {
+        foreach ($coverRows as $row) {
             self::applyLgFeeRow($result, $row, $lgsTypes, $mainType, $subTypeCover, $totalCashInFlowKey, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodsByWeekKey, true);
         }
 
-        $coverDetailQuery = DB::table('letter_of_guarantee_cash_cover_statements')
-            ->join('letter_of_guarantee_issuances', 'letter_of_guarantee_issuances.id', '=', 'letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id')
-            ->where('letter_of_guarantee_cash_cover_statements.company_id', $companyId);
-        $coverDetailQuery = LgCashCoverEffectiveDate::joinTo($coverDetailQuery);
-        $coverDetailRows = $coverDetailQuery
-            ->selectRaw('letter_of_guarantee_issuances.lg_type, letter_of_guarantee_cash_cover_statements.currency, '.$effectiveDateSql.' as movement_date, letter_of_guarantee_cash_cover_statements.debit as total_amount')
-            ->whereBetween(DB::raw($effectiveDateSql), [$periodStart, $periodEnd])
-            ->where('letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id', '>', 0)
-            ->whereIn('letter_of_guarantee_issuances.contract_id', $contractIds)
-            ->get();
+        /**
+         * * الكفر اللي بيتحجز وقت الإصدار — فلوس خارجة.
+         *
+         * * الصف ده ماكانش موجود هنا خالص: التقرير كان بيعرض الرد
+         * * الراجع كإيراد و ما بيعرضش الخروج أبدا ، فـ Net Cash كان
+         * * متضخّم بمبلغ الكفر بالكامل لكل خطاب اتصدر جوّه المدة.
+         * * قِسناها على العقد ٩١: ١٣٤٬١٤٥ خرجت و ماظهرتش في أي مصروف.
+         *
+         * * مقصور على New Issuance زي تقرير العقد بالظبط — كفر خطاب
+         * * الرصيد الافتتاحي اتدفع قبل ما النظام يشتغل فمفيش خروج نعرضه.
+         */
+        foreach (LgCashCoverIssuances::between($companyId, $periodStart, $periodEnd, $contractIds) as $row) {
+            $weekKey = CashFlowWeekBucketer::resolveWeekKey((string) $row->movement_date, $periodsByWeekKey);
+            if ($weekKey === null) {
+                continue;
+            }
 
-        foreach ($coverDetailRows as $row) {
-            self::applyLgFeeRow($result, $row, $lgsTypes, $mainType, $subTypeCover, $totalCashInFlowKey, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodsByWeekKey, true);
+            $exchangeRate = ForeignExchangeRate::getExchangeRateAt(
+                (string) $row->currency,
+                $mainFunctionalCurrency,
+                (string) $row->movement_date,
+                $companyId,
+                $foreignExchangeRates,
+            );
+            $amount = (float) $row->total_amount * $exchangeRate;
+            $lgType = $lgsTypes[$row->lg_type] ?? $row->lg_type;
+
+            if (! isset($result[$mainType][$subTypeIssued][$lgType])) {
+                $result[$mainType][$subTypeIssued][$lgType] = ['weeks' => [], 'total' => []];
+            }
+
+            $result[$mainType][$subTypeIssued][$lgType]['weeks'][$weekKey] = ($result[$mainType][$subTypeIssued][$lgType]['weeks'][$weekKey] ?? 0) + $amount;
+            $result[$mainType][$subTypeIssued][$lgType]['total'][$weekKey] = ($result[$mainType][$subTypeIssued][$lgType]['total'][$weekKey] ?? 0) + $amount;
+            $result[$mainType][$subTypeIssued]['total'][$weekKey] = ($result[$mainType][$subTypeIssued]['total'][$weekKey] ?? 0) + $amount;
+
+            // نفس دلو المصروفات اللي الرسوم بتنزل فيه — هو اللي بيغذّي Total Cash Outflow
+            $result['cash_expenses'][$mainType]['total'][$weekKey] = ($result['cash_expenses'][$mainType]['total'][$weekKey] ?? 0) + $amount;
         }
     }
 

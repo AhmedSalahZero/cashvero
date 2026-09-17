@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import RecordLogButton from '@/Components/RecordLogButton.vue';
+import ReviewButton from '@/Components/ReviewButton.vue';
 
 /*
  * BuyOrSellCurrencies/Index.vue
@@ -22,6 +23,8 @@ import RecordLogButton from '@/Components/RecordLogButton.vue';
  */
 
 const props = defineProps({
+    canReview: { type: Boolean, default: false },
+    reviewFilter: { type: String, default: '' },
     /* Link to this screen's written guide — see App\Support\Instructions\PageInstructions. */
     instructionsUrl: String,
     company: Object,
@@ -38,6 +41,10 @@ const props = defineProps({
     indexUrl: String,
     createUrl: String,
 });
+
+/* فلتر حالة المراجعة — قيمته بتترجع من السيرفر عشان تفضل
+   مختارة بعد إعادة التحميل */
+const reviewState = ref(props.reviewFilter || '');
 
 /**
  * Each tab is now its own separate Inertia prop server-side (see
@@ -122,6 +129,7 @@ function applyFilters(type) {
         endDate[t] = filters.value[t].endDate;
     });
     router.get(props.indexUrl, {
+        review: reviewState.value || undefined,
         active: type,
         startDate,
         endDate,
@@ -191,6 +199,12 @@ const odooErrorTarget = ref(null);
                             <label class="cvr-form-label">{{ $t('End Date') }}</label>
                             <input v-model="filters[type].endDate" type="date" class="cvr-input px-3 py-2 rounded" />
                         </div>
+                        <!-- فلتر حالة المراجعة -->
+                        <select v-model="reviewState" @change="applyFilters(type)" class="cvr-input px-3 py-2 rounded text-sm">
+                            <option value="">{{ $t('Review state') }}: {{ $t('All') }}</option>
+                            <option value="reviewed">{{ $t('Reviewed') }}</option>
+                            <option value="not_reviewed">{{ $t('Not reviewed') }}</option>
+                        </select>
                         <button @click="applyFilters(type)" class="cvr-btn-secondary px-4 py-2 rounded border">{{ $t('Apply') }}</button>
                     </div>
 
@@ -240,11 +254,18 @@ const odooErrorTarget = ref(null);
                                     <td v-if="canUpdate || canDelete || canCreate" class="px-3 py-3">
                                         <div class="flex items-center gap-2">
                                             <RecordLogButton subject="BuyOrSellCurrency" :id="row.id" :company-id="company.id" />
+                                            <ReviewButton
+                                                movement="buy-or-sell-currency"
+                                                :id="row.id"
+                                                :company-id="company.id"
+                                                :state="row.review"
+                                                :can-review="canReview"
+                                            />
                                             <a v-if="row.print_url" :href="row.print_url" target="_blank" rel="noopener" class="cvr-action-btn" :title="$t('Print')">🖨️</a>
                                             <button v-if="row.user_comment" @click="commentTarget = row" class="cvr-action-btn" :title="$t('User Comment')">💬</button>
                                             <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Odoo Error')">🐞</button>
                                             <button v-if="row.is_fully_integrated_with_odoo" @click="odooRefTarget = row" class="cvr-action-btn" :title="$t('Fully Integrated')">👍</button>
-                                            <Link v-if="canUpdate" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</Link>
+                                            <Link v-if="!row.review?.is_reviewed && canUpdate" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</Link>
                                             <!--
                                                 Copy — opens the CREATE form already filled in from
                                                 this row, ready to save as a new record. Gated by
@@ -252,7 +273,7 @@ const odooErrorTarget = ref(null);
                                                 never changes the row it was opened from.
                                             -->
                                             <Link v-if="canCreate && row.copy_url" :href="row.copy_url" class="cvr-action-btn" :title="$t('Copy')">📋</Link>
-                                            <button v-if="canDelete" @click="confirmDelete(row)" class="cvr-action-btn" :title="$t('Delete')">🗑️</button>
+                                            <button v-if="!row.review?.is_reviewed && canDelete" @click="confirmDelete(row)" class="cvr-action-btn" :title="$t('Delete')">🗑️</button>
                                         </div>
                                     </td>
                                 </tr>

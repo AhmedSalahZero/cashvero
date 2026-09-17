@@ -13,9 +13,12 @@ import { ref, watch } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import RecordLogButton from '@/Components/RecordLogButton.vue';
+import ReviewButton from '@/Components/ReviewButton.vue';
 import { mapAccountNumberOptions, accountNumberOption } from '@/composables/useAccountNumberOptions';
 
 const props = defineProps({
+    canReview: { type: Boolean, default: false },
+    reviewFilter: { type: String, default: '' },
     /* Link to this screen's written guide — see App\Support\Instructions\PageInstructions. */
     instructionsUrl: String,
     company: Object,
@@ -28,6 +31,15 @@ const props = defineProps({
     interestDestinations: Array, // [{value, title}]
     urls: Object,
 });
+
+/* فلتر حالة المراجعة . الصفحة دي مالهاش فلاتر تانية ، فالتغيير بيروح
+   للسيرفر على طول — الفلترة نفسها بتتم على آخر تسوية لكل اعتماد */
+const reviewState = ref(props.reviewFilter || '');
+
+function applyReviewFilter() {
+    router.get(window.location.pathname, { review: reviewState.value || undefined },
+        { preserveState: true, preserveScroll: true, replace: true });
+}
 
 function goToPage(url) {
     if (!url) return;
@@ -140,6 +152,19 @@ function confirmReset() {
                 {{ $t('Bank-financed Letters of Credit already paid to the supplier, waiting to be settled with the bank. To remove one from this list entirely, revert the LC back to Running from the LC Issuance screen.') }}
             </p>
 
+            <!-- فلتر حالة المراجعة . الصفحة مالهاش فلاتر تانية ، فهو
+                 لوحده فوق الجدول -->
+            <div class="flex items-end gap-3 flex-wrap mb-4">
+                <div>
+                    <label class="cvr-form-label">{{ $t('Review state') }}</label>
+                    <select v-model="reviewState" @change="applyReviewFilter" class="cvr-input px-3 py-2 rounded text-sm">
+                        <option value="">{{ $t('All') }}</option>
+                        <option value="reviewed">{{ $t('Reviewed') }}</option>
+                        <option value="not_reviewed">{{ $t('Not reviewed') }}</option>
+                    </select>
+                </div>
+            </div>
+
             <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
                 <table class="min-w-full text-sm">
                     <thead class="cvr-table-head">
@@ -175,8 +200,15 @@ function confirmReset() {
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-1">
                                     <RecordLogButton subject="LetterOfCreditIssuance" :id="row.letter_of_credit_issuance_id" :company-id="company.id" />
+                                    <ReviewButton v-if="row.review_id"
+                                        movement="lc-settlement-transfer"
+                                        :id="row.review_id"
+                                        :company-id="company.id"
+                                        :state="row.review"
+                                        :can-review="canReview"
+                                    />
                                     <button v-if="canSettle && !row.is_settled" @click="openSettle(row)" class="cvr-btn-primary px-3 py-1.5 rounded text-xs whitespace-nowrap">{{ $t('Mark As Settle') }}</button>
-                                    <Link v-if="canUpdate && row.edit_url" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit Most Recent Settlement')">✏️</Link>
+                                    <Link v-if="!row.review?.is_reviewed && canUpdate && row.edit_url" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit Most Recent Settlement')">✏️</Link>
                                     <button v-if="canReset && row.settlements_count > 0" @click="resetTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Reset — undo every settlement made so far')">↺</button>
                                 </div>
                             </td>

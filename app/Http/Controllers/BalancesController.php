@@ -691,6 +691,23 @@ class BalancesController
 			$invoiceBalanceStdClass->invoices_amount = $invoiceBalanceStdClass->net_balance;
 			$invoiceBalanceStdClass->down_payment_amount = 0;
 		}
+		/**
+		 * ⚠️ تحسين أداء : الأسماء دي كانت بتتجاب بـ Partner::find() جوه
+		 * * حلقتين متداخلتين — استعلام لكل (رصيد فاتورة × دفعة مقدمة) .
+		 * * استعلام واحد هنا بيغطّي اللي جاي كله .
+		 */
+		$downPaymentPartnerIds = array_values(array_unique(array_filter(
+			array_map(fn ($row) => $row->{$clientIdColumnName} ?? null, $downPayments)
+		)));
+
+		$missingNames = array_diff($downPaymentPartnerIds, array_keys($partnerNames));
+
+		if ($missingNames !== []) {
+			foreach (Partner::whereIn('id', $missingNames)->get(['id', 'name']) as $partner) {
+				$partnerNames[$partner->id] = $partner->name;
+			}
+		}
+
 		$hasInvoiceBalances = count($invoicesBalances);
 		foreach($hasInvoiceBalances ? $invoicesBalances : [null] as $invoiceBalanceStdClass ){
 			
@@ -705,7 +722,8 @@ class BalancesController
 					 */
 					$invoiceCurrency = null ;
 					$invoicePartnerId = $downPaymentStdClass->{$clientIdColumnName};
-					$invoicePartnerName = optional(Partner::find($invoicePartnerId))->getName();
+					// من الخريطة المحمّلة فوق ، مش استعلام لكل دورة
+					$invoicePartnerName = $partnerNames[$invoicePartnerId] ?? null;
 					$addNewRecord = true;
 				}
 				
@@ -784,7 +802,8 @@ class BalancesController
 			if(isset($invoicedPairs[$partnerId.'|'.$downPaymentStdClass->currency])){
 				continue;
 			}
-			$partnerName = $partnerNames[$partnerId] ?? optional(Partner::find($partnerId))->getName();
+			// الخريطة بقت كاملة قبل ما تتبعت هنا ، فمفيش استعلام احتياطي
+			$partnerName = $partnerNames[$partnerId] ?? null;
 			$rows[] = json_decode(json_encode([
 				$clientIdColumnName=>$partnerId,
 				$clientNameColumnName=>$partnerName,

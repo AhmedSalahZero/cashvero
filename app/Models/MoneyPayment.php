@@ -13,7 +13,6 @@ use App\Traits\Models\HasCreditStatements;
 use App\Traits\Models\HasForeignExchangeGainOrLoss;
 use App\Traits\Models\HasNonCustomerOrSupplier;
 use App\Traits\Models\HasPartnerStatement;
-use App\Traits\Models\HasReviewedBy;
 use App\Traits\Models\HasUserComment;
 use App\Traits\Models\IsMoney;
 use App\Traits\Models\IsMoneyOut;
@@ -26,6 +25,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use App\Traits\Models\IsReviewable;
 
 /**
  * @property int $id
@@ -148,10 +148,12 @@ use Illuminate\Support\Facades\DB;
  */
 class MoneyPayment extends Model implements IHaveCreditOverdraftStatement, IHaveMediumTermLoanCreditStatement, IHaveLeasingContractCreditStatement
 {
+    use IsReviewable;
+
     protected $with = [
         // 'payableCheque'
     ];
-    use IsMoney ,IsMoneyOut,HasForeignExchangeGainOrLoss,HasCreditStatements,HasPartnerStatement,HasReviewedBy , HasUserComment,HasNonCustomerOrSupplier;
+    use IsMoney ,IsMoneyOut,HasForeignExchangeGainOrLoss,HasCreditStatements,HasPartnerStatement,HasUserComment,HasNonCustomerOrSupplier;
     const CASH_PAYMENT  = 'cash_payment';
     const PAYABLE_CHEQUE  = 'payable_cheque';
     const OUTGOING_TRANSFER  = 'outgoing-transfer';

@@ -3,8 +3,11 @@ import { ref, computed, watch } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import RecordLogButton from '@/Components/RecordLogButton.vue';
+import ReviewButton from '@/Components/ReviewButton.vue';
 
 const props = defineProps({
+    canReview: { type: Boolean, default: false },
+    reviewFilter: { type: String, default: '' },
     /* Link to this screen's written guide — see App\Support\Instructions\PageInstructions. */
     instructionsUrl: String,
     company: Object,
@@ -21,6 +24,10 @@ const props = defineProps({
     customersWithContracts: Array, // [{id, name, contracts: [{id, name, code, amount}]}]
     navUrls: Object,
 });
+
+/* فلتر حالة المراجعة — بيتبعت مع باراميترات التاب عشان
+   الـ AJAX يجيب الصفوف المفلترة من السيرفر */
+const reviewState = ref(props.reviewFilter || '');
 
 /**
  * Each tab is now its own separate Inertia prop server-side, and rows
@@ -47,7 +54,7 @@ const currentTab = computed(() => tabs.value[activeTab.value] || { rows: { data:
 const searchField = ref('transaction_name');
 const searchValue = ref('');
 function applySearch() {
-    router.get(route_view_url(), { active: activeTab.value, field: searchField.value, value: searchValue.value }, { preserveState: true, only: [TAB_PROP_NAMES[activeTab.value]] });
+    router.get(route_view_url(), { active: activeTab.value, field: searchField.value, value: searchValue.value, review: reviewState.value || undefined }, { preserveState: true, only: [TAB_PROP_NAMES[activeTab.value]] });
 }
 function route_view_url() {
     return window.location.pathname;
@@ -285,6 +292,12 @@ const commentTarget = ref(null);
                     <span class="cvr-text-muted text-sm">🔍</span>
                     <input v-model="searchValue" @keyup.enter="applySearch" type="text" :placeholder="$t('Search...')" class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
                 </div>
+                <!-- فلتر حالة المراجعة -->
+                <select v-model="reviewState" @change="applySearch" class="cvr-input px-3 py-2 rounded text-sm">
+                    <option value="">{{ $t('Review state') }}: {{ $t('All') }}</option>
+                    <option value="reviewed">{{ $t('Reviewed') }}</option>
+                    <option value="not_reviewed">{{ $t('Not reviewed') }}</option>
+                </select>
                 <button @click="applySearch" class="cvr-btn-secondary px-3 py-2 rounded border text-sm">{{ $t('Search') }}</button>
             </div>
 
@@ -323,10 +336,17 @@ const commentTarget = ref(null);
                             <td class="px-3 py-3">
                                 <div class="flex items-center gap-1.5 flex-wrap">
                                     <RecordLogButton subject="LetterOfCreditIssuance" :id="row.id" :company-id="company.id" />
+                                    <ReviewButton
+                                        movement="letter-of-credit-issuance"
+                                        :id="row.id"
+                                        :company-id="company.id"
+                                        :state="row.review"
+                                        :can-review="canReview"
+                                    />
                                     <button v-if="row.has_comment" @click="commentTarget = row" class="cvr-action-btn" :title="$t('User Comment')">💬</button>
-                                    <button v-if="permissions.canUpdate && row.is_running" @click="openExpenses(row)" class="cvr-action-btn" :title="$t('Expenses')">💵</button>
-                                    <button v-if="permissions.canSettle" @click="openPay(row)" class="cvr-action-btn" :title="$t('Apply Payment')">💰</button>
-                                    <button v-if="permissions.canSettle && row.is_paid" @click="openBackToRunning(row)" class="cvr-action-btn" :title="$t('Back To Running')">↩️</button>
+                                    <button v-if="!row.review?.is_reviewed && permissions.canUpdate && row.is_running" @click="openExpenses(row)" class="cvr-action-btn" :title="$t('Expenses')">💵</button>
+                                    <button v-if="!row.review?.is_reviewed && permissions.canSettle" @click="openPay(row)" class="cvr-action-btn" :title="$t('Apply Payment')">💰</button>
+                                    <button v-if="!row.review?.is_reviewed && permissions.canSettle && row.is_paid" @click="openBackToRunning(row)" class="cvr-action-btn" :title="$t('Back To Running')">↩️</button>
 
                                     <!-- Client-requested (2026-08-11): once
                                          an LC is paid, Edit and Delete no

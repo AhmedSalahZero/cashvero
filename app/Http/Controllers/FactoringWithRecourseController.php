@@ -72,12 +72,17 @@ class FactoringWithRecourseController
             ->where('recourse_type', FactoringTransaction::WITH_RECOURSE);
 
         $transactions = $this->applyFactoringFilter($request, $query)
+            // فلتر حالة المراجعة — سكوب مشترك في IsReviewable
+            ->reviewState($request->get('review'))
             ->paginate(self::ROWS_PER_PAGE)
             ->withQueryString();
 
         $searchFields = $this->factoringSearchFields();
 
         return Inertia::render('FactoringWithRecourse/Index', [
+            // صلاحية المراجعة — بتقرر يظهر زرار ولا علامة قراءة بس
+            'canReview' => \App\Support\Permissions\PermissionResolver::allows(request()->user(), 'factoring_with_recourse.review'),
+            'reviewFilter' => (string) request()->get('review', ''),
             'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::FACTORING]),
             'company' => ['id' => $company->id, 'name' => $company->getName()],
             'searchFields' => $searchFields,
@@ -99,6 +104,8 @@ class FactoringWithRecourseController
             'canDelete' => hasAuthFor('factoring_with_recourse.delete'),
             'transactions' => $transactions->through(fn (FactoringTransaction $t) => [
                 'id' => $t->id,
+                // حالة المراجعة — شوف App\Traits\Models\IsReviewable
+                'review' => $t->reviewPayload(),
                 'factoring_date_formatted' => $t->getFactoringDateFormatted(),
                 'factoring_company_name' => $t->factoringCompany?->getName(),
                 'customer_name' => $t->customer?->getName(),

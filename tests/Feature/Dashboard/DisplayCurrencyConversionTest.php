@@ -125,18 +125,34 @@ class DisplayCurrencyConversionTest extends TestCase
         );
     }
 
+    /**
+     * * "Forecasted Project Payment" كان بيحسب التحويل بنفسه جوه
+     * * SupplierInvoice. بقى بينادي computeForecastedProjectCollection()
+     * * المشتركة (نفس اللي بيستخدمها صف التحصيل) ، فبيورث منها تحويل
+     * * عملة العرض — و ده اللي التست ده بيحرسه دلوقتي: إن الصف ماشي
+     * * على المسار المشترك ، و إن المسار ده لسه بيحترم تبويب العملة.
+     */
     public function test_the_supplier_forecast_uses_the_display_currency_rate(): void
     {
         $model = file_get_contents(app_path('Models/SupplierInvoice.php'));
 
         $this->assertStringContainsString(
-            'ForeignExchangeRate::getExchangeRateForDisplayCurrency($contract->getCurrency(),$currency,',
+            'computeForecastedProjectCollection(',
             $model,
-            'Forecasted Project Payment has the same bug and the same fix.'
+            'Forecasted Project Payment must go through the shared calculation.'
         );
         $this->assertStringNotContainsString(
             'ForeignExchangeRate::getExchangeRateAtOrOne($contract->getCurrency()',
-            $model
+            $model,
+            'The unconditional conversion is the bug; it must not come back.'
+        );
+
+        $trait = file_get_contents(app_path('Traits/Models/HasForecastedProjectCollection.php'));
+
+        $this->assertStringContainsString(
+            'ForeignExchangeRate::getExchangeRateForDisplayCurrency($contract->getCurrency(), $currency,',
+            $trait,
+            'and the shared calculation must still respect the tab currency.'
         );
     }
 

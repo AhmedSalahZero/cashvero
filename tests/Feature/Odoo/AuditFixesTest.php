@@ -205,18 +205,52 @@ class AuditFixesTest extends TestCase
             .implode("\n  ", $missing));
     }
 
+    /**
+     * * الفحص ده بقى بيسأل أودو "الأرقام دي لسه موجودة؟" بدل ما يجيب
+     * * مدى كامل و يطرحه ، فالشرط بقى أقوى: مفيش read خالص — الـ search
+     * * لوحده بيرجّع الأرقام
+     */
     public function test_the_deletion_sweep_reads_ids_only(): void
     {
         $src = file_get_contents(app_path('Services/Api/OdooService.php'));
 
-        $start = strpos($src, 'function syncDeletedInvoices');
-        $this->assertNotFalse($start);
+        $sweep = $this->methodBody($src, 'function syncDeletedInvoices');
+        $this->assertNotSame('', $sweep);
 
-        $this->assertMatchesRegularExpression(
-            "/getInvoices\(\\\$startDate,\s*\\\$endDate,\s*\['id'\]\)/",
-            substr($src, $start, 1200),
-            'It only compares ids, so it must not pull whole invoice rows.'
+        $this->assertStringContainsString(
+            'existingInvoiceIdsInOdoo(',
+            $sweep,
+            'It only compares ids, so it asks Odoo which ids still exist instead of pulling rows.'
         );
+        $this->assertStringNotContainsString(
+            "'read'",
+            $sweep,
+            'It must not read invoice rows.'
+        );
+
+        $check = $this->methodBody($src, 'function existingInvoiceIdsInOdoo');
+        $this->assertNotSame('', $check);
+
+        $this->assertStringContainsString("'search'", $check, 'A search returns the ids on its own.');
+        $this->assertStringNotContainsString("'read'", $check);
+    }
+
+    /**
+     * * بتقص جسم الدالة لحد أول تعريف دالة بعدها — بيشتغل على المسافات
+     * * و على التاب
+     */
+    private function methodBody(string $source, string $signature): string
+    {
+        $start = strpos($source, $signature);
+
+        if ($start === false) {
+            return '';
+        }
+
+        $body = substr($source, $start + strlen($signature));
+        $parts = preg_split('/\n[\t ]+(?:public|protected|private) function /', $body);
+
+        return $parts[0];
     }
 
     /* ── M-2: a removed partner must not break the page ───────────── */

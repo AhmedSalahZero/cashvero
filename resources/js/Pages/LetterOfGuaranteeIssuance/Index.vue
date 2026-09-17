@@ -3,8 +3,11 @@ import { ref, computed, watch } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import RecordLogButton from '@/Components/RecordLogButton.vue';
+import ReviewButton from '@/Components/ReviewButton.vue';
 
 const props = defineProps({
+    canReview: { type: Boolean, default: false },
+    reviewFilter: { type: String, default: '' },
     /* Link to this screen's written guide — see App\Support\Instructions\PageInstructions. */
     instructionsUrl: String,
     company: Object,
@@ -19,6 +22,10 @@ const props = defineProps({
     tabs: Object,        // { 'bid-bond': { current_page, last_page, total, loaded, rows: [...] }, ... }
     navUrls: Object,
 });
+
+/* فلتر حالة المراجعة — بيتبعت مع باراميترات التاب عشان
+   الـ AJAX يجيب الصفوف المفلترة من السيرفر */
+const reviewState = ref(props.reviewFilter || '');
 
 /*
  * ✅ PERFORMANCE FIX — only the active tab is ever queried on initial
@@ -73,6 +80,7 @@ function tabParams(type, extra) {
     const dates = props.filterDates?.[type] || {};
     const params = new URLSearchParams();
     const all = {
+        review: reviewState.value,
         type,
         startDate: dates.startDate,
         endDate: dates.endDate,
@@ -256,6 +264,12 @@ const odooErrorTarget = ref(null);
                     <span class="cvr-text-muted text-sm">🔍</span>
                     <input v-model="searchValue" @keyup.enter="applySearch" type="text" :placeholder="$t('Search...')" class="bg-transparent outline-none text-sm w-full cvr-text-primary" />
                 </div>
+                <!-- فلتر حالة المراجعة -->
+                <select v-model="reviewState" @change="applySearch" class="cvr-input px-3 py-2 rounded text-sm">
+                    <option value="">{{ $t('Review state') }}: {{ $t('All') }}</option>
+                    <option value="reviewed">{{ $t('Reviewed') }}</option>
+                    <option value="not_reviewed">{{ $t('Not reviewed') }}</option>
+                </select>
                 <button @click="applySearch" class="cvr-btn-secondary px-3 py-2 rounded border text-sm">{{ $t('Search') }}</button>
             </div>
 
@@ -300,14 +314,21 @@ const odooErrorTarget = ref(null);
                             <td class="px-3 py-3">
                                 <div class="flex items-center gap-1.5 flex-wrap">
                                     <RecordLogButton subject="LetterOfGuaranteeIssuance" :id="row.id" :company-id="company.id" />
+                                    <ReviewButton
+                                        movement="letter-of-guarantee-issuance"
+                                        :id="row.id"
+                                        :company-id="company.id"
+                                        :state="row.review"
+                                        :can-review="canReview"
+                                    />
                                     <button v-if="row.has_comment" @click="commentTarget = row" class="cvr-action-btn" :title="$t('User Comment')">💬</button>
                                     <button v-if="row.fully_integrated_with_odoo" @click="odooTarget = row" class="cvr-action-btn" :title="$t('Odoo References')">👍</button>
                                     <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn" style="color: #EF4444;" :title="$t('Odoo Error')">🐛</button>
-                                    <Link v-if="permissions.canRenew" :href="row.renewal_date_url" class="cvr-action-btn" :title="$t('Renewal')">🔄</Link>
+                                    <Link v-if="!row.review?.is_reviewed && permissions.canRenew" :href="row.renewal_date_url" class="cvr-action-btn" :title="$t('Renewal')">🔄</Link>
 
-                                    <button v-if="permissions.canCancel && (row.is_running || row.is_expired)" @click="openCancel(row)" class="cvr-action-btn" :title="$t('Cancel Letter')">🚫</button>
-                                    <button v-if="permissions.canUpdate && row.is_running && row.is_advanced_payment" @click="openAdvancedPayment(row)" class="cvr-action-btn" :title="$t('Amount To Be Decreased')">⚖️</button>
-                                    <button v-if="permissions.canCancel && row.is_cancelled" @click="openBackToRunning(row)" class="cvr-action-btn" :title="$t('Back To Running')">↩️</button>
+                                    <button v-if="!row.review?.is_reviewed && permissions.canCancel && (row.is_running || row.is_expired)" @click="openCancel(row)" class="cvr-action-btn" :title="$t('Cancel Letter')">🚫</button>
+                                    <button v-if="!row.review?.is_reviewed && permissions.canUpdate && row.is_running && row.is_advanced_payment" @click="openAdvancedPayment(row)" class="cvr-action-btn" :title="$t('Amount To Be Decreased')">⚖️</button>
+                                    <button v-if="!row.review?.is_reviewed && permissions.canCancel && row.is_cancelled" @click="openBackToRunning(row)" class="cvr-action-btn" :title="$t('Back To Running')">↩️</button>
 
                                     <Link v-if="permissions.canUpdate && !row.is_cancelled" :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">{{ $t('Edit') }}</Link>
                                     <button v-if="permissions.canDelete && !row.is_cancelled" @click="confirmDelete(row)" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">{{ $t('Delete') }}</button>

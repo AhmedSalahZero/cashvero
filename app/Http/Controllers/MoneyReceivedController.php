@@ -240,6 +240,10 @@ class MoneyReceivedController
             // same method the original Blade page called.
             $query = $company->{$definition['query']}($startDate, $endDate, $activeTab);
 
+            // الفلتر لازم يتطبّق قبل العدّ و الجمع ، و إلا الإجماليات تحت
+            // الجدول بتقول رقم و الصفوف بتقول رقم تاني
+            $query = $query->reviewState($request->get('review'));
+
             $totalCount = (clone $query)->count();
             $totalAmount = (clone $query)->sum('received_amount');
 
@@ -278,6 +282,9 @@ class MoneyReceivedController
         $user = auth()->user();
 
         return Inertia::render('MoneyReceived/Index', [
+            // صلاحية المراجعة — بتقرر يظهر زرار ولا علامة قراءة بس
+            'canReview' => \App\Support\Permissions\PermissionResolver::allows(request()->user(), 'money_received.review'),
+            'reviewFilter' => (string) request()->get('review', ''),
             'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::MONEY_RECEIVED_INDEX]),
             'company' => ['id' => $company->id, 'name' => $company->getName()],
             'activeTab' => $activeTab,
@@ -328,6 +335,8 @@ class MoneyReceivedController
 
         $common = [
             'id' => $moneyReceived->id,
+            // حالة المراجعة — شوف App\Traits\Models\IsReviewable
+            'review' => $moneyReceived->reviewPayload(),
             'type_formatted' => $moneyReceived->getMoneyTypeFormatted(),
             'transaction_type' => $moneyReceived->getTransactionType(),
             'transaction_type_formatted' => $this->formatMoneyReceivedTransactionType($moneyReceived->getTransactionType()),
@@ -1049,6 +1058,9 @@ class MoneyReceivedController
  
     public function edit(Company $company, Request $request, MoneyReceived $moneyReceived, $customerInvoiceId = null)
     {
+		// الحركة المراجَعة مقفولة — الرفض من أول الشاشة مش عند الحفظ
+		$moneyReceived->abortIfReviewed();
+
         $isDownPayment = $moneyReceived->isDownPayment();
         $partnerType = $moneyReceived->partner->getCustomerType();
         $customerInvoiceCurrencies = CustomerInvoice::getCurrencies($customerInvoiceId);

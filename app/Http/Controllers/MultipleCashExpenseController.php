@@ -59,6 +59,7 @@ class MultipleCashExpenseController extends Controller
             })
             ->when($request->filled('from'), fn ($q) => $q->whereDate('payment_date', '>=', $request->get('from')))
             ->when($request->filled('to'), fn ($q) => $q->whereDate('payment_date', '<=', $request->get('to')))
+            ->reviewState($request->get('review'))
             ->orderByDesc('id');
 
         $paginator = $query->paginate(25, ['*'], 'page', max(1, (int) $request->get('page', 1)))->withQueryString();
@@ -68,6 +69,9 @@ class MultipleCashExpenseController extends Controller
         $canCreate = PermissionResolver::allows($request->user(), 'multiple_cash_expense.create');
 
         return Inertia::render('MultipleCashExpense/Index', [
+            // صلاحية المراجعة — بتقرر يظهر زرار ولا علامة قراءة بس
+            'canReview' => \App\Support\Permissions\PermissionResolver::allows(request()->user(), 'multiple_cash_expense.review'),
+            'reviewFilter' => (string) request()->get('review', ''),
             'company' => ['id' => $company->id, 'name' => $company->getName()],
             'canCreate' => $canCreate,
             'canUpdate' => $canUpdate,
@@ -79,6 +83,8 @@ class MultipleCashExpenseController extends Controller
             ],
             'rows' => collect($paginator->items())->map(fn (MultipleCashExpense $expense) => [
                 'id' => $expense->id,
+                // حالة المراجعة — شوف App\Traits\Models\IsReviewable
+                'review' => $expense->reviewPayload(),
                 'payment_date' => $expense->getPaymentDateFormatted(),
                 'type' => $expense->getTypeFormatted(),
                 'currency' => $expense->getCurrency(),
@@ -119,6 +125,9 @@ class MultipleCashExpenseController extends Controller
 
     public function edit(Company $company, MultipleCashExpense $multipleCashExpense)
     {
+		// الحركة المراجَعة مقفولة — الرفض من أول الشاشة مش عند الحفظ
+		$multipleCashExpense->abortIfReviewed();
+
         $this->ensureAvailable($company);
         abort_unless($multipleCashExpense->company_id === $company->id, 404);
 

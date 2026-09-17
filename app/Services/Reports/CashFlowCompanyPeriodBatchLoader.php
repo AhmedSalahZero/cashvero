@@ -681,21 +681,23 @@ final class CashFlowCompanyPeriodBatchLoader
         // issuance row (debit>0) and a cancellation row (credit>0) with the
         // same effective date — a confusing zero-value duplicate per LG in
         // the breakdown popup.
-        $coverQuery = DB::table('letter_of_guarantee_cash_cover_statements')
-            ->where('letter_of_guarantee_cash_cover_statements.company_id', $companyId)
-            ->where('letter_of_guarantee_cash_cover_statements.type', LetterOfGuaranteeIssuance::FOR_CANCELLATION)
-            ->join('letter_of_guarantee_issuances', 'letter_of_guarantee_issuances.id', '=', 'letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id')
-            ->join('partners', 'partners.id', '=', 'letter_of_guarantee_issuances.partner_id');
-        $coverQuery = LgCashCoverEffectiveDate::joinTo($coverQuery);
-        $effectiveDateSql = LgCashCoverEffectiveDate::sql();
-        $coverRows = $coverQuery
-            ->whereBetween(DB::raw($effectiveDateSql), [$periodStart, $periodEnd])
-            ->where('letter_of_guarantee_cash_cover_statements.letter_of_guarantee_issuance_id', '>', 0)
-            ->when($reportCurrency !== $mainFunctionalCurrency, function ($q) use ($reportCurrency) {
-                $q->where('letter_of_guarantee_cash_cover_statements.currency', $reportCurrency);
-            })
-            ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, letter_of_guarantee_cash_cover_statements.credit as total_amount, letter_of_guarantee_cash_cover_statements.currency as currency, '.$effectiveDateSql.' as movement_date, partners.name as partner_name, letter_of_guarantee_issuances.lg_code as lg_code')
-            ->get();
+        /**
+         * * كان بيقرا حركات الإلغاء بس ، و الإلغاء حدث ماضي دايما ،
+         * * فالصف كان بيفضل فاضي في أي تقرير بيبص لقدام: الكفر بيخرج
+         * * وقت الإصدار و عمره ما بيرجع. دلوقتي بنقرا من جدول الخطابات
+         * * زي ما الودايع بتعمل ، فالخطاب اللي هينتهي جوّه فترة التقرير
+         * * بيرجّع كفره المتبقي في تاريخ انتهائه.
+         *
+         * * نفس الخدمة اللي تقرير العقد بيستخدمها ، فالتقريرين ما
+         * * يقدروش يختلفوا على نفس الشركة.
+         */
+        $coverRows = LgCashCoverRefunds::between(
+            $companyId,
+            $periodStart,
+            $periodEnd,
+            null,
+            $reportCurrency !== $mainFunctionalCurrency ? $reportCurrency : null,
+        );
 
         foreach ($coverRows as $row) {
             $weekKey = CashFlowWeekBucketer::resolveWeekKey((string) $row->movement_date, $periodsByWeekKey);

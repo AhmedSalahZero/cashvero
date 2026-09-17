@@ -55,6 +55,25 @@ use Illuminate\Support\Facades\DB;
  * any PO the contract directly owns (relevant when $contractId is
  * itself a genuine Supplier contract, e.g. picked directly on the
  * Consolidated Cash Flow report), so no existing behavior changes.
+ *
+ * ── Supplier side / child contracts (contract_scope, added 2026-09) ─
+ * po_allocations is the OPTIONAL, explicit way to attach a PO to a
+ * Customer contract (the "Allocate" modal on a Purchase Order). The
+ * ordinary one is contracts.parent_id: a Supplier contract created
+ * under a Customer contract is that contract's child, and its POs are
+ * what the Customer contract's "Supplier Contracts" popup lists. With
+ * 'contract_scope' => 'supplier_children' the contract query walks
+ * that link instead (children of $contractId), which is how
+ * SupplierInvoice::getForecastedProjectPayment builds the "Forecasted
+ * Project Payment" row. Two notes on that mode:
+ *   - Currency is NOT filtered. A Supplier contract routinely bills in
+ *     a different currency from the Customer contract it hangs under
+ *     (e.g. a EUR supplier under a USD project), and every amount is
+ *     converted to the main functional currency further down anyway.
+ *   - POs already reachable through po_allocations for this same
+ *     Customer contract are skipped ($excludeOrderIds), so a PO that
+ *     happens to be linked BOTH ways is counted once, by the
+ *     po_allocations row, and never twice.
  */
 trait HasForecastedProjectCollection
 {
@@ -70,6 +89,7 @@ trait HasForecastedProjectCollection
      *   down_payment_order_id_column: string, // 'sales_order_id' | 'purchase_order_id'
      *   add_to_cash_inflow_total: bool,       // true for customer (cash IN); false for supplier (cash OUT, not part of inflow total)
      *   paid_or_collected_status: string,      // invoice_status value meaning "fully settled": SupplierInvoice::COLLETED_OR_PAID | CustomerInvoice::COLLETED_OR_PAID
+     *   contract_scope?: 'self'|'supplier_children', // default 'self' — see class docblock
      * }
      * @param  Collection|null  $poAllocations  Supplier side only — PoAllocation rows (each already
      *                                          joined to its purchase_orders + contracts row, so it
@@ -101,6 +121,29 @@ trait HasForecastedProjectCollection
         $downPaymentOrderIdColumn = $config['down_payment_order_id_column'];
         $addToCashInflowTotal = $config['add_to_cash_inflow_total'];
         $paidOrCollectedStatus = $config['paid_or_collected_status'];
+        $contractScope = $config['contract_scope'] ?? 'self';
+        $useSupplierChildren = $contractScope === 'supplier_children';
+
+        // 'supplier_children' only means anything relative to a specific
+        // Customer contract — without one there is no parent to walk down
+        // from, and an unscoped query would sweep in every Supplier
+        // contract in the company.
+        if ($useSupplierChildren && ! $contractId) {
+            return;
+        }
+
+        // A PO reachable BOTH as a child contract's PO and through
+        // po_allocations must be counted once — the allocation row wins
+        // (it carries the allocation_percentage), so skip it here.
+        $excludeOrderIds = [];
+        if ($useSupplierChildren) {
+            $excludeOrderIds = DB::table('po_allocations')
+                ->where('contract_id', $contractId)
+                ->whereNotNull('purchase_order_id')
+                ->pluck('purchase_order_id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+        }
 
         // Company-wide + main functional currency tab -> include contracts in
         // every currency (each gets converted below via its own currency's
@@ -123,11 +166,17 @@ trait HasForecastedProjectCollection
                         ->where('end_date', '>=', $startDate);
                 });
             })
-            ->when(! $showAllCurrenciesConverted, function ($query) use ($currency) {
+            ->when(! $showAllCurrenciesConverted && ! $useSupplierChildren, function ($query) use ($currency) {
+                // Child Supplier contracts bill in their own currency, which
+                // is routinely NOT the parent Customer contract's — filtering
+                // them by it would silently drop them (everything is converted
+                // to the main functional currency further down anyway).
                 $query->where('currency', $currency);
             })
-            ->when($contractId, function ($query) use ($contractId) {
-                $query->where('id', $contractId);
+            ->when($contractId, function ($query) use ($contractId, $useSupplierChildren) {
+                $useSupplierChildren
+                    ? $query->where('parent_id', $contractId)->where('model_type', 'Supplier')
+                    : $query->where('id', $contractId);
             })
             ->with($orderRelation)
             ->get();
@@ -149,6 +198,10 @@ trait HasForecastedProjectCollection
             }
 
             foreach ($contract->{$orderRelation} as $order) {
+                if (in_array((int) $order->id, $excludeOrderIds, true)) {
+                    continue;
+                }
+
                 $orderArr = HArr::getLatestNonZeroExecutionKeys($order->toArray());
                 if (empty($orderArr['end_date'])) {
                     continue;

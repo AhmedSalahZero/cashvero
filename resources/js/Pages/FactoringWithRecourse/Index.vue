@@ -3,6 +3,7 @@ import { ref, reactive, watch, computed } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import RecordLogButton from '@/Components/RecordLogButton.vue';
+import ReviewButton from '@/Components/ReviewButton.vue';
 import { todayDate } from '@/composables/today';
 /* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
    الحماية الحقيقية على السيرفر. */
@@ -11,6 +12,8 @@ import Pagination from '@/Components/Pagination.vue';
 import { mapAccountNumberOptions, accountNumberOption } from '@/composables/useAccountNumberOptions';
 
 const props = defineProps({
+    canReview: { type: Boolean, default: false },
+    reviewFilter: { type: String, default: '' },
     /* Link to this screen's written guide — see App\Support\Instructions\PageInstructions. */
     instructionsUrl: String,
     company: Object,
@@ -41,7 +44,7 @@ const search = reactive({
 });
 
 function applySearch() {
-    router.get(props.urls.index, { ...search, page: 1 }, { preserveState: true, preserveScroll: true, replace: true });
+    router.get(props.urls.index, { ...search, review: reviewState.value || undefined, page: 1 }, { preserveState: true, preserveScroll: true, replace: true });
 }
 
 function resetSearch() {
@@ -207,6 +210,12 @@ function destroyRow() {
                     <label class="cvr-form-label">{{ $t('To') }}</label>
                     <input v-model="search.to" type="date" class="cvr-input px-3 py-2 rounded" />
                 </div>
+                <!-- فلتر حالة المراجعة -->
+                <select v-model="reviewState" @change="applySearch" class="cvr-input px-3 py-2 rounded text-sm">
+                    <option value="">{{ $t('Review state') }}: {{ $t('All') }}</option>
+                    <option value="reviewed">{{ $t('Reviewed') }}</option>
+                    <option value="not_reviewed">{{ $t('Not reviewed') }}</option>
+                </select>
                 <button @click="applySearch" class="cvr-btn-secondary px-3 py-2 rounded border text-sm">{{ $t('Search') }}</button>
                 <button @click="resetSearch" class="cvr-btn-secondary px-3 py-2 rounded border text-sm">{{ $t('Reset') }}</button>
             </div>
@@ -258,12 +267,19 @@ function destroyRow() {
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-1">
                                     <RecordLogButton subject="FactoringTransaction" :id="row.id" :company-id="company.id" />
-                                    <Link v-if="canUpdate && row.is_pending" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</Link>
+                                    <ReviewButton
+                                        movement="factoring-with-recourse"
+                                        :id="row.id"
+                                        :company-id="company.id"
+                                        :state="row.review"
+                                        :can-review="canReview"
+                                    />
+                                    <Link v-if="!row.review?.is_reviewed && canUpdate && row.is_pending" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</Link>
                                     <button v-if="canAct && row.is_pending" @click="openCollect(row)" class="cvr-action-btn" :title="$t('Collect')">✅</button>
                                     <button v-if="canAct && row.is_pending" @click="openReject(row)" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Reject')">✖️</button>
                                     <button v-if="canAct && row.is_collected" @click="revertCollectTarget = row" class="cvr-action-btn" :title="$t('Revert Collection')">↩️</button>
                                     <button v-if="canAct && row.is_rejected" @click="revertRejectTarget = row" class="cvr-action-btn" :title="$t('Revert Rejection')">↩️</button>
-                                    <button v-if="canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Delete')">🗑️</button>
+                                    <button v-if="!row.review?.is_reviewed && canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Delete')">🗑️</button>
                                 </div>
                             </td>
                         </tr>

@@ -130,7 +130,12 @@ function destroyRow() {
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">🏢</div>
                     <div>
                         <p class="cvr-kpi-label">{{ $t('Subsidiary Companies') }}</p>
-                        <p class="cvr-kpi-value">{{ counts[$t('subsidiary-companies')] }}</p>
+                        <!-- ⚠️ المفتاح ده كان ملفوف في دالة الترجمة ، مع إن
+                             مفتاح المصفوفة نفسه حرفي . يعني السطر كان شغال بس
+                             لأن المفتاح مش مترجم — أول ما يتترجم الكارت كان
+                             هيفضى . باقي الكروت بتقرا بالمفتاح مباشرة و دي
+                             بقت زيهم -->
+                        <p class="cvr-kpi-value">{{ counts['subsidiary-companies'] }}</p>
                     </div>
                 </div>
             </div>

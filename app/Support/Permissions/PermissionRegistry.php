@@ -69,6 +69,7 @@ class PermissionRegistry
         'lock' => 'Lock / Unlock',
         'assign_roles' => 'Assign Roles',
         'sync' => 'Sync',
+        'review' => 'Review / Unreview',
     ];
 
     /**
@@ -143,6 +144,12 @@ class PermissionRegistry
             'label' => 'Money Received',
             'group' => 'transactions',
             'actions' => [
+                /**
+                 * * مراجعة الحركة : بتقفلها عن التعديل و الحذف لحد
+                 * * ما تتشال . دور منفصل عن تعديل الحركة نفسها —
+                 * * اللي بيسجّل مش هو اللي بيراجع
+                 */
+                'review' => ['money_received.review'],
                 'view' => ['view money received'],
                 'create' => ['create money received'],
                 'update' => ['update money received'],
@@ -167,6 +174,12 @@ class PermissionRegistry
             'label' => 'Money Payment',
             'group' => 'transactions',
             'actions' => [
+                /**
+                 * * مراجعة الحركة : بتقفلها عن التعديل و الحذف لحد
+                 * * ما تتشال . دور منفصل عن تعديل الحركة نفسها —
+                 * * اللي بيسجّل مش هو اللي بيراجع
+                 */
+                'review' => ['money_payment.review'],
                 'view' => ['view supplier payment'],
                 'create' => ['create supplier payment'],
                 'update' => ['update supplier payment'],
@@ -177,10 +190,17 @@ class PermissionRegistry
                 'export' => ['view supplier payment'],
             ],
         ],
+
         'cash_expense' => [
             'label' => 'Cash Expense',
             'group' => 'transactions',
             'actions' => [
+                /**
+                 * * مراجعة الحركة : بتقفلها عن التعديل و الحذف لحد
+                 * * ما تتشال . دور منفصل عن تعديل الحركة نفسها —
+                 * * اللي بيسجّل مش هو اللي بيراجع
+                 */
+                'review' => ['cash_expense.review'],
                 'view' => ['view cash expenses'],
                 'create' => ['create cash expenses'],
                 'update' => ['update cash expenses'],
@@ -199,6 +219,12 @@ class PermissionRegistry
             'group' => 'transactions',
             'hint' => 'One payment covering several expense lines at once. Each line lands on the cash/bank statement on its own. Not linked to Odoo — the screen is hidden for companies on Odoo.',
             'actions' => [
+                /**
+                 * * مراجعة الحركة : بتقفلها عن التعديل و الحذف لحد
+                 * * ما تتشال . دور منفصل عن تعديل الحركة نفسها —
+                 * * اللي بيسجّل مش هو اللي بيراجع
+                 */
+                'review' => ['multiple_cash_expense.review'],
                 'view' => ['multiple_cash_expense.view'],
                 'create' => ['multiple_cash_expense.create'],
                 'update' => ['multiple_cash_expense.update'],
@@ -209,6 +235,12 @@ class PermissionRegistry
             'label' => 'Internal Money Transfer',
             'group' => 'transactions',
             'actions' => [
+                /**
+                 * * مراجعة الحركة : بتقفلها عن التعديل و الحذف لحد
+                 * * ما تتشال . دور منفصل عن تعديل الحركة نفسها —
+                 * * اللي بيسجّل مش هو اللي بيراجع
+                 */
+                'review' => ['internal_money_transfer.review'],
                 'view' => ['view internal money transfer'],
                 'create' => ['create internal money transfer'],
                 'update' => ['update internal money transfer'],
@@ -219,6 +251,12 @@ class PermissionRegistry
             'label' => 'LC Settlement Internal Transfer',
             'group' => 'transactions',
             'actions' => [
+                /**
+                 * * مراجعة الحركة : بتقفلها عن التعديل و الحذف لحد
+                 * * ما تتشال . دور منفصل عن تعديل الحركة نفسها —
+                 * * اللي بيسجّل مش هو اللي بيراجع
+                 */
+                'review' => ['lc_settlement_transfer.review'],
                 'view' => ['view lc settlement internal transfer'],
                 'create' => ['create lc settlement internal transfer'],
                 'update' => ['update lc settlement internal transfer'],
@@ -229,6 +267,12 @@ class PermissionRegistry
             'label' => 'Buy / Sell Currency',
             'group' => 'transactions',
             'actions' => [
+                /**
+                 * * مراجعة الحركة : بتقفلها عن التعديل و الحذف لحد
+                 * * ما تتشال . دور منفصل عن تعديل الحركة نفسها —
+                 * * اللي بيسجّل مش هو اللي بيراجع
+                 */
+                'review' => ['buy_or_sell_currency.review'],
                 'view' => ['view buy or sell currency'],
                 'create' => ['create buy or sell currency'],
                 'update' => ['update buy or sell currency'],
@@ -239,6 +283,12 @@ class PermissionRegistry
             'label' => 'Foreign Exchange Rate',
             'group' => 'transactions',
             'actions' => [
+                /**
+                 * * مراجعة الحركة : بتقفلها عن التعديل و الحذف لحد
+                 * * ما تتشال . دور منفصل عن تعديل الحركة نفسها —
+                 * * اللي بيسجّل مش هو اللي بيراجع
+                 */
+                'review' => ['foreign_exchange_rate.review'],
                 'view' => ['view foreign exchange rate'],
                 'create' => ['create foreign exchange rate'],
                 'update' => ['update foreign exchange rate'],
@@ -252,6 +302,12 @@ class PermissionRegistry
             'group' => 'factoring',
             // INHERITED: gated by supplier-payment permissions today.
             'actions' => [
+                /**
+                 * * مراجعة الحركة : بتقفلها عن التعديل و الحذف لحد
+                 * * ما تتشال . دور منفصل عن تعديل الحركة نفسها —
+                 * * اللي بيسجّل مش هو اللي بيراجع
+                 */
+                'review' => ['factoring_with_recourse.review'],
                 'view' => ['view supplier payment'],
                 'create' => ['create supplier payment'],
                 'update' => ['update supplier payment'],
@@ -264,6 +320,12 @@ class PermissionRegistry
             'label' => 'Factoring Without Recourse',
             'group' => 'factoring',
             'actions' => [
+                /**
+                 * * مراجعة الحركة : بتقفلها عن التعديل و الحذف لحد
+                 * * ما تتشال . دور منفصل عن تعديل الحركة نفسها —
+                 * * اللي بيسجّل مش هو اللي بيراجع
+                 */
+                'review' => ['factoring_without_recourse.review'],
                 'view' => ['view supplier payment'],
                 'create' => ['create supplier payment'],
                 'update' => ['update supplier payment'],
@@ -598,6 +660,12 @@ class PermissionRegistry
             'label' => 'Letter of Guarantee Issuance',
             'group' => 'lg_lc',
             'actions' => [
+                /**
+                 * * مراجعة الحركة : بتقفلها عن التعديل و الحذف لحد
+                 * * ما تتشال . دور منفصل عن تعديل الحركة نفسها —
+                 * * اللي بيسجّل مش هو اللي بيراجع
+                 */
+                'review' => ['lg_issuance.review'],
                 'view' => ['view letter of guarantee issuance'],
                 'create' => ['create letter of guarantee issuance', 'view letter of guarantee issuance'],
                 'update' => ['update letter of guarantee issuance', 'view letter of guarantee issuance'],
@@ -622,6 +690,12 @@ class PermissionRegistry
             'label' => 'Letter of Credit Issuance',
             'group' => 'lg_lc',
             'actions' => [
+                /**
+                 * * مراجعة الحركة : بتقفلها عن التعديل و الحذف لحد
+                 * * ما تتشال . دور منفصل عن تعديل الحركة نفسها —
+                 * * اللي بيسجّل مش هو اللي بيراجع
+                 */
+                'review' => ['lc_issuance.review'],
                 'view' => ['view letter of credit issuance'],
                 'create' => ['create letter of credit issuance', 'view letter of credit issuance'],
                 'update' => ['update letter of credit issuance', 'view letter of credit issuance'],
@@ -1114,13 +1188,19 @@ class PermissionRegistry
             'actions' => 'all',
             'except_modules' => ['super_admin', 'company'],
         ],
-        // Full day-to-day operation: can create, edit, approve, review,
-        // settle and export everywhere — but cannot delete, cannot bulk
-        // delete, and cannot touch users, roles or companies.
+        // Full day-to-day operation: can create, edit, approve, settle and
+        // export everywhere — but cannot delete, cannot bulk delete, and
+        // cannot touch users, roles or companies.
+        //
+        // ⚠️ 'review' is deliberately NOT here. Marking a movement as
+        // reviewed LOCKS it against edits and deletes, so it is the
+        // company's own sign-off — the client asked for it to default to
+        // the highest role in the company only. An administrator can
+        // still grant it to a manager deliberately.
         'manager' => [
             'modules' => 'all',
             'actions' => [
-                'view', 'create', 'update', 'export', 'import', 'review',
+                'view', 'create', 'update', 'export', 'import',
                 'approve', 'reject', 'cancel', 'settle', 'renew',
                 'manage_rates', 'manage_schedule', 'lock', 'sync',
             ],

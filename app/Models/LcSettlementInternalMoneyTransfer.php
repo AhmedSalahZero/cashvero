@@ -6,6 +6,7 @@ use App\Traits\HasBasicStoreRequest;
 use App\Traits\Models\HasUserComment;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\Models\IsReviewable;
 
 /**
  * * هنا عميلة تحويل الاموال من حساب بنك الي حساب خاص بال
@@ -68,6 +69,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class LcSettlementInternalMoneyTransfer extends Model 
 {
+    use IsReviewable;
+
 	use HasBasicStoreRequest , HasUserComment;
 	const BANK_TO_LETTER_OF_CREDIT = 'bank-to-letter-of-credit';
 	

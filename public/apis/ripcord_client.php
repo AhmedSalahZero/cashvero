@@ -446,6 +446,18 @@ interface Ripcord_Transport
 class Ripcord_Transport_Stream implements Ripcord_Transport 
 {
 	/**
+	 * * المهلة (بالثواني) اللي بننتظرها رد من السيرفر
+	 *
+	 * * من غير timeout صريح في الـ context ، PHP بيقع على
+	 * * default_socket_timeout اللي قيمته ٦٠ ثانية في أغلب السيرفرات.
+	 * * أودو بيحسب الرد بالكامل قبل ما يبعت أول بايت (خصوصا الحقول
+	 * * المحسوبة زي tax_totals و invoice_payments_widget) ، فأي قراءة
+	 * * تقيلة كانت بتتقطع عند الـ ٦٠ بالظبط و ترمي
+	 * * "Could not access <url>" من غير أي سبب واضح.
+	 */
+	const DEFAULT_TIMEOUT = 600;
+
+	/**
 	 * A list of stream context options.
 	 */
 	private $options = array();
@@ -476,16 +488,25 @@ class Ripcord_Transport_Stream implements Ripcord_Transport
 	 */
 	public function post( $url, $request ) 
 	{
-		$options = array_merge( 
-			$this->options, 
-			array( 
-				'http' => array(
-					'method' => "POST",
-					'header' => "Content-Type: text/xml",
-					'content' => $request
-				) 
-			) 
+		/**
+		 * * array_merge على المستوى الأول بيستبدل مفتاح 'http' كله ، فأي
+		 * * خيارات المستدعي بعتها جواه (و منها الـ timeout) كانت بتترمي.
+		 * * بندمج جوه 'http' نفسه: الافتراضي الأول ، بعدين اللي المستدعي
+		 * * بعته ، و في الآخر المفاتيح اللي الطلب لازم يفرضها.
+		 */
+		$httpOptions = ( isset( $this->options['http'] ) && is_array( $this->options['http'] ) )
+			? $this->options['http']
+			: array();
+		$httpOptions = array_merge(
+			array( 'timeout' => self::DEFAULT_TIMEOUT ),
+			$httpOptions,
+			array(
+				'method'  => "POST",
+				'header'  => "Content-Type: text/xml",
+				'content' => $request
+			)
 		);
+		$options = array_merge( $this->options, array( 'http' => $httpOptions ) );
 		$context = stream_context_create( $options );
 		/**
 		 * * بنمسك الوورنينج بنفسنا بدل @ عشان نحتفظ بسببه

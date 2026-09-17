@@ -119,6 +119,8 @@ class LetterOfGuaranteeIssuanceController
                 $source = $lg->getSource();
                 return [
                     'id' => $lg->id,
+                    // حالة المراجعة — شوف App\Traits\Models\IsReviewable
+                    'review' => $lg->reviewPayload(),
                     'transaction_name' => $lg->getTransactionName(),
                     'beneficiary_name' => $lg->getBeneficiaryName(),
                     'source_formatted' => $lg->getSourceFormatted(),
@@ -239,7 +241,8 @@ class LetterOfGuaranteeIssuanceController
 
         $paginationPerPage = GeneralFunctions::getPaginationLimit();
 
-        return $query->paginate($paginationPerPage);
+        // فلتر حالة المراجعة — سكوب مشترك في IsReviewable
+        return $query->reviewState(request()->get('review'))->paginate($paginationPerPage);
     }
 
     public function index(Company $company, Request $request)
@@ -265,6 +268,9 @@ class LetterOfGuaranteeIssuanceController
         }
 
 		return \Inertia\Inertia::render('LetterOfGuaranteeIssuance/Index', [
+            // صلاحية المراجعة — بتقرر يظهر زرار ولا علامة قراءة بس
+            'canReview' => \App\Support\Permissions\PermissionResolver::allows(request()->user(), 'lg_issuance.review'),
+            'reviewFilter' => (string) request()->get('review', ''),
             'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LG_ISSUANCE]),
 			'company' => ['id' => $company->id],
 			'activeLgType' => $activeLgType,

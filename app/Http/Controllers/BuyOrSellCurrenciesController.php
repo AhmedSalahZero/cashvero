@@ -118,6 +118,8 @@ class BuyOrSellCurrenciesController
         $mapRow = function (BuyOrSellCurrency $model) use ($company) {
             return [
                 'id' => $model->id,
+                // حالة المراجعة — شوف App\Traits\Models\IsReviewable
+                'review' => $model->reviewPayload(),
                 'transaction_date_formatted' => $model->getTransactionDateFormatted(),
                 'amount_to_sell_formatted' => $model->getAmountToSellFormatted(),
                 'currency_to_sell' => $model->getCurrencyToSellFormatted(),
@@ -200,6 +202,7 @@ class BuyOrSellCurrenciesController
             $query = $this->applyTypeFilters($query, $request, $type, $currentType, $config['searchable']);
             $paginator = $query
                 ->with(['fromBank.bank', 'fromAccountType', 'toBank.bank', 'toAccountType', 'fromBranch', 'toBranch'])
+                ->reviewState($request->get('review'))
                 ->orderByDesc('transaction_date')
                 ->paginate($paginationPerPage, ['*'], $config['page'])
                 ->withQueryString();
@@ -213,6 +216,9 @@ class BuyOrSellCurrenciesController
         };
 
         return \Inertia\Inertia::render('BuyOrSellCurrencies/Index', [
+            // صلاحية المراجعة — بتقرر يظهر زرار ولا علامة قراءة بس
+            'canReview' => \App\Support\Permissions\PermissionResolver::allows(request()->user(), 'buy_or_sell_currency.review'),
+            'reviewFilter' => (string) request()->get('review', ''),
             'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CURRENCY_EXCHANGE]),
             'company' => ['id' => $company->id],
             'activeTab' => $currentType,
@@ -443,6 +449,9 @@ class BuyOrSellCurrenciesController
 
 	public function edit(Company $company,BuyOrSellCurrency $buyOrSellCurrency)
 	{
+		// الحركة المراجَعة مقفولة — الرفض من أول الشاشة مش عند الحفظ
+		$buyOrSellCurrency->abortIfReviewed();
+
         return \Inertia\Inertia::render('BuyOrSellCurrencies/Form', array_merge($this->buildFormProps($company, $buyOrSellCurrency), ['instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::CURRENCY_EXCHANGE_FORM])]));
     }
 	

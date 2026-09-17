@@ -12,6 +12,7 @@ use App\Support\ShareholderAccounts\AccountNumberLabel;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Traits\Models\IsReviewable;
 
 /**
  * @property int $id
@@ -113,6 +114,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class InternalMoneyTransfer extends Model 
 {
+    use IsReviewable;
+
 	use HasBasicStoreRequest ,HasUserComment,HasCompany,HasOdooMoneyTransfer,HasDeleteOdoo;
 	const BANK_TO_BANK = 'bank-to-bank';
 	const BANK_TO_SAFE = 'bank-to-safe';

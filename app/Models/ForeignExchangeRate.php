@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Services\Api\ExchangeRateService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\Models\IsReviewable;
 
 /**
  * @property int $id
@@ -31,6 +32,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class ForeignExchangeRate extends Model
 {
+    use IsReviewable;
+
 	/** @var array<string, float|int> */
 	private static array $exchangeRateRequestMemo = [];
 

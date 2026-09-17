@@ -281,7 +281,10 @@ function submit() {
                         </label>
 
                         <p v-if="isMonthlyExecuted && contractMonths" class="text-xs cvr-num-green mt-2 ms-6">
-                            {{ contractMonths }} {{ $t('month') }}<span v-if="contractMonths !== 1">{{ $t('s') }}</span> ·
+                            <!-- ⚠️ كان بيلزق "s" على "month" للجمع ، و ده بيطلع
+                                 "شهرs" في العربي . جملة واحدة مترجمة بالعدد
+                                 جواها بتشتغل صح في اللغتين -->
+                            {{ $t(':count months', { count: contractMonths }) }} ·
                             {{ monthlyAmount.toFixed(2) }} {{ form.currency }} {{ $t('per month') }}
                         </p>
                         <p v-else-if="isMonthlyExecuted" class="text-xs cvr-num-amber mt-2 ms-6">

@@ -730,7 +730,17 @@ class CashFlowReportController
 				$periodEnd = HDate::getMinDateOfWeek($datesWithWeeks, $week, $currentYear)['end_date'];
 			} elseif ($currentWeekYear === $lastIndex) {
 				$periodStart = HDate::getMinDateOfWeek($datesWithWeeks, $week, $currentYear)['start_date'];
-				$periodEnd = $requestEndDate ?? $reportEndDate;
+				/**
+				 * * $requestEndDate جاي زي ما الفورم بعته بالظبط ، و فورم
+				 * * تقرير العقد بيستخدم datepicker بيبعت 03/17/2027 مش
+				 * * 2027-03-17. و CashFlowWeekBucketer بيقارن التواريخ
+				 * * كنصوص ، فـ '2027-03-17' <= '03/17/2027' بترجع false —
+				 * * يعني أي حركة تاريخها في آخر عمود كانت بتتسقط من
+				 * * التقرير في صمت. بنطبّع الصيغة قبل ما تتقارن.
+				 */
+				$periodEnd = $requestEndDate
+					? Carbon::make($requestEndDate)->format('Y-m-d')
+					: $reportEndDate;
 			} else {
 				$rangedWeeks = HDate::getMinDateOfWeek($datesWithWeeks, $week, $currentYear);
 				$periodStart = $rangedWeeks['start_date'];
