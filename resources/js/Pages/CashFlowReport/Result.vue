@@ -387,7 +387,19 @@ function openDueInvoiceModal(invoiceType) {
     dueInvoiceModal.value = { invoiceType, rows };
 }
 async function submitDueInvoiceModal() {
-    const rows = dueInvoiceModal.value.rows;
+    /* الصفوف اللي المستخدم اختارلها أسبوع بس .
+
+       المودال بيعرض كل الفواتير المتأخرة ، و اللي مالهاش أسبوع معناها
+       إن المستخدم ما قصدش يظبطها . إرسالها كان بيوصل تاريخ فاضي للسيرفر
+       و العمود NOT NULL ، فالصفحة كانت بتقع بدل ما تحفظ اللي اتظبط . */
+    const rows = dueInvoiceModal.value.rows
+        .filter(row => (dueInvoiceForm[row.id]?.week_start_date || '').trim() !== '');
+
+    if (rows.length === 0) {
+        dueInvoiceModal.value = null;
+        return;
+    }
+
     const payload = {
         cashFlowReportId: props.cashflowReport?.id || 0,
         invoiceType: dueInvoiceModal.value.invoiceType,
@@ -421,7 +433,15 @@ function openLoanInstallmentModal() {
     loanInstallmentModal.value = true;
 }
 async function submitLoanInstallmentModal() {
-    const rows = props.pastDueInstallments || [];
+    /* زي مودال الفواتير : الأقساط اللي ما اتحددلهاش أسبوع ما بتتبعتش */
+    const rows = (props.pastDueInstallments || [])
+        .filter(row => (loanInstallmentForm[row.id]?.week_start_date || '').trim() !== '');
+
+    if (rows.length === 0) {
+        loanInstallmentModal.value = false;
+        return;
+    }
+
     const payload = {
         currency_name: activeTab.value,
         cashflow_report_id: props.cashflowReport?.id || 0,

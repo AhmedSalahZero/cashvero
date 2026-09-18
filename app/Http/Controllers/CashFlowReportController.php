@@ -909,6 +909,24 @@ class CashFlowReportController
 	
 		foreach($request->get('customer_invoice_id',[]) as $customerInvoiceId){
 			$weekStartDate = $request->input('week_start_date.'.$customerInvoiceId);
+
+			/**
+			 * ⚠️ الصف اللي المستخدم ما اختارلوش أسبوع بيتخطّى .
+			 *
+			 * * المودال بيعرض كل الفواتير المتأخرة و بيبعتها كلها ، حتى
+			 * * اللي المستخدم ما لمسهاش . الأسبوع الفاضي بيوصل هنا null
+			 * * (ميدلوير ConvertEmptyStringsToNull بيحوّل '' لـ null) ،
+			 * * و العمود NOT NULL — فالصفحة كانت بتقع بـ ٥٠٠ بدل ما
+			 * * تحفظ اللي المستخدم اختاره فعلا .
+			 *
+			 * * التخطّي هو نية المستخدم : هو قصد يظبط اللي اختارهم بس .
+			 * * الواجهة بقت ما تبعتش الصفوف دي أصلا ، و ده بيحمي السيرفر
+			 * * لو الطلب جه من أي مكان تاني .
+			 */
+			if ($weekStartDate === null || trim((string) $weekStartDate) === '') {
+				continue;
+			}
+
 			$percentage = $request->input('percentage.'.$customerInvoiceId);
 			$invoiceAmount = $request->input('invoice_amount.'.$customerInvoiceId);
 			$amount = $percentage/100  * $invoiceAmount;
@@ -1023,6 +1041,16 @@ class CashFlowReportController
 		// $contractCode = 
 		foreach($request->get('loan_schedule_id',[]) as $loanScheduleId){
 			$weekStartDate = $request->input('week_start_date.'.$loanScheduleId);
+
+			/**
+			 * ⚠️ نفس حالة الفواتير فوق : القسط اللي ما اتحددلوش أسبوع
+			 * * بيتخطّى بدل ما يوقّع الحفظ كله بـ ٥٠٠ .
+			 * * week_start_date هنا NOT NULL برضه .
+			 */
+			if ($weekStartDate === null || trim((string) $weekStartDate) === '') {
+				continue;
+			}
+
 			$percentage = $request->input('percentage.'.$loanScheduleId);
 			$invoiceAmount = $request->input('invoice_amount.'.$loanScheduleId);
 			$amount = $percentage/100  * $invoiceAmount;
