@@ -31,7 +31,7 @@ class MarkContractAsRunningTest extends TestCase
 
     protected function setUpTraits()
     {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', env('DB_DATABASE', 'cashvero'))]);
+        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
         DB::purge('mysql');
 
         return parent::setUpTraits();

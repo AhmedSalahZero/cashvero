@@ -90,7 +90,7 @@ class LeasingPaymentTest extends TestCase
     {
         parent::setUp();
 
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cash-vero')]);
+        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
         DB::purge('mysql');
 
         try {

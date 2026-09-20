@@ -308,6 +308,16 @@ class LgContractRequirementTest extends TestCase
     }
 
     /**
+     * الليبل اتترجم بعد ما التستات دي اتكتبت (بقى {{ $t('Contract') }}
+     * بدل Contract الحرفية) ، فالأنماط هنا بتقبل الشكلين. اللي بيتفحص
+     * هو القاعدة — v-if="contractIsRequired" — مش صياغة الليبل.
+     */
+    private function asteriskPattern(string $label): string
+    {
+        return '/(?:\{\{\s*\$t\(\''.$label.'\'\)\s*\}\}|'.$label.') <span v-if="contractIsRequired">\*<\/span>/';
+    }
+
+    /**
      * All four issuance forms carry the same Contract field, and the
      * server applies the same rule to all four. A form left behind
      * would keep demanding a contract the backend no longer wants —
@@ -322,7 +332,7 @@ class LgContractRequirementTest extends TestCase
         $this->assertStringContainsString('customers_without_contract_requirement', $page,
             "{$form} never reads the exemption list the server sends.");
         $this->assertStringContainsString('const contractIsRequired', $page);
-        $this->assertMatchesRegularExpression('/Contract <span v-if="contractIsRequired">\*<\/span>/', $page,
+        $this->assertMatchesRegularExpression($this->asteriskPattern('Contract'), $page,
             "{$form}'s asterisk must follow the rule, not be hard-coded.");
     }
 
@@ -337,7 +347,7 @@ class LgContractRequirementTest extends TestCase
     {
         $page = file_get_contents(resource_path("js/Pages/LetterOfGuaranteeIssuance/{$form}.vue"));
 
-        $this->assertMatchesRegularExpression('/SO <span v-if="contractIsRequired">\*<\/span>/', $page);
+        $this->assertMatchesRegularExpression($this->asteriskPattern('SO'), $page);
     }
 
     /**
@@ -366,8 +376,9 @@ class LgContractRequirementTest extends TestCase
     {
         $page = file_get_contents(resource_path("js/Pages/LetterOfGuaranteeIssuance/{$form}.vue"));
 
-        $start = strpos($page, 'Contract <span v-if="contractIsRequired">');
-        $this->assertNotFalse($start, "{$form} has no Contract field bound to the rule.");
+        $this->assertSame(1, preg_match($this->asteriskPattern('Contract'), $page, $m, PREG_OFFSET_CAPTURE),
+            "{$form} has no Contract field bound to the rule.");
+        $start = $m[0][1];
 
         $end = strpos($page, '</select>', $start);
         $this->assertNotFalse($end);

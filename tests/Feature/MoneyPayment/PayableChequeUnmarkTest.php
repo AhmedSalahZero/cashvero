@@ -40,7 +40,7 @@ class PayableChequeUnmarkTest extends TestCase
 
     protected function setUpTraits()
     {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cash-vero')]);
+        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
         DB::purge('mysql');
 
         return parent::setUpTraits();

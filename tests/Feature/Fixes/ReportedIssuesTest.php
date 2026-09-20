@@ -113,15 +113,37 @@ class ReportedIssuesTest extends TestCase
         $this->assertStringNotContainsString('">{{ f.label }}</label>', $vue);
     }
 
-    public function test_deduct_is_hidden_on_a_settled_invoice(): void
+    /**
+     * Deduct used to be hidden behind `v-if="invoice.net_balance > 0"`.
+     * That hid the deductions already saved on a settled invoice, so
+     * they could never be reviewed or corrected — and the server rule
+     * it was standing in for was wrong anyway: it compared against
+     * net_balance, which already has those deductions subtracted, so
+     * re-saving the same values was rejected as if they were new.
+     *
+     * The button is deliberately always shown now, and the real limit
+     * lives in UpdateInvoiceDeductionRequest, which adds the saved
+     * deductions back before comparing. This asserts that arrangement
+     * rather than the old markup — otherwise the fix reads as a
+     * regression.
+     */
+    public function test_deduct_stays_available_and_the_limit_is_enforced_server_side(): void
     {
         $vue = file_get_contents(resource_path('js/Pages/Balances/InvoiceReport.vue'));
 
-        $this->assertMatchesRegularExpression(
+        $this->assertDoesNotMatchRegularExpression(
             '/v-if="invoice\.net_balance > 0"[^>]*@click="openDeductModal\(invoice\)"/s',
             $vue,
-            'A deduction only has meaning against an open balance, so the button must not show at zero.'
+            'Hiding Deduct at zero balance also hides the deductions already saved on the invoice.'
         );
+        $this->assertStringContainsString('@click="openDeductModal(invoice)"', $vue);
+
+        $rules = file_get_contents(app_path('Http/Requests/UpdateInvoiceDeductionRequest.php'));
+
+        $this->assertStringContainsString("\$alreadyDeducted = (float) \$invoice->deductions->sum('pivot.amount');", $rules,
+            'The ceiling has to add the saved deductions back, or re-saving them is rejected as new.');
+        $this->assertStringContainsString('$invoice->getNetBalance() + $alreadyDeducted', $rules,
+            'Without the server-side ceiling nothing stops a deduction beyond the balance.');
     }
 
     public function test_settled_invoices_are_not_offered_for_down_payment_settlement(): void

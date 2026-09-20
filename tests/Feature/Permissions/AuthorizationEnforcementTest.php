@@ -47,7 +47,7 @@ class AuthorizationEnforcementTest extends TestCase
     {
         parent::setUp();
 
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cash-vero')]);
+        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
         DB::purge('mysql');
 
         try {
@@ -512,25 +512,34 @@ class AuthorizationEnforcementTest extends TestCase
     }
 
     /**
-     * The "mark as reviewed" feature was removed as unused, and with it
-     * the `confirmed.review` endpoint that wrote `is_reviewed` /
-     * `reviewed_by` from a request-supplied table name. Assert the route
-     * is really gone rather than merely unlinked from the UI — an
-     * endpoint left live with no button is exactly the shape of the
-     * problem this suite exists to catch.
+     * The dangerous `confirmed.review` endpoint — which wrote
+     * `is_reviewed` / `reviewed_by` using a table name taken straight
+     * from the request — must stay gone.
+     *
+     * Movement review itself came back on 2026-09-17 as
+     * `movement.review.update`, which takes the movement type from a
+     * closed list inside the controller instead. So the review
+     * permissions are live again and are checked by RoutePermissionMap;
+     * this test used to assert they were dead, which stopped being true
+     * the day the feature returned.
      */
-    public function test_the_review_endpoint_no_longer_exists(): void
+    public function test_the_unsafe_review_endpoint_stays_gone_and_the_safe_one_is_guarded(): void
     {
         $this->assertFalse(
             \Illuminate\Support\Facades\Route::has('confirmed.review'),
-            'confirmed.review should have been removed with the review feature.'
+            'confirmed.review took its table name from the request — it must not come back.'
+        );
+
+        $this->assertTrue(
+            \Illuminate\Support\Facades\Route::has('movement.review.update'),
+            'the replacement endpoint should exist — if it is gone the permissions below are dead again'
         );
 
         foreach (['money_received.review', 'money_payment.review', 'cash_expense.review'] as $key) {
-            $this->assertFalse(
+            $this->assertTrue(
                 PermissionRegistry::has($key),
-                "{$key} should have been removed with the review feature — a permission "
-                .'nothing checks is exactly the dead-permission problem this system fixed.'
+                "{$key} is mapped to movement.review.update in RoutePermissionMap, so it has to be "
+                .'a declared key — otherwise the route falls through the permission check.'
             );
         }
     }

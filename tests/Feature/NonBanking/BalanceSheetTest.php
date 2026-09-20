@@ -2,30 +2,28 @@
 
 namespace Tests\Feature\NonBanking;
 
-use App\Models\NonBankingService\Study;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Foundation\Testing\WithFaker;
 use Tests\TestCase;
 
+/**
+ * * الملف ده جاي منقول من system.veroanalysisb.com. موديول
+ * * non-banking-service مش جزء من cashvero أصلا :
+ * *
+ * *   - الكلاس App\Models\NonBankingService\Study مش موجود
+ * *   - و الراوت non_banking_services.balance_sheet.view مش مسجّل
+ * *
+ * * فالنسخة القديمة كانت بترمي "Class not found" في كل تشغيل ، يعني فشل
+ * * دايم مالوش علاقة بأي كود هنا — و ده بالظبط اللي بيخلي السويت الحمرا
+ * * تتجاهل. بنوضّح السبب بدل ما نسيبه أحمر.
+ *
+ * * لو الموديول مش هيتضاف لـ cashvero ، الملف ده يتحذف.
+ */
 class BalanceSheetTest extends TestCase
 {
-    /**
-     * A basic feature test example.
-     *
-     * @return void
-     */
-    public function test_it_can_display_balance_sheet_page()
+    public function test_the_non_banking_module_is_not_part_of_this_application(): void
     {
-		$study = Study::find(109);
-		$company = $study->company;
-        $response = $this->get(route('non_banking_services.balance_sheet.view', [
-            'company' => $company->id,
-            'study' => $study->id,
-        ]));
+        $this->assertFalse(class_exists(\App\Models\NonBankingService\Study::class),
+            'لو الموديول اتضاف ، الاختبار ده يترجع لنسخة system.veroanalysisb.com بدل ما يتخطّى');
 
-        $response->assertStatus(200);
-        $response->assertViewIs('non_banking_services.balance_sheet.view');
-        $response->assertViewHas('company');
-        $response->assertViewHas('study');
+        $this->markTestSkipped('non-banking-service is not part of cashvero — this file came over from the other system.');
     }
 }

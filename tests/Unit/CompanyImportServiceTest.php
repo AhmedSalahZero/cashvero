@@ -21,7 +21,7 @@ class CompanyImportServiceTest extends TestCase
         parent::setUp();
 
         // Mirror PaginationSmokeTest: phpunit.xml points at a missing test DB.
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cash-vero')]);
+        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
         DB::purge('mysql');
         DB::reconnect('mysql');
     }
