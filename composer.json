@@ -23,6 +23,7 @@
         "php-ai/php-ml": "^0.10.0",
         "php-flasher/flasher-toastr-laravel": "^2.6",
         "picqer/php-barcode-generator": "*",
+        "pusher/pusher-php-server": "^7.3",
         "sentry/sentry-laravel": "^4.26",
         "simplesoftwareio/simple-qrcode": "*",
         "spatie/laravel-medialibrary": "^11.0",

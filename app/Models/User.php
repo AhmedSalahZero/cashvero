@@ -111,6 +111,18 @@ class User extends Authenticatable implements HasMedia
     {
         return $this->belongsToMany(Company::class, 'companies_users');
     }
+
+    /**
+     * Every chat / support conversation this user is part of. See
+     * App\Models\Conversation for how direct chat and "Super Message"
+     * support tickets share this same table.
+     */
+    public function conversations(): BelongsToMany
+    {
+        return $this->belongsToMany(Conversation::class, 'conversation_participants')
+            ->withPivot('last_read_at')
+            ->withTimestamps();
+    }
 	public function hasAccessToSystems(array  $systemNames):bool{
 			if($this->isSuperAdmin()){
 				return true ;

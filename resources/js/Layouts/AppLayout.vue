@@ -46,7 +46,7 @@ const menu = computed(() => page.props.sidebarMenu ?? {});
 const notificationMenu = computed(() => page.props.notificationMenu ?? []);
 
 const sectionKeys = computed(() =>
-    Object.keys(menu.value).filter(k => k !== 'home')
+    Object.keys(menu.value).filter(k => k !== 'home' && k !== 'messages')
 );
 
 /* ── Sidebar collapse (whole sidebar width) ──────────────────────── */
@@ -289,6 +289,25 @@ if (page.flash?.success || page.flash?.error) {
                 >
                     <NavIcon :name="menu.home.icon" :size="18" />
                     <span v-if="isMobileNav || sidebarExpanded" class="truncate">{{ $t('Home') }}</span>
+                </Link>
+
+                <!-- MESSAGES (chat + Super Message support tickets) -->
+                <Link
+                    v-if="menu.messages?.show"
+                    :href="menu.messages.link"
+                    :title="!(isMobileNav || sidebarExpanded) ? $t('Messages') : ''"
+                    class="cvr-nav-item flex items-center gap-2 py-2 rounded text-sm mb-2 relative"
+                    :class="[(isMobileNav || sidebarExpanded) ? 'px-3' : 'px-0 justify-center', { 'cvr-nav-item-active': isActiveLink(menu.messages.link) }]"
+                >
+                    <span class="relative inline-flex">
+                        <NavIcon :name="menu.messages.icon" :size="18" />
+                        <span
+                            v-if="menu.messages.badge"
+                            class="absolute -top-1.5 -end-2 min-w-[16px] h-4 px-1 rounded-full text-[10px] leading-4 text-center font-bold"
+                            style="background: var(--cvr-amber-bright); color: var(--cvr-bg);"
+                        >{{ menu.messages.badge > 9 ? '9+' : menu.messages.badge }}</span>
+                    </span>
+                    <span v-if="isMobileNav || sidebarExpanded" class="truncate">{{ $t('Messages') }}</span>
                 </Link>
 
                 <!-- 12 collapsible sections -->

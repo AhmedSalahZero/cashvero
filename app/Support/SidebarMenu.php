@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Company;
+use App\Models\Conversation;
 use App\Models\User;
 
 /**
@@ -47,9 +48,15 @@ class SidebarMenu
             return [];
         }
 
+        // Unread chat/support-ticket count, shown as a badge on the
+        // "Messages" link. Not company-scoped, so it's computed once here
+        // and reused by both branches below.
+        $unreadMessages = Conversation::unreadCountFor($user);
+
         if (! $company) {
             return [
                 'home' => self::item(__('Home'), $user->isSuperAdmin(), route('home'), icon: 'home'),
+                'messages' => self::item(__('Messages'), true, route('messages.index'), inertia: true, icon: 'message-circle', badge: $unreadMessages ?: null),
             ];
         }
 
@@ -58,6 +65,7 @@ class SidebarMenu
 
         return [
             'home' => self::item(__('Home'), $user->isSuperAdmin(), route('home'), icon: 'home'),
+            'messages' => self::item(__('Messages'), true, route('messages.index', ['company' => $companyId]), inertia: true, icon: 'message-circle', badge: $unreadMessages ?: null),
 
             // ✅ Dashboard tabs migrated to Inertia/Vue — flipped to inertia: true
             // per the "flip one flag, no sidebar restructuring" convention.
@@ -215,7 +223,7 @@ class SidebarMenu
         ];
     }
 
-    protected static function item(string $title, bool $show, string $link, bool $inertia = false, string $icon = 'circle'): array
+    protected static function item(string $title, bool $show, string $link, bool $inertia = false, string $icon = 'circle', ?int $badge = null): array
     {
         return [
             'type' => 'link',
@@ -224,6 +232,7 @@ class SidebarMenu
             'link' => $link,
             'inertia' => $inertia,
             'icon' => $icon,
+            'badge' => $badge,
         ];
     }
 

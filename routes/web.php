@@ -55,6 +55,24 @@ Route::group(
             Route::post('toggle-theme', 'ProfileController@toggleTheme')->name('theme.toggle');
 
             /**
+             * Messaging: user-to-user chat + "Super Message" support
+             * tickets. Deliberately NOT under the {company} prefix — a
+             * user's inbox and their ability to reach Super Admin support
+             * shouldn't depend on which company they currently have open.
+             * See app/Http/Controllers/MessagingController.php.
+             */
+            Route::group(['prefix' => 'messages', 'as' => 'messages.'], function () {
+                Route::get('/', 'MessagingController@index')->name('index');
+                Route::get('/{conversation}', 'MessagingController@show')->name('show');
+                Route::post('/start', 'MessagingController@startDirect')->name('start');
+                Route::post('/support', 'MessagingController@startSupport')->name('support.start');
+                Route::post('/{conversation}/send', 'MessagingController@send')->name('send');
+                Route::delete('/{conversation}/messages/{message}', 'MessagingController@deleteMessage')->name('delete');
+                Route::post('/{conversation}/read', 'MessagingController@markRead')->name('read');
+                Route::patch('/{conversation}/status', 'MessagingController@updateStatus')->name('status');
+            });
+
+            /**
              * ⚠️ Verb before {user}, never `user-permissions/{user}/…`.
              *
              * canViewCurrentCompany reads Request()->segment(2) and treats
