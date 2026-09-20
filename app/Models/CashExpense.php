@@ -838,13 +838,17 @@ class CashExpense extends Model  implements IHaveCreditOverdraftStatement
 	 * CashExpense is always "money out", so no MoneyReceived branch is
 	 * needed here — it always resolves to its own delivery/payment date.
 	 */
+	/**
+	 * * payment_date عمود nullable و التوقيع :string — من غير الكاست
+	 * * ده مصروف من غير تاريخ كان بيرمي TypeError بدل ما يرجّع قيمة
+	 */
 	public function getReceivingOrPaymentMoneyDate(): string
 	{
-		return $this->getDeliveryDate();
+		return (string) ($this->getDeliveryDate() ?? '');
 	}
 	public function getReceivingOrPaymentMoneyDateFormatted(): string
 	{
-		return $this->getPaymentDateFormatted();
+		return (string) ($this->getPaymentDateFormatted() ?? '');
 	}
 	/**
 	 * Same reasoning as getReceivingOrPaymentMoneyDate() above — this is
