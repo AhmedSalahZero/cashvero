@@ -4,6 +4,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useTheme } from '@/composables/useTheme';
 import ToastStack from '@/Components/ToastStack.vue';
 import { useToasts } from '@/composables/useToasts';
+import { useUnreadMessages } from '@/composables/useUnreadMessages';
 import NavIcon from '@/Components/NavIcon.vue';
 import LanguageSwitcher from '@/Components/LanguageSwitcher.vue';
 
@@ -48,6 +49,15 @@ const notificationMenu = computed(() => page.props.notificationMenu ?? []);
 const sectionKeys = computed(() =>
     Object.keys(menu.value).filter(k => k !== 'home' && k !== 'messages')
 );
+
+/**
+ * The server-rendered badge is a snapshot of when this page loaded, so
+ * it goes stale while you sit on a screen. The Messages inbox polls for
+ * new mail anyway and publishes the real count through
+ * useUnreadMessages — prefer that whenever it's there.
+ */
+const { unreadMessages } = useUnreadMessages();
+const messagesBadge = computed(() => unreadMessages.value ?? menu.value.messages?.badge ?? 0);
 
 /* ── Sidebar collapse (whole sidebar width) ──────────────────────── */
 const sidebarExpanded = ref(true);
@@ -302,10 +312,10 @@ if (page.flash?.success || page.flash?.error) {
                     <span class="relative inline-flex">
                         <NavIcon :name="menu.messages.icon" :size="18" />
                         <span
-                            v-if="menu.messages.badge"
+                            v-if="messagesBadge"
                             class="absolute -top-1.5 -end-2 min-w-[16px] h-4 px-1 rounded-full text-[10px] leading-4 text-center font-bold"
                             style="background: var(--cvr-amber-bright); color: var(--cvr-bg);"
-                        >{{ menu.messages.badge > 9 ? '9+' : menu.messages.badge }}</span>
+                        >{{ messagesBadge > 9 ? '9+' : messagesBadge }}</span>
                     </span>
                     <span v-if="isMobileNav || sidebarExpanded" class="truncate">{{ $t('Messages') }}</span>
                 </Link>

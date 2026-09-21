@@ -40,6 +40,30 @@ class RoutePermissionMap
         // ── The user's own profile & session ──
         'profile.edit', 'profile.update', 'theme.toggle',
 
+        /**
+         * ── Messaging ──
+         *
+         * Authentication only, deliberately. There is no module these
+         * belong to: writing to a colleague and raising a support
+         * ticket are things every user does regardless of which parts
+         * of the system they can see, and the Super Admin who answers
+         * the tickets is not attached to the company whose module key
+         * would be checked — a module gate would lock the Support Inbox
+         * against the one person who needs it.
+         *
+         * They are NOT ungoverned. Authorization here is per
+         * conversation rather than per module and lives in
+         * MessagingController: authorizeConversation() (you must be a
+         * participant, or a Super Admin on a support ticket) and the
+         * same-company check in startDirect(). Tests\Feature\Messaging\
+         * MessagingTest holds that line — an outsider is refused on
+         * read, send, mark-read and delete, a Super Admin cannot read
+         * private chats, and a cross-company chat cannot be opened.
+         */
+        'messages.index', 'messages.poll', 'messages.show', 'messages.updates',
+        'messages.start', 'messages.support.start', 'messages.send',
+        'messages.read', 'messages.status', 'messages.delete',
+
         // ── Written help. Text only, no company data of any kind, so
         //    anyone who can reach a screen can read how it works.
         'view.instructions',

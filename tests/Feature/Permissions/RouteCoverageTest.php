@@ -142,6 +142,31 @@ class RouteCoverageTest extends TestCase
             'profile.update', 'ignition.executeSolution', 'ignition.updateConfig',
             'debugbar.cache.delete', 'debugbar.queries.explain',
             'livewire.upload-file', 'default-livewire.update',
+
+            /**
+             * Messaging. These change data — they create conversations,
+             * post messages, soft-delete them and move a ticket's
+             * status — but there is no module permission that could
+             * sensibly gate them, and the Super Admin who answers
+             * support tickets belongs to no company whose module key
+             * would be checked.
+             *
+             * What guards them instead is per-conversation
+             * authorization in MessagingController:
+             * authorizeConversation() for everything that names a
+             * conversation, the same-company check in startDirect(),
+             * the sender-only check in deleteMessage(), and the
+             * Super-Admin-only check in updateStatus().
+             *
+             * Tests\Feature\Messaging\MessagingTest is the standing
+             * proof of that: it asserts an outsider is refused on read,
+             * send, mark-read and delete; that the recipient cannot
+             * delete the sender's message; that a reporter cannot close
+             * their own ticket; and that a chat cannot be opened across
+             * companies or with yourself.
+             */
+            'messages.start', 'messages.support.start', 'messages.send',
+            'messages.read', 'messages.status', 'messages.delete',
         ];
 
         $offenders = [];

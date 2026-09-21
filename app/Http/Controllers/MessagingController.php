@@ -8,7 +8,11 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
@@ -21,41 +25,21 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
  *   - the Super Admin's inbox of every open/in-progress/resolved ticket
  *
  * See App\Models\Conversation for why both chat and tickets share one
- * table/model, and MESSAGING_SETUP.md for what still needs configuring
- * (a real-time broadcasting driver) before messages appear live.
+ * table/model.
+ *
+ * Live updates are driven by polling, not by broadcasting: no driver is
+ * configured (BROADCAST_DRIVER=log), so Laravel Echo never comes up in
+ * the browser. Two endpoints exist purely for that loop — updates() for
+ * the open thread and poll() for the inbox — both built to answer
+ * "nothing changed" as cheaply as possible, since that's what they
+ * mostly answer. The broadcast() calls are left in place so configuring
+ * Pusher later upgrades the experience without touching this code.
  */
 class MessagingController extends Controller
 {
     public function index(Request $request)
     {
         $user = Auth::user();
-
-        $conversations = $user->conversations()
-            ->with(['participants:id,name,email', 'lastMessage.user:id,name'])
-            ->orderByDesc(
-                Message::select('created_at')
-                    ->whereColumn('conversation_id', 'conversations.id')
-                    ->latest()
-                    ->limit(1)
-            )
-            ->get();
-
-        // Super Admin also sees every support ticket, including ones
-        // raised before their account existed (see isVisibleTo()).
-        if ($user->isSuperAdmin()) {
-            $extraTickets = Conversation::query()
-                ->where('type', Conversation::TYPE_SUPPORT)
-                ->whereDoesntHave('participants', fn ($q) => $q->where('users.id', $user->id))
-                ->with(['participants:id,name,email', 'lastMessage.user:id,name'])
-                ->get();
-
-            $conversations = $conversations->concat($extraTickets);
-        }
-
-        $direct = $conversations->where('type', Conversation::TYPE_DIRECT)->values();
-        $support = $conversations->where('type', Conversation::TYPE_SUPPORT)
-            ->sortBy(fn ($c) => $c->status === Conversation::STATUS_RESOLVED ? 1 : 0)
-            ->values();
 
         // Contacts a user can start a direct chat with.
         //
@@ -93,10 +77,7 @@ class MessagingController extends Controller
 
         return Inertia::render('Messaging/Inbox', [
             'isSuperAdmin' => $user->isSuperAdmin(),
-            'conversations' => [
-                'direct' => $this->formatConversationList($direct, $user),
-                'support' => $this->formatConversationList($support, $user),
-            ],
+            'conversations' => $this->inboxLists($user),
             'contacts' => $contacts,
             /**
              * ⚠️ Real bug fixed here (reported 2026-09-20, "Could not load
@@ -111,10 +92,14 @@ class MessagingController extends Controller
             'routes' => [
                 'start' => route('messages.start'),
                 'support' => route('messages.support.start'),
+                // Inbox-wide background refresh: one request that covers
+                // both lists plus the sidebar badge.
+                'poll' => route('messages.poll'),
                 // {id} is a literal placeholder the frontend swaps out —
                 // simplest way to hand over a whole family of per-conversation
                 // URLs without listing one for every conversation up front.
                 'show' => route('messages.show', ['conversation' => '__ID__']),
+                'updates' => route('messages.updates', ['conversation' => '__ID__']),
                 'send' => route('messages.send', ['conversation' => '__ID__']),
                 'read' => route('messages.read', ['conversation' => '__ID__']),
                 'status' => route('messages.status', ['conversation' => '__ID__']),
@@ -126,21 +111,139 @@ class MessagingController extends Controller
     }
 
     /**
-     * JSON: full message history for one conversation (used by the Vue
-     * page when a conversation is opened, and to poll as a fallback if
-     * no real-time broadcasting driver is configured).
+     * JSON: full message history for one conversation — the first paint
+     * when a thread is opened. Everything after that arrives through
+     * updates() below, which only ships what changed.
+     *
+     * `server_time` is the handoff to that delta: the frontend sends it
+     * straight back as `since` on its first poll, so the two can't
+     * disagree about where "already seen" ends even if the browser
+     * clock is wrong.
      */
     public function show(Conversation $conversation)
     {
         $this->authorizeConversation($conversation);
 
+        $messages = $conversation->messages()
+            ->with('user:id,name')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (Message $m) => $this->formatMessage($m));
+
         return response()->json([
             'conversation' => $this->formatConversation($conversation, Auth::user()),
-            'messages' => $conversation->messages()
-                ->with('user:id,name')
-                ->orderBy('created_at')
-                ->get()
-                ->map(fn (Message $m) => $this->formatMessage($m)),
+            'messages' => $messages,
+            'last_id' => (int) ($conversation->messages()->max('id') ?? 0),
+            'server_time' => now()->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * JSON: what changed in one conversation since the caller last
+     * looked. Replaces re-downloading the entire thread every few
+     * seconds, which is what the old polling fallback did.
+     *
+     *   after_id  — highest message id the caller already holds.
+     *   since     — server_time from its previous response.
+     *   mark_read — advance this user's read watermark in the same trip.
+     *
+     * Two kinds of change come back:
+     *   messages — anything newer than after_id, in full.
+     *   changed  — messages the caller already has whose body/deleted
+     *              flag moved since `since`. Tiny by construction, and
+     *              the only way a deletion can reach a client that
+     *              isn't re-reading the whole history.
+     */
+    public function updates(Request $request, Conversation $conversation)
+    {
+        $this->authorizeConversation($conversation);
+
+        $data = $request->validate([
+            'after_id' => ['nullable', 'integer', 'min:0'],
+            'since' => ['nullable', 'date'],
+            'mark_read' => ['nullable', 'boolean'],
+        ]);
+
+        $afterId = (int) ($data['after_id'] ?? 0);
+
+        $new = $conversation->messages()
+            ->with('user:id,name')
+            ->where('id', '>', $afterId)
+            ->orderBy('id')
+            ->get()
+            ->map(fn (Message $m) => $this->formatMessage($m));
+
+        $changed = collect();
+
+        if ($afterId > 0 && ! empty($data['since'])) {
+            /**
+             * The 2-second overlap is deliberate. `updated_at` has no
+             * fractional seconds, so a change written in the same second
+             * the previous response was generated would otherwise fall
+             * exactly on the boundary and be missed forever. Re-sending a
+             * change once or twice costs nothing — applying it is
+             * idempotent (a message only ever goes to deleted, never back).
+             */
+            $changed = $conversation->messages()
+                ->where('id', '<=', $afterId)
+                ->where('updated_at', '>=', Carbon::parse($data['since'])->subSeconds(2))
+                ->get(['id', 'body', 'deleted_at'])
+                ->map(fn (Message $m) => [
+                    'id' => $m->id,
+                    'body' => $m->isDeleted() ? null : $m->body,
+                    'deleted' => $m->isDeleted(),
+                ]);
+        }
+
+        /**
+         * Reading happens in the same round trip as fetching. The old
+         * code only marked a thread read once, at the moment it was
+         * opened, so anything that arrived while you sat there reading
+         * it stayed "unread" on the server and kept the badge lit.
+         */
+        if ($request->boolean('mark_read') && $new->isNotEmpty()) {
+            $this->touchLastReadAt($conversation);
+        }
+
+        return response()->json([
+            // Carries the ticket status so a Super Admin flipping it to
+            // Resolved shows up for the reporter without a reload.
+            'conversation' => [
+                'id' => $conversation->id,
+                'status' => $conversation->status,
+                'subject' => $conversation->subject,
+            ],
+            'messages' => $new->values(),
+            'changed' => $changed->values(),
+            'last_id' => (int) ($conversation->messages()->max('id') ?? $afterId),
+            'server_time' => now()->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * JSON: the whole inbox as the background poller sees it — both
+     * lists plus the sidebar's unread total, in one request.
+     *
+     * `version` is a cheap fingerprint of everything this response
+     * depends on. The caller echoes back the one it already has, and the
+     * overwhelmingly common "nothing happened" answer costs three
+     * aggregate queries instead of hydrating every conversation with its
+     * participants and last message.
+     */
+    public function poll(Request $request)
+    {
+        $user = Auth::user();
+        $version = $this->inboxVersion($user);
+
+        if ($request->query('version') === $version) {
+            return response()->json(['changed' => false, 'version' => $version]);
+        }
+
+        return response()->json([
+            'changed' => true,
+            'version' => $version,
+            'unread_total' => Conversation::unreadCountFor($user),
+            'conversations' => $this->inboxLists($user),
         ]);
     }
 
@@ -148,12 +251,42 @@ class MessagingController extends Controller
     public function startDirect(Request $request)
     {
         $data = $request->validate([
-            'user_id' => ['required', 'exists:users,id', 'different:' . Auth::id()],
+            /**
+             * Rule::notIn, not `different`. The `different` rule takes
+             * the NAME OF ANOTHER FIELD in the same request, not a
+             * value — so "different:7" compared user_id against a field
+             * literally named "7", which never exists, so the rule
+             * always passed. Messaging yourself then reached
+             * findOrCreateDirect($me, $me), which tries to attach the
+             * same participant twice and dies on the unique key: a 500
+             * where a 422 belongs.
+             */
+            'user_id' => ['required', 'exists:users,id', Rule::notIn([Auth::id()])],
             'body' => ['required', 'string', 'max:5000'],
         ]);
 
+        $me = Auth::user();
         $other = User::findOrFail($data['user_id']);
-        $conversation = Conversation::findOrCreateDirect(Auth::user(), $other);
+
+        /**
+         * Colleagues only. index() already limits the contacts dropdown
+         * to people sharing a company with you, but that is the UI, not
+         * a guard: this endpoint takes a raw user_id, so without the
+         * check below anyone could open a chat with anyone in any other
+         * client's company just by knowing their id.
+         *
+         * A Super Admin is exempt on either side — they support every
+         * company and belong to none in particular.
+         */
+        if (! $me->isSuperAdmin() && ! $other->isSuperAdmin()) {
+            $shared = $me->companies->pluck('id')->intersect($other->companies->pluck('id'));
+
+            if ($shared->isEmpty()) {
+                throw new AccessDeniedHttpException();
+            }
+        }
+
+        $conversation = Conversation::findOrCreateDirect($me, $other);
 
         $message = $this->postMessage($conversation, $data['body']);
 
@@ -208,9 +341,7 @@ class MessagingController extends Controller
     {
         $this->authorizeConversation($conversation);
 
-        $conversation->participants()->syncWithoutDetaching([
-            Auth::id() => ['last_read_at' => now()],
-        ]);
+        $this->touchLastReadAt($conversation);
 
         return response()->json(['ok' => true]);
     }
@@ -267,13 +398,24 @@ class MessagingController extends Controller
         $message->load('user:id,name');
 
         // Sending counts as reading your own new message.
-        $conversation->participants()->syncWithoutDetaching([
-            Auth::id() => ['last_read_at' => now()],
-        ]);
+        $this->touchLastReadAt($conversation);
 
         broadcast(new NewMessageSent($message))->toOthers();
 
         return $message;
+    }
+
+    /**
+     * Advance the current user's read watermark on this conversation.
+     * Also bumps the pivot's updated_at, which is one of the inputs to
+     * inboxVersion() — so reading a thread in one tab invalidates the
+     * poller's fingerprint in the others.
+     */
+    private function touchLastReadAt(Conversation $conversation): void
+    {
+        $conversation->participants()->syncWithoutDetaching([
+            Auth::id() => ['last_read_at' => now()],
+        ]);
     }
 
     private function authorizeConversation(Conversation $conversation): void
@@ -281,6 +423,122 @@ class MessagingController extends Controller
         if (! $conversation->isVisibleTo(Auth::user())) {
             throw new AccessDeniedHttpException();
         }
+    }
+
+    /**
+     * The two inbox lists, already formatted. Shared by index() (first
+     * paint) and poll() (background refresh) so the two can never drift
+     * into disagreeing about ordering, titles or unread flags.
+     *
+     * @return array{direct: array, support: array}
+     */
+    private function inboxLists(User $user): array
+    {
+        $conversations = $user->conversations()
+            ->with(['participants:id,name,email', 'lastMessage.user:id,name'])
+            ->orderByDesc(
+                Message::select('created_at')
+                    ->whereColumn('conversation_id', 'conversations.id')
+                    ->latest()
+                    ->limit(1)
+            )
+            ->get();
+
+        // Super Admin also sees every support ticket, including ones
+        // raised before their account existed (see isVisibleTo()).
+        if ($user->isSuperAdmin()) {
+            $extraTickets = Conversation::query()
+                ->where('type', Conversation::TYPE_SUPPORT)
+                ->whereDoesntHave('participants', fn ($q) => $q->where('users.id', $user->id))
+                ->with(['participants:id,name,email', 'lastMessage.user:id,name'])
+                ->get();
+
+            $conversations = $conversations->concat($extraTickets);
+        }
+
+        $direct = $conversations->where('type', Conversation::TYPE_DIRECT)->values();
+        $support = $conversations->where('type', Conversation::TYPE_SUPPORT)
+            ->sortBy(fn ($c) => $c->status === Conversation::STATUS_RESOLVED ? 1 : 0)
+            ->values();
+
+        return [
+            'direct' => $this->formatConversationList($direct, $user),
+            'support' => $this->formatConversationList($support, $user),
+        ];
+    }
+
+    /**
+     * Ids of every conversation $user may see — the scope both the
+     * fingerprint below and inboxLists() above work over.
+     *
+     * @return Collection<int, int>
+     */
+    private function visibleConversationIds(User $user): Collection
+    {
+        $ids = DB::table('conversation_participants')
+            ->where('user_id', $user->id)
+            ->pluck('conversation_id');
+
+        if ($user->isSuperAdmin()) {
+            $ids = $ids->concat(
+                DB::table('conversations')
+                    ->where('type', Conversation::TYPE_SUPPORT)
+                    ->pluck('id')
+            );
+        }
+
+        return $ids->unique()->values();
+    }
+
+    /**
+     * A short string that changes whenever anything the inbox displays
+     * changes, and otherwise stays byte-identical. Covers:
+     *
+     *   - a new message anywhere       -> MAX(messages.id), COUNT(*)
+     *   - a deletion                   -> COUNT(messages.deleted_at)
+     *   - a ticket status change,
+     *     or a brand new conversation  -> conversations aggregates
+     *   - a read in another tab        -> pivot updated_at
+     *
+     * All aggregates, no model hydration — that's the whole point.
+     *
+     * ⚠️ The deleted count is what actually catches deletions, not
+     * MAX(updated_at): timestamps have no fractional seconds, so sending
+     * a message and deleting it inside the same second produced a
+     * byte-identical fingerprint and the list preview never updated.
+     * Counting deleted rows can't collide that way.
+     */
+    private function inboxVersion(User $user): string
+    {
+        $ids = $this->visibleConversationIds($user);
+
+        if ($ids->isEmpty()) {
+            return 'empty';
+        }
+
+        $messages = DB::table('messages')
+            ->whereIn('conversation_id', $ids)
+            ->selectRaw('COUNT(*) as total, COUNT(deleted_at) as deleted_total, MAX(id) as max_id, MAX(updated_at) as max_updated')
+            ->first();
+
+        $threads = DB::table('conversations')
+            ->whereIn('id', $ids)
+            ->selectRaw('COUNT(*) as total, MAX(updated_at) as max_updated')
+            ->first();
+
+        $read = DB::table('conversation_participants')
+            ->where('user_id', $user->id)
+            ->max('updated_at');
+
+        return implode('|', [
+            $messages->total ?? 0,
+            $messages->deleted_total ?? 0,
+            $messages->max_id ?? 0,
+            $messages->max_updated ?? '-',
+            $threads->total ?? 0,
+            $threads->max_updated ?? '-',
+            $read ?? '-',
+        ]);
     }
 
     private function formatConversationList($conversations, User $viewer): array
@@ -312,6 +570,9 @@ class MessagingController extends Controller
                 ? ($other->name ?? 'Deleted user')
                 : ($conversation->subject ?? 'Support ticket'),
             'other_user' => $other ? ['id' => $other->id, 'name' => $other->name] : null,
+            // Lets the frontend merge a polled snapshot into the list it
+            // already has without guessing whether the preview moved.
+            'last_message_id' => $lastMessage?->id,
             'last_message' => $lastMessage ? [
                 'body' => $lastMessage->isDeleted() ? __('This message was deleted') : $lastMessage->body,
                 'created_at' => $lastMessage->created_at->toIso8601String(),

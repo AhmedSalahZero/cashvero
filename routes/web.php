@@ -63,7 +63,15 @@ Route::group(
              */
             Route::group(['prefix' => 'messages', 'as' => 'messages.'], function () {
                 Route::get('/', 'MessagingController@index')->name('index');
+                /**
+                 * ⚠️ Must stay ABOVE GET /{conversation}: routes match in
+                 * declaration order, so a literal /messages/poll declared
+                 * after it would be swallowed by the {conversation} binding
+                 * and 404 as "no such conversation".
+                 */
+                Route::get('/poll', 'MessagingController@poll')->name('poll');
                 Route::get('/{conversation}', 'MessagingController@show')->name('show');
+                Route::get('/{conversation}/updates', 'MessagingController@updates')->name('updates');
                 Route::post('/start', 'MessagingController@startDirect')->name('start');
                 Route::post('/support', 'MessagingController@startSupport')->name('support.start');
                 Route::post('/{conversation}/send', 'MessagingController@send')->name('send');
