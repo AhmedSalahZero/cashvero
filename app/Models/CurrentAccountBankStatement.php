@@ -169,9 +169,16 @@ class CurrentAccountBankStatement extends Model  implements IHaveStatement
 		 * * ودا غلط مفروض التاريخ الاقل ما بين التاريخ الجديد و القديم للعنصر بحيث دايما يبدا يحدث من عنده
 		 */
 
+		/**
+		 * * الفلاتر هنا لازم تطابق اللي التريجر بيدوّر بيه على الصف
+		 * * السابق : company_id + financial_institution_account_id .
+		 * * من غير company_id الـ cascade بيلمس صفوف من سلسلة تانية —
+		 * * مش بيكسر حاجة لكنه شغل زيادة و مصدر مفاجآت
+		 */
 		 StatementCascade::touchRows(
 			DB::table('current_account_bank_statements')
 		->where('full_date','>=',$minDate)
+		->where('company_id',$model->company_id)
 		->where('financial_institution_account_id',$model->financial_institution_account_id),
 			'full_date asc , id asc'
 		);

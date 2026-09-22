@@ -366,58 +366,81 @@ class HArr
  
  
 
-    public static function getLatestNonZeroExecutionKeys(array $data): array
+    /**
+     * * كل مراحل التنفيذ (execution) اللي نسبتها أكبر من صفر ، مرتّبة من
+     * * الأقدم للأحدث حسب تاريخ نهاية المرحلة .
+     *
+     * * الأمر (Sales Order / Purchase Order) بيتخزّن عليه لحد ٥ مراحل ،
+     * * كل مرحلة ليها نسبة و تاريخ بداية و نهاية و أيام تحصيل . الفاتورة
+     * * المتوقعة بتطلع في نهاية المرحلة و بتتحصّل بعدها بـ collection_days
+     * * ، يعني كل مرحلة ليها ميعاد تحصيل خاص بيها و المفروض تنزل في
+     * * البُكِت بتاعها في التقرير .
+     *
+     * * الدالة اللي قبل دي (getLatestNonZeroExecutionKeys) كانت بترجّع
+     * * مرحلة واحدة بس — اللي عندها أبعد end_date — و معاها 'amount' اللي
+     * * هو إجمالي الأمر مش حصّة المرحلة . النتيجة إن تقرير الـ Cash Flow
+     * * كان بينزّل قيمة العقد كلها في بُكِت واحد في آخر ميعاد تحصيل ، بدل
+     * * ما يوزّعها على المراحل . مثال حقيقي : عقد بمليون موزّع
+     * * 50% لـ 30/09 و 20% لـ 31/10 و 30% لـ 30/11 (كلهم ٣٠ يوم تحصيل)
+     * * كان بينزل مليون كامل في 30/12 بدل 500 ألف في 30/10 و 200 ألف في
+     * * 30/11 و 300 ألف في 30/12 .
+     *
+     * * 'share' هي نصيب المرحلة من قيمة الأمر كنسبة من ١ ، و متقسومة على
+     * * **مجموع** النسب مش على ١٠٠ . الفورم بيمنع إن المجموع يعدّي ١٠٠ ،
+     * * لكن في الداتا القديمة (المتزامنة من أودو) فيه أوامر مجموع نسبها
+     * * ٢٠٠٪ — مرحلتين كل واحدة ١٠٠٪ . القسمة على المجموع بتضمن إن إجمالي
+     * * الأمر ما يتغيّرش عن اللي التقرير بيعرضه دلوقتي مهما كان المجموع .
+     *
+     * @param  array<string,mixed>  $data  صف الأمر كـ array (toArray)
+     * @return array<int,array<string,mixed>> لستة فاضية لو مفيش ولا مرحلة منفّذة
+     */
+    public static function getNonZeroExecutionPhases(array $data): array
     {
-        $maxEndDate = null;
-        $selectedIndex = null;
+        $phases = [];
+        $totalPercentage = 0.0;
 
-        // Iterate through possible indices (1 to 5 in your example)
         for ($i = 1; $i <= 5; $i++) {
-            $executionPercentageKey = "execution_percentage_$i";
-            $endDateKey = "end_date_$i";
+            $percentage = (float) ($data["execution_percentage_$i"] ?? 0);
+            $endDate = $data["end_date_$i"] ?? null;
 
-            // Check if the keys exist and execution_percentage is greater than 0
-            if (
-                isset($data[$executionPercentageKey], $data[$endDateKey]) &&
-                floatval($data[$executionPercentageKey]) > 0
-            ) {
-                $currentEndDate = \Carbon\Carbon::parse($data[$endDateKey]);
-
-                // Update if this end_date is greater or if maxEndDate is not set
-                if ($maxEndDate === null || $currentEndDate->greaterThan($maxEndDate)) {
-                    $maxEndDate = $currentEndDate;
-                    $selectedIndex = $i;
-                }
+            if ($percentage <= 0 || empty($endDate)) {
+                continue;
             }
+
+            $totalPercentage += $percentage;
+
+            $phases[] = [
+                'index' => $i,
+                'start_date' => $data["start_date_$i"] ?? null,
+                'end_date' => $endDate,
+                'execution_percentage' => $percentage,
+                'execution_days' => $data["execution_days_$i"] ?? 0,
+                'collection_days' => $data["collection_days_$i"] ?? 0,
+                'so_number' => $data['so_number'] ?? null,
+                'po_number' => $data['po_number'] ?? null,
+                'amount' => $data['amount'] ?? 0,
+            ];
         }
 
-        // If no valid set is found, return an empty array
-        if ($selectedIndex === null) {
+        if (! $phases || $totalPercentage <= 0) {
             return [];
         }
 
-        // Collect all keys related to the selected index
-        $result = [];
-        $keys = [
-            "start_date_$selectedIndex",
-            "end_date_$selectedIndex",
-            "execution_percentage_$selectedIndex",
-            "execution_days_$selectedIndex",
-            "collection_days_$selectedIndex",
-            'so_number',
-            'po_number',
-            'amount'
-        ];
-
-        foreach ($keys as $key) {
-            if (isset($data[$key])) {
-                $r= '_'.$selectedIndex;
-                $newKey = str_replace($r, '', $key);
-                $result[$newKey] = $data[$key];
-            }
+        foreach ($phases as $key => $phase) {
+            $phases[$key]['share'] = $phase['execution_percentage'] / $totalPercentage;
         }
 
-        return $result;
+        // من الأقدم للأحدث — الترتيب ده هو اللي الخصم بيمشي عليه في
+        // HasForecastedProjectCollection ، فمهم يكون بتاريخ النهاية مش
+        // برقم الخانة (المستخدم ممكن يملا الخانة ٣ بتاريخ أقدم من ٢) .
+        usort($phases, function (array $first, array $second) {
+            $comparison = Carbon::make($first['end_date'])->getTimestamp()
+                <=> Carbon::make($second['end_date'])->getTimestamp();
+
+            return $comparison !== 0 ? $comparison : $first['index'] <=> $second['index'];
+        });
+
+        return $phases;
     }
     // public static function divideArrBy(array $items, int $num):array
     // {

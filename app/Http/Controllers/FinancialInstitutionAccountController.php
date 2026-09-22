@@ -162,12 +162,23 @@ class FinancialInstitutionAccountController
 				$time  = Carbon::make($currentFullDate)->format('H:i:s');
 				$newFullDateTime = date('Y-m-d H:i:s', strtotime("$balanceDate $time")) ;
 				// $minDateTime = min($currentFullDate ,$newFullDateTime );
+				/**
+				 * * كتابة خام عن قصد : الـ Eloquent events مش بتتطلق هنا ،
+				 * * فالـ cascade بتاع updateNextRows() مش بيشتغل . التريجر
+				 * * بيصلّح رصيد الصف ده لوحده ، و التسلسل للصفوف اللي بعده
+				 * * بيتعمل بالـ touch تحت .
+				 *
+				 * * updated_at بتتكتب صراحةً : من غيرها الصف بيتغيّر رصيده
+				 * * و ختمه الزمني يفضل قديم ، فبيبقى مستحيل تعرف من الداتا
+				 * * ان الصف اتعدّل أصلا
+				 */
 				DB::table('current_account_bank_statements')->where('id',$currentAccountBeginningBalance->id)->update([
 					'date'=>$balanceDate,
 					'full_date'=>$newFullDateTime ,
 					'debit'=>$request->get('balance_amount'),
 					'comment_en'=>__('Beginning Balance',[],'en'),
 					'comment_ar'=>__('Beginning Balance',[],'ar'),
+					'updated_at'=>now(),
 				]);
 				/**
 				 * * بنبدا اعادة الحساب من اقدم تاريخ ما بين التاريخ القديم و الجديد
@@ -189,9 +200,16 @@ class FinancialInstitutionAccountController
 				 */
 				$currentAccountBeginningBalance->resyncEndOfMonthInterestForAllYears($company->id);
 
+				/**
+				 * * الترتيب لازم يكون بـ full_date مش date : السلسلة كلها
+				 * * (التريجر و StatementCascade) بتشتغل بدقة الثانية ، فلو
+				 * * رتّبنا باليوم و في نفس اليوم أكتر من حركة ، first()
+				 * * بياخد أصغر id مش أقدم ساعة — و الـ cascade يبدأ من
+				 * * نقطة متأخرة فيسيب الصفوف اللي قبلها في نفس اليوم
+				 */
 				$statementToRefresh = CurrentAccountBankStatement::where('date','>=',min($currentDate,$balanceDate))
 				->where('financial_institution_account_id',$currentAccountBeginningBalance->financial_institution_account_id)
-				->orderByRaw('date asc , id asc')
+				->orderByRaw('full_date asc , id asc')
 				->first();
 				if($statementToRefresh){
 					$statementToRefresh->update([
@@ -216,7 +234,7 @@ class FinancialInstitutionAccountController
 
 				$currentStatement = CurrentAccountBankStatement::where('date','>=',$balanceDate)
 				->where('financial_institution_account_id',$financialInstitutionAccount->id)
-				->orderByRaw('date asc , id asc')
+				->orderByRaw('full_date asc , id asc')
 				->first();
 				if($currentStatement){
 					$currentStatement->update([

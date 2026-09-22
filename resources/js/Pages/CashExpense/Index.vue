@@ -264,7 +264,7 @@ const odooErrorTarget = ref(null);
 
                     <!-- Table -->
                     <div class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto">
-                        <table class="min-w-full text-sm">
+                        <table class="min-w-full text-sm cvr-sticky-actions">
                             <thead class="cvr-table-head">
                                 <tr>
                                     <th v-if="canMarkAsPaid && tab.hasBatchCollection" class="px-3 py-3 text-start">{{ $t('Select') }}</th>

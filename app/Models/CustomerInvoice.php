@@ -686,6 +686,11 @@ class CustomerInvoice extends Model implements IInvoice
 				'down_payment_order_id_column' => 'sales_order_id',
 				'add_to_cash_inflow_total' => true,
 				'paid_or_collected_status' => self::COLLETED_OR_PAID,
+				'invoice_settled_column' => 'total_collected_amount',
+				'invoice_settled_main_column' => 'total_collected_amount_in_main_currency',
+				'down_payment_money_table' => 'money_received',
+				'down_payment_money_id_column' => 'money_received_id',
+				'down_payment_money_date_column' => 'receiving_date',
 			]
 		);
 	}

@@ -126,6 +126,34 @@ class ForecastedProjectPaymentTest extends TestCase
         ]);
     }
 
+
+    /**
+     * * أمر شراء بأكتر من مرحلة تنفيذ — التستات التانية كلها بتستخدم
+     * * مرحلة واحدة بـ 100% ، فدي اللي بتغطّي التوزيعة على المراحل
+     *
+     * @param  array<int,array{0:float,1:string,2:int}>  $phases  [النسبة , تاريخ النهاية , أيام التحصيل]
+     */
+    private function phasedPurchaseOrder(int $contractId, string $poNumber, float $amount, array $phases): int
+    {
+        $row = [
+            'company_id' => $this->companyId,
+            'contract_id' => $contractId,
+            'po_number' => $poNumber,
+            'amount' => $amount,
+        ];
+
+        foreach (array_values($phases) as $offset => [$percentage, $endDate, $collectionDays]) {
+            $index = $offset + 1;
+            $row['start_date_'.$index] = $endDate;
+            $row['end_date_'.$index] = $endDate;
+            $row['execution_percentage_'.$index] = $percentage;
+            $row['execution_days_'.$index] = 0;
+            $row['collection_days_'.$index] = $collectionDays;
+        }
+
+        return (int) DB::table('purchase_orders')->insertGetId($row);
+    }
+
     private function salesOrder(int $contractId, string $soNumber, float $amount, string $endDate = '2026-11-17'): int
     {
         return (int) DB::table('sales_orders')->insertGetId([
@@ -414,7 +442,12 @@ class ForecastedProjectPaymentTest extends TestCase
         $this->assertSame(['Vendor Test 2-Test 2' => 3000.0], $this->subRows($this->runRow($scenario['customer_contract_id'])));
     }
 
-    public function test_a_partially_settled_supplier_invoice_only_deducts_what_is_left(): void
+    /**
+     * * الفاتورة المسدّدة جزئيا بتخصم بالكامل — مش الباقي منها بس :
+     * * الـ 1250 المدفوعة فلوس خرجت خلاص ، و الـ 750 المفتوحة ظاهرة
+     * * في صف Suppliers Invoices . الاتنين مش دفعات مستقبلية متوقعة .
+     */
+    public function test_a_partially_settled_supplier_invoice_deducts_the_whole_invoice(): void
     {
         $scenario = $this->buildBaseScenario();
         $invoiceId = $this->supplierInvoice($scenario['supplier_contract_code'], 'P00256', 'EGP', 2000, 1250);
@@ -422,10 +455,15 @@ class ForecastedProjectPaymentTest extends TestCase
         $stored = $this->storedInvoice($invoiceId);
         $this->assertSame(750.0, (float) $stored->net_balance);
         $this->assertNotSame(SupplierInvoice::COLLETED_OR_PAID, $stored->invoice_status);
-        $this->assertSame(['Vendor Test 2-Test 2' => 4250.0], $this->subRows($this->runRow($scenario['customer_contract_id'])));
+        $this->assertSame(['Vendor Test 2-Test 2' => 3000.0], $this->subRows($this->runRow($scenario['customer_contract_id'])));
     }
 
-    public function test_a_fully_paid_supplier_invoice_is_excluded_like_on_the_collection_side(): void
+    /**
+     * * الفاتورة المدفوعة بالكامل مابقتش مستبعدة : المعادلة بتطرح
+     * * المسدّد (total_paid_amount_in_main_currency) ، و ده بالظبط
+     * * اللي بيمنع التقرير من انه يتوقع صرف فلوس اتصرفت خلاص .
+     */
+    public function test_a_fully_paid_supplier_invoice_deducts_what_was_paid(): void
     {
         $scenario = $this->buildBaseScenario();
         $invoiceId = $this->supplierInvoice($scenario['supplier_contract_code'], 'P00256', 'EGP', 2000, 2000);
@@ -433,7 +471,7 @@ class ForecastedProjectPaymentTest extends TestCase
         $stored = $this->storedInvoice($invoiceId);
         $this->assertSame(0.0, (float) $stored->net_balance);
         $this->assertSame(SupplierInvoice::COLLETED_OR_PAID, $stored->invoice_status);
-        $this->assertSame(['Vendor Test 2-Test 2' => 5000.0], $this->subRows($this->runRow($scenario['customer_contract_id'])));
+        $this->assertSame(['Vendor Test 2-Test 2' => 3000.0], $this->subRows($this->runRow($scenario['customer_contract_id'])));
     }
 
     public function test_an_invoice_on_another_purchase_order_does_not_touch_this_one(): void
@@ -784,5 +822,98 @@ class ForecastedProjectPaymentTest extends TestCase
             ->where('model_type', 'Customer')
             ->orderByDesc('id')
             ->value('id');
+    }
+
+    /* ───────── توزيعة المراحل على ناحية الموردين ───────── */
+
+    /**
+     * * الحساب ده مشترك حرفياً بين ناحية العملاء و ناحية الموردين —
+     * * الاتنين بينادوا computeForecastedProjectCollection() من نفس
+     * * الـ trait . التستات اللي في ForecastedProjectCollectionPhasesTest
+     * * بتغطّي ناحية العملاء ، و دي بتثبت إن ناحية الموردين واخدة نفس
+     * * التصليح فعلاً مش بالافتراض .
+     */
+    public function test_each_purchase_order_phase_lands_in_its_own_month(): void
+    {
+        $scenario = $this->buildBaseScenario();
+
+        $phasedContractId = $this->contract([
+            'partner_id' => $this->partner('Phased Vendor'),
+            'model_type' => 'Supplier',
+            'parent_id' => $scenario['customer_contract_id'],
+            'name' => 'Phased',
+            'code' => 's-phased-'.$this->companyId,
+            'amount' => 1000000,
+            'end_date' => '2026-11-30',
+        ]);
+        $this->phasedPurchaseOrder($phasedContractId, 'P00401', 1000000, [
+            [50, '2026-09-30', 30],
+            [20, '2026-10-31', 30],
+            [30, '2026-11-30', 30],
+        ]);
+
+        $weeks = $this->runRow($scenario['customer_contract_id'])['suppliers'][self::ROW_KEY]['Phased Vendor-Phased']['weeks'] ?? [];
+
+        $this->assertSame([
+            '10-2026' => 500000.0,
+            '11-2026' => 200000.0,
+            '12-2026' => 300000.0,
+        ], array_map('floatval', $weeks));
+    }
+
+    public function test_an_open_supplier_invoice_eats_the_oldest_phase_first(): void
+    {
+        $scenario = $this->buildBaseScenario();
+
+        $phasedCode = 's-phased2-'.$this->companyId;
+        $phasedContractId = $this->contract([
+            'partner_id' => $this->partner('Phased Vendor 2'),
+            'model_type' => 'Supplier',
+            'parent_id' => $scenario['customer_contract_id'],
+            'name' => 'Phased2',
+            'code' => $phasedCode,
+            'amount' => 1000000,
+            'end_date' => '2026-11-30',
+        ]);
+        $this->phasedPurchaseOrder($phasedContractId, 'P00402', 1000000, [
+            [50, '2026-09-30', 30],
+            [20, '2026-10-31', 30],
+            [30, '2026-11-30', 30],
+        ]);
+        $this->supplierInvoice($phasedCode, 'P00402', 'EGP', 600000);
+
+        $weeks = $this->runRow($scenario['customer_contract_id'])['suppliers'][self::ROW_KEY]['Phased Vendor 2-Phased2']['weeks'] ?? [];
+
+        $this->assertSame([
+            '10-2026' => 0.0,
+            '11-2026' => 100000.0,
+            '12-2026' => 300000.0,
+        ], array_map('floatval', $weeks));
+    }
+
+    /**
+     * * نفس الباج التاني بتاع النهاردة بس على ناحية الموردين : عقد مورد
+     * * بيخلص بعد نهاية التقرير كان بيتشال بالكامل بفلتر
+     * * where('end_date','<=',$endDate) .
+     */
+    public function test_a_supplier_contract_ending_after_the_window_still_reports_its_phases(): void
+    {
+        $scenario = $this->buildBaseScenario();
+
+        $lateContractId = $this->contract([
+            'partner_id' => $this->partner('Late Ending Vendor'),
+            'model_type' => 'Supplier',
+            'parent_id' => $scenario['customer_contract_id'],
+            'name' => 'LateEnding',
+            'code' => 's-lateend-'.$this->companyId,
+            'amount' => 2000,
+            'end_date' => '2028-12-31',
+        ]);
+        $this->purchaseOrder($lateContractId, 'P00403', 2000, '2026-10-31');
+
+        $subRows = $this->subRows($this->runRow($scenario['customer_contract_id']));
+
+        $this->assertArrayHasKey('Late Ending Vendor-LateEnding', $subRows);
+        $this->assertSame(2000.0, $subRows['Late Ending Vendor-LateEnding']);
     }
 }

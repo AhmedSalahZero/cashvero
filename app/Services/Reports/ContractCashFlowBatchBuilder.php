@@ -112,7 +112,7 @@ final class ContractCashFlowBatchBuilder
             CustomerInvoice::getForecastedProjectCollection($result, $formStartDate, $formEndDate, $currency, $company->id, $datesWithWeekNumber, $contractId, $foreignExchangeRates, $mainFunctionalCurrency);
             SupplierInvoice::getForecastedProjectCollection($result, $formStartDate, $formEndDate, $currency, $company->id, $datesWithWeekNumber, $contractId, $foreignExchangeRates, $mainFunctionalCurrency, $poAllocations);
             CustomerInvoice::getCustomerInvoicesUnderCollectionAtDatesForContracts($result, $company->id, $contractCode, $datesWithWeekNumber, $formEndDate);
-            SupplierInvoice::getSupplierInvoicesForPoUnderCollectionAtDates($result, $company->id, $datesWithWeekNumber, $formStartDate, $formEndDate, $poAllocations, $pastDueSupplierInvoicesForContracts);
+            SupplierInvoice::getSupplierInvoicesForPoUnderCollectionAtDates($result, $company->id, $datesWithWeekNumber, $formStartDate, $formEndDate, $poAllocations, $pastDueSupplierInvoicesForContracts, $contractId);
         }
 
         // $result is still bound BY REFERENCE to the last contract's slot

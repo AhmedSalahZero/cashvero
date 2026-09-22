@@ -468,48 +468,126 @@ class SupplierInvoice extends Model implements IInvoice
 		}
 	
 	}
-	public static function getSupplierInvoicesForPoUnderCollectionAtDates(array &$result  , int $companyId ,array $datesWithWeekNumber,string $startDate,string $endDate  , $poAllocations  , &$pastDueSupplierInvoicesForContracts = []  ):void
+	/**
+	 * * صف "Suppliers Invoices" في تقرير كاش فلو العقد .
+	 *
+	 * * فاتورة المورد بتحمل كود عقد **المورد** ، مش كود عقد العميل اللي
+	 * * التقرير معروض عليه . فلازم نوصل لأوامر الشراء بتاعة عقد العميل
+	 * * الأول و بعدين نجيب فواتيرها .
+	 *
+	 * * و فيه طريقتين بيترابطوا بيهم — و الدالة دي كانت بتعرف واحدة بس :
+	 * *
+	 * *   1. po_allocations : الربط الصريح الاختياري (مودال "Allocate"
+	 * *      على أمر الشراء) . أمر شراء واحد ممكن يتقسّم على أكتر من عقد
+	 * *      عميل ، فكل فاتورة بتتحسب مضروبة في allocation_percentage .
+	 * *
+	 * *   2. contracts.parent_id : الربط **العادي** — عقد مورد متعمل تحت
+	 * *      عقد العميل ، و ده اللي بيظهر في بوب اب "عقود الموردين" .
+	 * *      العقد ده بيخص عقد العميل لوحده ، فوزنه 100% .
+	 *
+	 * * الطريقة التانية كانت ناقصة خالص : عقد عميل بـ 10,000 تحته عقد
+	 * * مورد بـ 5,000 و عليه فاتورة بـ 5,000 لسه ما اتدفعتش ، كان بيطلع
+	 * * الصف فاضي . و في نفس الوقت صف "Forecasted Project Payment" —
+	 * * اللي بيمشي على parent_id فعلاً — بينزل لصفر لأن الفاتورة اتخصمت
+	 * * منه . فالـ 5,000 كانت بتختفي من التقرير بالكامل .
+	 *
+	 * * المفروض : الفاتورة تظهر هنا بقيمتها في ميعاد استحقاقها ، و الفرق
+	 * * بين قيمة العقد و الفاتورة يفضل في صف التوقّعات (عقد بـ 10,000
+	 * * عليه فاتورة بـ 7,000 → 7,000 هنا و 3,000 هناك) .
+	 *
+	 * @param  int|null  $contractId  عقد العميل المعروض — من غيره ما ينفعش
+	 *                                نوصل لعقود الموردين الأبناء
+	 */
+	public static function getSupplierInvoicesForPoUnderCollectionAtDates(array &$result  , int $companyId ,array $datesWithWeekNumber,string $startDate,string $endDate  , $poAllocations  , &$pastDueSupplierInvoicesForContracts = []  , ?int $contractId = null ):void
+	{
+		$allocatedPurchaseOrderIds = [];
+
+		foreach($poAllocations as $poAllocation){
+			$allocatedPurchaseOrderIds[] = (int) $poAllocation->purchase_order_id;
+
+			self::addSupplierInvoicesOfPurchaseOrder(
+				$result, $companyId, $datesWithWeekNumber, $startDate, $endDate,
+				$poAllocation->code, $poAllocation->po_number,
+				$poAllocation->allocation_percentage / 100,
+				$pastDueSupplierInvoicesForContracts
+			);
+		}
+
+		if(!$contractId){
+			return ;
+		}
+
+		// * أوامر الشراء بتاعة عقود الموردين الأبناء . أمر الشراء اللي
+		// * مربوط بالطريقتين بيتعدّ مرة واحدة و صف الـ allocation بيكسب
+		// * (هو اللي شايل النسبة) — نفس القاعدة بالظبط اللي في
+		// * HasForecastedProjectCollection .
+		$childSupplierContracts = Contract::where('company_id',$companyId)
+			->where('parent_id',$contractId)
+			->where('model_type','Supplier')
+			->with('purchasesOrders')
+			->get();
+
+		foreach($childSupplierContracts as $supplierContract){
+			foreach($supplierContract->purchasesOrders as $purchaseOrder){
+				if(in_array((int) $purchaseOrder->id, $allocatedPurchaseOrderIds, true)){
+					continue;
+				}
+
+				self::addSupplierInvoicesOfPurchaseOrder(
+					$result, $companyId, $datesWithWeekNumber, $startDate, $endDate,
+					$supplierContract->getCode(), $purchaseOrder->po_number,
+					1.0,
+					$pastDueSupplierInvoicesForContracts
+				);
+			}
+		}
+	}
+
+	/**
+	 * * فواتير أمر شراء واحد في صف "Suppliers Invoices" .
+	 *
+	 * * مشتركة بين مسار po_allocations (بوزن allocation_percentage) و
+	 * * مسار عقود الموردين الأبناء (بوزن 100%) . الفواتير المتأخرة
+	 * * بتتشال من هنا و بتروح لصف "Suppliers Past Due Invoices" .
+	 *
+	 * * مفيش فلتر عملة : net_balance_in_main_currency أصلاً محوّل
+	 * * للعملة الرئيسية ، و عقد المورد بيفوتر بعملته هو اللي مش شرط
+	 * * تكون عملة عقد العميل .
+	 */
+	private static function addSupplierInvoicesOfPurchaseOrder(array &$result , int $companyId , array $datesWithWeekNumber , string $startDate , string $endDate , string $supplierContractCode , ?string $purchaseOrderNumber , float $weight , &$pastDueSupplierInvoicesForContracts):void
 	{
 		$key = __('Suppliers Invoices') ;
-	
-		foreach($poAllocations as $poAllocation){
-			$purchaseOrderNumber = $poAllocation->po_number;
-			$supplierContractCode = $poAllocation->code;
-			$allocationPercentage = $poAllocation->allocation_percentage / 100;
 
-			$items = self::where('company_id',$companyId)
-			// ->where('currency',$currency)
-			->where('net_balance','>',0)
-			->where('contract_code',$supplierContractCode)
-			->where('purchases_order_number',$purchaseOrderNumber)
-			->whereBetween('invoice_due_date',[$startDate,$endDate])
-			->get();
-		
-			foreach($items as $item){
-				$invoiceDueDate = $item->invoice_due_date ;
-				$invoiceDueDate = Carbon::make($invoiceDueDate);
-				if($invoiceDueDate->lessThan(now())){
-					$pastDueSupplierInvoicesForContracts[] = $item ;
-				}else{
-					$sum = $item->net_balance_in_main_currency * $allocationPercentage ; 
-					$currentWeekYear = $datesWithWeekNumber[$item->invoice_due_date] ;
-					$invoiceNumber = $item->invoice_number . ' [ ' . $item->supplier_name . ' ]' ; 
-					$invoiceNumber = __('Invoice No.') . ' ' .  $invoiceNumber;
-					$result['suppliers'][$key][$invoiceNumber]['weeks'][$currentWeekYear] = isset($result['suppliers'][$key][$invoiceNumber]['weeks'][$currentWeekYear]) ? $result['suppliers'][$key][$invoiceNumber]['weeks'][$currentWeekYear] + $sum :  $sum;
-					$result['suppliers'][$key][$invoiceNumber]['total'] = isset($result['suppliers'][$key][$invoiceNumber]['total']) ? $result['suppliers'][$key][$invoiceNumber]['total']  + $sum : $sum;
-					$currentTotal = $sum;
-					$result['suppliers'][$key]['total'][$currentWeekYear] = isset($result['suppliers'][$key]['total'][$currentWeekYear]) ? $result['suppliers'][$key]['total'][$currentWeekYear] +  $currentTotal : $currentTotal ;
-				
-				}
-				
-				
-		  }
-		
+		if($weight <= 0 || !$purchaseOrderNumber){
+			return ;
 		}
-		
-		
-		
-	
+
+		$items = self::where('company_id',$companyId)
+		->where('net_balance','>',0)
+		->where('contract_code',$supplierContractCode)
+		->where('purchases_order_number',$purchaseOrderNumber)
+		->whereBetween('invoice_due_date',[$startDate,$endDate])
+		->get();
+
+		foreach($items as $item){
+			$invoiceDueDate = Carbon::make($item->invoice_due_date) ;
+			if($invoiceDueDate->lessThan(now())){
+				$pastDueSupplierInvoicesForContracts[] = $item ;
+				continue;
+			}
+
+			if(!isset($datesWithWeekNumber[$item->invoice_due_date])){
+				continue;
+			}
+
+			$sum = $item->net_balance_in_main_currency * $weight ;
+			$currentWeekYear = $datesWithWeekNumber[$item->invoice_due_date] ;
+			$invoiceNumber = $item->invoice_number . ' [ ' . $item->supplier_name . ' ]' ;
+			$invoiceNumber = __('Invoice No.') . ' ' .  $invoiceNumber;
+			$result['suppliers'][$key][$invoiceNumber]['weeks'][$currentWeekYear] = isset($result['suppliers'][$key][$invoiceNumber]['weeks'][$currentWeekYear]) ? $result['suppliers'][$key][$invoiceNumber]['weeks'][$currentWeekYear] + $sum :  $sum;
+			$result['suppliers'][$key][$invoiceNumber]['total'] = isset($result['suppliers'][$key][$invoiceNumber]['total']) ? $result['suppliers'][$key][$invoiceNumber]['total']  + $sum : $sum;
+			$result['suppliers'][$key]['total'][$currentWeekYear] = isset($result['suppliers'][$key]['total'][$currentWeekYear]) ? $result['suppliers'][$key]['total'][$currentWeekYear] +  $sum : $sum ;
+		}
 	}
 	public function letterOfCreditIssuancePaymentSettlements()
 	{
@@ -544,6 +622,11 @@ class SupplierInvoice extends Model implements IInvoice
 				'down_payment_order_id_column' => 'purchase_order_id',
 				'add_to_cash_inflow_total' => false,
 				'paid_or_collected_status' => self::COLLETED_OR_PAID,
+				'invoice_settled_column' => 'total_paid_amount',
+				'invoice_settled_main_column' => 'total_paid_amount_in_main_currency',
+				'down_payment_money_table' => 'money_payments',
+				'down_payment_money_id_column' => 'money_payment_id',
+				'down_payment_money_date_column' => 'delivery_date',
 			],
 			$poAllocations
 		);
@@ -590,6 +673,11 @@ class SupplierInvoice extends Model implements IInvoice
 				'down_payment_order_id_column' => 'purchase_order_id',
 				'add_to_cash_inflow_total' => false,
 				'paid_or_collected_status' => self::COLLETED_OR_PAID,
+				'invoice_settled_column' => 'total_paid_amount',
+				'invoice_settled_main_column' => 'total_paid_amount_in_main_currency',
+				'down_payment_money_table' => 'money_payments',
+				'down_payment_money_id_column' => 'money_payment_id',
+				'down_payment_money_date_column' => 'delivery_date',
 				'contract_scope' => 'supplier_children',
 			]
 		);

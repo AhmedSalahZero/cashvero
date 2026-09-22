@@ -12,6 +12,7 @@ use App\Models\ForeignExchangeRate;
 use App\Models\TimeOfDeposit;
 use App\Services\Api\CashExpenseOdooService;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 trait HasPeriodicInterest
 {
@@ -90,8 +91,21 @@ trait HasPeriodicInterest
 	{
 		$currentAccountBankStatements = $this->currentAccountBankStatements->where('id',$currentAccountBankStatement->id) ;
 		$currentAccountBankStatement = $currentAccountBankStatements->first();
-		if($currentAccountBankStatement && $currentAccountBankStatement->interest_journal_entry_id){
+		/**
+		 * * الشركة من غير تكامل أودو ما عندهاش odoo_db_url ، و
+		 * * AuthTrait::$url نوعه string مش nullable — فمجرد إنشاء
+		 * * السيرفس كان بيرمي TypeError و يمنع حذف صف الفايدة من أصله .
+		 * * نفس الباج اللي كان في BankStatementController@updateBankStatementRow ،
+		 * * و نفس الحارس المستخدم في storePeriodInterestOdooRelations() فوق
+		 */
+		if($currentAccountBankStatement && $currentAccountBankStatement->interest_journal_entry_id && $this->company->hasOdooIntegrationCredentials()){
 			(new CashExpenseOdooService($this->company))->unlink($currentAccountBankStatement->interest_journal_entry_id);
+		}elseif($currentAccountBankStatement && $currentAccountBankStatement->interest_journal_entry_id){
+			Log::info('Period interest row deleted without unlinking its Odoo entry: no Odoo integration credentials', [
+				'company_id' => $this->company->id,
+				'statement_id' => $currentAccountBankStatement->id,
+				'interest_journal_entry_id' => $currentAccountBankStatement->interest_journal_entry_id,
+			]);
 		}
 		CurrentAccountBankStatement::deleteButTriggerChangeOnLastElement($currentAccountBankStatements);
 	}

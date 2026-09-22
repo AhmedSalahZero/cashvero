@@ -1543,9 +1543,24 @@ class MoneyPaymentController
             }
 			
 			
-			 if ($moneyPayment->account_bank_statement_line_id) {
+			/**
+			 * * الشركة (أو المستخدم) من غير بيانات تكامل أودو كانت
+			 * * بتوقّع المسار ده بـ TypeError قبل ما يحصل أي حاجة —
+			 * * نفس باج BankStatementController@updateBankStatementRow
+			 * * و HasPeriodicInterest::deletePeriodInterest . العمود
+			 * * account_bank_statement_line_id مابيتملاش غير من أودو ،
+			 * * بس hasOdooIntegrationCredentials() بتفحص المستخدم كمان ،
+			 * * فمستخدم من غير يوزر/باسورد أودو في شركة متكاملة بيوقّعه
+			 */
+			 if ($moneyPayment->account_bank_statement_line_id && $moneyPayment->company->hasOdooIntegrationCredentials()) {
             $OdooPaymentService = new OdooPayment($moneyPayment->company);
             $OdooPaymentService->unlinkBankCollection($moneyPayment->account_bank_statement_line_id);
+        } elseif ($moneyPayment->account_bank_statement_line_id) {
+            \Illuminate\Support\Facades\Log::info('Money payment updated without unlinking its Odoo bank collection: no Odoo integration credentials', [
+                'company_id' => $moneyPayment->company->id,
+                'money_payment_id' => $moneyPayment->id,
+                'account_bank_statement_line_id' => $moneyPayment->account_bank_statement_line_id,
+            ]);
         }
 		
 		return redirect()->back()->with('success',__('Done'));

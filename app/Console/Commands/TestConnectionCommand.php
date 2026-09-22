@@ -17,7 +17,7 @@ require_once(public_path('apis/ripcord.php'));
 class TestConnectionCommand extends Command
 {
 
-	protected $signature = 'run:odoo-connection';
+	protected $signature = 'run:odoo-connection {company=92 : رقم الشركة} {user? : رقم المستخدم — الافتراضي أول مستخدم في الشركة}';
 	
 	protected $description = 'Test Odoo Connection Code Command';
 
@@ -47,13 +47,63 @@ class TestConnectionCommand extends Command
 	{
 		    $this->info(' Trying to connect to Odoo...');
 
-		$company = Company::find(92);
-		$user = $company->users()->first();
+		$companyId = (int) $this->argument('company');
+		$company = Company::find($companyId);
+
+		/**
+		 * * الكوماند ده أداة تشخيص — لازم يقول المشكلة فين بدل ما يقع
+		 * * بـ "Call to a member function on null"
+		 */
+		if (! $company) {
+			$this->error("❌ Company {$companyId} not found.");
+
+			return Command::FAILURE;
+		}
+
+		$userId = $this->argument('user');
+		$user = $userId ? User::find((int) $userId) : $company->users()->first();
+
+		if (! $user) {
+			$this->error($userId ? "❌ User {$userId} not found." : "❌ Company {$companyId} has no users.");
+
+			return Command::FAILURE;
+		}
+
+		$this->info(' User: '.$user->name);
+
 		/**
 		 * @var User $user
 		 * @var Company $company
 		 */
-			$this->url = $company->getOdooDBUrl();
+
+		/**
+		 * * الخصائص تحت معرّفة string مش nullable ، فالشركة اللي
+		 * * ماعندهاش odoo_db_url كانت بتطلّع
+		 * *   TypeError: Cannot assign null to property ...::$url
+		 * * بدل ما الكوماند يقول إن التكامل مش متظبط أصلا — و ده بالظبط
+		 * * عكس الغرض من أداة اختبار اتصال
+		 */
+		$missing = [];
+		if (! $company->getOdooDBUrl()) {
+			$missing[] = 'company.odoo_db_url';
+		}
+		if (! $company->getOdooDBName()) {
+			$missing[] = 'company.odoo_db_name';
+		}
+		if (! $user->getOdooDBUserName()) {
+			$missing[] = 'user.odoo_db_username';
+		}
+		if (! $user->getOdooDBPassword()) {
+			$missing[] = 'user.odoo_db_password';
+		}
+
+		if ($missing) {
+			$this->error('❌ Odoo integration is not configured. Missing: '.implode(', ', $missing));
+
+			return Command::FAILURE;
+		}
+
+		$this->url = $company->getOdooDBUrl();
 		$this->db = $company->getOdooDBName();
 		$this->username =$user->getOdooDBUserName();
 		$this->password = $user->getOdooDBPassword();

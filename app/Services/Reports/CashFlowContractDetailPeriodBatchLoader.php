@@ -6,6 +6,7 @@ use App\Enums\LcTypes;
 use App\Enums\LgTypes;
 use App\Models\CashExpense;
 use App\Models\Cheque;
+use App\Models\Contract;
 use App\Models\ForeignExchangeRate;
 use App\Models\LetterOfCreditIssuance;
 use App\Models\LetterOfGuaranteeIssuance;
@@ -45,9 +46,10 @@ final class CashFlowContractDetailPeriodBatchLoader
         self::applyLetterOfGuaranteeMovements($result, $letterOfGuaranteeModelData, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractId, $periodStart, $periodEnd, $periodsByWeekKey);
         self::applyLetterOfCreditMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $periodStart, $periodEnd, $periodsByWeekKey);
         self::applyCashExpenseMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractId, $periodStart, $periodEnd, $periodsByWeekKey);
-        if ($poAllocations !== null && $poAllocations->isNotEmpty()) {
-            self::applySupplierPaymentMovementsViaPoAllocations($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $poAllocations, $periodStart, $periodEnd, $periodsByWeekKey);
-        }
+        // No longer gated on $poAllocations being non-empty — a Supplier
+        // contract hanging under this one via contracts.parent_id has no
+        // allocation row at all, and its payments used to be skipped here.
+        self::applySupplierPaymentMovements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $contractId, $poAllocations ?? collect(), $periodStart, $periodEnd, $periodsByWeekKey);
     }
 
     private static function applySettlementMovements(
@@ -550,51 +552,120 @@ final class CashFlowContractDetailPeriodBatchLoader
      * Supplier payments that never get tagged with THIS (Customer)
      * contract directly — a supplier payment settlement always carries
      * the SUPPLIER's own contract_id (see settlement_allocations),
-     * never the Customer contract it might be linked to. The only link
-     * is po_allocations: Customer contract -> allocated PO -> that PO's
-     * real Supplier invoice(s) -> whatever payments/LCs settled them.
-     * Each match is weighted by the PO's allocation_percentage for this
-     * contract, so a payment on a PO that's 60% allocated here shows
-     * 60% of its paid amount — same weighting already used for the
-     * "Suppliers Invoices" row (SupplierInvoice::getSupplierInvoicesForPoUnderCollectionAtDates).
+     * never the Customer contract it might be linked to. So the only
+     * way in is through the Supplier contract's Purchase Orders ->
+     * their Supplier invoice(s) -> whatever payments/LCs settled them.
      * Covers every payment type Company Cash Flow shows (Outgoing
      * Transfers, Cash Payments, Paid/Under-Payment Payable Cheques)
      * plus Letters of Credit that settled the invoice.
+     *
+     * ── Both links, not just po_allocations (fixed 2026-09) ─────────
+     * This used to walk po_allocations ONLY, and was skipped entirely
+     * when the contract had no allocation rows. po_allocations is the
+     * OPTIONAL explicit link (the "Allocate" modal on a Purchase
+     * Order); the ordinary one is contracts.parent_id — a Supplier
+     * contract created under this Customer contract, which is what the
+     * contract's "Supplier Contracts" popup lists.
+     *
+     * The same gap was fixed at the same time in the "Suppliers
+     * Invoices" row (SupplierInvoice::getSupplierInvoicesForPoUnderCollectionAtDates).
+     * Fixing only that one would have moved the problem one step down
+     * the line rather than solving it: the invoice would show while
+     * unpaid, then vanish from the report the moment it was paid —
+     * dropped from the invoices row by its net_balance reaching 0, and
+     * never picked up here.
+     *
+     * Weighting mirrors that row exactly: an allocated PO counts for
+     * its allocation_percentage (one PO can be split across several
+     * Customer contracts), a child Supplier contract's PO counts 100%
+     * (it belongs to this contract alone). A PO reachable BOTH ways is
+     * counted once, by its allocation row — the one carrying the
+     * percentage — same rule as HasForecastedProjectCollection.
      */
-    private static function applySupplierPaymentMovementsViaPoAllocations(
+    private static function applySupplierPaymentMovements(
         array &$result,
         Collection $foreignExchangeRates,
         string $mainFunctionalCurrency,
         int $companyId,
+        int $contractId,
         Collection $poAllocations,
         string $periodStart,
         string $periodEnd,
         array $periodsByWeekKey,
     ): void {
+        $allocatedPurchaseOrderIds = [];
+
         foreach ($poAllocations as $poAllocation) {
-            $allocationPercentage = ((float) ($poAllocation->allocation_percentage ?? 0)) / 100;
-            if ($allocationPercentage <= 0) {
-                continue;
+            $allocatedPurchaseOrderIds[] = (int) $poAllocation->purchase_order_id;
+
+            self::applySupplierPaymentMovementsForPurchaseOrder(
+                $result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId,
+                $poAllocation->code, $poAllocation->po_number,
+                ((float) ($poAllocation->allocation_percentage ?? 0)) / 100,
+                $periodStart, $periodEnd, $periodsByWeekKey
+            );
+        }
+
+        $childSupplierContracts = Contract::where('company_id', $companyId)
+            ->where('parent_id', $contractId)
+            ->where('model_type', 'Supplier')
+            ->with('purchasesOrders')
+            ->get();
+
+        foreach ($childSupplierContracts as $supplierContract) {
+            foreach ($supplierContract->purchasesOrders as $purchaseOrder) {
+                if (in_array((int) $purchaseOrder->id, $allocatedPurchaseOrderIds, true)) {
+                    continue;
+                }
+
+                self::applySupplierPaymentMovementsForPurchaseOrder(
+                    $result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId,
+                    $supplierContract->getCode(), $purchaseOrder->po_number, 1.0,
+                    $periodStart, $periodEnd, $periodsByWeekKey
+                );
             }
-
-            $invoiceIds = DB::table('supplier_invoices')
-                ->where('company_id', $companyId)
-                ->where('contract_code', $poAllocation->code)
-                ->where('purchases_order_number', $poAllocation->po_number)
-                ->pluck('id');
-
-            if ($invoiceIds->isEmpty()) {
-                continue;
-            }
-
-            self::applyPoAllocatedMoneyPayments($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $invoiceIds, $allocationPercentage, $periodStart, $periodEnd, $periodsByWeekKey);
-            self::applyPoAllocatedLetterOfCreditSettlements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $invoiceIds, $allocationPercentage, $periodStart, $periodEnd, $periodsByWeekKey);
         }
     }
 
     /**
+     * One Purchase Order's supplier invoices and the cash movements
+     * that settled them — shared by both links above.
+     */
+    private static function applySupplierPaymentMovementsForPurchaseOrder(
+        array &$result,
+        Collection $foreignExchangeRates,
+        string $mainFunctionalCurrency,
+        int $companyId,
+        ?string $supplierContractCode,
+        ?string $purchaseOrderNumber,
+        float $weight,
+        string $periodStart,
+        string $periodEnd,
+        array $periodsByWeekKey,
+    ): void {
+        if ($weight <= 0 || ! $supplierContractCode || ! $purchaseOrderNumber) {
+            return;
+        }
+
+        $invoiceIds = DB::table('supplier_invoices')
+            ->where('company_id', $companyId)
+            ->where('contract_code', $supplierContractCode)
+            ->where('purchases_order_number', $purchaseOrderNumber)
+            ->pluck('id');
+
+        if ($invoiceIds->isEmpty()) {
+            return;
+        }
+
+        self::applyPoAllocatedMoneyPayments($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $invoiceIds, $weight, $periodStart, $periodEnd, $periodsByWeekKey);
+        self::applyPoAllocatedLetterOfCreditSettlements($result, $foreignExchangeRates, $mainFunctionalCurrency, $companyId, $invoiceIds, $weight, $periodStart, $periodEnd, $periodsByWeekKey);
+    }
+
+    /**
      * Outgoing Transfers / Cash Payments / Paid & Under-Payment Payable
-     * Cheques for invoices matched via po_allocations.
+     * Cheques for a Supplier PO's invoices. $weight is the allocation
+     * percentage for an allocated PO, or 1.0 for a child Supplier
+     * contract's own PO — see applySupplierPaymentMovements().
      *
      * ⚠️ Bug fix: the first version of this method only checked
      * settlement_allocations (mirroring applyContractMoneyPaymentByType()
@@ -618,7 +689,7 @@ final class CashFlowContractDetailPeriodBatchLoader
         string $mainFunctionalCurrency,
         int $companyId,
         Collection $invoiceIds,
-        float $allocationPercentage,
+        float $weight,
         string $periodStart,
         string $periodEnd,
         array $periodsByWeekKey,
@@ -689,7 +760,7 @@ final class CashFlowContractDetailPeriodBatchLoader
                     $companyId,
                     $foreignExchangeRates,
                 );
-                $amount = (float) $row->paid_amount * $exchangeRate * $allocationPercentage;
+                $amount = (float) $row->paid_amount * $exchangeRate * $weight;
                 $supplierName = (string) $row->supplier_name;
 
                 if (! isset($result['suppliers'][$typeLabel][$supplierName])) {
@@ -722,7 +793,7 @@ final class CashFlowContractDetailPeriodBatchLoader
         string $mainFunctionalCurrency,
         int $companyId,
         Collection $invoiceIds,
-        float $allocationPercentage,
+        float $weight,
         string $periodStart,
         string $periodEnd,
         array $periodsByWeekKey,
@@ -776,7 +847,7 @@ final class CashFlowContractDetailPeriodBatchLoader
 
             $lcKey = __('Letter Of Credit').' - '.__('Invoice No').' '.$invoiceNumber;
             $supplierName = (string) $row->supplier_name;
-            $amount = (float) $row->allocation_amount * $exchangeRate * $allocationPercentage;
+            $amount = (float) $row->allocation_amount * $exchangeRate * $weight;
 
             if (! isset($result['suppliers'][$lcKey][$supplierName])) {
                 $result['suppliers'][$lcKey][$supplierName] = ['weeks' => [], 'total' => 0];
@@ -910,7 +981,13 @@ final class CashFlowContractDetailPeriodBatchLoader
             ->where(function ($q) {
                 $q->where('is_renewal_fees', 1)->orWhere('is_commission_fees', 1)->orWhere('is_issuance_fees', 1);
             })
-            ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, credit as paid_amount, financial_institution_accounts.currency as currency, current_account_bank_statements.date as movement_date')
+            /**
+             * * leftJoin مش join : الخطاب اللي مالوش partner لازم يفضل
+             * * في النتيجة بمبلغه ، الاسم الناقص ما يصحش يغيّر أرقام
+             * * التقرير
+             */
+            ->leftJoin('partners', 'partners.id', '=', 'letter_of_guarantee_issuances.partner_id')
+            ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, credit as paid_amount, financial_institution_accounts.currency as currency, current_account_bank_statements.date as movement_date, letter_of_guarantee_issuances.lg_code as lg_code, partners.name as partner_name')
             ->get();
 
         foreach ($feeRows as $row) {
@@ -935,6 +1012,15 @@ final class CashFlowContractDetailPeriodBatchLoader
             $result[$mainType][$subTypeFees][$lgType]['weeks'][$weekKey] += $amount;
             $result[$mainType][$subTypeFees][$lgType]['total'] = ($result[$mainType][$subTypeFees][$lgType]['total'] ?? 0) + $amount;
             $result[$mainType][$subTypeFees]['total'][$weekKey] = ($result[$mainType][$subTypeFees]['total'][$weekKey] ?? 0) + $amount;
+
+            // Same breakdown payload as the two cash-cover rows below, so the
+            // ℹ️ popup on "LGs Commission & Fees" shows which guarantees the
+            // cell is made of instead of a bare number.
+            $letterOfGuaranteeModelData[$subTypeFees][$lgType]['weeks'][$weekKey][] = [
+                'amount' => $amount,
+                'lg_code' => $row->lg_code,
+                'name' => $row->partner_name,
+            ];
         }
 
         // ⚠️ Bug fix: this used to be a single, unfiltered query that read

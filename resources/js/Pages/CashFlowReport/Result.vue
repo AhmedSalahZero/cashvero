@@ -194,6 +194,16 @@ function buildCurrencyTable(currency) {
     return mainRows;
 }
 
+// Rows whose cells carry a per-guarantee breakdown popup. "LGs Commission
+// & Fees" was added once its loader started shipping lg_code/name per
+// guarantee — before that its SQL grouped by lg_type, so there was nothing
+// to show.
+const LG_BREAKDOWN_ROWS = ['Cancelled LGs Cash Cover', 'Issued LG Cash Cover', 'LGs Commission & Fees'];
+// Only these two ever existed in the old flat (lgType-keyed) shape, so only
+// they may fall back to it. Letting the fees row fall back would make it
+// display the cash-cover rows' guarantees on a report saved before this change.
+const LG_FLAT_SHAPE_ROWS = ['Cancelled LGs Cash Cover', 'Issued LG Cash Cover'];
+
 function buildSubRow(local, mainReportKey, parentKeyName, subKey, customerDue, supplierDue, loanDue) {
     const subData = local[mainReportKey]?.[parentKeyName]?.[subKey] || {};
     let currentSubTotal = 0;
@@ -218,14 +228,16 @@ function buildSubRow(local, mainReportKey, parentKeyName, subKey, customerDue, s
         currentSubTotal += currentValue;
         return currentValue;
     });
-    const lgBreakdown = (parentKeyName === 'Cancelled LGs Cash Cover' || parentKeyName === 'Issued LG Cash Cover')
+    const lgBreakdown = LG_BREAKDOWN_ROWS.includes(parentKeyName)
         ? weekKeys.value.map(weekKey =>
             // New shape (Company Cash Flow): namespaced by row name first,
             // so Cancelled and Issued don't collide on the same lgType.
             // Falls back to the old flat shape (still used by Contract Cash
             // Flow, untouched) so that report keeps working unchanged.
             props.letterOfGuaranteeModelData?.[parentKeyName]?.[subKey]?.weeks?.[weekKey]
-            ?? props.letterOfGuaranteeModelData?.[subKey]?.weeks?.[weekKey]
+            ?? (LG_FLAT_SHAPE_ROWS.includes(parentKeyName)
+                ? props.letterOfGuaranteeModelData?.[subKey]?.weeks?.[weekKey]
+                : null)
             ?? [])
         : null;
     const incomingTransferBreakdown = parentKeyName === 'Incoming Transfers'
@@ -634,7 +646,7 @@ function saveProjectionTab(type) {
                                 </td>
                                 <td v-for="(cell, i) in sub.cells" :key="i" class="px-2 py-2 text-center cvr-num whitespace-nowrap text-xs">
                                     {{ fmt(cell) }}
-                                    <i v-if="(row.name === 'Cancelled LGs Cash Cover' || row.name === 'Issued LG Cash Cover') && cell"
+                                    <i v-if="LG_BREAKDOWN_ROWS.includes(row.name) && cell"
                                         @click.stop="openLgBreakdown(sub.label, weekKeys[i], sub.lgBreakdown?.[i])"
                                         class="ms-1 cursor-pointer" :title="$t('Breakdown')">ℹ️</i>
                                     <i v-if="row.name === 'Incoming Transfers' && cell"

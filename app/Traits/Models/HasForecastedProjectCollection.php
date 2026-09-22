@@ -89,6 +89,11 @@ trait HasForecastedProjectCollection
      *   down_payment_order_id_column: string, // 'sales_order_id' | 'purchase_order_id'
      *   add_to_cash_inflow_total: bool,       // true for customer (cash IN); false for supplier (cash OUT, not part of inflow total)
      *   paid_or_collected_status: string,      // invoice_status value meaning "fully settled": SupplierInvoice::COLLETED_OR_PAID | CustomerInvoice::COLLETED_OR_PAID
+     *   invoice_settled_column: string,        // 'total_collected_amount' | 'total_paid_amount'
+     *   invoice_settled_main_column: string,   // 'total_collected_amount_in_main_currency' | 'total_paid_amount_in_main_currency'
+     *   down_payment_money_table: string,      // 'money_received' | 'money_payments'
+     *   down_payment_money_id_column: string,  // 'money_received_id' | 'money_payment_id'
+     *   down_payment_money_date_column: string,// 'receiving_date' | 'delivery_date'
      *   contract_scope?: 'self'|'supplier_children', // default 'self' — see class docblock
      * }
      * @param  Collection|null  $poAllocations  Supplier side only — PoAllocation rows (each already
@@ -121,6 +126,11 @@ trait HasForecastedProjectCollection
         $downPaymentOrderIdColumn = $config['down_payment_order_id_column'];
         $addToCashInflowTotal = $config['add_to_cash_inflow_total'];
         $paidOrCollectedStatus = $config['paid_or_collected_status'];
+        $invoiceSettledColumn = $config['invoice_settled_column'];
+        $invoiceSettledMainColumn = $config['invoice_settled_main_column'];
+        $downPaymentMoneyTable = $config['down_payment_money_table'];
+        $downPaymentMoneyIdColumn = $config['down_payment_money_id_column'];
+        $downPaymentMoneyDateColumn = $config['down_payment_money_date_column'];
         $contractScope = $config['contract_scope'] ?? 'self';
         $useSupplierChildren = $contractScope === 'supplier_children';
 
@@ -151,21 +161,30 @@ trait HasForecastedProjectCollection
         // keeps the original same-currency-only filter.
         $showAllCurrenciesConverted = ! $contractId && $mainFunctionalCurrency !== null && $currency === $mainFunctionalCurrency;
 
-        // * العقد العادي بينزل دفعة واحدة في تاريخ تحصيل أمره، فبيتشرط
-        // * ينتهي جوّه فترة التقرير. العقد بتنفيذ شهري بينزل شرائح على
-        // * مدار مدّته، فبيدخل طول ما مدّته بتتقاطع مع الفترة — لو اتشرط
-        // * بنفس شرط الانتهاء، عقد سنة معروض عليه تقرير 3 شهور كان
-        // * هيختفي بالكامل.
+        // * مفيش فلترة بتاريخ العقد خالص.
+        // *
+        // * كان في شرط على العقد العادي: end_date <= $endDate يعني "هات
+        // * العقود اللي بتنتهي جوّه فترة التقرير بس". الشرط ده كان مبني
+        // * على إن العقد العادي بينزل دفعة واحدة في تاريخ تحصيل أمره —
+        // * و ده بالظبط الباج اللي اتصلّح في applyForecastedOrderBalance:
+        // * دلوقتي كل مرحلة تنفيذ بتنزل في بُكِتها. فعقد ماشي لحد يوليو
+        // * 2027 و مراحله بتتحصّل في أكتوبر و نوفمبر و ديسمبر 2026 كان
+        // * بيتشال بالكامل و صفّه يطلع فاضي.
+        // *
+        // * و مافيش عمود تاريخ في جدول العقود ينفع يقوم مقام الشرط الصح
+        // * أصلاً: مواعيد المراحل متخزّنة على الأمر نفسه
+        // * (sales_orders/purchase_orders.end_date_N + collection_days_N)
+        // * مش على العقد.
+        // *
+        // * الفلترة الحقيقية بتحصل في مكانها الصح على مستوى الشريحة:
+        // *   - العقد العادي: كل مرحلة بتتشيّك على [$startDate, $endDate]
+        // *     في applyForecastedOrderBalance()
+        // *   - العقد الشهري: كل شريحة بتتشيّك على $datesWithWeekNumber
+        // *     في applyMonthlyExecutedContractBalance()
+        // * و الأمر أو العقد اللي مالوش أي حاجة جوّه الفترة ما بيكتبش صف
+        // * من أصله. فالشرط ده كان تصفية مسبقة خشنة — و غلط. و شيله
+        // * ما بيكلّفش حاجة: النظام كله فيه أقل من 200 عقد.
         $contracts = Contract::where('company_id', $companyId)
-            ->where(function ($window) use ($startDate, $endDate) {
-                $window->where(function ($oneOff) use ($endDate) {
-                    $oneOff->where('is_monthly_executed', 0)->where('end_date', '<=', $endDate);
-                })->orWhere(function ($monthly) use ($startDate, $endDate) {
-                    $monthly->where('is_monthly_executed', 1)
-                        ->where('start_date', '<=', $endDate)
-                        ->where('end_date', '>=', $startDate);
-                });
-            })
             ->when(! $showAllCurrenciesConverted && ! $useSupplierChildren, function ($query) use ($currency) {
                 // Child Supplier contracts bill in their own currency, which
                 // is routinely NOT the parent Customer contract's — filtering
@@ -192,7 +211,7 @@ trait HasForecastedProjectCollection
                     $result, $contract, $startDate, $endDate, $currency, $companyId,
                     $datesWithWeekNumber, $foreignExchangeRates, $mainFunctionalCurrency,
                     $mainResultType, $resultKey, $invoiceTable, $downPaymentTable,
-                    $addToCashInflowTotal, $paidOrCollectedStatus
+                    $addToCashInflowTotal, $paidOrCollectedStatus, $invoiceSettledColumn
                 );
                 continue;
             }
@@ -202,18 +221,20 @@ trait HasForecastedProjectCollection
                     continue;
                 }
 
-                $orderArr = HArr::getLatestNonZeroExecutionKeys($order->toArray());
-                if (empty($orderArr['end_date'])) {
+                $phases = HArr::getNonZeroExecutionPhases($order->toArray());
+                if (! $phases) {
                     continue;
                 }
 
                 self::applyForecastedOrderBalance(
-                    $result, $orderArr, $contract, $order->id, $contract->id,
+                    $result, $phases, $contract, $order->id, $contract->id,
                     $startDate, $endDate, $currency, $companyId, $datesWithWeekNumber,
                     $foreignExchangeRates, $mainFunctionalCurrency,
                     $mainResultType, $resultKey, $invoiceTable, $orderNumberKey,
                     $invoiceOrderNumberColumn, $downPaymentTable, $downPaymentOrderIdColumn,
-                    $addToCashInflowTotal, $paidOrCollectedStatus, 1.0
+                    $addToCashInflowTotal, $paidOrCollectedStatus, 1.0,
+                    $invoiceSettledColumn, $invoiceSettledMainColumn, $downPaymentMoneyTable,
+                    $downPaymentMoneyIdColumn, $downPaymentMoneyDateColumn
                 );
             }
         }
@@ -222,8 +243,8 @@ trait HasForecastedProjectCollection
         // po_allocations, weighted by allocation_percentage. ──────────
         if ($poAllocations !== null) {
             foreach ($poAllocations as $poAllocation) {
-                $orderArr = HArr::getLatestNonZeroExecutionKeys($poAllocation->toArray());
-                if (empty($orderArr['end_date'])) {
+                $phases = HArr::getNonZeroExecutionPhases($poAllocation->toArray());
+                if (! $phases) {
                     continue;
                 }
 
@@ -242,25 +263,128 @@ trait HasForecastedProjectCollection
                 }
 
                 self::applyForecastedOrderBalance(
-                    $result, $orderArr, $supplierContract, $poAllocation->purchase_order_id, $poAllocation->customer_contract_id,
+                    $result, $phases, $supplierContract, $poAllocation->purchase_order_id, $poAllocation->customer_contract_id,
                     $startDate, $endDate, $currency, $companyId, $datesWithWeekNumber,
                     $foreignExchangeRates, $mainFunctionalCurrency,
                     $mainResultType, $resultKey, $invoiceTable, $orderNumberKey,
                     $invoiceOrderNumberColumn, $downPaymentTable, $downPaymentOrderIdColumn,
-                    $addToCashInflowTotal, $paidOrCollectedStatus, $allocationPercentage
+                    $addToCashInflowTotal, $paidOrCollectedStatus, $allocationPercentage,
+                    $invoiceSettledColumn, $invoiceSettledMainColumn, $downPaymentMoneyTable,
+                    $downPaymentMoneyIdColumn, $downPaymentMoneyDateColumn
                 );
             }
         }
     }
 
     /**
+     * * سعر الصرف تحت بيرجّع 1 لو التبويب المعروض هو نفس عملة العقد
+     * * (ForeignExchangeRate::getExchangeRateForDisplayCurrency) ، يعني
+     * * الأرقام بتفضل بعملة العقد . نفس الشرط بالظبط متكرر هنا عشان
+     * * نعرف نقرا الخصم بنفس العملة .
+     */
+    private static function displaysInContractCurrency($displayCurrency, ?string $contractCurrency): bool
+    {
+        return is_string($displayCurrency)
+            && $displayCurrency !== ''
+            && $contractCurrency === $displayCurrency;
+    }
+
+    /**
+     * * رصيد الدفعة المقدمة بعملة العرض . الجدول مفيهوش عمود بالعملة
+     * * الوظيفية ، فلما العرض بيكون بالعملة الوظيفية بنحوّل كل صف
+     * * بسعر تاريخ حركة الفلوس بتاعته — نفس التاريخ اللي صف الدفعات
+     * * المقدمة في التقرير بيتحوّل عنده .
+     */
+    private static function downPaymentBalanceForDisplay(
+        string $downPaymentTable,
+        string $downPaymentOrderIdColumn,
+        $orderId,
+        $downPaymentContractId,
+        $companyId,
+        Contract $contract,
+        $displayCurrency,
+        ?string $mainFunctionalCurrency,
+        $foreignExchangeRates,
+        string $downPaymentMoneyTable,
+        string $downPaymentMoneyIdColumn,
+        string $downPaymentMoneyDateColumn,
+        bool $displayInContractCurrency
+    ): float {
+        $rows = DB::table($downPaymentTable.' as dp')
+            ->leftJoin($downPaymentMoneyTable.' as m', 'm.id', '=', 'dp.'.$downPaymentMoneyIdColumn)
+            ->where('dp.company_id', $companyId)
+            ->where('dp.'.$downPaymentOrderIdColumn, $orderId)
+            ->where('dp.contract_id', $downPaymentContractId)
+            ->select([
+                'dp.down_payment_balance',
+                'dp.currency',
+                'm.'.$downPaymentMoneyDateColumn.' as money_date',
+            ])
+            ->get();
+
+        $total = 0.0;
+        foreach ($rows as $row) {
+            $balance = (float) $row->down_payment_balance;
+
+            if ($displayInContractCurrency) {
+                $total += $balance;
+
+                continue;
+            }
+
+            $total += $balance * ForeignExchangeRate::getExchangeRateAtOrOne(
+                $row->currency ?: $contract->getCurrency(),
+                $mainFunctionalCurrency,
+                $row->money_date ?: $contract->getStartDate(),
+                $companyId,
+                $foreignExchangeRates
+            );
+        }
+
+        return $total;
+    }
+
+    /**
      * One order's (Sales Order / Purchase Order) contribution to the
      * forecast row — shared by both the "directly owned" and the
      * "allocated via po_allocations" paths above.
+     *
+     * ── Per-execution-phase split (fixed 2026-09) ───────────────────
+     * $phases is every non-zero execution phase of the order, oldest
+     * end_date first (HArr::getNonZeroExecutionPhases). Each phase is
+     * invoiced at its own end_date and collected collection_days
+     * later, so each lands in its OWN period bucket, carrying its own
+     * share of the order amount.
+     *
+     * Before this, only the phase with the furthest end_date was read
+     * and the WHOLE order amount was dropped into that single bucket —
+     * a 1,000,000 contract split 50/20/30 across Sep/Oct/Nov showed as
+     * 1,000,000 in December instead of 500,000 / 200,000 / 300,000
+     * across October / November / December.
+     *
+     * This is what made an ordinary contract "pay out on one date",
+     * the premise the monthly-executed contract (added later) was
+     * built to work around. An ordinary contract now pays out across
+     * its phases too; the monthly one still differs in that it has no
+     * orders at all and spreads its remainder evenly over its months.
+     *
+     * ── Where the deduction lands (confirmed with project owner) ────
+     * "Unused down payment + open invoices" is one number for the
+     * whole order, but the forecast is now several buckets, so it has
+     * to be spent somewhere. It eats the phases OLDEST FIRST: money
+     * already received, or already invoiced, covers the phases that
+     * have actually been executed, and only what is left over stays in
+     * the later phases at their own dates.
+     *
+     * The deduction walk runs over EVERY phase in order — including
+     * phases whose collection date falls outside the report window —
+     * before the window check, otherwise an early out-of-window phase
+     * would keep its share of the deduction unspent and the in-window
+     * phases would be over-deducted.
      */
     private static function applyForecastedOrderBalance(
         array &$result,
-        array $orderArr,
+        array $phases,
         Contract $contract,
         $orderId,
         $downPaymentContractId,
@@ -280,72 +404,103 @@ trait HasForecastedProjectCollection
         string $downPaymentOrderIdColumn,
         bool $addToCashInflowTotal,
         string $paidOrCollectedStatus,
-        float $weightMultiplier
+        float $weightMultiplier,
+        string $invoiceSettledColumn,
+        string $invoiceSettledMainColumn,
+        string $downPaymentMoneyTable,
+        string $downPaymentMoneyIdColumn,
+        string $downPaymentMoneyDateColumn
     ): void {
         $totalCashInFlowKey = __('Total Cash Inflow');
 
-        $orderEndDate = $orderArr['end_date'];
-        $orderCollectionDays = $orderArr['collection_days'] ?? 0;
-        $currentCollectionDate = Carbon::make($orderEndDate)->addDays($orderCollectionDays);
-        if (! $currentCollectionDate->between($startDate, $endDate)) {
-            return;
-        }
+        // Order-level columns (amount, so_number/po_number) are copied
+        // onto every phase, so any phase answers for the whole order.
+        $orderAmount = (float) $phases[0]['amount'];
+        $orderNumber = $phases[0][$orderNumberKey];
 
-        $currentCollectionDateFormatted = $currentCollectionDate->format('Y-m-d');
-        $currentWeekYear = $datesWithWeekNumber[$currentCollectionDateFormatted];
-        $orderAmount = $orderArr['amount'];
         $contractCode = $contract->getCode();
         $contractName = $contract->getName();
-        $orderNumber = $orderArr[$orderNumberKey];
         $customerName = $contract->getClientName();
 
-        // Sum of each linked invoice's OWN net_balance — already
-        // settlement-aware (see trait docblock), so a fully
-        // down-payment-settled invoice contributes 0 automatically,
-        // and a partially-settled one contributes only what's left.
-        // Explicitly excludes fully paid/collected invoices too (not
-        // just relying on net_balance reaching 0 for them) — confirmed
-        // with the project owner as the safer, authoritative signal.
-        $invoicesNetBalance = (float) DB::table($invoiceTable)
+        // * لو التبويب المعروض هو نفس عملة العقد ، سعر الصرف تحت بيرجع 1
+        // * و الأرقام بتفضل بعملة العقد — فالخصم لازم يتقرا بالأعمدة الخام .
+        // * غير كده كل حاجة بتتحوّل للعملة الوظيفية ، فبنقرا أعمدة
+        // * _in_main_currency . القرار ثابت للتقرير كله مش لكل مرحلة ،
+        // * لان $currency مابتتغيرش جوه اللوب .
+        $displayInContractCurrency = self::displaysInContractCurrency($currency, $contract->getCurrency());
+        $settledColumn = $displayInContractCurrency ? $invoiceSettledColumn : $invoiceSettledMainColumn;
+        $deductionsColumn = $displayInContractCurrency ? 'total_deductions' : 'total_deductions_in_main_currency';
+        $netBalanceColumn = $displayInContractCurrency ? 'net_balance' : 'net_balance_in_main_currency';
+
+        // كل ما اتفوتر على الأمر ده و اتحسب في مكان تاني :
+        //   - المسدّد فعلا (اتحصّل/اتدفع) + الخصومات : فلوس خلصت
+        //   - net_balance : الرصيد المفتوح ، و ده ظاهر اصلا في صف
+        //     Customers Invoices / Suppliers Invoices ، فلو مااتطرحش
+        //     هنا بيتحسب مرتين في نفس التقرير
+        // مفيش فلتر على invoice_status : المعادلة بتجمع المفوتر مش
+        // المتبقي بس ، فالفاتورة المحصّلة بالكامل لازم تدخل .
+        $invoicesSettlement = (float) DB::table($invoiceTable)
             ->where('company_id', $companyId)
             ->where('currency', $contract->getCurrency())
             ->where($invoiceOrderNumberColumn, $orderNumber)
             ->where('contract_code', $contractCode)
-            ->where('invoice_status', '!=', $paidOrCollectedStatus)
-            ->sum('net_balance');
+            ->sum(DB::raw(
+                'ifnull('.$settledColumn.', 0)'
+                .' + ifnull('.$deductionsColumn.', 0)'
+                .' + ifnull('.$netBalanceColumn.', 0)'
+            ));
 
-        // The portion of any down payment NOT yet applied to an
-        // invoice — down_payment_balance, not the original
-        // down_payment_amount, so it isn't double-counted once
-        // it's been used to settle an invoice above.
-        $unusedDownPaymentBalance = (float) DB::table($downPaymentTable)
-            ->where('company_id', $companyId)
-            ->where($downPaymentOrderIdColumn, $orderId)
-            ->where('contract_id', $downPaymentContractId)
-            ->sum('down_payment_balance');
+        // Down Payment Balance — الرصيد اللي لسه ما اتصرفش بس ، مش
+        // الدفعة كلها : الجزء اللي اتصرف موجود اصلا جوه المسدّد فوق .
+        $unusedDownPaymentBalance = self::downPaymentBalanceForDisplay(
+            $downPaymentTable, $downPaymentOrderIdColumn, $orderId, $downPaymentContractId,
+            $companyId, $contract, $currency, $mainFunctionalCurrency, $foreignExchangeRates,
+            $downPaymentMoneyTable, $downPaymentMoneyIdColumn, $downPaymentMoneyDateColumn,
+            $displayInContractCurrency
+        );
 
-        $orderNetBalance = $orderAmount - $unusedDownPaymentBalance - $invoicesNetBalance;
-        if ($orderNetBalance < 0) {
-            $orderNetBalance = 0;
-        }
-
-        // * $currency هي عملة التبويب المعروض. لو العقد بنفس العملة يبقى
-        // * الرقم لازم يفضل زي ما هو — التحويل للعملة الرئيسية بيحصل بس على
-        // * تبويب العملة الرئيسية اللي بيجمّع كل العملات مع بعض.
-        $exchangeRate = ForeignExchangeRate::getExchangeRateForDisplayCurrency($contract->getCurrency(), $currency, $mainFunctionalCurrency, $currentCollectionDateFormatted, $companyId, $foreignExchangeRates);
-        $orderNetBalance = $orderNetBalance * $exchangeRate * $weightMultiplier;
-
+        $remainingDeduction = $invoicesSettlement + $unusedDownPaymentBalance;
         $rowLabel = $customerName.'-'.$contractName;
-        $result[$mainResultType][$resultKey][$rowLabel]['weeks'][$currentWeekYear] =
-            ($result[$mainResultType][$resultKey][$rowLabel]['weeks'][$currentWeekYear] ?? 0) + $orderNetBalance;
-        $result[$mainResultType][$resultKey][$rowLabel]['total'] =
-            ($result[$mainResultType][$resultKey][$rowLabel]['total'] ?? 0) + $orderNetBalance;
-        $result[$mainResultType][$resultKey]['total'][$currentWeekYear] =
-            ($result[$mainResultType][$resultKey]['total'][$currentWeekYear] ?? 0) + $orderNetBalance;
 
-        if ($addToCashInflowTotal) {
-            $result['customers'][$totalCashInFlowKey]['total'][$currentWeekYear] =
-                ($result['customers'][$totalCashInFlowKey]['total'][$currentWeekYear] ?? 0) + $orderNetBalance;
+        foreach ($phases as $phase) {
+            $currentCollectionDate = Carbon::make($phase['end_date'])
+                ->addDays((int) $phase['collection_days']);
+            $currentCollectionDateFormatted = $currentCollectionDate->format('Y-m-d');
+
+            // * $currency هي عملة التبويب المعروض. لو العقد بنفس العملة يبقى
+            // * الرقم لازم يفضل زي ما هو — التحويل للعملة الرئيسية بيحصل بس على
+            // * تبويب العملة الرئيسية اللي بيجمّع كل العملات مع بعض.
+            // * كل مرحلة بتتحوّل بسعر يوم تحصيلها هي، مش بسعر واحد للأمر كله.
+            // * التحويل بقى قبل الخصم ، لان الخصم نفسه بقى بعملة العرض .
+            $exchangeRate = ForeignExchangeRate::getExchangeRateForDisplayCurrency($contract->getCurrency(), $currency, $mainFunctionalCurrency, $currentCollectionDateFormatted, $companyId, $foreignExchangeRates);
+            $phaseAmount = $orderAmount * $phase['share'] * $exchangeRate;
+
+            // min() is what keeps the forecast from going negative and
+            // carries any excess on to the next phase.
+            $deducted = min($remainingDeduction, $phaseAmount);
+            $remainingDeduction -= $deducted;
+            $phaseNetBalance = ($phaseAmount - $deducted) * $weightMultiplier;
+
+            if (! $currentCollectionDate->between($startDate, $endDate)) {
+                continue;
+            }
+
+            if (! isset($datesWithWeekNumber[$currentCollectionDateFormatted])) {
+                continue;
+            }
+            $currentWeekYear = $datesWithWeekNumber[$currentCollectionDateFormatted];
+
+            $result[$mainResultType][$resultKey][$rowLabel]['weeks'][$currentWeekYear] =
+                ($result[$mainResultType][$resultKey][$rowLabel]['weeks'][$currentWeekYear] ?? 0) + $phaseNetBalance;
+            $result[$mainResultType][$resultKey][$rowLabel]['total'] =
+                ($result[$mainResultType][$resultKey][$rowLabel]['total'] ?? 0) + $phaseNetBalance;
+            $result[$mainResultType][$resultKey]['total'][$currentWeekYear] =
+                ($result[$mainResultType][$resultKey]['total'][$currentWeekYear] ?? 0) + $phaseNetBalance;
+
+            if ($addToCashInflowTotal) {
+                $result['customers'][$totalCashInFlowKey]['total'][$currentWeekYear] =
+                    ($result['customers'][$totalCashInFlowKey]['total'][$currentWeekYear] ?? 0) + $phaseNetBalance;
+            }
         }
     }
 
@@ -378,7 +533,8 @@ trait HasForecastedProjectCollection
         string $invoiceTable,
         string $downPaymentTable,
         bool $addToCashInflowTotal,
-        string $paidOrCollectedStatus
+        string $paidOrCollectedStatus,
+        string $invoiceSettledColumn
     ): void {
         $contractStart = $contract->getStartDate();
         $contractEnd = $contract->getEndDate();
@@ -386,20 +542,26 @@ trait HasForecastedProjectCollection
             return;
         }
 
-        // * الفواتير بترتبط بالعقد بالكود مش بالـ id (زي باقي التقرير)
-        $invoicesNetBalance = (float) DB::table($invoiceTable)
+        // * نفس معادلة applyForecastedOrderBalance بالظبط . هنا الخصم
+        // * لازم يفضل بعملة العقد : المبلغ الكلي بعملة العقد ، و كل
+        // * شريحة شهرية بتتحوّل بسعر يومها بعد القسمة — فلو الخصم
+        // * اتقرا بالعملة الوظيفية كان هيتحوّل مرتين .
+        $invoicesSettlement = (float) DB::table($invoiceTable)
             ->where('company_id', $companyId)
             ->where('currency', $contract->getCurrency())
             ->where('contract_code', $contract->getCode())
-            ->where('invoice_status', '!=', $paidOrCollectedStatus)
-            ->sum('net_balance');
+            ->sum(DB::raw(
+                'ifnull('.$invoiceSettledColumn.', 0)'
+                .' + ifnull(total_deductions, 0)'
+                .' + ifnull(net_balance, 0)'
+            ));
 
         $unusedDownPaymentBalance = (float) DB::table($downPaymentTable)
             ->where('company_id', $companyId)
             ->where('contract_id', $contract->id)
             ->sum('down_payment_balance');
 
-        $remaining = (float) $contract->getAmount() - $unusedDownPaymentBalance - $invoicesNetBalance;
+        $remaining = (float) $contract->getAmount() - $unusedDownPaymentBalance - $invoicesSettlement;
         if ($remaining <= 0) {
             return;
         }

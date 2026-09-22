@@ -55,7 +55,7 @@ const odooErrorTarget = ref(null);
             <p class="text-sm cvr-text-muted mb-6">{{ $t('Down payments available to settle against invoices') }}</p>
 
             <div class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto">
-                <table class="min-w-full text-sm">
+                <table class="min-w-full text-sm cvr-sticky-actions">
                     <thead class="cvr-table-head">
                         <tr>
                             <th class="px-4 py-3 text-center">#</th>

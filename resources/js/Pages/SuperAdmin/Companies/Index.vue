@@ -65,8 +65,8 @@ function removeImage(row) {
                 </div>
             </div>
 
-            <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
-                <table class="min-w-full text-sm">
+            <div class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto">
+                <table class="min-w-full text-sm cvr-sticky-actions">
                     <thead class="cvr-table-head">
                         <tr>
                             <th class="px-3 py-3 text-start">{{ $t('Company') }}</th>

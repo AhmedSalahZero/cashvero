@@ -97,20 +97,52 @@ class MonthlyExecutedContractWiringTest extends TestCase
     }
 
     /**
-     * A normal contract is only picked up when it ENDS inside the
-     * report window, because it pays out on one date. A monthly one
-     * pays out across its whole period, so a twelve-month contract
-     * viewed through a three-month window has to be included even
-     * though it ends long after that window closes.
+     * This used to assert the opposite: a monthly contract was picked
+     * up on period overlap while a NORMAL one had to END inside the
+     * report window — "because it pays out on one date".
+     *
+     * That premise was itself the bug. An ordinary contract only paid
+     * out on one date because applyForecastedOrderBalance() read a
+     * single execution phase and dropped the whole order amount on it.
+     * Now every phase lands in its own bucket, so an ordinary contract
+     * pays out across its phases exactly like a monthly one pays out
+     * across its months, and end_date <= $endDate would hide a
+     * contract whose phases are all collected inside the window.
+     *
+     * There is no correct contract-level date filter to replace it
+     * with either: phase dates live on the ORDER
+     * (end_date_N + collection_days_N), not on contracts.*. So the
+     * selection carries no date filter at all, and the window is
+     * applied per slice — see the two tests below.
      */
-    public function test_monthly_contracts_are_selected_on_period_overlap(): void
+    public function test_contract_selection_carries_no_date_filter(): void
     {
         $trait = $this->trait();
 
-        $this->assertStringContainsString("where('is_monthly_executed', 1)", $trait);
-        $this->assertStringContainsString("->where('start_date', '<=', \$endDate)", $trait);
-        $this->assertStringContainsString("->where('end_date', '>=', \$startDate)", $trait);
-        $this->assertStringContainsString("where('is_monthly_executed', 0)->where('end_date', '<=', \$endDate)", $trait);
+        // من أول بناء الاستعلام لحد ->get() — الجزء اللي بيختار العقود
+        $needle = '$contracts = Contract::where(';
+        $from = strpos($trait, $needle);
+        $this->assertNotFalse($from, 'The contract selection query moved or was renamed.');
+        $to = strpos($trait, '->get();', $from);
+        $this->assertNotFalse($to, 'The contract selection query is no longer terminated by ->get().');
+        $selection = substr($trait, $from, $to - $from);
+
+        $this->assertStringNotContainsString('end_date', $selection, 'A contract must not be dropped by its own end_date.');
+        $this->assertStringNotContainsString('start_date', $selection, 'A contract must not be dropped by its own start_date.');
+        $this->assertStringNotContainsString('is_monthly_executed', $selection, 'Both kinds are now selected the same way.');
+    }
+
+    /**
+     * The window moved from the contract query down to each slice.
+     * A normal contract filters phase by phase on its collection date.
+     */
+    public function test_an_ordinary_phase_is_filtered_on_its_own_collection_date(): void
+    {
+        $this->assertStringContainsString(
+            '->between($startDate, $endDate)',
+            $this->trait(),
+            'Each execution phase must be checked against the window on its own.'
+        );
     }
 
     public function test_the_monthly_row_uses_the_shared_schedule(): void

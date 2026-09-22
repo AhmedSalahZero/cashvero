@@ -1165,3 +1165,59 @@ aside .cvr-nav-sub-item.cvr-nav-item-active .cvr-nav-icon-svg {
     padding-right: .75rem;
     padding-left: .75rem;
 }
+/* ── عمود الإجراءات (Control) يفضل ظاهر على الشاشات الصغيرة ────────
+   جداول صفحات الـ index أعرض من الكارت تحت 1024px : مقيس على Chrome
+   بالـ CSS المبني ، الجدول 897px جوه كارت 672px عند 768 ، و 279px عند
+   375. يعني آخر عمود — اللي فيه كل أزرار التحكم — كان بيقع 210px لحد
+   603px برّه المنطقة المرئية ، و المستخدم لازم يسحب أفقيا جوه الكارت
+   عشان يوصله. على الأجهزة اللي مابتعرضش سكرول بار دايم (iOS و معظم
+   الموبايلات) ده بيبان و كأن الزرار خرج برّه الجدول أو اختفى.
+
+   تثبيت العمود على حافة الكارت بيخليه في مكانه مهما اتسحب الجدول.
+   بيتطبّق بس على الجداول اللي آخر عمود فيها أزرار — كلاس صريح مش
+   قاعدة عامة على td:last-child ، عشان مانثبّتش أعمدة بيانات في
+   التقارير بالغلط. */
+@media (max-width: 1023px) {
+    .cvr-sticky-actions th:last-child,
+    .cvr-sticky-actions td:last-child {
+        position: sticky;
+        inset-inline-end: 0;
+        /* الصفوف نفسها شفافة فوق الكارت ، فلازم نديها خلفية و إلا
+           باقي الأعمدة هتعدي من تحتها و هي بتتسحب */
+        background-color: var(--cvr-bg-card);
+    }
+
+    .cvr-sticky-actions td:last-child {
+        z-index: 2;
+    }
+
+    /* الرأس فوق الجسم عشان ما يتغطّاش وقت السحب العمودي */
+    .cvr-sticky-actions th:last-child {
+        z-index: 3;
+        background-color: var(--cvr-table-head-bg);
+    }
+
+    /* الهوفر لازم يكمّل على العمود المثبّت كمان ، و إلا الصف بيبان مقطوع */
+    .cvr-sticky-actions tr.cvr-table-row:hover > td:last-child {
+        background-color: var(--cvr-bg-hover);
+    }
+
+    /* ضل خفيف يوضّح إن فيه محتوى متسحب تحت العمود */
+    .cvr-sticky-actions th:last-child::before,
+    .cvr-sticky-actions td:last-child::before {
+        content: '';
+        position: absolute;
+        inset-block: 0;
+        inset-inline-start: 0;
+        width: 6px;
+        transform: translateX(-100%);
+        pointer-events: none;
+        background: linear-gradient(to left, rgba(0, 0, 0, 0.18), transparent);
+    }
+
+    [dir="rtl"] .cvr-sticky-actions th:last-child::before,
+    [dir="rtl"] .cvr-sticky-actions td:last-child::before {
+        transform: translateX(100%);
+        background: linear-gradient(to right, rgba(0, 0, 0, 0.18), transparent);
+    }
+}

@@ -633,8 +633,20 @@ final class CashFlowCompanyPeriodBatchLoader
             ->when($reportCurrency !== $mainFunctionalCurrency, function ($q) use ($reportCurrency) {
                 $q->where('financial_institution_accounts.currency', $reportCurrency);
             })
-            ->groupByRaw('letter_of_guarantee_issuances.lg_type, financial_institution_accounts.currency, current_account_bank_statements.date')
-            ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, sum(credit) as paid_amount, financial_institution_accounts.currency as currency, current_account_bank_statements.date as movement_date')
+            /**
+             * * leftJoin مش join : الخطاب اللي مالوش partner لازم يفضل
+             * * في النتيجة بمبلغه ، الاسم الناقص ما يصحش يغيّر أرقام
+             * * التقرير
+             */
+            ->leftJoin('partners', 'partners.id', '=', 'letter_of_guarantee_issuances.partner_id')
+            /**
+             * * التجميع بقى لكل خطاب لوحده مش لكل نوع : الاجمالي زي ما هو
+             * * (مجموع الاجزاء = مجموع الكل) لكن اسم الخطاب و كوده بيوصلوا
+             * * للـ breakdown popup . قبل كده التجميع كان بيدفن الخطابات
+             * * جوه نوعها في الـ SQL فما كانش فيه اصلا حاجة تتعرض
+             */
+            ->groupByRaw('letter_of_guarantee_issuances.id, letter_of_guarantee_issuances.lg_type, letter_of_guarantee_issuances.lg_code, partners.name, financial_institution_accounts.currency, current_account_bank_statements.date')
+            ->selectRaw('letter_of_guarantee_issuances.lg_type as lg_type, sum(credit) as paid_amount, financial_institution_accounts.currency as currency, current_account_bank_statements.date as movement_date, letter_of_guarantee_issuances.lg_code as lg_code, partners.name as partner_name')
             ->get();
 
         foreach ($feeRows as $row) {
@@ -669,6 +681,15 @@ final class CashFlowCompanyPeriodBatchLoader
             $result[$mainType][$subTypeFees][$lgType]['weeks'][$weekKey] += $amount;
             $result[$mainType][$subTypeFees][$lgType]['total'][$weekKey] += $amount;
             $result[$mainType][$subTypeFees]['total'][$weekKey] += $amount;
+
+            // Same breakdown payload as the two cash-cover rows below, so the
+            // ℹ️ popup on "LGs Commission & Fees" shows which guarantees the
+            // cell is made of instead of a bare number.
+            $letterOfGuaranteeModelData[$subTypeFees][$lgType]['weeks'][$weekKey][] = [
+                'amount' => $amount,
+                'lg_code' => $row->lg_code,
+                'name' => $row->partner_name,
+            ];
         }
 
         $inflowMainType = 'customers';

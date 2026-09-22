@@ -44,7 +44,7 @@ function destroyRole() {
             </div>
 
             <div class="cvr-card overflow-x-auto">
-                <table class="min-w-full text-sm">
+                <table class="min-w-full text-sm cvr-sticky-actions">
                     <thead class="cvr-table-head">
                         <tr>
                             <th class="px-4 py-3 text-start">{{ $t('Role') }}</th>

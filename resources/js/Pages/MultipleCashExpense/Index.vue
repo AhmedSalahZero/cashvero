@@ -99,7 +99,7 @@ function performDelete() {
             </div>
 
             <div v-else class="overflow-auto">
-                <table class="min-w-full text-sm">
+                <table class="min-w-full text-sm cvr-sticky-actions">
                     <thead>
                         <tr class="cvr-table-head">
                             <th class="px-3 py-2 text-start">{{ $t('Payment Date') }}</th>

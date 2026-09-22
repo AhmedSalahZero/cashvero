@@ -178,8 +178,8 @@ function destroyRow() {
             </div>
 
             <!-- ═══ BANKS TABLE ═══ -->
-            <div v-if="activeTab === 'bank'" class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
-                <table class="min-w-full text-sm">
+            <div v-if="activeTab === 'bank'" class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto">
+                <table class="min-w-full text-sm cvr-sticky-actions">
                     <thead class="cvr-table-head">
                         <tr>
                             <th class="px-4 py-3 text-center">#</th>
@@ -251,8 +251,8 @@ function destroyRow() {
             </div>
 
             <!-- ═══ LEASING / FACTORING (same shape: name + actions) ═══ -->
-            <div v-else-if="activeTab === 'leasing_companies' || activeTab === 'factoring_companies'" class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
-                <table class="min-w-full text-sm">
+            <div v-else-if="activeTab === 'leasing_companies' || activeTab === 'factoring_companies'" class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto">
+                <table class="min-w-full text-sm cvr-sticky-actions">
                     <thead class="cvr-table-head">
                         <tr>
                             <th class="px-4 py-3 text-start">#</th>
@@ -281,8 +281,8 @@ function destroyRow() {
             </div>
 
             <!-- ═══ MORTGAGE (name + branch + actions) ═══ -->
-            <div v-else class="cvr-card-bg cvr-border border rounded-lg overflow-hidden">
-                <table class="min-w-full text-sm">
+            <div v-else class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto">
+                <table class="min-w-full text-sm cvr-sticky-actions">
                     <thead class="cvr-table-head">
                         <tr>
                             <th class="px-4 py-3 text-start">#</th>

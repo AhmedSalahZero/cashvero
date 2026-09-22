@@ -777,8 +777,22 @@ class BankStatementController
 			$financialInstitutionAccount = FinancialInstitutionAccount::find($financialInstitutionAccountId);
 			$financialInstitution = $financialInstitutionAccount?->financialInstitution;
 			$financialInstitutionId= $financialInstitution?->id;
-			if($bankStatementRecord && $bankStatementRecord->interest_journal_entry_id){
+			/**
+			 * * الشركة من غير تكامل أودو ما عندهاش odoo_db_url ، و
+			 * * AuthTrait::$url نوعه string مش nullable — فمجرد إنشاء
+			 * * السيرفس كان بيرمي TypeError و يمنع تعديل صف الكشف من
+			 * * أصله . نفس الحارس اللي باقي مسارات أودو بتستخدمه ، و هو
+			 * * بيغطي الحالتين اللي بتوقّع الـ constructor : بيانات الشركة
+			 * * الناقصة و المستخدم اللي ماعندوش يوزر/باسورد أودو
+			 */
+			if($bankStatementRecord && $bankStatementRecord->interest_journal_entry_id && $company->hasOdooIntegrationCredentials()){
 				(new CashExpenseOdooService($company))->unlink($bankStatementRecord->interest_journal_entry_id);
+			}elseif($bankStatementRecord && $bankStatementRecord->interest_journal_entry_id){
+				\Illuminate\Support\Facades\Log::info('Bank statement row updated without unlinking its Odoo interest entry: no Odoo integration credentials', [
+					'company_id' => $company->id,
+					'statement_id' => $bankStatementRecord->id,
+					'interest_journal_entry_id' => $bankStatementRecord->interest_journal_entry_id,
+				]);
 			}
 			(new TimeOfDeposit())->storePeriodInterestOdooRelations($bankStatementRecord,$date,$debit,$financialInstitutionId , $financialInstitutionAccountId,$company);
 		}
