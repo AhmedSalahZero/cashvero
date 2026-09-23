@@ -188,12 +188,13 @@ class LoanSchedule extends Model
 	public static function getLoanInstallmentsAtDates(array &$result ,$foreignExchangeRates,$mainFunctionalCurrency  , int $companyId,array $datesWithWeekNumber,string $endDate,?string $currency = null) 
 	{
 		$mainType = 'cash_expenses';
-		$showAllCurrenciesConverted = $currency === null || $currency === $mainFunctionalCurrency;
+		/**
+		 * * كل صفوف التقرير على مستوى الشركة و بالعملة الوظيفية دايما .
+		 * * اختيار العملة وظيفته يفلتر العقود بس — مش يضيّق باقي الصفوف
+		 * * و لا يغيّر وحدة العرض .
+		 */
 		$rows = DB::table('loan_schedules')->where('loan_schedules.company_id',$companyId)
 						->join('medium_term_loans','medium_term_loans.id','=','loan_schedules.medium_term_loan_id')
-						->when(! $showAllCurrenciesConverted, function($q) use ($currency) {
-							$q->where('medium_term_loans.currency',$currency);
-						})
 						->whereBetween('date',[now()->format('Y-m-d'),$endDate])
 						->where('remaining','>',0)
 						->selectRaw('medium_term_loans.name as name ,loan_schedules.remaining as paid_amount ,date,medium_term_loans.currency,date')->get();
@@ -203,7 +204,7 @@ class LoanSchedule extends Model
 			$currentCurrency = $row->currency;
 			$exchangeRate  = ForeignExchangeRate::getExchangeRateAt($currentCurrency,$mainFunctionalCurrency,$date,$companyId,$foreignExchangeRates);
 			$lcType = $row->name;
-			$currentPaidAmount = $showAllCurrenciesConverted ? $row->paid_amount * $exchangeRate : (float) $row->paid_amount;
+			$currentPaidAmount = $row->paid_amount * $exchangeRate;
 			$currentWeekYear =$datesWithWeekNumber[$row->date];
 			$result[$mainType][$subType][$lcType]['weeks'][$currentWeekYear] = isset($result[$mainType][$subType][$lcType]['weeks'][$currentWeekYear]) ? $result[$mainType][$subType][$lcType]['weeks'][$currentWeekYear] + $currentPaidAmount :  $currentPaidAmount;
 			$result[$mainType][$subType][$lcType]['total'] = isset($result[$mainType][$subType][$lcType]['total']) ? $result[$mainType][$subType][$lcType]['total']  + $currentPaidAmount : $currentPaidAmount;

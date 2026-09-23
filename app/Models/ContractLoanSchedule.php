@@ -288,13 +288,13 @@ class ContractLoanSchedule extends Model
         ?string $currency = null
     ): void {
         $mainType = 'cash_expenses';
-        $showAllCurrenciesConverted = $currency === null || $currency === $mainFunctionalCurrency;
+        /**
+         * * كل صفوف التقرير على مستوى الشركة و بالعملة الوظيفية دايما .
+         * * اختيار العملة وظيفته يفلتر العقود بس .
+         */
         $rows = DB::table('contract_loan_schedules')
             ->where('contract_loan_schedules.company_id', $companyId)
             ->join('leasing_contracts', 'leasing_contracts.id', '=', 'contract_loan_schedules.leasing_contract_id')
-            ->when(! $showAllCurrenciesConverted, function ($q) use ($currency) {
-                $q->where('leasing_contracts.currency', $currency);
-            })
             ->where('contract_loan_schedules.date', '>=', now()->format('Y-m-d'))
             ->where('contract_loan_schedules.date', '<=', $endDate)
             ->where('contract_loan_schedules.date', '>', '0000-00-00')
@@ -316,7 +316,7 @@ class ContractLoanSchedule extends Model
                 $foreignExchangeRates
             );
             $contractName = $row->name ?: __('N/A');
-            $currentPaidAmount = $showAllCurrenciesConverted ? $row->paid_amount * $exchangeRate : (float) $row->paid_amount;
+            $currentPaidAmount = $row->paid_amount * $exchangeRate;
             $currentWeekYear = $datesWithWeekNumber[$row->date];
             $result[$mainType][$subType][$contractName]['weeks'][$currentWeekYear] = isset($result[$mainType][$subType][$contractName]['weeks'][$currentWeekYear])
                 ? $result[$mainType][$subType][$contractName]['weeks'][$currentWeekYear] + $currentPaidAmount

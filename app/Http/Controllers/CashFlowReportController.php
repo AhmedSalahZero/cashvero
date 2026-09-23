@@ -803,19 +803,14 @@ class CashFlowReportController
 	public function getPastDueCustomerInvoices(string $invoiceType,string $currency , int $companyId , ?string $contractCode = null , ?string $mainFunctionalCurrency = null ){
 		$fullClassName = '\App\Models\\'.$invoiceType;
 
-		// Company-wide + viewing the main functional currency tab: show
-		// past-due invoices in EVERY currency (their net_balance_in_main_currency
-		// column already carries the converted equivalent). Any other tab
-		// (a specific foreign currency, or a single-currency contract) keeps
-		// the original strict same-currency filter.
-		$showAllCurrenciesConverted = ! $contractCode && $mainFunctionalCurrency !== null && $currency === $mainFunctionalCurrency;
-
+		/**
+		 * * كل صفوف التقرير على مستوى الشركة و بالعملة الوظيفية دايما .
+		 * * اختيار العملة وظيفته يفلتر العقود بس — مش يضيّق باقي الصفوف
+		 * * و لا يغيّر وحدة العرض .
+		 */
 		$items  = $fullClassName::where('company_id',$companyId)
 		->where('net_balance','>',0)
 		->whereIn('invoice_status',['past_due','partially_collected_and_past_due'])
-		->when(! $showAllCurrenciesConverted, function($query) use ($currency) {
-			$query->where('currency',$currency);
-		})
 		->where('invoice_due_date','<',now()->format('Y-m-d'))
 		->when($contractCode , function($query) use($contractCode) {
 			$query->where('contract_code',$contractCode);
@@ -826,7 +821,11 @@ class CashFlowReportController
 		return $items;
 	}
 	public function getPastDueLoanSchedules(string $currency , int $companyId , ?string $mainFunctionalCurrency = null , ?Collection $foreignExchangeRates = null ){
-		$showAllCurrenciesConverted = $mainFunctionalCurrency !== null && $currency === $mainFunctionalCurrency;
+		/**
+		 * * كل صفوف التقرير على مستوى الشركة و بالعملة الوظيفية دايما .
+		 * * اختيار العملة وظيفته يفلتر العقود بس — مش يضيّق باقي الصفوف
+		 * * و لا يغيّر وحدة العرض .
+		 */
 
 		/**
 		 * Bug fix (client-flagged, confirmed 2026-08-15): this only ever
@@ -851,9 +850,6 @@ class CashFlowReportController
 		$mtlItems  = LoanSchedule::where('loan_schedules.company_id',$companyId)
 		->where('remaining','>',0)
 		->join('medium_term_loans','medium_term_loans.id','=','loan_schedules.medium_term_loan_id')
-		->when(! $showAllCurrenciesConverted, function($query) use ($currency) {
-			$query->where('medium_term_loans.currency',$currency);
-		})
 		->whereIn('loan_schedules.status',['past_due','partially_paid_and_past_due'])
 		->where('date','<',now()->format('Y-m-d'))
 		->selectRaw('loan_schedules.*,medium_term_loans.currency,medium_term_loans.name as loan_name, \'MTL\' as loan_type')->get();
@@ -861,33 +857,25 @@ class CashFlowReportController
 		$leasingItems = ContractLoanSchedule::where('contract_loan_schedules.company_id',$companyId)
 		->where('remaining','>',0)
 		->join('leasing_contracts','leasing_contracts.id','=','contract_loan_schedules.leasing_contract_id')
-		->when(! $showAllCurrenciesConverted, function($query) use ($currency) {
-			$query->where('leasing_contracts.currency',$currency);
-		})
 		->whereIn('contract_loan_schedules.status',['past_due','partially_paid_and_past_due'])
 		->where('date','<',now()->format('Y-m-d'))
 		->selectRaw('contract_loan_schedules.*,leasing_contracts.currency,leasing_contracts.name as loan_name, \'Leasing\' as loan_type')->get();
 
 		$items = $mtlItems->concat($leasingItems)->sortBy('date')->values();
 
-		if ($showAllCurrenciesConverted) {
-			$items = $items->map(function($item) use ($mainFunctionalCurrency, $companyId, $foreignExchangeRates) {
-				$rate = ForeignExchangeRate::getExchangeRateAt(
-					(string) $item->currency,
-					$mainFunctionalCurrency,
-					(string) $item->date,
-					$companyId,
-					$foreignExchangeRates ?? collect(),
-				);
-				$item->remaining_in_main_currency = (float) $item->remaining * $rate;
-				return $item;
-			});
-		} else {
-			$items = $items->map(function($item) {
-				$item->remaining_in_main_currency = (float) $item->remaining;
-				return $item;
-			});
-		}
+		// مفيش عمود remaining_in_main_currency في الجدول ، فكل صف بيتحوّل
+		// هنا بسعر تاريخه — دايما ، مهما كانت العملة المختارة .
+		$items = $items->map(function($item) use ($mainFunctionalCurrency, $companyId, $foreignExchangeRates) {
+			$rate = ForeignExchangeRate::getExchangeRateAt(
+				(string) $item->currency,
+				$mainFunctionalCurrency,
+				(string) $item->date,
+				$companyId,
+				$foreignExchangeRates ?? collect(),
+			);
+			$item->remaining_in_main_currency = (float) $item->remaining * $rate;
+			return $item;
+		});
 
 		return $items->toArray();
 	}

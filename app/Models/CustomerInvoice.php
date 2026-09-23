@@ -452,18 +452,15 @@ class CustomerInvoice extends Model implements IInvoice
 	{
 		$totalCashInFlowKey = __('Total Cash Inflow');
 		$key = __('Customers Invoices') ;
-		// Company-wide + main functional currency tab: keep every currency
-		// (net_balance_in_main_currency already carries the converted
-		// equivalent). Any specific foreign-currency tab, or a single-
-		// currency contract, narrows down to that currency's own invoices.
-		$showAllCurrenciesConverted = ! $contractCode && $mainFunctionalCurrency !== null && $currency === $mainFunctionalCurrency;
+		/**
+		 * * كل صفوف التقرير على مستوى الشركة و بالعملة الوظيفية دايما .
+		 * * اختيار العملة وظيفته يفلتر العقود بس — مش يضيّق باقي الصفوف
+		 * * و لا يغيّر وحدة العرض .
+		 */
 		$items = self::
 		where('company_id',$companyId)
 		->when($contractCode,function($builder) use ($contractCode){
 			$builder->where('contract_code',$contractCode);
-		})
-		->when(! $showAllCurrenciesConverted && $currency !== null, function($builder) use ($currency){
-			$builder->where('currency',$currency);
 		})
 		->where('net_balance','>',0)
 		->
@@ -491,17 +488,20 @@ class CustomerInvoice extends Model implements IInvoice
 		 * * في حالة لو مرر العقد فا مش محتاجين عمله لان العقد الواحد مربوط بعملة واحدة
 		 */
 		$totalCashInFlowKey = __('Total Cash Inflow');
-		// Main functional currency tab -> every currency's balance, each
-		// converted below. A specific foreign-currency tab -> that
-		// currency's own balances only, unconverted.
-		$showAllCurrenciesConverted = $currency === null || $currency === $mainFunctionalCurrency;
+		/**
+		 * * صف الارصدة بيجيب ارصدة كل العملات و بيحوّلها للعملة الوظيفية
+		 * * دايما — بغض النظر عن تبويب العملة المعروض . اختيار العملة
+		 * * وظيفته يفلتر العقود مش يغيّر وحدة العرض .
+		 *
+		 * * قبل كده تبويب العملة الاجنبية كان (١) بيفلتر الارصدة على
+		 * * العملة دي و (٢) بيعرضها خام من غير تحويل — بينما صفوف التوقّع
+		 * * في نفس العمود كانت بتتحوّل للعملة الوظيفية . فالنتيجة كانت
+		 * * جمع دولار على جنيه في نفس الخانة و في Total Cash Inflow .
+		 */
 		
 		$currentTypeText = 'Cash & Banks Balance';
 		$rows = DB::table('cash_in_safe_statements')
 		->where('cash_in_safe_statements.company_id',$companyId)
-		->when(! $showAllCurrenciesConverted, function($q) use ($currency) {
-			$q->where('cash_in_safe_statements.currency',$currency);
-		})
 		->where('cash_in_safe_statements.date','<=',$startDate)
 		->join('branch','branch.id','=','cash_in_safe_statements.branch_id')
 		->orderByRaw('cash_in_safe_statements.date desc , cash_in_safe_statements.id desc')
@@ -516,7 +516,7 @@ class CustomerInvoice extends Model implements IInvoice
 			$currentCurrency = $row->currency;
 			$exchangeRate  = ForeignExchangeRate::getExchangeRateAt($currentCurrency,$mainFunctionalCurrency,$date,$companyId,$foreignExchangeRates);
 			$invoiceNumber =   $row->name  ;
-			$amountInExchangeRate = $showAllCurrenciesConverted ? $row->received_amount * $exchangeRate : (float) $row->received_amount;
+			$amountInExchangeRate = $row->received_amount * $exchangeRate;
 			 $result['customers'][$currentTypeText][$invoiceNumber]['weeks'][$currentWeekYear] = isset($result['customers'][$currentTypeText][$invoiceNumber]['weeks'][$currentWeekYear]) ? $result['customers'][$currentTypeText][$invoiceNumber]['weeks'][$currentWeekYear]+  $amountInExchangeRate :$amountInExchangeRate;
 			$result['customers'][$currentTypeText][$invoiceNumber]['total'] = isset($result['customers'][$currentTypeText][$invoiceNumber]['total']) ? $result['customers'][$currentTypeText][$invoiceNumber]['total']  + $amountInExchangeRate : $amountInExchangeRate;
 			$currentTotal =$amountInExchangeRate;
@@ -526,9 +526,6 @@ class CustomerInvoice extends Model implements IInvoice
 		
 		$rows = DB::table('current_account_bank_statements')
 		->where('current_account_bank_statements.company_id',$companyId)
-		->when(! $showAllCurrenciesConverted, function($q) use ($currency) {
-			$q->where('financial_institution_accounts.currency',$currency);
-		})
 		->where('current_account_bank_statements.date','<=',$startDate)
 		->join('financial_institution_accounts','financial_institution_accounts.id','=','current_account_bank_statements.financial_institution_account_id')
 		->join('financial_institutions','financial_institutions.id','=','financial_institution_accounts.financial_institution_id')
@@ -548,7 +545,7 @@ class CustomerInvoice extends Model implements IInvoice
 			$exchangeRate  = ForeignExchangeRate::getExchangeRateAt($currentCurrency,$mainFunctionalCurrency,$date,$companyId,$foreignExchangeRates);
 			
 			$invoiceNumber =   $row->name . ' [ ' . $row->account_number . ' ]' . ' [ ' .  $currentCurrency .' ]'   ;
-			$amountInExchangeRate = $showAllCurrenciesConverted ? $row->received_amount*$exchangeRate : (float) $row->received_amount ; 
+			$amountInExchangeRate = $row->received_amount * $exchangeRate ; 
 			 $result['customers'][$currentTypeText][$invoiceNumber]['weeks'][$currentWeekYear] = isset($result['customers'][$currentTypeText][$invoiceNumber]['weeks'][$currentWeekYear]) ? $result['customers'][$currentTypeText][$invoiceNumber]['weeks'][$currentWeekYear]+  $amountInExchangeRate :$amountInExchangeRate;
 			$result['customers'][$currentTypeText][$invoiceNumber]['total'] = isset($result['customers'][$currentTypeText][$invoiceNumber]['total']) ? $result['customers'][$currentTypeText][$invoiceNumber]['total']  + $amountInExchangeRate : $amountInExchangeRate;
 			$currentTotal = $amountInExchangeRate;
