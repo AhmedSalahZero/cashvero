@@ -357,8 +357,8 @@ class ConsolidatedCashFlowService
             // like every other row: to the invoice's own contract if it's
             // one of the included ones, otherwise into the unallocated
             // rows above. Past-due invoices otherwise contribute nothing
-            // to any weekly figure at all (see totalCashInflowExcludingForecast()
-            // docblock) — this tier plan is what turns that dead, informational-only
+            // to any weekly figure at all — this tier plan is what turns
+            // that dead, informational-only
             // amount into an actual forecasted week, entirely opt-in
             // (empty tiers ⇒ zero effect, same as leaving it unset).
             $customerTiers = $this->normalizeTiers($request, 'customer_past_due_percentages', 'customer_past_due_days');
@@ -399,7 +399,7 @@ class ConsolidatedCashFlowService
             $sumInflow = $this->sumByWeek($sumInflow, $companyUnallocatedCashIn);
 
             $cashAndBanks = $banksSection[self::CASH_AND_BANKS_BALANCE_KEY]['total'] ?? [];
-            $sumNet = $this->netCashWithBanks($sumInflow, $cashAndBanks, $sumOutflow, $weeks);
+            $sumNet = $this->netCashFromTotals($sumInflow, $cashAndBanks, $sumOutflow, $weeks);
 
             $grandTotal = [
                 'cash_and_banks' => $cashAndBanks,
@@ -663,34 +663,6 @@ class ConsolidatedCashFlowService
     }
 
     /**
-     * "Total Cash Inflow" minus just the "Forecasted Project Collection"
-     * row — confirmed with the project owner: still-open invoices and
-     * past-due amounts SHOULD stay in this comparison (as long as
-     * they're not tied to a customer contract); only the forward-looking
-     * contract forecast itself must be excluded, nothing else.
-     *
-     * @return array<string, float|int>
-     */
-    public static function totalCashInflowExcludingForecast(array $customersResult): array
-    {
-        $inflowKey = __('Total Cash Inflow');
-        $forecastKey = 'Forecasted Project Collection';
-
-        $totalInflow = $customersResult[$inflowKey]['total'] ?? [];
-        $forecast = $customersResult[$forecastKey]['total'] ?? [];
-        $totalInflow = is_array($totalInflow) ? $totalInflow : [];
-        $forecast = is_array($forecast) ? $forecast : [];
-
-        $weekKeys = array_unique(array_merge(array_keys($totalInflow), array_keys($forecast)));
-        $result = [];
-        foreach ($weekKeys as $weekKey) {
-            $result[$weekKey] = (float) ($totalInflow[$weekKey] ?? 0) - (float) ($forecast[$weekKey] ?? 0);
-        }
-
-        return $result;
-    }
-
-    /**
      * Company-level cash outflow not covered by the selected contract cash-flow totals
      * (e.g. salaries and other expenses with no project allocation).
      *
@@ -723,18 +695,27 @@ class ConsolidatedCashFlowService
 
     /**
      * Company-level cash INFLOW not covered by the selected contracts —
-     * unlike computeUnallocatedCashOut() above, this deliberately does
-     * NOT compare the raw "Total Cash Inflow" figures as-is — those
-     * include "Forecasted Project Collection" (a forward-looking
-     * projection), which was inflating this figure: a contract's
-     * forecasted-but-not-yet-collected amount was baked into the
-     * company-wide total with nothing on the per-contract side reliably
-     * cancelling it back out. Confirmed with the project owner: only
-     * that forecast row should be excluded — still-open invoices and
-     * past-due amounts stay in the comparison as long as they're not
-     * tied to a customer contract (see totalCashInflowExcludingForecast()).
+     * the exact mirror of computeUnallocatedCashOut(): the company's own
+     * "Total Cash Inflow" minus the selected contracts' "Total Cash
+     * Inflow", period by period, floored at zero.
      *
-     * @param  list<array{cash_inflow_excl_forecast: array<string, float|int>}>  $contractsSection
+     * Both figures are taken AS THEY APPEAR IN THE REPORT, forecast rows
+     * included. Until 2026-09 this side alone stripped "Forecasted
+     * Project Collection" out of both halves, which made the two
+     * unallocated rows answer different questions: the inflow row showed
+     * committed money only while the outflow row showed committed plus
+     * projected. They now both mean "what the report shows for the
+     * company, minus what it shows for the contracts you picked".
+     *
+     * ⚠️ "Cash & Banks Balance" IS subtracted, though: it is part of the
+     * company's "Total Cash Inflow" but the report already prints it as
+     * its own row (banksSection / grandTotal['cash_and_banks']), so
+     * leaving it here showed the same opening balance twice on screen.
+     * It is not lost — netCashFromTotals() adds it back exactly once when
+     * it computes Net Cash, so Net Cash and Accumulated Net Cash keep the
+     * same values they had before this row was trimmed.
+     *
+     * @param  list<array{cash_inflow: array<string, float|int>}>  $contractsSection
      * @param  array<string, string|int>  $weeks
      * @return array<string, float|int>
      */
@@ -743,18 +724,22 @@ class ConsolidatedCashFlowService
         array $contractsSection,
         array $weeks,
     ): array {
-        $companyInflow = self::totalCashInflowExcludingForecast($companyResult['customers'] ?? []);
+        $companyInflow = $this->extractTotalCashInflow($companyResult);
+        $cashAndBanks = $companyResult['customers'][self::CASH_AND_BANKS_BALANCE_KEY]['total'] ?? [];
+        $cashAndBanks = is_array($cashAndBanks) ? $cashAndBanks : [];
         $contractsInflow = [];
 
         foreach ($contractsSection as $block) {
-            foreach (($block['cash_inflow_excl_forecast'] ?? []) as $weekKey => $amount) {
+            foreach (($block['cash_inflow'] ?? []) as $weekKey => $amount) {
                 $contractsInflow[$weekKey] = ($contractsInflow[$weekKey] ?? 0.0) + (float) $amount;
             }
         }
 
         $unallocated = [];
         foreach (array_keys($weeks) as $weekKey) {
-            $diff = (float) ($companyInflow[$weekKey] ?? 0) - (float) ($contractsInflow[$weekKey] ?? 0);
+            $diff = (float) ($companyInflow[$weekKey] ?? 0)
+                - (float) ($cashAndBanks[$weekKey] ?? 0)
+                - (float) ($contractsInflow[$weekKey] ?? 0);
             $unallocated[$weekKey] = max(0.0, $diff);
         }
 
@@ -858,7 +843,26 @@ class ConsolidatedCashFlowService
      * @param  array<string, string|int>  $weeks
      * @return array<string, float|int>
      */
-    private function netCashWithBanks(array $inflow, array $cashAndBanks, array $outflow, array $weeks): array
+    /**
+     * صافي التدفق = الداخل + رصيد البنوك − الخارج .
+     *
+     * * رصيد البنوك بيتحسب هنا **مرة واحدة بس** ، لان
+     * * computeUnallocatedCashIn() بتطرحه من طرف الشركة قبل ما تحطه في
+     * * $inflow . قبل كده كان داخل في الاتنين — في $inflow و هنا —
+     * * فصافي التدفق كان بيزيد بقيمة الرصيد كلها في اول فترة ، و
+     * * Accumulated Net Cash بيورّث الزيادة على كل الفترات اللي بعدها .
+     *
+     * * يعني الثابتة اللي لازم تفضل : الرصيد يظهر مرة في صفه الخاص
+     * * (banksSection) و مرة في الصافي ، و مايظهرش خالص في صف الدخل
+     * * غير المخصّص .
+     *
+     * @param  array<string, float|int>  $inflow
+     * @param  array<string, float|int>  $cashAndBanks
+     * @param  array<string, float|int>  $outflow
+     * @param  array<string, string|int>  $weeks
+     * @return array<string, float>
+     */
+    private function netCashFromTotals(array $inflow, array $cashAndBanks, array $outflow, array $weeks): array
     {
         $out = [];
         foreach (array_keys($weeks) as $wk) {
