@@ -176,8 +176,10 @@ class OdooContractImportRulesTest extends TestCase
             'veroanalysisb still imports contracts without an exchange rate.');
         $this->assertStringContainsString("\$projectFormatted['exchange_rate']", $source,
             'veroanalysisb looks the rate up but never stores it.');
-        $this->assertStringContainsString('$executionPercentageKey', $source,
-            'veroanalysisb still overwrites the sales-order execution percentage on every sync.');
+        $this->assertStringContainsString('executionPlanKeysFromOdoo', $source,
+            'veroanalysisb still builds the execution plan inline instead of through the shared guard.');
+        $this->assertStringContainsString('lastFilledExecutionIndex', $source,
+            'veroanalysisb still overwrites a hand-entered execution plan on every sync.');
 
         foreach (self::HARD_WRITES as $hardWrite) {
             $this->assertStringNotContainsString($hardWrite, $source,
@@ -186,10 +188,14 @@ class OdooContractImportRulesTest extends TestCase
     }
 
     /**
-     * There are TWO places the sync writes a percentage: the sales order
-     * under a customer contract, and the purchase order under the
+     * There are TWO places the sync writes an execution plan: the sales
+     * order under a customer contract, and the purchase order under the
      * supplier contract it creates. Fixing only the first still wiped
-     * every PO percentage on the next sync.
+     * every PO plan on the next sync. Both now go through the one
+     * helper, which also stops the phase DATES being overwritten.
+     *
+     * @see \App\Services\Api\OdooService::executionPlanKeysFromOdoo()
+     * @see \Tests\Feature\Odoo\OdooExecutionPlanPreservedTest
      */
     public function test_this_system_no_longer_hard_writes_the_percentage(): void
     {
@@ -200,8 +206,21 @@ class OdooContractImportRulesTest extends TestCase
                 "The sync still hard-writes the execution percentage: {$hardWrite}");
         }
 
-        $this->assertStringContainsString('$executionPercentageKey', $source, 'sales order guard');
-        $this->assertStringContainsString('$oldPurchaseOrder->execution_percentage_1 === null', $source, 'purchase order guard');
+        $this->assertStringContainsString(
+            '$currentSalesOrderArr += $this->executionPlanKeysFromOdoo(',
+            $source,
+            'sales order plan guard'
+        );
+        $this->assertStringContainsString(
+            '$purchaseOrderFormatted += $this->executionPlanKeysFromOdoo(',
+            $source,
+            'purchase order plan guard'
+        );
+        $this->assertStringContainsString(
+            '$oldOrder->execution_percentage_1 === null',
+            $source,
+            'the 100 is still only a default for an order we have never recorded'
+        );
         $this->assertStringContainsString("\$projectFormatted['exchange_rate'] = \$currentExchangeRate;", $source);
     }
 }

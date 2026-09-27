@@ -421,7 +421,6 @@ class OdooService
 					if ($currentExchangeRate !== null) {
 						$projectFormatted['exchange_rate'] = $currentExchangeRate;
 					}
-					$currentOrderIndex =$orderIndex+1;
 					$currentSalesOrderId = $salesOrderArr['id'];
 					$currentSalesOrderAmount = $salesOrderArr['amount_total'];
 					$projectAmount += $currentSalesOrderAmount;
@@ -429,31 +428,16 @@ class OdooService
 					$currentSalesOrderArr = [
 						'odoo_id'=>$currentSalesOrderId,
 						'so_number'=>$salesOrderArr['display_name'],
-						// 'id'=>$currentSalesOrderId,
 						'amount'=>$currentSalesOrderAmount,
-						'start_date_'.$currentOrderIndex=>$currentProjectStartDate,
-						'end_date_'.$currentOrderIndex=>$currentProjectEndDate,
-			//			'execution_days_'.$currentOrderIndex=>Carbon::make($currentProjectEndDate)->diffInMonths($currentProjectStartDate, true), // Carbon 3 sign-bug fix applied here too, in case this line is ever re-enabled
-						'collection_days_'.$currentOrderIndex=>0,
-						'company_id'=>$companyId
-						
-					] ;
-					$oldSalesOrder = SalesOrder::where('odoo_id',$currentSalesOrderId)->first();
-					if($oldSalesOrder){
+						'company_id'=>$companyId,
+					];
+					$oldSalesOrder = SalesOrder::where('odoo_id', $currentSalesOrderId)->first();
+					if ($oldSalesOrder) {
 						$currentSalesOrderArr['id'] = $oldSalesOrder->id;
 					}
-					/**
-					 * * اودو مالهاش نسبة تنفيذ اصلا ، فالـ 100 دي قيمة افتراضية
-					 * * لأمر بيع جديد مش بيانات جاية من اودو .. كانت بتتكتب في
-					 * * كل مزامنة و بتمسح اي نسبة المستخدم ظبطها بايده
-					 *
-					 * * لو فيه قيمة متسجلة عندنا (حتي لو صفر — الصفر قرار برضه)
-					 * * ما بنبعتش المفتاح ، فالعمود ما بيتلمسش
-					 */
-					$executionPercentageKey = 'execution_percentage_'.$currentOrderIndex;
-					if (! $oldSalesOrder || $oldSalesOrder->{$executionPercentageKey} === null) {
-						$currentSalesOrderArr[$executionPercentageKey] = 100;
-					}
+
+					$currentSalesOrderArr += $this->executionPlanKeysFromOdoo($oldSalesOrder, $currentProjectStartDate, $currentProjectEndDate);
+
 					$salesOrderFormatted[]=$currentSalesOrderArr;
 				}
 				$projectAmount = $projectAmount ? $projectAmount : 0 ;
@@ -478,11 +462,61 @@ class OdooService
 	}
 
 	/**
+	 * * اودو مالهاش خطة تنفيذ .. عندها تاريخ بداية و نهاية المشروع بس ،
+	 * * فالخطة اللي جوه بوب اب التنفيذ بيملاها المستخدم بايده
+	 *
+	 * * كانت كل مزامنة بتكتب تواريخ المشروع فوق الخانة ، فاي خطة
+	 * * المستخدم ظبطها كانت بتتمسح اول ما العقد يتقري من اودو تاني
+	 *
+	 * * كمان رقم الخانة كان بييجي من ترتيب الامر في المشروع ، فلما
+	 * * اودو بترجّع الاوامر بترتيب مختلف كانت خانة جديدة بتتملي و
+	 * * القديمة بتفضل مكانها — يعني مرحلتين بـ 100% لنفس الامر
+	 *
+	 * * القاعدة بقت : لو الامر عنده خطة مليانة ما بنلمسش نسبة و لا
+	 * * تاريخ بداية و لا ايام تحصيل ، بنمدّد نهاية اخر مرحلة لنهاية
+	 * * المشروع الجديدة بس عشان الخطة تفضل واصلة لآخر المشروع
+	 *
+	 * * و لو الخطة فاضية خالص (امر جديد) : خانة واحدة بـ 100% من
+	 * * بداية المشروع لنهايته — نفس السلوك القديم
+	 *
+	 * @param  \App\Models\SalesOrder|\App\Models\PurchaseOrder|null  $oldOrder
+	 * @return array<string, mixed>
+	 */
+	protected function executionPlanKeysFromOdoo($oldOrder, ?string $projectStartDate, ?string $projectEndDate): array
+	{
+		$lastFilledIndex = $oldOrder ? $oldOrder->lastFilledExecutionIndex() : null;
+
+		if ($lastFilledIndex !== null) {
+			return ['end_date_'.$lastFilledIndex => $projectEndDate];
+		}
+
+		$keys = [
+			'start_date_1' => $projectStartDate,
+			'end_date_1' => $projectEndDate,
+			'collection_days_1' => 0,
+		];
+
+		/**
+		 * * الصفر قرار برضه ، فما بنكتبش الـ 100 غير لما العمود يكون
+		 * * فاضي تماما (امر لسه ما اتسجلش عندنا)
+		 */
+		if (! $oldOrder || $oldOrder->execution_percentage_1 === null) {
+			$keys['execution_percentage_1'] = 100;
+		}
+
+		return $keys;
+	}
+
+	/**
 	 * * كل أوامر البيع لكل المشاريع في نداء واحد ، مجمّعة بالمشروع
 	 *
 	 * * أودو بيرجّع النتيجة بترتيب البحث الافتراضي ، و التجميع بيحافظ
-	 * * على الترتيب النسبي جوه كل مشروع — و ده مهم لأن ترتيب أمر البيع
-	 * * هو اللي بيحدد رقم الخانة (start_date_1 .. start_date_5)
+	 * * على الترتيب النسبي جوه كل مشروع
+	 *
+	 * * الترتيب ده كان بيحدد رقم خانة التنفيذ (start_date_1 ..
+	 * * start_date_5) ، و ده كان بيخلي اختلاف الترتيب بين مزامنة و
+	 * * التانية يملي خانة جديدة و يسيب القديمة .. بقى كل امر بيبدأ
+	 * * من الخانة الاولى ، بص على executionPlanKeysFromOdoo
 	 *
 	 * * project_id بقى مطلوب في القراءة عشان نجمّع بيه — قبل التجميع
 	 * * كان بيتشال لأن البحث نفسه كان لمشروع واحد
@@ -987,9 +1021,6 @@ class OdooService
 				'odoo_id'=>$odooPurchaseOrderId,
 				'po_number'=>$purchaseOrderNumber,
 				'amount'=>$amount,
-				'start_date_1'=>$startDate,
-				'end_date_1'=>$endDate,
-				'collection_days_1'=>0,
 				'company_id'=>$companyId,
 			];
 
@@ -1000,13 +1031,8 @@ class OdooService
 			if ($oldPurchaseOrder) {
 				$purchaseOrderFormatted['id'] = $oldPurchaseOrder->id;
 			}
-			/**
-			 * * نفس قاعدة أمر البيع : اودو مالهاش نسبة تنفيذ ، فالـ 100 دي
-			 * * قيمة افتراضية لأمر شراء جديد بس .. لو المستخدم ظبطها ما بنلمسهاش
-			 */
-			if (! $oldPurchaseOrder || $oldPurchaseOrder->execution_percentage_1 === null) {
-				$purchaseOrderFormatted['execution_percentage_1'] = 100;
-			}
+
+			$purchaseOrderFormatted += $this->executionPlanKeysFromOdoo($oldPurchaseOrder, $startDate, $endDate);
 
 			$supplierContractFormatted = [
 				'odoo_id'=>$odooPurchaseOrderId,

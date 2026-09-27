@@ -200,6 +200,41 @@ trait IsOrder {
 		$this->attributes['end_date_5'] = $year.'-'.$month.'-'.$day;
 	}
 	
+	const EXECUTION_PHASES_COUNT = 5;
+
+	/**
+	 * * الخانات المليانة في بوب اب التنفيذ .. الخانة بتتحسب مليانة لو
+	 * * فيها نسبة اكبر من صفر او تاريخ بداية متسجل — عشان التعامل مع
+	 * * الصفوف اللي المستخدم ملاها بايده يختلف عن الصفوف الفاضية
+	 *
+	 * @return array<int, int>
+	 */
+	public function filledExecutionIndexes(): array
+	{
+		$filled = [];
+
+		for ($index = 1; $index <= self::EXECUTION_PHASES_COUNT; $index++) {
+			$hasPercentage = (float) ($this->{'execution_percentage_'.$index} ?? 0) > 0;
+			$hasStartDate = $this->{'start_date_'.$index} !== null;
+
+			if ($hasPercentage || $hasStartDate) {
+				$filled[] = $index;
+			}
+		}
+
+		return $filled;
+	}
+
+	/**
+	 * * رقم اخر خانة مليانة ، او null لو الخطة فاضية خالص
+	 */
+	public function lastFilledExecutionIndex(): ?int
+	{
+		$filled = $this->filledExecutionIndexes();
+
+		return count($filled) ? (int) end($filled) : null;
+	}
+
 	public function contract()
 	{
 		return $this->belongsTo(Contract::class,'contract_id','id');
