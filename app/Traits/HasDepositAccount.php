@@ -205,7 +205,7 @@ trait HasDepositAccount
 			return (int)$account->getId() === $accountId ;
 		});
 	}
-	public function handleTdOrCdStoreDepositForOdoo(bool $isBreakOrApplyDeposit,string $odooDate = null)
+	public function handleTdOrCdStoreDepositForOdoo(bool $isBreakOrApplyDeposit, ?string $odooDate = null)
 	{
 		
 		$company = $this->company ; 

@@ -250,7 +250,10 @@ class ActivityRegistry
         Models\LetterOfGuaranteeIssuance::class => [
             'label' => 'LG Issuance',
             'module' => 'lg_issuance',
-            'fields' => ['status' => ['label' => 'Status']],
+            'fields' => [
+                'status' => ['label' => 'Status'],
+                'is_activated' => ['label' => 'Activated'],
+            ],
         ],
         Models\LgRenewalDateHistory::class => ['label' => 'LG Renewal', 'module' => 'lg_issuance'],
         Models\LetterOfCreditFacility::class => ['label' => 'LC Facility', 'module' => 'lc_facility'],

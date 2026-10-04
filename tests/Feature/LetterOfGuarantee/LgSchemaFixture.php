@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\LetterOfGuarantee;
 
+use Closure;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -48,13 +50,14 @@ trait LgSchemaFixture
             $table->unsignedBigInteger('id')->primary();
             $table->string('odoo_db_url')->nullable();
             $table->string('odoo_db_name')->nullable();
+            $table->date('opening_balance_date')->nullable();
         });
 
         Schema::create('letter_of_guarantee_issuances', function ($table) {
             $table->bigIncrements('id');
             $table->unsignedBigInteger('company_id');
             $table->string('source')->nullable();
-            $table->string('status')->nullable();
+            $table->string('status')->default('running');
             $table->string('category_name')->default('new-issuance');
             $table->string('lg_type')->nullable();
             $table->string('transaction_name')->nullable();
@@ -62,6 +65,8 @@ trait LgSchemaFixture
             $table->unsignedBigInteger('partner_id')->nullable();
             $table->unsignedBigInteger('financial_institution_id')->nullable();
             $table->unsignedBigInteger('lg_facility_id')->nullable();
+            $table->date('activation_date')->nullable();
+            $table->boolean('is_activated')->default(true);
             $table->date('issuance_date')->nullable();
             $table->date('renewal_date')->nullable();
             $table->date('cancellation_date')->nullable();
@@ -147,6 +152,7 @@ trait LgSchemaFixture
             $table->boolean('is_renewal_fees')->default(0);
             $table->boolean('is_renewal_cash_cover')->default(0);
             $table->unsignedBigInteger('lg_renewal_date_history_id')->nullable();
+            $table->unsignedBigInteger('lg_advanced_payment_history_id')->default(0);
             $table->string('end_of_month_period')->nullable();
             $table->string('type')->nullable();
             $table->string('interest_type')->nullable();
@@ -168,6 +174,10 @@ trait LgSchemaFixture
             $table->bigIncrements('id');
             $table->unsignedBigInteger('company_id');
             $table->unsignedBigInteger('letter_of_guarantee_issuance_id');
+            $table->date('date')->nullable();
+            $table->decimal('amount', 14)->default(0);
+            $table->unsignedBigInteger('journal_entry_id')->nullable();
+            $table->timestamps();
         });
 
         Schema::create('lg_renewal_date_histories', function ($table) {
@@ -226,5 +236,14 @@ trait LgSchemaFixture
         foreach ($this->lgTables as $table) {
             Schema::dropIfExists($table);
         }
+
+        /**
+         * Eloquent caches a model's column list the first time it mass
+         * assigns it. Cached from these narrow tables, every later test in
+         * the run would silently lose attributes such as contract_id.
+         */
+        Closure::bind(static function () {
+            static::$guardableColumns = [];
+        }, null, Model::class)();
     }
 }

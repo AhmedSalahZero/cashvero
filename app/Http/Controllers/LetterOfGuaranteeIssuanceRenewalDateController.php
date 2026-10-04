@@ -123,6 +123,9 @@ class LetterOfGuaranteeIssuanceRenewalDateController
 				'source_formatted' => $letterOfGuaranteeIssuance->getSourceFormatted(),
 				'lg_code' => $letterOfGuaranteeIssuance->getLgCode(),
 				'issuance_date_formatted' => $letterOfGuaranteeIssuance->getIssuanceDateFormatted(),
+				'activation_date_formatted' => $letterOfGuaranteeIssuance->requiresActivation()
+					? ($letterOfGuaranteeIssuance->getActivationDateFormatted() ?: __('Unactivated'))
+					: null,
 				'is_expired' => $letterOfGuaranteeIssuance->isExpired(),
 			],
 			'rows' => $rows,
@@ -130,8 +133,9 @@ class LetterOfGuaranteeIssuanceRenewalDateController
 			// The original only shows the add/edit form at all when
 			// either editing an existing row, or the LG has expired
 			// (you can't renew an LG that hasn't reached its current
-			// expiry yet). Same rule as TD's renewal page.
-			'canShowForm' => (bool) $model || $letterOfGuaranteeIssuance->isExpired(),
+			// expiry yet). Same rule as TD's renewal page. An Advance
+			// Payment LG that isn't activated yet has nothing to renew.
+			'canShowForm' => (bool) $model || ($letterOfGuaranteeIssuance->isExpired() && $letterOfGuaranteeIssuance->isActivated()),
 			'formDefaults' => [
 				// See class docblock — this is NOT simply "the
 				// previous row's date" in edit mode.
@@ -206,6 +210,14 @@ class LetterOfGuaranteeIssuanceRenewalDateController
 		return $this->renderPage($company, $letterOfGuaranteeIssuance, null);
     }
 	public function store(StoreLgRenewalDateRequest $request, Company $company, LetterOfGuaranteeIssuance $letterOfGuaranteeIssuance){
+
+		/**
+		 * * التجديد بيرحّل عمولة و مصاريف تجديد ، و خطاب الدفعة المقدمة اللي
+		 * * لسه مش مفعّل مالوش حركات اصلا . مدته بتتمد من فورم الخطاب نفسه
+		 */
+		if ($letterOfGuaranteeIssuance->isUnactivated()) {
+			return redirect()->route('letter.of.issuance.renewal.date',['company'=>$company->id,'letterOfGuaranteeIssuance'=>$letterOfGuaranteeIssuance->id])->with('fail', __('This LG is not activated yet. Enter its Activation Date first.'));
+		}
 
 		$date = $request->get('renewal_date') ;
 		$renewalFeesAmount = number_unformat($request->get('fees_amount',0));

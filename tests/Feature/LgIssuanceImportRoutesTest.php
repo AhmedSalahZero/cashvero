@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Enums\LgSources;
+use App\Enums\LgTypes;
 use App\Exports\LgImport\LgIssuanceLookupSheetExport;
+use App\Models\Company;
 use App\Support\LgImport\LgIssuanceImportTemplateService;
 use Tests\TestCase;
 
@@ -34,6 +36,45 @@ class LgIssuanceImportRoutesTest extends TestCase
         }
     }
 
+    public function test_the_activation_date_column_sits_right_before_the_issuance_date(): void
+    {
+        foreach (array_keys(LgSources::getAll()) as $source) {
+            $columns = LgIssuanceImportTemplateService::columnsBySource($source);
+            $this->assertSame(
+                array_search('issuance_date', $columns, true) - 1,
+                array_search('activation_date', $columns, true),
+                $source
+            );
+        }
+    }
+
+    public function test_an_advance_payment_row_may_leave_the_activation_date_empty(): void
+    {
+        $this->assertArrayNotHasKey('activation_date', $this->rowErrors([
+            'lg_type' => LgTypes::ADVANCED_PAYMENT_LGS,
+            'issuance_date' => '2026-01-10',
+            'activation_date' => null,
+        ]));
+    }
+
+    public function test_an_activation_date_before_the_issuance_date_is_rejected(): void
+    {
+        $this->assertArrayHasKey('activation_date', $this->rowErrors([
+            'lg_type' => LgTypes::ADVANCED_PAYMENT_LGS,
+            'issuance_date' => '2026-01-10',
+            'activation_date' => '2026-01-09',
+        ]));
+    }
+
+    public function test_other_lg_types_ignore_the_activation_date(): void
+    {
+        $this->assertArrayNotHasKey('activation_date', $this->rowErrors([
+            'lg_type' => LgTypes::BID_BOND,
+            'issuance_date' => '2026-01-10',
+            'activation_date' => '2026-01-09',
+        ]));
+    }
+
     public function test_lookup_sheet_uses_display_values_not_keys(): void
     {
         $rows = (new LgIssuanceLookupSheetExport([
@@ -51,5 +92,10 @@ class LgIssuanceImportRoutesTest extends TestCase
         $this->assertSame('partner_id', $map['partner_name']);
         $this->assertSame('contract_id', $map['contract_name']);
         $this->assertSame('purchase_order_id', $map['purchase_order_number']);
+    }
+
+    private function rowErrors(array $row): array
+    {
+        return LgIssuanceImportTemplateService::validateRow(new Company, LgSources::LG_FACILITY, $row);
     }
 }

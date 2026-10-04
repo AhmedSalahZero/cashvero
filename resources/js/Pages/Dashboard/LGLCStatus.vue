@@ -103,16 +103,19 @@ function fmt(value) {
    above already show, just grouped by bank instead of totalled — so
    this modal's totals row always foots to the Limit/Outstanding/
    Room/Cash Cover cards above it. */
-const limitDetailsModal = ref(null); // { rows, totals } | null
+const limitDetailsModal = ref(null); // { rows, totals, showReserved } | null
 function openLimitDetails(sectionKey) {
     const rows = props.reports?.[sectionKey]?.[activeCurrency.value]?.limitDetailsByBank || [];
     const totals = rows.reduce((acc, r) => ({
         limit: acc.limit + (Number(r.limit) || 0),
         outstanding: acc.outstanding + (Number(r.outstanding) || 0),
+        reserved: acc.reserved + (Number(r.reserved) || 0),
         room: acc.room + (Number(r.room) || 0),
         cash_cover: acc.cash_cover + (Number(r.cash_cover) || 0),
-    }), { limit: 0, outstanding: 0, room: 0, cash_cover: 0 });
-    limitDetailsModal.value = { rows, totals };
+    }), { limit: 0, outstanding: 0, reserved: 0, room: 0, cash_cover: 0 });
+    // Only LGs can be reserved: an unactivated Advance Payment LG holds
+    // its amount against the facility limit without any statement row.
+    limitDetailsModal.value = { rows, totals, showReserved: sectionKey === 'lg' };
 }
 
 /* ── LG / LC sections — structurally identical, generalized rather
@@ -242,7 +245,7 @@ function tableRows(section) {
                                     <td class="px-4 py-2"><span class="cvr-badge cvr-badge-facility">{{ row.type }}</span></td>
                                     <td class="px-4 py-2 cvr-text-secondary text-xs">{{ row.source }}</td>
                                     <td class="px-4 py-2">
-                                        <span class="cvr-badge" :class="row.status === 'Expired' ? 'cvr-badge-overdue' : 'cvr-badge-active'">{{ row.status }}</span>
+                                        <span class="cvr-badge" :class="row.status === 'Expired' ? 'cvr-badge-overdue' : (row.status === 'Unactivated' ? 'cvr-badge-pending' : 'cvr-badge-active')">{{ $t(row.status) }}</span>
                                     </td>
                                     <td v-if="section.key === 'lg'" class="px-4 py-2 text-right cvr-num">{{ row.count }}</td>
                                     <td v-if="section.key === 'lc'" class="px-4 py-2 text-right cvr-num-blue">{{ fmt(row.limit) }}</td>
@@ -268,6 +271,7 @@ function tableRows(section) {
                                 <th class="px-2 py-2 text-start">{{ $t('Financial Institution') }}</th>
                                 <th class="px-2 py-2 text-right">{{ $t('Limit') }}</th>
                                 <th class="px-2 py-2 text-right">{{ $t('Outstanding') }}</th>
+                                <th v-if="limitDetailsModal.showReserved" class="px-2 py-2 text-right" :title="$t('Unactivated Advance Payment LGs')">{{ $t('Reserved') }}</th>
                                 <th class="px-2 py-2 text-right">{{ $t('Room') }}</th>
                                 <th class="px-2 py-2 text-right">{{ $t('Cash Cover') }}</th>
                             </tr>
@@ -277,14 +281,16 @@ function tableRows(section) {
                                 <td class="px-2 py-2">{{ row.financial_institution_name }}</td>
                                 <td class="px-2 py-2 text-right cvr-num-blue">{{ fmt(row.limit) }}</td>
                                 <td class="px-2 py-2 text-right cvr-num-amber">{{ fmt(row.outstanding) }}</td>
+                                <td v-if="limitDetailsModal.showReserved" class="px-2 py-2 text-right cvr-num-amber">{{ fmt(row.reserved) }}</td>
                                 <td class="px-2 py-2 text-right cvr-num-green">{{ fmt(row.room) }}</td>
                                 <td class="px-2 py-2 text-right cvr-num">{{ fmt(row.cash_cover) }}</td>
                             </tr>
-                            <tr v-if="!limitDetailsModal.rows.length"><td colspan="5" class="px-2 py-4 text-center cvr-text-muted">{{ $t('No facilities found.') }}</td></tr>
+                            <tr v-if="!limitDetailsModal.rows.length"><td :colspan="limitDetailsModal.showReserved ? 6 : 5" class="px-2 py-4 text-center cvr-text-muted">{{ $t('No facilities found.') }}</td></tr>
                             <tr v-if="limitDetailsModal.rows.length" class="font-semibold cvr-summary-row">
                                 <td class="px-2 py-2">{{ $t('Total') }}</td>
                                 <td class="px-2 py-2 text-right cvr-num-blue">{{ fmt(limitDetailsModal.totals.limit) }}</td>
                                 <td class="px-2 py-2 text-right cvr-num-amber">{{ fmt(limitDetailsModal.totals.outstanding) }}</td>
+                                <td v-if="limitDetailsModal.showReserved" class="px-2 py-2 text-right cvr-num-amber">{{ fmt(limitDetailsModal.totals.reserved) }}</td>
                                 <td class="px-2 py-2 text-right cvr-num-green">{{ fmt(limitDetailsModal.totals.room) }}</td>
                                 <td class="px-2 py-2 text-right cvr-num">{{ fmt(limitDetailsModal.totals.cash_cover) }}</td>
                             </tr>

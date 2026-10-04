@@ -2,6 +2,7 @@
 
 namespace App\Services\CompanyData;
 
+use App\Enums\LgTypes;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -1459,6 +1460,9 @@ class CompanyImportService
     private function insertRemappedRow(string $table, array $row, string $pk, bool $remapCompanyId = true): int|string
     {
         $payload = $this->filterColumns($table, $row);
+        if ($table === 'letter_of_guarantee_issuances') {
+            $payload = $this->normalizeImportedLgIssuance($payload);
+        }
         $oldId = $payload[$pk] ?? null;
         unset($payload[$pk]);
 
@@ -2460,6 +2464,39 @@ class CompanyImportService
         }
 
         return $mismatches;
+    }
+
+    /**
+     * A raw copy never runs LetterOfGuaranteeIssuance's saving hook, so
+     * is_activated would stay at the column default (activated) even when
+     * activation_date is empty.
+     *
+     * A legacy source has no activation_date column. Those Advance Payment
+     * LGs were already outstanding — the migration backfills them the same
+     * way, activation_date = issuance_date. A row that actually carries a
+     * null activation_date stays unactivated.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function normalizeImportedLgIssuance(array $payload): array
+    {
+        $isAdvance = ($payload['lg_type'] ?? null) === LgTypes::ADVANCED_PAYMENT_LGS;
+
+        if (! $isAdvance) {
+            $payload['activation_date'] = null;
+            $payload['is_activated'] = 1;
+
+            return $payload;
+        }
+
+        if (! array_key_exists('activation_date', $payload)) {
+            $payload['activation_date'] = $payload['issuance_date'] ?? null;
+        }
+
+        $payload['is_activated'] = filled($payload['activation_date']) ? 1 : 0;
+
+        return $payload;
     }
 
     /**

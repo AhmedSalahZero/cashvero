@@ -96,6 +96,15 @@ class LgFacilityRoomRuleTest extends TestCase
         Schema::create('letter_of_guarantee_issuances', function ($table) {
             $table->unsignedBigInteger('id')->primary();
             $table->unsignedBigInteger('company_id');
+            $table->string('source')->nullable();
+            $table->string('status')->nullable();
+            $table->string('lg_type')->nullable();
+            $table->string('lg_currency')->nullable();
+            $table->unsignedBigInteger('financial_institution_id')->nullable();
+            $table->unsignedBigInteger('lg_facility_id')->nullable();
+            $table->string('cd_or_td_id')->nullable();
+            $table->date('activation_date')->nullable();
+            $table->boolean('is_activated')->default(true);
             $table->decimal('lg_amount', 14)->default(0);
             $table->decimal('cash_cover_rate', 14)->default(0);
             $table->decimal('lg_commission_rate', 14)->default(0);
@@ -222,6 +231,72 @@ class LgFacilityRoomRuleTest extends TestCase
 
         $this->assertTrue($this->passes(400_000, LetterOfGuaranteeIssuance::LG_FACILITY, self::ISSUANCE_ID));
         $this->assertFalse($this->passes(self::LIMIT + 1, LetterOfGuaranteeIssuance::LG_FACILITY, self::ISSUANCE_ID));
+    }
+
+    /**
+     * An Advance Payment LG waiting for activation has no statement yet,
+     * but the bank already holds its amount against the limit.
+     */
+    public function test_an_unactivated_advance_payment_lg_reserves_room_without_any_statement(): void
+    {
+        $this->insertAdvancePaymentIssuance(300_000, isActivated: false);
+
+        $this->assertFalse($this->passes(700_001));
+        $this->assertTrue($this->passes(700_000));
+    }
+
+    public function test_editing_the_unactivated_lg_itself_adds_its_reservation_back(): void
+    {
+        $this->insertAdvancePaymentIssuance(300_000, isActivated: false);
+
+        $this->assertTrue($this->passes(self::LIMIT, LetterOfGuaranteeIssuance::LG_FACILITY, self::ISSUANCE_ID));
+        $this->assertFalse($this->passes(self::LIMIT + 1, LetterOfGuaranteeIssuance::LG_FACILITY, self::ISSUANCE_ID));
+    }
+
+    public function test_a_cancelled_unactivated_lg_no_longer_reserves_room(): void
+    {
+        $this->insertAdvancePaymentIssuance(300_000, isActivated: false, status: LetterOfGuaranteeIssuance::CANCELLED);
+
+        $this->assertTrue($this->passes(self::LIMIT));
+    }
+
+    /**
+     * Once activated, its amount lives in letter_of_guarantee_statements
+     * — reserving it again from the issuances table would count it twice.
+     */
+    public function test_an_activated_lg_is_counted_from_its_statement_only(): void
+    {
+        $this->insertAdvancePaymentIssuance(300_000, isActivated: true);
+        DB::table('letter_of_guarantee_statements')->insert([
+            'company_id' => self::COMPANY_ID,
+            'currency' => 'EGP',
+            'financial_institution_id' => self::BANK_ID,
+            'lg_facility_id' => self::FACILITY_ID,
+            'lg_type' => LgTypes::ADVANCED_PAYMENT_LGS,
+            'source' => LetterOfGuaranteeIssuance::LG_FACILITY,
+            'date' => '2026-01-01',
+            'end_balance' => 300_000,
+        ]);
+
+        $this->assertTrue($this->passes(700_000));
+        $this->assertFalse($this->passes(700_001));
+    }
+
+    private function insertAdvancePaymentIssuance(float $amount, bool $isActivated, string $status = LetterOfGuaranteeIssuance::RUNNING): void
+    {
+        DB::table('letter_of_guarantee_issuances')->insert([
+            'id' => self::ISSUANCE_ID,
+            'company_id' => self::COMPANY_ID,
+            'source' => LetterOfGuaranteeIssuance::LG_FACILITY,
+            'status' => $status,
+            'lg_type' => LgTypes::ADVANCED_PAYMENT_LGS,
+            'lg_currency' => 'EGP',
+            'financial_institution_id' => self::BANK_ID,
+            'lg_facility_id' => self::FACILITY_ID,
+            'activation_date' => $isActivated ? '2026-01-01' : null,
+            'is_activated' => $isActivated,
+            'lg_amount' => $amount,
+        ]);
     }
 
     private function passes(float $amount, string $source = LetterOfGuaranteeIssuance::LG_FACILITY, $issuanceId = null): bool

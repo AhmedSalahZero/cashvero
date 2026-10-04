@@ -145,7 +145,10 @@ function goToPage(url) {
                                 <td class="px-3 py-2.5 text-start cvr-text-secondary">{{ row.partnerName }}</td>
                                 <td class="px-3 py-2.5 text-start cvr-text-secondary">{{ row.lgType }}</td>
                                 <td class="px-3 py-2.5 text-start cvr-text-secondary">{{ row.transactionName }}</td>
-                                <td class="px-3 py-2.5 text-center cvr-text-secondary">{{ row.lgCode }}</td>
+                                <td class="px-3 py-2.5 text-center cvr-text-secondary">
+                                    {{ row.lgCode }}
+                                    <span v-if="!row.isActivated" class="cvr-badge cvr-badge-pending ms-1">{{ $t('Unactivated') }}</span>
+                                </td>
                                 <td class="px-3 py-2.5 text-start cvr-text-secondary">{{ row.source }}</td>
                                 <td v-if="showStatusColumn" class="px-3 py-2.5 text-center" :class="rowStatusClass(row)">{{ rowStatusLabel(row) }}</td>
                                 <td class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(row.lgAmount) }}</td>

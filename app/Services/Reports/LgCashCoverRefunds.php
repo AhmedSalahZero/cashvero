@@ -95,6 +95,11 @@ final class LgCashCoverRefunds
                 $query->whereNotNull('cancellation.cancellation_date')
                     ->orWhere('letter_of_guarantee_issuances.status', '!=', self::CANCELLED_STATUS);
             })
+            /**
+             * * خطاب الدفعة المقدمة اللي لسه مش مفعّل كاش كفره عمره ما اتخصم ،
+             * * فمفيش حاجة ترجع
+             */
+            ->where('letter_of_guarantee_issuances.is_activated', 1)
             ->whereRaw(self::EFFECTIVE_DATE.' BETWEEN ? AND ?', [$periodStart, $periodEnd])
             ->when($currency !== null, function ($query) use ($currency) {
                 $query->whereRaw(self::CURRENCY.' = ?', [$currency]);

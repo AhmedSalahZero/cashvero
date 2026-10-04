@@ -53,6 +53,8 @@ use App\Traits\Models\IsReviewable;
  * @property int|null $contract_id
  * @property int|null $purchase_order_id
  * @property string|null $purchase_order_date
+ * @property string|null $activation_date
+ * @property bool $is_activated
  * @property string|null $issuance_date
  * @property int|null $lg_duration_months
  * @property string|null $renewal_date
@@ -211,6 +213,14 @@ class LetterOfGuaranteeIssuance extends Model
     const FOR_CANCELLATION ='for-cancellation'; // هي الفلوس اللي انت حيطتها بسبب انه عمل الغاء
     const AMOUNT_TO_BE_DECREASED ='amount-to-be-decreased'; //
     protected $guarded = ['id'];
+    /**
+     * * من غير الكاست ، true اللي الـ saving hook بيكتبها و 1 اللي جاية من
+     * * الداتابيز مش متساويين في نظر لارافل ، فالعمود كان هيطلع dirty مع كل
+     * * حفظ — و ده بيخلي فكّ المراجعة يقع في قفل IsReviewable
+     */
+    protected $casts = [
+        'is_activated' => 'boolean',
+    ];
     public static function lgSources()
     {
         return [
@@ -461,6 +471,100 @@ class LetterOfGuaranteeIssuance extends Model
         $this->attributes['issuance_date'] = $year.'-'.$month.'-'.$day;
     }
 
+    /**
+     * * خطاب الدفعة المقدمة بس هو اللي مشروط بالتفعيل : البنك بيفعّله لما
+     * * شيك الدفعة المقدمة من العميل يوصل . قبل كده مفيش كاش كفر و لا
+     * * مصاريف اصدار و لا عمولة و لا رصيد ، لا عندنا و لا في Odoo
+     */
+    public function requiresActivation(): bool
+    {
+        return $this->isAdvancedPayment();
+    }
+    public function isActivated(): bool
+    {
+        return ! $this->requiresActivation() || filled($this->getActivationDate());
+    }
+    public function isUnactivated(): bool
+    {
+        return ! $this->isActivated();
+    }
+    /**
+     * * التاريخ اللي حركات الخطاب بتنزل بيه في السيستم و في Odoo : تاريخ
+     * * التفعيل لخطاب الدفعة المقدمة ، و تاريخ الاصدار لباقي الانواع .
+     * * null معناها الخطاب لسه مالوش حركات
+     */
+    public function getMovementDate(): ?string
+    {
+        $movementDate = $this->requiresActivation() ? $this->getActivationDate() : $this->getIssuanceDate();
+
+        return $movementDate ? Carbon::make($movementDate)->format('Y-m-d') : null;
+    }
+    public function getActivationDate(): ?string
+    {
+        return $this->activation_date;
+    }
+    public function getActivationDateFormatted(): ?string
+    {
+        $activationDate = $this->getActivationDate();
+        return $activationDate ? Carbon::make($activationDate)->format('d-m-Y') : null;
+    }
+    public function setActivationDateAttribute($value)
+    {
+        if (blank($value) || $value === 'null') {
+            $this->attributes['activation_date'] = null;
+            return ;
+        }
+        $date = explode('/', $value);
+        if (count($date) != 3) {
+            $this->attributes['activation_date'] =  $value ;
+            return ;
+        }
+        $month = $date[0];
+        $day = $date[1];
+        $year = $date[2];
+
+        $this->attributes['activation_date'] = $year.'-'.$month.'-'.$day;
+    }
+    /**
+     * * خطاب Opening Balance كاش كفره و مصاريفه داخلين في الرصيد الافتتاحي
+     * * للحسابات ، فمش بيتسجلوا كحركات . خطاب دفعة مقدمة اتفعّل بعد تاريخ
+     * * الرصيد الافتتاحي مختلف : الخصم حصل و الشركة على السيستم ، فلازم
+     * * يتسجل كحركة عادية زي اي اصدار جديد
+     *
+     * * باقي الانواع النتيجة هي isOpeningBalance() بالظبط
+     */
+    public function postsAsOpeningBalance(): bool
+    {
+        if (! $this->isOpeningBalance()) {
+            return false;
+        }
+        if (! $this->requiresActivation()) {
+            return true;
+        }
+        $companyOpeningBalanceDate = $this->company?->opening_balance_date;
+        $movementDate = $this->getMovementDate();
+        if (! $companyOpeningBalanceDate || ! $movementDate) {
+            return true;
+        }
+
+        return $movementDate < Carbon::make($companyOpeningBalanceDate)->format('Y-m-d');
+    }
+    /**
+     * * نفس monthsBetweenCeil اللي الفورم بتحسب بيها lg_duration_months :
+     * * اي جزء من شهر بيتحسب شهر كامل ، و اقل حاجة شهر
+     */
+    public static function monthsBetweenCeil(string $startDate, string $endDate): int
+    {
+        $start = Carbon::make($startDate);
+        $end = Carbon::make($endDate);
+        $months = ($end->year - $start->year) * 12 + ($end->month - $start->month);
+        if ($end->day > $start->day) {
+            $months++;
+        }
+
+        return max(1, $months);
+    }
+
     public function getLgDurationMonths()
     {
         return $this->lg_duration_months;
@@ -528,7 +632,7 @@ class LetterOfGuaranteeIssuance extends Model
         $rate = ForeignExchangeRate::getExchangeRateForCurrencyAndClosestDate(
             $currency,
             $mainFunctionalCurrency,
-            $date ?: $this->getIssuanceDate(),
+            $date ?: ($this->getMovementDate() ?: $this->getIssuanceDate()),
             $company->id
         );
 
@@ -700,6 +804,18 @@ class LetterOfGuaranteeIssuance extends Model
     {
         static::deleting(function (LetterOfGuaranteeIssuance $letterOfGuaranteeIssuance) {
             $letterOfGuaranteeIssuance->deleteAllRelations();
+        });
+
+        /**
+         * * is_activated نسخة من isActivated() للاستعلامات ، فبيتحسب هنا مع كل
+         * * حفظ عشان عمره ما يختلف عن activation_date . و تاريخ التفعيل
+         * * مالوش معنى لغير الدفعة المقدمة (لو اتكتب و بعدين النوع اتغيّر)
+         */
+        static::saving(function (LetterOfGuaranteeIssuance $letterOfGuaranteeIssuance) {
+            if (! $letterOfGuaranteeIssuance->requiresActivation() && ! is_null($letterOfGuaranteeIssuance->getActivationDate())) {
+                $letterOfGuaranteeIssuance->activation_date = null;
+            }
+            $letterOfGuaranteeIssuance->is_activated = $letterOfGuaranteeIssuance->isActivated();
         });
     }
 
@@ -895,10 +1011,10 @@ class LetterOfGuaranteeIssuance extends Model
     
     public function handleIssuanceAndCommissionFeesForOdoo()
     {
-        $issuanceDate = $this->getIssuanceDate();
+        $movementDate = $this->getMovementDate();
         $company=  $this->company;
 
-        if (!$company->hasOdooIntegrationCredentials() || $this->isOpeningBalance() || !$company->withinIntegrationDate($issuanceDate)) {
+        if ($this->isUnactivated() || !$movementDate || !$company->hasOdooIntegrationCredentials() || $this->postsAsOpeningBalance() || !$company->withinIntegrationDate($movementDate)) {
             return ;
         }
         /**
@@ -911,7 +1027,7 @@ class LetterOfGuaranteeIssuance extends Model
 
     protected function createIssuanceAndCommissionFeesInOdoo(): void
     {
-        $issuanceDate = $this->getIssuanceDate();
+        $movementDate = $this->getMovementDate();
         $company = $this->company;
         $odooSetting = $company->odooSetting;
         $financialInstitutionAccountForCommissionAndFees = FinancialInstitutionAccount::find($this->getCommissionFeesAccountId());
@@ -932,7 +1048,7 @@ class LetterOfGuaranteeIssuance extends Model
         $ref = $lgType . ' Issuance Fees';
         $message = $ref;
         if ($issuanceFees > 0) {
-            $result = $odooLetterOfGuaranteeIssuance->createLgIssuanceCashCover($issuanceDate, $issuanceFees, $journalId, $odooCurrencyId, $debitOdooAccountId, $accountOdooId, $this->getBeneficiaryOdooId(), $ref, $message, $analytic_distribution, $this->getAmountInMainFunctionalCurrency($issuanceFees, $issuanceDate));
+            $result = $odooLetterOfGuaranteeIssuance->createLgIssuanceCashCover($movementDate, $issuanceFees, $journalId, $odooCurrencyId, $debitOdooAccountId, $accountOdooId, $this->getBeneficiaryOdooId(), $ref, $message, $analytic_distribution, $this->getAmountInMainFunctionalCurrency($issuanceFees, $movementDate));
             $this->issuance_fees_account_bank_statement_odoo_id=$result['account_bank_statement_line_id'];
             $this->issuance_fees_journal_entry_id=$result['journal_entry_id'];
             $this->odoo_issuance_fees_reference=$result['reference'];
@@ -943,7 +1059,7 @@ class LetterOfGuaranteeIssuance extends Model
             $ref = $lgType . ' Commission Fees';
             $message = $ref;
             $debitOdooAccountId = $odooSetting->getLetterOfGuaranteeCommissionFeesId();
-            $result = $odooLetterOfGuaranteeIssuance->createLgIssuanceCashCover($issuanceDate, $commissionFees, $journalId, $odooCurrencyId, $debitOdooAccountId, $accountOdooId, $this->getBeneficiaryOdooId(), $ref, $message, $analytic_distribution, $this->getAmountInMainFunctionalCurrency($commissionFees, $issuanceDate));
+            $result = $odooLetterOfGuaranteeIssuance->createLgIssuanceCashCover($movementDate, $commissionFees, $journalId, $odooCurrencyId, $debitOdooAccountId, $accountOdooId, $this->getBeneficiaryOdooId(), $ref, $message, $analytic_distribution, $this->getAmountInMainFunctionalCurrency($commissionFees, $movementDate));
      //       $this->commission_fees_account_bank_statement_odoo_id=$result['account_bank_statement_line_id'];
             $this->commission_fees_journal_entry_id=$result['journal_entry_id'];
             $this->odoo_commission_fees_reference=$result['reference'];
@@ -953,14 +1069,14 @@ class LetterOfGuaranteeIssuance extends Model
     
     public function handleLgIssuanceCashCoverForOdoo()
     {
-        $isOpeningBalance = $this->isOpeningBalance();
+        $isOpeningBalance = $this->postsAsOpeningBalance();
         $isCdOrTdCashCoverAccount = $this->isCdOrTd();
         $company = $this->company;
-        $issuanceDate = $this->getIssuanceDate();
+        $movementDate = $this->getMovementDate();
         // new issuance and cd
         //
         
-        if ($company->hasOdooIntegrationCredentials() && !$isOpeningBalance && !$isCdOrTdCashCoverAccount && $company->withinIntegrationDate($issuanceDate)) {
+        if ($this->isActivated() && $movementDate && $company->hasOdooIntegrationCredentials() && !$isOpeningBalance && !$isCdOrTdCashCoverAccount && $company->withinIntegrationDate($movementDate)) {
             /**
              * * الاتصال بأودو بيتأجل لبعد ما الترانزاكشن تكومِت
              */
@@ -973,7 +1089,7 @@ class LetterOfGuaranteeIssuance extends Model
     protected function createLgIssuanceCashCoverInOdoo(): void
     {
         $company = $this->company;
-        $issuanceDate = $this->getIssuanceDate();
+        $movementDate = $this->getMovementDate();
         {
             $financialInstitutionAccountForCashCover = FinancialInstitutionAccount::find($this->getCashCoverDeductedFromAccountId());
             if (is_null($financialInstitutionAccountForCashCover)) {
@@ -992,7 +1108,7 @@ class LetterOfGuaranteeIssuance extends Model
             
             $ref = $this->generateCashCoverRef();
             $message = $this->generateCashCoverMessage();
-            $result = $odooLetterOfGuaranteeIssuance->createLgIssuanceCashCover($issuanceDate, $cashCoverAmount, $journalId, $odooCurrencyId, $lgDebitOdooAccountId, $accountOdooId, $this->getBeneficiaryOdooId(), $ref, $message, $analytic_distribution, $this->getAmountInMainFunctionalCurrency($cashCoverAmount, $issuanceDate));
+            $result = $odooLetterOfGuaranteeIssuance->createLgIssuanceCashCover($movementDate, $cashCoverAmount, $journalId, $odooCurrencyId, $lgDebitOdooAccountId, $accountOdooId, $this->getBeneficiaryOdooId(), $ref, $message, $analytic_distribution, $this->getAmountInMainFunctionalCurrency($cashCoverAmount, $movementDate));
             $this->account_bank_statement_odoo_id=$result['account_bank_statement_line_id'];
             $this->journal_entry_id=$result['journal_entry_id'];
             $this->cash_cover_fees_reference=$result['reference'];
@@ -1156,5 +1272,30 @@ class LetterOfGuaranteeIssuance extends Model
         $cashCoverRate = $this->getCashCoverRate() / 100;
         $cashCoverAmount = $isAdvancedPayment ? $amount *$cashCoverRate  : $this->getCashCoverAmount();
         return $cashCoverAmount;
+    }
+    /**
+     * * الخطاب اللي لسه مش مفعّل مالوش رصيد في letter_of_guarantee_statements
+     * * بس البنك حاجز مبلغه من حد التسهيل من يوم الاصدار — فالمبلغ ده
+     * * بيتحسب هنا من جدول الخطابات و بيتضاف على الـ outstanding وقت حساب
+     * * الـ room . نفس فلاتر رصيد التسهيل : $lgFacilityId للتسهيل و $cdOrTdId
+     * * للوديعة ، و null معناها من غير فلتر
+     */
+    public static function reservedForUnactivated(int $companyId, ?string $currency, int $financialInstitutionId, ?string $source, ?int $lgFacilityId = null, $cdOrTdId = null, ?string $lgType = null): float
+    {
+        if (blank($currency) || blank($source)) {
+            return 0;
+        }
+
+        return (float) DB::table('letter_of_guarantee_issuances')
+            ->where('company_id', $companyId)
+            ->where('lg_currency', $currency)
+            ->where('financial_institution_id', $financialInstitutionId)
+            ->where('source', $source)
+            ->when(! is_null($lgFacilityId), fn ($query) => $query->where('lg_facility_id', $lgFacilityId))
+            ->when(! is_null($cdOrTdId), fn ($query) => $query->where('cd_or_td_id', $cdOrTdId))
+            ->when($lgType, fn ($query) => $query->where('lg_type', $lgType))
+            ->where('is_activated', 0)
+            ->where('status', '!=', self::CANCELLED)
+            ->sum('lg_amount');
     }
 }

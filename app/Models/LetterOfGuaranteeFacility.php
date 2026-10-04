@@ -270,9 +270,16 @@ class LetterOfGuaranteeFacility extends Model
 			throw new \InvalidArgumentException(__('There is no renewal to delete — this facility is still on its original terms.'));
 		}
 
+		/**
+		 * * خطاب الدفعة المقدمة حركاته بتنزل بتاريخ التفعيل ، فممكن يكون
+		 * * اتصدر قبل التجديد و اتفعّل بعده
+		 */
 		$blockingIssuances = \Illuminate\Support\Facades\DB::table('letter_of_guarantee_issuances')
 			->where('lg_facility_id', $this->id)
-			->where('issuance_date', '>=', $latest->effective_date)
+			->where(function ($query) use ($latest) {
+				$query->where('issuance_date', '>=', $latest->effective_date)
+					->orWhere('activation_date', '>=', $latest->effective_date);
+			})
 			->exists();
 
 		if ($blockingIssuances) {

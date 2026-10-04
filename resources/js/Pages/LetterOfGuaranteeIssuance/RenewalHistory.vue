@@ -154,6 +154,10 @@ function destroyRow() {
                             <label class="cvr-form-label">{{ $t('Issuance Date') }}</label>
                             <input disabled :value="letterOfGuaranteeIssuance.issuance_date_formatted" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
+                        <div v-if="letterOfGuaranteeIssuance.activation_date_formatted">
+                            <label class="cvr-form-label">{{ $t('Activation Date') }}</label>
+                            <input disabled :value="letterOfGuaranteeIssuance.activation_date_formatted" class="cvr-input w-full px-3 py-2 rounded" />
+                        </div>
 
                         <div>
                             <label class="cvr-form-label">{{ $t('Expiry Date') }}</label>

@@ -620,8 +620,17 @@ class PageInstructions
                     ],
                 ],
                 [
+                    'heading' => 'Unactivated Advance Payment LGs',
+                    'body' => ['An Advance Payment LG only takes effect once the bank activates it — usually when the customer\'s advance payment arrives. Until its Activation Date is entered it shows an Unactivated badge and nothing is posted for it, here or in Odoo: no cash cover, no issuance fees and no commission. Its amount still counts against the LG Facility room from the Issuance Date.'],
+                    'fields' => [
+                        ['label' => 'Activating it', 'text' => 'Open Edit and fill in the Activation Date. Everything that used to be posted on the Issuance Date is posted on the Activation Date instead, and commission runs from that date to the Renewal Date.'],
+                        ['label' => 'While it is Unactivated', 'text' => 'Renewal and Amount To Be Decreased are not available. Cancelling it only changes its status — there is no cash cover to release.'],
+                    ],
+                ],
+                [
                     'heading' => 'Things that will stop you',
                     'fields' => [
+                        ['label' => '"This LG is not activated yet. Enter its Activation Date first."', 'text' => 'Renewal and Amount To Be Decreased need an activated LG. Edit the LG and enter its Activation Date.'],
                         ['label' => '"This exceeds what is left of the LG Facility. Reduce the amount or pick another facility."', 'text' => 'The facility does not have enough unused limit for this LG.'],
                         ['label' => '"Contract is required for this LG type."', 'text' => 'This beneficiary requires the LG to be tied to a contract.'],
                         ['label' => '"This LG is cancelled and can no longer be edited. Set it back to Running first."', 'text' => 'Cancelled LGs are read-only. Use Back To Running first if you must change it.'],
@@ -2172,6 +2181,7 @@ class PageInstructions
                 [
                     'heading' => 'Dates and amount',
                     'fields' => [
+                        ['label' => 'Activation Date', 'text' => 'Advance Payment LGs only. When the bank activated the guarantee. Leave it empty until then — the cash cover, fees and commission are posted on this date instead of the Issuance Date, and nothing is posted while it is empty.'],
                         ['label' => 'Issuance Date', 'text' => 'When the bank issued it. Commission runs from this date.'],
                         ['label' => 'LG Duration (Months)', 'text' => 'How long it stands.'],
                         ['label' => 'Renewal Date', 'text' => 'When it expires and must be extended or released.'],
@@ -2196,6 +2206,7 @@ class PageInstructions
                     'notes' => [
                         'The cash cover is real money leaving your available balance. A run of guarantees at high cover rates can freeze more cash than expected.',
                         'If the LG Type you need is missing, its terms have not been added to the facility. Add them there first.',
+                        'An Advance Payment LG saved without an Activation Date stays Unactivated: it already uses facility room, but nothing is posted until you come back, edit it and enter the date.',
                     ],
                 ],
             ],

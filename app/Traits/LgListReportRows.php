@@ -21,6 +21,13 @@ namespace App\Traits;
 trait LgListReportRows
 {
     /**
+     * An unactivated Advance Payment LG is listed like any other, but
+     * no cash cover has been taken for it yet — so both the row and the
+     * Cash Cover total read 0 for it.
+     */
+    protected const CASH_COVER_SQL = 'CASE WHEN letter_of_guarantee_issuances.is_activated = 1 THEN letter_of_guarantee_issuances.cash_cover_amount ELSE 0 END';
+
+    /**
      * @param  array  $lgsTypes  LgTypes::getAll() — [type => label]
      * @param  array  $lgsSources  LgSources::getAll() — [source => label]
      */
@@ -33,6 +40,7 @@ trait LgListReportRows
             'lgType' => $lgsTypes[$row->lg_type] ?? $row->lg_type,
             'transactionName' => $row->transaction_name,
             'lgCode' => $row->lg_code,
+            'isActivated' => (bool) ($row->is_activated ?? true),
             'source' => $lgsSources[$row->source] ?? $row->source,
             'lgAmount' => (float) ($row->lg_amount ?? 0),
             'renewalDate' => $row->renewal_date, // already formatted (or "cancelled") by the SQL query itself
@@ -40,5 +48,16 @@ trait LgListReportRows
             'lgCommissionRate' => $row->lg_commission_rate,
             'status' => $row->lg_status ?? null, // 'running' | 'expired' | 'cancelled' — computed in fetchRows()
         ];
+    }
+
+    /**
+     * The workbook and the printout have no badges, so the flag rides
+     * along with the code itself.
+     */
+    protected function lgCodeForExport(array $mappedRow): string
+    {
+        return $mappedRow['isActivated']
+            ? (string) $mappedRow['lgCode']
+            : $mappedRow['lgCode'].' ('.__('Unactivated').')';
     }
 }

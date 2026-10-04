@@ -288,6 +288,7 @@ const odooErrorTarget = ref(null);
                             <th class="px-3 py-3 text-start">{{ $t('LG Code') }}</th>
                             <th class="px-3 py-3 text-start">{{ $t('LG Amount') }}</th>
                             <th v-if="activeTab === 'advanced-payment-lgs'" class="px-3 py-3 text-start">{{ $t('LG Current Amount') }}</th>
+                            <th v-if="activeTab === 'advanced-payment-lgs'" class="px-3 py-3 text-start">{{ $t('Activation Date') }}</th>
                             <th class="px-3 py-3 text-start">{{ $t('Issuance Date') }}</th>
                             <th class="px-3 py-3 text-start">{{ $t('Renewal Date') }}</th>
                             <th class="px-3 py-3 text-start">{{ $t('Actions') }}</th>
@@ -304,11 +305,17 @@ const odooErrorTarget = ref(null);
                                     class="cvr-badge"
                                     :class="row.is_cancelled || row.is_expired ? 'cvr-badge-overdue' : 'cvr-badge-active'"
                                 >{{ row.status_formatted }}</span>
+                                <span
+                                    v-if="!row.is_activated"
+                                    class="cvr-badge cvr-badge-pending ms-1"
+                                    :title="$t('Enter the Activation Date from Edit once the bank activates this LG.')"
+                                >{{ $t('Unactivated') }}</span>
                             </td>
                             <td class="px-3 py-3 cvr-text-secondary max-w-[10rem] break-words">{{ row.bank_name }}</td>
                             <td class="px-3 py-3 cvr-text-secondary">{{ row.lg_code }}</td>
                             <td class="px-3 py-3 cvr-num">{{ row.lg_amount_formatted }} <span class="cvr-text-muted">{{ row.lg_currency }}</span></td>
                             <td v-if="activeTab === 'advanced-payment-lgs'" class="px-3 py-3 cvr-num-green">{{ row.lg_current_amount_formatted }} <span class="cvr-text-muted">{{ row.lg_currency }}</span></td>
+                            <td v-if="activeTab === 'advanced-payment-lgs'" class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.activation_date_formatted || '—' }}</td>
                             <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.issuance_date_formatted }}</td>
                             <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.renewal_date_formatted }}</td>
                             <td class="px-3 py-3">
@@ -324,10 +331,10 @@ const odooErrorTarget = ref(null);
                                     <button v-if="row.has_comment" @click="commentTarget = row" class="cvr-action-btn" :title="$t('User Comment')">💬</button>
                                     <button v-if="row.fully_integrated_with_odoo" @click="odooTarget = row" class="cvr-action-btn" :title="$t('Odoo References')">👍</button>
                                     <button v-if="row.has_odoo_error" @click="odooErrorTarget = row" class="cvr-action-btn" style="color: #EF4444;" :title="$t('Odoo Error')">🐛</button>
-                                    <Link v-if="!row.review?.is_reviewed && permissions.canRenew" :href="row.renewal_date_url" class="cvr-action-btn" :title="$t('Renewal')">🔄</Link>
+                                    <Link v-if="!row.review?.is_reviewed && permissions.canRenew && row.is_activated" :href="row.renewal_date_url" class="cvr-action-btn" :title="$t('Renewal')">🔄</Link>
 
                                     <button v-if="!row.review?.is_reviewed && permissions.canCancel && (row.is_running || row.is_expired)" @click="openCancel(row)" class="cvr-action-btn" :title="$t('Cancel Letter')">🚫</button>
-                                    <button v-if="!row.review?.is_reviewed && permissions.canUpdate && row.is_running && row.is_advanced_payment" @click="openAdvancedPayment(row)" class="cvr-action-btn" :title="$t('Amount To Be Decreased')">⚖️</button>
+                                    <button v-if="!row.review?.is_reviewed && permissions.canUpdate && row.is_running && row.is_advanced_payment && row.is_activated" @click="openAdvancedPayment(row)" class="cvr-action-btn" :title="$t('Amount To Be Decreased')">⚖️</button>
                                     <button v-if="!row.review?.is_reviewed && permissions.canCancel && row.is_cancelled" @click="openBackToRunning(row)" class="cvr-action-btn" :title="$t('Back To Running')">↩️</button>
 
                                     <Link v-if="permissions.canUpdate && !row.is_cancelled" :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">{{ $t('Edit') }}</Link>
@@ -336,7 +343,7 @@ const odooErrorTarget = ref(null);
                             </td>
                         </tr>
                         <tr v-if="currentTab.rows.length === 0">
-                            <td colspan="12" class="px-4 py-8 text-center cvr-text-muted">
+                            <td colspan="13" class="px-4 py-8 text-center cvr-text-muted">
                                 {{ $t('No LG Issuance records found.') }}
                             </td>
                         </tr>
@@ -391,7 +398,7 @@ const odooErrorTarget = ref(null);
                         </div>
                         <div>
                             <label class="cvr-form-label">{{ $t('Cancellation Date') }} *</label>
-                            <input v-model="cancelForm.cancellation_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="cancelForm.cancellation_date" type="date" :min="cancelTarget.movement_date || undefined" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                     </div>
                     <div class="flex justify-end gap-2">
@@ -441,7 +448,7 @@ const odooErrorTarget = ref(null);
                         </div>
                         <div>
                             <label class="cvr-form-label">{{ $t('Date') }} *</label>
-                            <input v-model="newAdvancedPaymentForm.date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="newAdvancedPaymentForm.date" type="date" :min="advancedPaymentTarget.movement_date || undefined" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">{{ $t('Amount To Be Decreased') }} *</label>
@@ -490,7 +497,7 @@ const odooErrorTarget = ref(null);
                     <div class="cvr-form-grid-2 mb-4">
                         <div>
                             <label class="cvr-form-label">{{ $t('Date') }} *</label>
-                            <input v-model="editAdvancedPaymentForm.decrease_date" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="editAdvancedPaymentForm.decrease_date" type="date" :min="advancedPaymentTarget?.movement_date || undefined" class="cvr-input w-full px-3 py-2 rounded" />
                         </div>
                         <div>
                             <label class="cvr-form-label">{{ $t('Amount To Be Decreased') }} *</label>

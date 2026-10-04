@@ -425,6 +425,7 @@ class LetterOfGuaranteeStatement extends Model
 		 * a cash-cover statement row. The Limit popup / Cash Cover KPI
 		 * still have to show the facility's cover — the same
 		 * cash_cover_amount the LG table already sums per issuance.
+		 * An unactivated Advance Payment LG has no cover yet.
 		 */
 		return (float) DB::table('letter_of_guarantee_issuances')
 			->where('company_id', $companyId)
@@ -433,6 +434,7 @@ class LetterOfGuaranteeStatement extends Model
 			->where('lg_facility_id', $lgFacilityId)
 			->where('source', $source)
 			->where('status', '!=', LetterOfGuaranteeIssuance::CANCELLED)
+			->where('is_activated', 1)
 			->when($type, fn ($query) => $query->where('lg_type', $type))
 			->sum('cash_cover_amount');
 	}

@@ -26,6 +26,7 @@ use App\Services\Api\OdooSync;
 use App\Support\LetterOfGuarantee\LgContractRequirement;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -133,6 +134,9 @@ class LetterOfGuaranteeIssuanceController
                     'lg_current_amount_formatted' => $lg->getLgCurrentAmountFormatted(),
                     'lg_currency' => $lg->getLgCurrency(),
                     'purchase_order_date_formatted' => $lg->getPurchaseOrderDateFormatted(),
+                    'activation_date_formatted' => $lg->getActivationDateFormatted(),
+                    'is_activated' => $lg->isActivated(),
+                    'movement_date' => $lg->getMovementDate(),
                     'issuance_date_formatted' => $lg->getIssuanceDateFormatted(),
                     'renewal_date_formatted' => $lg->getRenewalDateFormatted(),
                     'is_running' => $lg->isRunning(),
@@ -183,7 +187,7 @@ class LetterOfGuaranteeIssuanceController
             return is_string($value) && trim($value) !== '';
         }
 
-        if (in_array($field, ['issuance_date', 'renewal_date', 'purchase_order_date'], true)) {
+        if (in_array($field, ['activation_date', 'issuance_date', 'renewal_date', 'purchase_order_date'], true)) {
             return filled($from) && filled($to);
         }
 
@@ -208,7 +212,10 @@ class LetterOfGuaranteeIssuanceController
             $query->whereBetween('renewal_date', [$startDate, $endDate]);
         }
 
-        $query = $query->when($searchFieldName == 'issuance_date', function ($q) use ($from, $to) {
+        $query = $query->when($searchFieldName == 'activation_date', function ($q) use ($from, $to) {
+            $q->whereBetween('activation_date', [$from, $to]);
+        })
+        ->when($searchFieldName == 'issuance_date', function ($q) use ($from, $to) {
             $q->whereBetween('issuance_date', [$from, $to]);
         })
         ->when($searchFieldName == 'renewal_date', function ($q) use ($from, $to) {
@@ -534,6 +541,7 @@ class LetterOfGuaranteeIssuanceController
                 'purchase_order_date' => $model->getPurchaseOrderDate(),
             ], $this->lgIssuanceContractFormFields($model), [
                 'transaction_date' => $model->transaction_date,
+                'activation_date' => $model->getActivationDate(),
                 'issuance_date' => $model->getIssuanceDate(),
                 'lg_duration_months' => $model->lg_duration_months,
                 'renewal_date' => $model->getRenewalDate(),
@@ -627,6 +635,7 @@ class LetterOfGuaranteeIssuanceController
                 'purchase_order_date' => $model->getPurchaseOrderDate(),
             ], $this->lgIssuanceContractFormFields($model), [
                 'transaction_date' => $model->transaction_date,
+                'activation_date' => $model->getActivationDate(),
                 'issuance_date' => $model->getIssuanceDate(),
                 'lg_duration_months' => $model->lg_duration_months,
                 'renewal_date' => $model->getRenewalDate(),
@@ -713,6 +722,7 @@ class LetterOfGuaranteeIssuanceController
                 'purchase_order_date' => $model->getPurchaseOrderDate(),
             ], $this->lgIssuanceContractFormFields($model), [
                 'transaction_date' => $model->transaction_date,
+                'activation_date' => $model->getActivationDate(),
                 'issuance_date' => $model->getIssuanceDate(),
                 'lg_duration_months' => $model->lg_duration_months,
                 'renewal_date' => $model->getRenewalDate(),
@@ -785,6 +795,7 @@ class LetterOfGuaranteeIssuanceController
                 'purchase_order_date' => $model->getPurchaseOrderDate(),
             ], $this->lgIssuanceContractFormFields($model), [
                 'transaction_date' => $model->transaction_date,
+                'activation_date' => $model->getActivationDate(),
                 'issuance_date' => $model->getIssuanceDate(),
                 'lg_duration_months' => $model->lg_duration_months,
                 'renewal_date' => $model->getRenewalDate(),
@@ -864,7 +875,6 @@ class LetterOfGuaranteeIssuanceController
         $partner = Partner::find($request->get('partner_id'));
         $customerName = $partner->getName() ;
         $lgCode = $request->get('lg_code');
-        $isOpeningBalance = $request->get('category_name') == LetterOfGuaranteeIssuance::OPENING_BALANCE;
         $financialInstitutionId = $request->get('financial_institution_id') ;
         $letterOfGuaranteeFacilityId =  $request->get('lg_facility_id') ;
         
@@ -968,38 +978,55 @@ class LetterOfGuaranteeIssuanceController
         
         $financialInstitutionAccountIdForFeesAndCommission = $financialInstitutionAccountForFeesAndCommission->id;
         $isCdOrTdCashCoverAccount = $model->isCdOrTd();
-        $model->handleLgIssuanceCashCoverForOdoo();
-        $model->handleIssuanceAndCommissionFeesForOdoo();
-            
+        $isOpeningBalance = $model->postsAsOpeningBalance();
+        $movementDate = $model->getMovementDate();
+        /**
+         * * خطاب دفعة مقدمة من غير تاريخ تفعيل بيتحفظ بس : مفيش كاش كفر و لا
+         * * مصاريف و لا عمولة و لا رصيد و لا Odoo . كل ده بينزل بتاريخ التفعيل
+         * * لما يتكتب من شاشة التعديل (update بيمسح الخطاب و يحفظه من هنا تاني)
+         */
+        if ($model->isActivated()) {
+            $model->handleLgIssuanceCashCoverForOdoo();
+            $model->handleIssuanceAndCommissionFeesForOdoo();
+                
 
-        $openingBalanceDateOfCurrentAccount = $financialInstitutionAccountForFeesAndCommission->getOpeningBalanceDate();
-        
-        $financialInstitutionAccountIdForCashCover = $financialInstitutionAccountForCashCover->id ?? 0;
-        
-        
-        
-        $customerName = $model->getBeneficiaryName();
-        if (!$isOpeningBalance && !$isCdOrTdCashCoverAccount) {
-            $model->storeCurrentAccountCreditBankStatement($issuanceDate, $cashCoverAmount, $financialInstitutionAccountIdForCashCover, 0, 1, __('Cash Cover [ :customerName ] [ :lgType ] Transaction Name [ :transactionName ]', ['lgType'=>__($lgType, [], 'en'),'customerName'=>$customerName,'transactionName'=>$transactionName], 'en'), __('Cash Cover [ :customerName ] [ :lgType ] Transaction Name [ :transactionName ]', ['lgType'=>__($lgType, [], 'ar'),'customerName'=>$customerName,'transactionName'=>$transactionName], 'ar'));
+            $openingBalanceDateOfCurrentAccount = $financialInstitutionAccountForFeesAndCommission->getOpeningBalanceDate();
+            
+            $financialInstitutionAccountIdForCashCover = $financialInstitutionAccountForCashCover->id ?? 0;
+            
+            
+            
+            $customerName = $model->getBeneficiaryName();
+            if (!$isOpeningBalance && !$isCdOrTdCashCoverAccount) {
+                $model->storeCurrentAccountCreditBankStatement($movementDate, $cashCoverAmount, $financialInstitutionAccountIdForCashCover, 0, 1, __('Cash Cover [ :customerName ] [ :lgType ] Transaction Name [ :transactionName ]', ['lgType'=>__($lgType, [], 'en'),'customerName'=>$customerName,'transactionName'=>$transactionName], 'en'), __('Cash Cover [ :customerName ] [ :lgType ] Transaction Name [ :transactionName ]', ['lgType'=>__($lgType, [], 'ar'),'customerName'=>$customerName,'transactionName'=>$transactionName], 'ar'));
+            }
+            if (!$isOpeningBalance) {
+                $model->storeCurrentAccountCreditBankStatement($movementDate, $issuanceFees, $financialInstitutionAccountIdForFeesAndCommission, 0, 1, __('Issuance Fees [ :customerName ] [ :lgType ] Transaction Name [ :transactionName ]', ['lgType'=>__($lgType, [], 'en'),'customerName'=>$customerName,'transactionName'=>$transactionName], 'en'), __('Issuance Fees [ :customerName ] [ :lgType ] Transaction Name [ :transactionName ]', ['lgType'=>__($lgType, [], 'ar'),'customerName'=>$customerName,'transactionName'=>$transactionName], 'ar'), false, false, null, 1);
+            }
+            
+            $letterOfGuaranteeStatementCommentEn = LetterOfGuaranteeStatement::generateIssuanceComment('en', $customerName, $transactionName, $lgCode);
+            ;
+            $letterOfGuaranteeStatementCommentAr = LetterOfGuaranteeStatement::generateIssuanceComment('ar', $customerName, $transactionName, $lgCode);
+            ;
+            $model->handleLetterOfGuaranteeStatement($financialInstitutionId, $source, $letterOfGuaranteeFacilityId, $lgType, $company->id, $movementDate, 0, 0, $lgAmount, $currency, 0, $cdOrTdId, 'credit-lg-amount', $letterOfGuaranteeStatementCommentEn, $letterOfGuaranteeStatementCommentAr);
+            if (!$isOpeningBalance && !$isCdOrTdCashCoverAccount) {
+                $model->handleLetterOfGuaranteeCashCoverStatement($financialInstitutionId, $source, $letterOfGuaranteeFacilityId, $lgType, $company->id, $movementDate, 0, $cashCoverAmount, 0, $currency, 0, 'debit-lg-amount');
+            }
+            
+            $lgDurationMonths = $request->get('lg_duration_months', 1);
+            /**
+             * * lg_duration_months الفورم بتحسبه من تاريخ الاصدار للانتهاء ، و
+             * * عمولة خطاب الدفعة المقدمة بتبدأ من تاريخ التفعيل — من غير ده
+             * * خطاب اتفعّل في نص مدته كان هياخد عمولة ارباع بعد انتهاءه
+             */
+            if ($model->requiresActivation() && $movementDate !== $issuanceDate && $model->getRenewalDate()) {
+                $lgDurationMonths = LetterOfGuaranteeIssuance::monthsBetweenCeil($movementDate, $model->getRenewalDate());
+            }
+            $numberOfIterationsForQuarter = ceil($lgDurationMonths / 3);
+            $lgCommissionInterval = $request->get('lg_commission_interval');
+            
+            $model->storeCommissionAmountCreditBankStatement($lgCommissionInterval, $numberOfIterationsForQuarter, $movementDate, $openingBalanceDateOfCurrentAccount, $maxLgCommissionAmount, $financialInstitutionAccountIdForFeesAndCommission, $transactionName, $lgType, $isOpeningBalance);
         }
-        if (!$isOpeningBalance) {
-            $model->storeCurrentAccountCreditBankStatement($issuanceDate, $issuanceFees, $financialInstitutionAccountIdForFeesAndCommission, 0, 1, __('Issuance Fees [ :customerName ] [ :lgType ] Transaction Name [ :transactionName ]', ['lgType'=>__($lgType, [], 'en'),'customerName'=>$customerName,'transactionName'=>$transactionName], 'en'), __('Issuance Fees [ :customerName ] [ :lgType ] Transaction Name [ :transactionName ]', ['lgType'=>__($lgType, [], 'ar'),'customerName'=>$customerName,'transactionName'=>$transactionName], 'ar'), false, false, null, 1);
-        }
-        
-        $letterOfGuaranteeStatementCommentEn = LetterOfGuaranteeStatement::generateIssuanceComment('en', $customerName, $transactionName, $lgCode);
-        ;
-        $letterOfGuaranteeStatementCommentAr = LetterOfGuaranteeStatement::generateIssuanceComment('ar', $customerName, $transactionName, $lgCode);
-        ;
-        $model->handleLetterOfGuaranteeStatement($financialInstitutionId, $source, $letterOfGuaranteeFacilityId, $lgType, $company->id, $issuanceDate, 0, 0, $lgAmount, $currency, 0, $cdOrTdId, 'credit-lg-amount', $letterOfGuaranteeStatementCommentEn, $letterOfGuaranteeStatementCommentAr);
-        if (!$isOpeningBalance && !$isCdOrTdCashCoverAccount) {
-            $model->handleLetterOfGuaranteeCashCoverStatement($financialInstitutionId, $source, $letterOfGuaranteeFacilityId, $lgType, $company->id, $issuanceDate, 0, $cashCoverAmount, 0, $currency, 0, 'debit-lg-amount');
-        }
-        
-        $lgDurationMonths = $request->get('lg_duration_months', 1);
-        $numberOfIterationsForQuarter = ceil($lgDurationMonths / 3);
-        $lgCommissionInterval = $request->get('lg_commission_interval');
-        
-        $model->storeCommissionAmountCreditBankStatement($lgCommissionInterval, $numberOfIterationsForQuarter, $issuanceDate, $openingBalanceDateOfCurrentAccount, $maxLgCommissionAmount, $financialInstitutionAccountIdForFeesAndCommission, $transactionName, $lgType, $isOpeningBalance);
         
 		/**
 		 * ⚠️ Response made Inertia-aware, same reasoning as the
@@ -1124,7 +1151,7 @@ class LetterOfGuaranteeIssuanceController
 
         $lgType = $letterOfGuaranteeIssuance->getLgType();
         $currency = $letterOfGuaranteeIssuance->getLgCurrency();
-        $issuanceDate = $letterOfGuaranteeIssuance->getIssuanceDate();
+        $movementDate = $letterOfGuaranteeIssuance->getMovementDate();
         $isCdOrTd = $letterOfGuaranteeIssuance->isCdOrTd();
         $financialInstitutionAccount = FinancialInstitutionAccount::find($letterOfGuaranteeIssuance->getCashCoverDeductedFromAccountId());
        
@@ -1140,6 +1167,14 @@ class LetterOfGuaranteeIssuanceController
            'status' => $letterOfGuaranteeIssuanceStatus,
            'cancellation_date'=>null
         ]);
+
+        /**
+         * * الخطاب اللي لسه مش مفعّل اتلغى من غير حركات ، فمفيش حاجة ترجع غير
+         * * الحالة — من غير ده كان هيتعمل صف كاش كفر بصفر و قيد بصفر في Odoo
+         */
+        if ($letterOfGuaranteeIssuance->isUnactivated()) {
+            return redirect()->route('view.letter.of.guarantee.issuance', ['company'=>$company->id,'active'=>$request->get('lg_type', $letterOfGuaranteeIssuance->getLgType())])->with('success', __('Data Store Successfully'));
+        }
     
         LetterOfGuaranteeStatement::deleteButTriggerChangeOnLastElement($letterOfGuaranteeIssuance->letterOfGuaranteeStatements->where('type', LetterOfGuaranteeIssuance::FOR_CANCELLATION));
         
@@ -1159,7 +1194,7 @@ class LetterOfGuaranteeIssuanceController
         
         $letterOfGuaranteeFacilityId = $letterOfGuaranteeFacility ? $letterOfGuaranteeFacility->id : null ;
 
-        $letterOfGuaranteeIssuance->handleLetterOfGuaranteeCashCoverStatement($financialInstitutionId, $source, $letterOfGuaranteeFacilityId, $lgType, $company->id, $issuanceDate, 0, $cashCoverAmount, 0, $currency, 0, 'debit-lg-amount');
+        $letterOfGuaranteeIssuance->handleLetterOfGuaranteeCashCoverStatement($financialInstitutionId, $source, $letterOfGuaranteeFacilityId, $lgType, $company->id, $movementDate, 0, $cashCoverAmount, 0, $currency, 0, 'debit-lg-amount');
 		if( $company->hasOdooIntegrationCredentials()){
 			foreach (['cancel_journal_entry_id'] as $journalColumnName) {
             $currentJournalEntryId = $letterOfGuaranteeIssuance->{$journalColumnName};
@@ -1171,11 +1206,11 @@ class LetterOfGuaranteeIssuanceController
         }
 
 		}
-		 if ($company->hasOdooIntegrationCredentials() && !$isCdOrTd && $company->withinIntegrationDate($issuanceDate)) {
+		 if ($company->hasOdooIntegrationCredentials() && !$isCdOrTd && $company->withinIntegrationDate($movementDate)) {
             /**
              * * الاتصال بأودو بيتأجل لبعد ما الترانزاكشن تكومِت
              */
-            OdooSync::defer(function () use ($company, $letterOfGuaranteeIssuance, $financialInstitutionAccount, $issuanceDate, $cashCoverAmount, $lgType) {
+            OdooSync::defer(function () use ($company, $letterOfGuaranteeIssuance, $financialInstitutionAccount, $movementDate, $cashCoverAmount, $lgType) {
                 $currency = $financialInstitutionAccount->getCurrency();
                 $odooLetterOfGuaranteeIssuance = new LetterOfGuaranteeService($company);
                 $fromAccountNumber = $financialInstitutionAccount->getAccountNumber();
@@ -1186,7 +1221,7 @@ class LetterOfGuaranteeIssuanceController
                 $ref = $letterOfGuaranteeIssuance->generateIssuanceRef();
                 $message = $letterOfGuaranteeIssuance->generateIssuanceMessage();
                 $analytic_distribution = $letterOfGuaranteeIssuance->formatAnalysisDistribution() ;
-                $result = $odooLetterOfGuaranteeIssuance->createLgIssuanceCashCover($issuanceDate, $cashCoverAmount, $journalId, $odooCurrencyId, $lgOdooAccountId, $accountOdooId, $letterOfGuaranteeIssuance->getBeneficiaryOdooId(), $ref, $message, $analytic_distribution, $letterOfGuaranteeIssuance->getAmountInMainFunctionalCurrency($cashCoverAmount, $issuanceDate));
+                $result = $odooLetterOfGuaranteeIssuance->createLgIssuanceCashCover($movementDate, $cashCoverAmount, $journalId, $odooCurrencyId, $lgOdooAccountId, $accountOdooId, $letterOfGuaranteeIssuance->getBeneficiaryOdooId(), $ref, $message, $analytic_distribution, $letterOfGuaranteeIssuance->getAmountInMainFunctionalCurrency($cashCoverAmount, $movementDate));
                 $letterOfGuaranteeIssuance->account_bank_statement_odoo_id=$result['account_bank_statement_line_id'];
                 $letterOfGuaranteeIssuance->journal_entry_id=$result['journal_entry_id'];
                 $letterOfGuaranteeIssuance->save();
@@ -1202,12 +1237,40 @@ class LetterOfGuaranteeIssuanceController
      * * letter of guarantee statements
      */
     /**
+     * Cancellation and amount-to-be-decreased post on the date the user
+     * picks. That date cannot be earlier than the day the LG's own
+     * movements started: the Activation Date for an Advance Payment LG,
+     * the Issuance Date for every other type. An unactivated LG has no
+     * movement date, so this does not apply to it.
+     */
+    protected function redirectIfBeforeMovementDate(Company $company, LetterOfGuaranteeIssuance $letterOfGuaranteeIssuance, string $date): ?RedirectResponse
+    {
+        $movementDate = $letterOfGuaranteeIssuance->getMovementDate();
+        if (! $movementDate || $date >= $movementDate) {
+            return null;
+        }
+
+        return redirect()->route('view.letter.of.guarantee.issuance', [
+            'company' => $company->id,
+            'active' => $letterOfGuaranteeIssuance->getLgType(),
+        ])->with('fail', __('This date cannot be before :date.', [
+            'date' => Carbon::make($movementDate)->format('d-m-Y'),
+        ]));
+    }
+
+    /**
      * Cancels a running/expired LG — posts cancellation entries to the
      * LG/cash-cover statements, refunds cash cover to the bank account,
-     * and reverses the Odoo entry. UNCHANGED, deliberately.
+     * and reverses the Odoo entry. The cancellation date cannot be
+     * earlier than the day those movements started.
      */
     public function cancel(Company $company, Request $request, LetterOfGuaranteeIssuance $letterOfGuaranteeIssuance, string $source)
     {
+        $cancellationDate = Carbon::make($request->get('cancellation_date', now()->format('Y-m-d')))->format('Y-m-d');
+        if ($rejection = $this->redirectIfBeforeMovementDate($company, $letterOfGuaranteeIssuance, $cancellationDate)) {
+            return $rejection;
+        }
+
         /**
          * ⚠️ WRAPPED IN A TRANSACTION (2026-07-25, confirmed with project
          * owner): previously the `status => cancelled` update below was its
@@ -1223,7 +1286,7 @@ class LetterOfGuaranteeIssuanceController
          * back the status change too, instead of leaving a half-cancelled
          * LG behind.
          */
-        return OdooSync::transaction(function () use ($company, $request, $letterOfGuaranteeIssuance, $source) {
+        return OdooSync::transaction(function () use ($company, $request, $letterOfGuaranteeIssuance, $source, $cancellationDate) {
             /**
              * @var LetterOfGuaranteeIssuance $letterOfGuaranteeIssuance
              */
@@ -1236,12 +1299,19 @@ class LetterOfGuaranteeIssuanceController
             $financialInstitutionId = $letterOfGuaranteeIssuance->financial_institution_id ;
         //    $financialInstitution = FinancialInstitution::find($financialInstitutionId);
 
-            $cancellationDate = Carbon::make($request->get('cancellation_date', now()->format('Y-m-d')))->format('Y-m-d') ;
-
             $letterOfGuaranteeIssuance->update([
                'status' => $letterOfGuaranteeIssuanceStatus,
                'cancellation_date'=>$cancellationDate
             ]);
+
+            /**
+             * * الخطاب اللي لسه مش مفعّل مالوش رصيد و لا كاش كفر و لا قيد في
+             * * Odoo ، فالالغاء بيغيّر الحالة بس . و لازم يفضل متاح : الدفعة
+             * * المقدمة ممكن ما توصلش خالص
+             */
+            if ($letterOfGuaranteeIssuance->isUnactivated()) {
+                return redirect()->route('view.letter.of.guarantee.issuance', ['company'=>$company->id,'active'=>$request->get('lg_type', $letterOfGuaranteeIssuance->getLgType())])->with('success', __('Data Store Successfully'));
+            }
             $letterOfGuaranteeFacility = $letterOfGuaranteeIssuance->letterOfGuaranteeFacility;
             $lgType = $letterOfGuaranteeIssuance->getLgType();
             // $isAdvancedPayment =  $letterOfGuaranteeIssuance->isAdvancedPayment() ;
@@ -1292,10 +1362,21 @@ class LetterOfGuaranteeIssuanceController
      * Records a new advanced-payment (amount-to-be-decreased) entry —
      * posts the LG/cash-cover statement reduction, refunds cash cover
      * to the bank account if applicable, and posts the Odoo entry.
-     * UNCHANGED, deliberately.
+     * The decrease date cannot be earlier than the LG's movement date.
      */
     public function applyAmountToBeDecreased(Company $company, Request $request, LetterOfGuaranteeIssuance $letterOfGuaranteeIssuance, string $source)
     {
+        /**
+         * * التخفيض بيطرح من رصيد الخطاب و كاش كفره ، و الخطاب اللي لسه مش
+         * * مفعّل مالوش رصيد يتطرح منه — كان هيطلع بالسالب
+         */
+        if ($letterOfGuaranteeIssuance->isUnactivated()) {
+            return redirect()->route('view.letter.of.guarantee.issuance', ['company'=>$company->id,'active'=>$letterOfGuaranteeIssuance->getLgType()])->with('fail', __('This LG is not activated yet. Enter its Activation Date first.'));
+        }
+        $decreaseDate = Carbon::make($request->get('date', now()->format('Y-m-d')))->format('Y-m-d');
+        if ($rejection = $this->redirectIfBeforeMovementDate($company, $letterOfGuaranteeIssuance, $decreaseDate)) {
+            return $rejection;
+        }
         return OdooSync::transaction(function () use ($company, $request, $letterOfGuaranteeIssuance, $source) {
             return $this->applyAmountToBeDecreasedWithinTransaction($company, $request, $letterOfGuaranteeIssuance, $source);
         });
@@ -1361,13 +1442,23 @@ class LetterOfGuaranteeIssuanceController
      * Edits an existing advanced-payment (amount-to-be-decreased)
      * entry — adjusts the linked LG/cash-cover statements, the bank
      * statement debit, and the Odoo entry to match. UNCHANGED
-     * financial logic, deliberately. The response was changed from a
-     * raw JSON body to a redirect, for Inertia compatibility — same
-     * fix already applied to editRate()/editLendingInformation()
-     * elsewhere.
+     * financial logic. The decrease date cannot be earlier than the
+     * LG's movement date. The response was changed from a raw JSON
+     * body to a redirect, for Inertia compatibility — same fix already
+     * applied to editRate()/editLendingInformation() elsewhere.
      */
     public function editAmountToBeDecreased(Company $company, Request $request, LetterOfGuaranteeIssuanceAdvancedPaymentHistory $lgAdvancedPaymentHistory, string $source)
     {
+        $letterOfGuaranteeIssuance = $lgAdvancedPaymentHistory->letterOfGuaranteeIssuance;
+        if ($letterOfGuaranteeIssuance && $letterOfGuaranteeIssuance->isUnactivated()) {
+            return redirect()->route('view.letter.of.guarantee.issuance', ['company'=>$company->id,'active'=>$letterOfGuaranteeIssuance->getLgType()])->with('fail', __('This LG is not activated yet. Enter its Activation Date first.'));
+        }
+        if ($letterOfGuaranteeIssuance) {
+            $decreaseDate = Carbon::make($request->get('decrease_date', now()->format('Y-m-d')))->format('Y-m-d');
+            if ($rejection = $this->redirectIfBeforeMovementDate($company, $letterOfGuaranteeIssuance, $decreaseDate)) {
+                return $rejection;
+            }
+        }
         return OdooSync::transaction(function () use ($company, $request, $lgAdvancedPaymentHistory, $source) {
             return $this->editAmountToBeDecreasedWithinTransaction($company, $request, $lgAdvancedPaymentHistory, $source);
         });

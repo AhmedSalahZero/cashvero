@@ -54,6 +54,7 @@ const form = ref({
     purchase_order_id: normalizeFkId(props.model?.purchase_order_id),
     purchase_order_date: props.model?.purchase_order_date ?? '',
     transaction_date: props.model?.transaction_date ?? '',
+    activation_date: props.model?.activation_date ?? '',
     issuance_date: props.model?.issuance_date ?? '',
     lg_duration_months: props.model?.lg_duration_months ?? 1,
     renewal_date: props.model?.renewal_date ?? '',
@@ -143,6 +144,13 @@ watch(isBidBond, (bidBond) => {
         form.value.purchase_order_id = '';
         form.value.purchase_order_date = '';
     }
+});
+
+/* ── Only an Advance Payment LG waits for the bank to activate it, so
+   the Activation Date is cleared as soon as the type changes away. ── */
+const isAdvancedPayment = computed(() => form.value.lg_type === 'advanced-payment-lgs');
+watch(isAdvancedPayment, (advancedPayment) => {
+    if (!advancedPayment) form.value.activation_date = '';
 });
 
 /* ── Picking a specific SO auto-fills its date (and locks the field);
@@ -249,9 +257,12 @@ function monthsBetweenCeil(startIso, endIso) {
     if (end.getDate() > start.getDate()) months += 1;
     return Math.max(1, months);
 }
-watch(() => [form.value.issuance_date, form.value.renewal_date], () => {
-    if (!form.value.issuance_date || !form.value.renewal_date) return;
-    form.value.lg_duration_months = monthsBetweenCeil(form.value.issuance_date, form.value.renewal_date);
+// An activated Advance Payment LG is charged commission from its
+// Activation Date, not its Issuance Date — same as the server counts it.
+watch(() => [form.value.activation_date, form.value.issuance_date, form.value.renewal_date], () => {
+    const startDate = (isAdvancedPayment.value && form.value.activation_date) || form.value.issuance_date;
+    if (!startDate || !form.value.renewal_date) return;
+    form.value.lg_duration_months = monthsBetweenCeil(startDate, form.value.renewal_date);
 });
 watch(() => [form.value.lg_amount, form.value.cash_cover_rate], () => {
     form.value.cash_cover_amount = Math.round((Number(form.value.lg_amount || 0) * Number(form.value.cash_cover_rate || 0) / 100) * 100) / 100;
@@ -447,6 +458,12 @@ function submit() {
                 <div class="cvr-card">
                     <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Dates & Amount') }}</h2>
                     <div class="cvr-form-grid-4">
+                        <div v-if="isAdvancedPayment">
+                            <label class="cvr-form-label">{{ $t('Activation Date') }}</label>
+                            <input v-model="form.activation_date" type="date" :min="form.issuance_date || undefined" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />
+                            <p class="text-xs cvr-text-muted mt-1">{{ $t('Leave empty until the bank activates the LG — cash cover, fees and commission are posted on this date.') }}</p>
+                            <p v-if="errorFor('activation_date')" class="text-xs mt-1 cvr-num-red">{{ errorFor('activation_date') }}</p>
+                        </div>
                         <div>
                             <label class="cvr-form-label">{{ $t('Issuance Date') }} *</label>
                             <input v-model="form.issuance_date" type="date" :max="maxDate" class="cvr-input w-full px-3 py-2 rounded" />

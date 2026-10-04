@@ -270,6 +270,24 @@ class LgCashCoverRefundTest extends TestCase
         $this->assertSame([], $this->refunds(), 'التغطية خلصت ، مفيش حاجة ترجع');
     }
 
+    /**
+     * * خطاب دفعة مقدمة لسه مش مفعّل ما اتحجزلوش كفر أصلا ، فمفيش حاجة
+     * * ترجع منه وقت انتهائه
+     */
+    public function test_an_unactivated_advance_payment_guarantee_refunds_nothing(): void
+    {
+        $this->lg([
+            'lg_code' => 'LG-UNACT',
+            'lg_type' => 'advanced-payment-lgs',
+            'activation_date' => null,
+            'is_activated' => 0,
+            'cash_cover_amount' => 10000,
+            'renewal_date' => '2026-12-15',
+        ]);
+
+        $this->assertSame([], $this->refunds(), 'الكفر ده عمره ما خرج');
+    }
+
     public function test_repaying_more_than_the_guarantee_never_goes_negative(): void
     {
         $lgId = $this->lg(['lg_code' => 'LG-OVER', 'lg_amount' => 100000, 'cash_cover_rate' => 10, 'cash_cover_amount' => 10000]);

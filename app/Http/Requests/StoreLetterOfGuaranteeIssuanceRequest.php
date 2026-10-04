@@ -44,6 +44,36 @@ class StoreLetterOfGuaranteeIssuanceRequest extends FormRequest
         return ($partnerId === 'null' || blank($partnerId)) ? null : (int) $partnerId;
     }
 
+    /**
+     * The forms send the literal string "null" for an empty field, and
+     * the date rule would reject it — an empty Activation Date is valid.
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->get('activation_date') === 'null') {
+            $this->merge(['activation_date' => null]);
+        }
+    }
+
+    /**
+     * * خطاب الدفعة المقدمة من غير تاريخ تفعيل مش هيتخصم له حاجة دلوقتي
+     */
+    private function isUnactivatedAdvancePayment(): bool
+    {
+        return $this->get('lg_type') === LgTypes::ADVANCED_PAYMENT_LGS && blank($this->get('activation_date'));
+    }
+
+    /**
+     * * اليوم اللي الكاش كفر و المصاريف و العمولة هيتخصموا فيه من الحساب
+     * * الجاري : تاريخ التفعيل لخطاب الدفعة المقدمة و تاريخ الاصدار لغيره
+     */
+    private function movementDateFromRequest(): ?string
+    {
+        return $this->get('lg_type') === LgTypes::ADVANCED_PAYMENT_LGS
+            ? $this->get('activation_date')
+            : $this->get('issuance_date');
+    }
+
     public function rules()
     {
         return [
@@ -61,6 +91,11 @@ class StoreLetterOfGuaranteeIssuanceRequest extends FormRequest
 					$this->companyOpeningBalanceDate()
 				),
 			],
+			/**
+			 * * تاريخ تفعيل خطاب الدفعة المقدمة : اختياري ، و لما يتكتب لازم
+			 * * يكون بين تاريخ الاصدار و تاريخ الانتهاء و مايبقاش في المستقبل
+			 */
+			'activation_date'=>['exclude_unless:lg_type,'.LgTypes::ADVANCED_PAYMENT_LGS, 'nullable', 'date', 'after_or_equal:issuance_date', 'before_or_equal:today', 'before_or_equal:renewal_date'],
 			'lg_amount'=>['required','gt:0'],
 			/**
 			 * A draw against an LG Facility must not exceed what is
@@ -79,7 +114,7 @@ class StoreLetterOfGuaranteeIssuanceRequest extends FormRequest
 					$this->currentIssuanceId() ?: null
 				),
 			],
-			'cash_cover_amount'=>[new LgTermAmountRule($this->get('category_name'),$this->get('cash_cover_deducted_from_account_type'),$this->get('lg_fees_and_commission_account_id'),$this->get('issuance_date'),$this->get('cash_cover_amount',0),$this->get('lg_commission_amount',0),$this->get('min_lg_commission_fees',0),$this->get('issuance_fees',0),$this->get('company_id'),$this->get('financial_institution_id'))],
+			'cash_cover_amount'=>$this->isUnactivatedAdvancePayment() ? [] : [new LgTermAmountRule($this->get('category_name'),$this->get('cash_cover_deducted_from_account_type'),$this->get('lg_fees_and_commission_account_id'),$this->movementDateFromRequest(),$this->get('cash_cover_amount',0),$this->get('lg_commission_amount',0),$this->get('min_lg_commission_fees',0),$this->get('issuance_fees',0),$this->get('company_id'),$this->get('financial_institution_id'))],
 			/**
 			 * A contract is required unless the LG type or the
 			 * beneficiary excuses it — see LgContractRequirement for

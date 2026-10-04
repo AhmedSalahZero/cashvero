@@ -112,6 +112,8 @@ class ReferencedRecordGuardTest extends TestCase
             $table->unsignedBigInteger('financial_institution_id')->nullable();
             $table->unsignedBigInteger('cash_cover_deducted_from_account_id')->nullable();
             $table->unsignedBigInteger('lg_fees_and_commission_account_id')->nullable();
+            $table->date('activation_date')->nullable();
+            $table->boolean('is_activated')->default(true);
         });
 
         DB::table('partners')->insert(['id' => self::PARTNER, 'name' => 'sce zone']);

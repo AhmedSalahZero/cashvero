@@ -542,9 +542,19 @@ class LetterOfGuaranteeFacilityController
 			}
 			$totalLastOutstandingBalanceOfFourTypes += $letterOfGuaranteeStatementEndBalance;
 		}
-		$totalLastOutstandingBalanceOfFourTypes = abs($totalLastOutstandingBalanceOfFourTypes) - $lgAmount;
+		/**
+		 * * خطاب الدفعة المقدمة اللي لسه مش مفعّل مالوش رصيد في الـ statements
+		 * * بس البنك حاجز مبلغه من الحد ، فبيتضاف هنا . طرح مبلغ الخطاب نفسه
+		 * * وقت التعديل ($lgAmount) صح في الحالتين : مبلغه يا في الرصيد يا في
+		 * * الحجز
+		 */
+		$reservedLgFacilityId = $isLGFacilitySource ? $letterOfGuaranteeFacilityId : null;
+		$reservedCdOrTdId = $isCdOrTdSource ? $cdOrTdAccountId : null;
+		$reservedForUnactivatedLgs = LetterOfGuaranteeIssuance::reservedForUnactivated($company->id, $currencyName, (int) $financialInstitutionId, $currentSource, $reservedLgFacilityId, $reservedCdOrTdId);
+		$reservedForSelectedLgType = $selectedLgType ? LetterOfGuaranteeIssuance::reservedForUnactivated($company->id, $currencyName, (int) $financialInstitutionId, $currentSource, $reservedLgFacilityId, $reservedCdOrTdId, $selectedLgType) : 0;
+		$totalLastOutstandingBalanceOfFourTypes = abs($totalLastOutstandingBalanceOfFourTypes) + $reservedForUnactivatedLgs - $lgAmount;
 		$limit = $letterOfGuaranteeFacility ? $letterOfGuaranteeFacility->getLimit() : 0;
-		$currentLgTypeOutstanding = abs($currentLgTypeOutstanding) - $lgAmount ;
+		$currentLgTypeOutstanding = abs($currentLgTypeOutstanding) + $reservedForSelectedLgType - $lgAmount ;
 	
 		return response()->json([
 			'limit'=>number_format($limit) ,

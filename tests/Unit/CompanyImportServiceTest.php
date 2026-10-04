@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Enums\LgTypes;
 use App\Services\CompanyData\CompanyImportService;
 use Illuminate\Support\Facades\DB;
 use ReflectionClass;
@@ -379,6 +380,46 @@ class CompanyImportServiceTest extends TestCase
         $this->assertSame('users', $morph['App\\Models\\User']);
         $this->assertSame('users', $morph['User']);
         $this->assertSame('companies', $morph['App\\Models\\Company']);
+    }
+
+    /**
+     * A raw company copy never runs the issuance model's saving hook.
+     * Legacy rows have no activation_date column at all.
+     *
+     * @dataProvider importedLgIssuanceProvider
+     */
+    public function test_an_imported_lg_issuance_gets_a_consistent_activation_state(array $row, ?string $activationDate, int $isActivated): void
+    {
+        $payload = $this->invoke($this->service(), 'normalizeImportedLgIssuance', $row);
+
+        $this->assertSame($activationDate, $payload['activation_date']);
+        $this->assertSame($isActivated, $payload['is_activated']);
+    }
+
+    public static function importedLgIssuanceProvider(): array
+    {
+        return [
+            'a legacy advance payment row has no activation column' => [
+                ['lg_type' => LgTypes::ADVANCED_PAYMENT_LGS, 'issuance_date' => '2026-01-10'],
+                '2026-01-10',
+                1,
+            ],
+            'an advance payment explicitly left unactivated stays that way' => [
+                ['lg_type' => LgTypes::ADVANCED_PAYMENT_LGS, 'issuance_date' => '2026-01-10', 'activation_date' => null],
+                null,
+                0,
+            ],
+            'an advance payment that already has an activation date keeps it' => [
+                ['lg_type' => LgTypes::ADVANCED_PAYMENT_LGS, 'issuance_date' => '2026-01-10', 'activation_date' => '2026-04-10'],
+                '2026-04-10',
+                1,
+            ],
+            'any other type drops a stray activation date' => [
+                ['lg_type' => LgTypes::FINAL_LGS, 'issuance_date' => '2026-01-10', 'activation_date' => '2026-04-10', 'is_activated' => 0],
+                null,
+                1,
+            ],
+        ];
     }
 
     private function databasesReachable(): bool

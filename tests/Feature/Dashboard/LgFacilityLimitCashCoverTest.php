@@ -58,6 +58,8 @@ class LgFacilityLimitCashCoverTest extends TestCase
             $table->string('status')->nullable();
             $table->string('lg_type')->nullable();
             $table->string('lg_currency')->nullable();
+            $table->date('activation_date')->nullable();
+            $table->boolean('is_activated')->default(true);
             $table->decimal('cash_cover_amount', 14)->default(0);
         });
 
@@ -126,6 +128,26 @@ class LgFacilityLimitCashCoverTest extends TestCase
             'cash_cover_amount' => 40_000,
             'source' => LetterOfGuaranteeIssuance::LG_FACILITY,
             'status' => LetterOfGuaranteeIssuance::CANCELLED,
+        ]);
+
+        $this->assertSame(75_000.0, $this->total());
+    }
+
+    /**
+     * An Advance Payment LG waiting for activation has not had any cash
+     * cover taken yet, so its cash_cover_amount is only a plan.
+     */
+    public function test_unactivated_issuances_are_excluded(): void
+    {
+        $this->insertIssuance([
+            'cash_cover_amount' => 75_000,
+            'source' => LetterOfGuaranteeIssuance::LG_FACILITY,
+        ]);
+        $this->insertIssuance([
+            'cash_cover_amount' => 40_000,
+            'source' => LetterOfGuaranteeIssuance::LG_FACILITY,
+            'lg_type' => LgTypes::ADVANCED_PAYMENT_LGS,
+            'is_activated' => false,
         ]);
 
         $this->assertSame(75_000.0, $this->total());

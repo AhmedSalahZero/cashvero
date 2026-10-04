@@ -1155,10 +1155,16 @@ class CustomerInvoiceDashboardController extends Controller
 							if($currentLgOrLcType =='lc' && $currencyName=='USD'){
 								$debug=true;
 								}
+							/**
+							 * * خطابات الدفعة المقدمة اللي لسه مش مفعّلة مالهاش رصيد في
+							 * * الـ statements ، بس البنك حاجز مبلغها من حد التسهيل —
+							 * * نفس الحجز اللي فورم الاصدار بيطرحه من الـ room
+							 */
 							$details[$currencyName][$currentLgOrLcType][] = [
 								'limit'=>$currentLimit =  $currentLastLetterOfGuaranteeOrCreditFacility->limit  ,
 								'outstanding_balance'=> $currentOutstanding = $statementTableFullClassName::getTotalOutstandingBalanceForAllTypes($currentLastLetterOfGuaranteeOrCreditFacility->id,$company->id,$financialInstitutionBankId,$currencyName,$debug)  , 
-								'room'=> $currentRoom = $currentLimit - $currentOutstanding ,
+								'reserved'=> $currentReserved = $currentLgOrLcType == 'lg' ? LetterOfGuaranteeIssuance::reservedForUnactivated($company->id, $currencyName, (int) $financialInstitutionBankId, LetterOfGuaranteeIssuance::LG_FACILITY, (int) $currentLastLetterOfGuaranteeOrCreditFacility->id) : 0 ,
+								'room'=> $currentRoom = $currentLimit - $currentOutstanding - $currentReserved ,
 								'cash_cover'=> $currentCashCover = $statementTableFullClassName::getTotalCashCoverForAllTypes($currentLastLetterOfGuaranteeOrCreditFacility->id,$company->id,$financialInstitutionBankId,$currencyName)  , 
 								'financial_institution_name'=>$currentFinancialInstitution->getName()
 							] ;
@@ -1166,6 +1172,7 @@ class CustomerInvoiceDashboardController extends Controller
 							
 							$total[$currentLgOrLcType][$currencyName]['limit'] = isset($total[$currentLgOrLcType][$currencyName]['limit']) ? $total[$currentLgOrLcType][$currencyName]['limit'] + $currentLimit  : $currentLimit ;
 							$total[$currentLgOrLcType][$currencyName]['outstanding_balance'] = isset($total[$currentLgOrLcType][$currencyName]['outstanding_balance']) ? $total[$currentLgOrLcType][$currencyName]['outstanding_balance'] + $currentOutstanding  : $currentOutstanding ;
+							$total[$currentLgOrLcType][$currencyName]['reserved'] = ($total[$currentLgOrLcType][$currencyName]['reserved'] ?? 0) + $currentReserved ;
 						
 							$total[$currentLgOrLcType][$currencyName]['room'] = isset($total[$currentLgOrLcType][$currencyName]['room']) ? $total[$currentLgOrLcType][$currencyName]['room'] + $currentRoom  : $currentRoom ;
 							$total[$currentLgOrLcType][$currencyName]['cash_cover'] = isset($total[$currentLgOrLcType][$currencyName]['cash_cover']) ? $total[$currentLgOrLcType][$currencyName]['cash_cover'] + $currentCashCover  : $currentCashCover ;
@@ -1176,6 +1183,7 @@ class CustomerInvoiceDashboardController extends Controller
 				}
 				// $reports[$currentLgOrLcType][$currencyName]['limit'] = $total[$currentLgOrLcType][$currencyName]['limit'] ?? 0 ;
 				$reports[$currentLgOrLcType][$currencyName]['outstanding_balance'] = $total[$currentLgOrLcType][$currencyName]['outstanding_balance'] ?? 0 ;
+				$reports[$currentLgOrLcType][$currencyName]['reserved'] = $total[$currentLgOrLcType][$currencyName]['reserved'] ?? 0 ;
 				$reports[$currentLgOrLcType][$currencyName]['room'] = $total[$currentLgOrLcType][$currencyName]['room'] ?? 0 ;
 				$reports[$currentLgOrLcType][$currencyName]['cash_cover'] = $total[$currentLgOrLcType][$currencyName]['cash_cover'] ?? 0 ;
 
@@ -1196,12 +1204,14 @@ class CustomerInvoiceDashboardController extends Controller
 							'financial_institution_name' => $bankName,
 							'limit' => 0.0,
 							'outstanding' => 0.0,
+							'reserved' => 0.0,
 							'room' => 0.0,
 							'cash_cover' => 0.0,
 						];
 					}
 					$limitDetailsByBank[$bankName]['limit'] += $facilityRow['limit'];
 					$limitDetailsByBank[$bankName]['outstanding'] += $facilityRow['outstanding_balance'];
+					$limitDetailsByBank[$bankName]['reserved'] += $facilityRow['reserved'];
 					$limitDetailsByBank[$bankName]['room'] += $facilityRow['room'];
 					$limitDetailsByBank[$bankName]['cash_cover'] += $facilityRow['cash_cover'];
 				}
@@ -1243,6 +1253,14 @@ class CustomerInvoiceDashboardController extends Controller
 							if ($status === LetterOfGuaranteeIssuance::CANCELLED) {
 								return;
 							}
+							/**
+							 * * خطاب الدفعة المقدمة اللي لسه مش مفعّل في group لوحده :
+							 * * مبلغه محجوز من الحد ، بس مفيش كاش كفر اتخصم له
+							 */
+							$isUnactivated = $lg->isUnactivated();
+							if ($isUnactivated) {
+								$status = 'unactivated';
+							}
 							$groupKey = $lg->financial_institution_id.'|'.$lg->lg_type.'|'.$lg->getSource().'|'.$status;
 							if (! isset($lgGroups[$groupKey])) {
 								$lgGroups[$groupKey] = [
@@ -1257,7 +1275,7 @@ class CustomerInvoiceDashboardController extends Controller
 							}
 							$lgGroups[$groupKey]['count']++;
 							$lgGroups[$groupKey]['outstanding'] += (float) $lg->lg_amount;
-							$lgGroups[$groupKey]['cash_cover'] += (float) $lg->cash_cover_amount;
+							$lgGroups[$groupKey]['cash_cover'] += $isUnactivated ? 0.0 : (float) $lg->cash_cover_amount;
 						});
 					$tablesData['lg_outstanding_for_table'][$currencyName] = array_values($lgGroups);
 				}

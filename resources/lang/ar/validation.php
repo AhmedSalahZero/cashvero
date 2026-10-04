@@ -128,6 +128,7 @@ return [
         'end_date' => 'تاريخ النهاية',
         'effective_date' => 'تاريخ السريان',
         'balance_date' => 'تاريخ الرصيد',
+        'activation_date' => 'تاريخ التفعيل',
         'issuance_date' => 'تاريخ الإصدار',
         'renewal_date' => 'تاريخ التجديد',
         'transaction_date' => 'تاريخ الحركة',
@@ -249,5 +250,11 @@ return [
         'seasonality.*' => 'الموسمية',
         'new_seasonality_monthly' => 'الموسمية الشهرية الجديدة',
         'new_allocation_base_items.*' => 'الاسم',
+    ],
+
+    'values' => [
+        'activation_date' => [
+            'today' => 'تاريخ اليوم',
+        ],
     ],
 ];
