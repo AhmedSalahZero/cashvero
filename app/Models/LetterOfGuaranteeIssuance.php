@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use App\Enums\LgTypes;
-use App\Http\Controllers\LetterOfGuaranteeIssuanceRenewalDateController;
 use App\Models\LgRenewalDateHistory;
 use App\Services\Api\LetterOfGuaranteeService;
 use App\Services\Api\OdooSync;
@@ -844,7 +843,8 @@ class LetterOfGuaranteeIssuance extends Model
             $advancedPaymentHistory->deleteAllRelations();
         }
         foreach ($this->renewalDateHistories as $renewalDateHistory) {
-            (new LetterOfGuaranteeIssuanceRenewalDateController)->destroy($company, $this, $renewalDateHistory);
+            $renewalDateHistory->unlinkRenewalFeesForOddo();
+            $renewalDateHistory->delete();
         }
         LetterOfGuaranteeIssuanceAdvancedPaymentHistory::deleteButTriggerChangeOnLastElement($this->advancedPaymentHistories);
         CurrentAccountBankStatement::deleteButTriggerChangeOnLastElement($this->currentAccountDebitBankStatements);

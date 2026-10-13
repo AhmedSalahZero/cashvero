@@ -538,6 +538,33 @@ class LgRenewalTermsTest extends TestCase
         $this->assertEquals(self::ORIGINAL_CASH_COVER, $original->first()->debit);
     }
 
+    public function test_deleting_an_issuance_with_multiple_renewal_histories_does_not_revert_histories_one_by_one(): void
+    {
+        $letterOfGuaranteeIssuance = $this->issueLg();
+
+        foreach ([self::ORIGINAL_EXPIRY, self::NEW_EXPIRY] as $renewalDate) {
+            LgRenewalDateHistory::create([
+                'company_id' => self::COMPANY,
+                'letter_of_guarantee_issuance_id' => $letterOfGuaranteeIssuance->id,
+                'renewal_date' => $renewalDate,
+                'fees_amount' => 0,
+            ]);
+        }
+
+        $this->assertTrue($letterOfGuaranteeIssuance->delete());
+
+        $this->assertDatabaseMissing('letter_of_guarantee_issuances', ['id' => self::ISSUANCE]);
+        $this->assertDatabaseMissing('lg_renewal_date_histories', [
+            'letter_of_guarantee_issuance_id' => self::ISSUANCE,
+        ]);
+        $this->assertDatabaseMissing('letter_of_guarantee_cash_cover_statements', [
+            'letter_of_guarantee_issuance_id' => self::ISSUANCE,
+        ]);
+        $this->assertDatabaseMissing('current_account_bank_statements', [
+            'letter_of_guarantee_issuance_id' => self::ISSUANCE,
+        ]);
+    }
+
     // ---------------------------------------------------------------
     // what the rest of the app reads off the re-priced issuance
     // ---------------------------------------------------------------

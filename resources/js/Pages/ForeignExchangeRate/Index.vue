@@ -252,8 +252,8 @@ function destroyRow() {
                                         :state="rate.review"
                                         :can-review="canReview"
                                     />
-                                    <a v-if="!row.review?.is_reviewed" :href="rate.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</a>
-                                    <button v-if="!row.review?.is_reviewed" @click="confirmDelete(rate)" class="cvr-action-btn" :title="$t('Delete')">🗑️</button>
+                                    <a v-if="!rate.review?.is_reviewed" :href="rate.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</a>
+                                    <button v-if="!rate.review?.is_reviewed" @click="confirmDelete(rate)" class="cvr-action-btn" :title="$t('Delete')">🗑️</button>
                                 </div>
                             </td>
                         </tr>
