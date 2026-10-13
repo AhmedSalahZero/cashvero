@@ -5,6 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import RecordLogButton from '@/Components/RecordLogButton.vue';
 import ReviewButton from '@/Components/ReviewButton.vue';
 import SettlementsInfoButton from '@/Components/SettlementsInfoButton.vue';
+import FormErrorSummary from '@/Components/FormErrorSummary.vue';
 import { todayDate } from '@/composables/today';
 import { mapAccountNumberOptions, accountNumberOption } from '@/composables/useAccountNumberOptions';
 /* أقصى تاريخ مسموح بيه لحركة فلوس فعلية — النهاردة.
@@ -128,10 +129,35 @@ function goToPage(url) {
     router.get(url, {}, { preserveScroll: true });
 }
 
-/* ── Delete confirmation ──────────────────────────────────────── */
+/* ── Delete confirmation ────────────────────────────────────────
+   الرفض بيرجع كخطأ تحقق (مثلاً رصيد الحساب مش كفاية). onFinish كان
+   بيقفل النافذة في كل الأحوال، وإينرشيا بتسيب التمرير مكانه، فالشريط
+   اللي فوق الجدول كان بيفضل بره الشاشة. الرسالة تتعرض جوه النافذة. */
 const deleteTarget = ref(null);
+const deleteError = ref('');
+function openDelete(row) {
+    deleteError.value = '';
+    deleteTarget.value = row;
+}
+function closeDelete() {
+    deleteTarget.value = null;
+    deleteError.value = '';
+}
+function firstValidationMessage(errors) {
+    for (const value of Object.values(errors || {})) {
+        const text = Array.isArray(value) ? value.find(Boolean) : value;
+        if (text) return String(text);
+    }
+    return '';
+}
 function destroyRow() {
-    router.delete(deleteTarget.value.delete_url, { onFinish: () => { deleteTarget.value = null; } });
+    deleteError.value = '';
+    router.delete(deleteTarget.value.delete_url, {
+        onSuccess: () => closeDelete(),
+        onError: (errors) => {
+            deleteError.value = firstValidationMessage(errors);
+        },
+    });
 }
 
 /* ── User comment / Odoo error / Odoo references modals ─────────── */
@@ -259,6 +285,7 @@ function submitApplyCollection() {
         <div class="p-6">
             <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Money Received') }}</h1>
             <p class="text-sm cvr-text-blue mb-6">{{ company.name }}</p>
+            <FormErrorSummary />
 
             <!-- KPI cards (active tab) -->
             <div class="cvr-kpi-row mb-6">
@@ -529,13 +556,13 @@ function submitApplyCollection() {
                                     <template v-if="activeTab === 'cheque'">
                                         <Link v-if="!row.review?.is_reviewed && permissions.canUpdate && !row.is_open_balance" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</Link>
                                         <button v-if="permissions.canChangeChequeStatus" @click="openSendToCollection(row)" class="cvr-action-btn" :title="$t('Send Under Collection')">🏦</button>
-                                        <button v-if="!row.review?.is_reviewed && permissions.canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Delete')">🗑️</button>
+                                        <button v-if="!row.review?.is_reviewed && permissions.canDelete" @click="openDelete(row)" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Delete')">🗑️</button>
                                     </template>
 
                                     <!-- Rejected Cheques (no Edit — matches original, which had it commented out) -->
                                     <template v-else-if="activeTab === 'cheque-rejected'">
                                         <button v-if="permissions.canChangeChequeStatus" @click="openSendToCollection(row)" class="cvr-action-btn" :title="$t('Send Under Collection')">🏦</button>
-                                        <button v-if="!row.review?.is_reviewed && permissions.canDelete && !row.is_open_balance" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Delete')">🗑️</button>
+                                        <button v-if="!row.review?.is_reviewed && permissions.canDelete && !row.is_open_balance" @click="openDelete(row)" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Delete')">🗑️</button>
                                     </template>
 
                                     <!-- Cheques Under Collection -->
@@ -554,7 +581,7 @@ function submitApplyCollection() {
                                     <!-- Incoming Transfer / Cash In Safe / Cash In Bank -->
                                     <template v-else>
                                         <Link v-if="!row.review?.is_reviewed && permissions.canUpdate" :href="row.edit_url" class="cvr-action-btn" :title="$t('Edit')">✏️</Link>
-                                        <button v-if="!row.review?.is_reviewed && permissions.canDelete" @click="deleteTarget = row" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Delete')">🗑️</button>
+                                        <button v-if="!row.review?.is_reviewed && permissions.canDelete" @click="openDelete(row)" class="cvr-action-btn-danger cvr-action-btn" :title="$t('Delete')">🗑️</button>
                                     </template>
                                 </div>
                             </td>
@@ -585,8 +612,9 @@ function submitApplyCollection() {
             <div v-if="deleteTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to delete this item?') }}</h2>
+                    <p v-if="deleteError" class="text-sm mb-4" style="color: var(--cvr-danger-text)">{{ deleteError }}</p>
                     <div class="flex justify-end gap-2">
-                        <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="closeDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
                         <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
                     </div>
                 </div>

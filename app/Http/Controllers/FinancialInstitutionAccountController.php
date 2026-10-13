@@ -10,6 +10,7 @@ use App\Models\CurrentAccountBankStatement;
 use App\Models\FinancialInstitution;
 use App\Models\FinancialInstitutionAccount;
 use App\Services\Api\OdooService;
+use App\Support\StatementCascade;
 use App\Traits\GeneralFunctions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -157,7 +158,6 @@ class FinancialInstitutionAccountController
 
 
 			if($currentAccountBeginningBalance){
-				$currentDate =$currentAccountBeginningBalance->date ;
 				$currentFullDate =$currentAccountBeginningBalance->full_date ;
 				$time  = Carbon::make($currentFullDate)->format('H:i:s');
 				$newFullDateTime = date('Y-m-d H:i:s', strtotime("$balanceDate $time")) ;
@@ -166,7 +166,7 @@ class FinancialInstitutionAccountController
 				 * * كتابة خام عن قصد : الـ Eloquent events مش بتتطلق هنا ،
 				 * * فالـ cascade بتاع updateNextRows() مش بيشتغل . التريجر
 				 * * بيصلّح رصيد الصف ده لوحده ، و التسلسل للصفوف اللي بعده
-				 * * بيتعمل بالـ touch تحت .
+				 * * بيتنده تحت من أقدم full_date بين القديم والجديد .
 				 *
 				 * * updated_at بتتكتب صراحةً : من غيرها الصف بيتغيّر رصيده
 				 * * و ختمه الزمني يفضل قديم ، فبيبقى مستحيل تعرف من الداتا
@@ -201,21 +201,19 @@ class FinancialInstitutionAccountController
 				$currentAccountBeginningBalance->resyncEndOfMonthInterestForAllYears($company->id);
 
 				/**
-				 * * الترتيب لازم يكون بـ full_date مش date : السلسلة كلها
-				 * * (التريجر و StatementCascade) بتشتغل بدقة الثانية ، فلو
-				 * * رتّبنا باليوم و في نفس اليوم أكتر من حركة ، first()
-				 * * بياخد أصغر id مش أقدم ساعة — و الـ cascade يبدأ من
-				 * * نقطة متأخرة فيسيب الصفوف اللي قبلها في نفس اليوم
+				 * * بنلمس الصفوف من أقدم full_date بين القديم والجديد .
+				 * * التوقيت القديم متسجل قبل الكتابة ، لأن صف الافتتاح
+				 * * خلاص اتكتب بالتاريخ الجديد . Eloquent update على
+				 * * updated_at في نفس الثانية ما بيطلقش updated ،
+				 * * فالسلسلة ما كانتش بتبدأ .
 				 */
-				$statementToRefresh = CurrentAccountBankStatement::where('date','>=',min($currentDate,$balanceDate))
-				->where('financial_institution_account_id',$currentAccountBeginningBalance->financial_institution_account_id)
-				->orderByRaw('full_date asc , id asc')
-				->first();
-				if($statementToRefresh){
-					$statementToRefresh->update([
-						'updated_at'=>now()
-					]);
-				}
+				StatementCascade::touchRows(
+					DB::table('current_account_bank_statements')
+						->where('company_id',$company->id)
+						->where('financial_institution_account_id',$currentAccountBeginningBalance->financial_institution_account_id)
+						->where('full_date','>=',min(Carbon::make($currentFullDate)->format('Y-m-d H:i:s'),$newFullDateTime)),
+					'full_date asc , id asc'
+				);
 			}else{
 
 				$time  = Carbon::make(now())->format('H:i:s');
@@ -237,9 +235,7 @@ class FinancialInstitutionAccountController
 				->orderByRaw('full_date asc , id asc')
 				->first();
 				if($currentStatement){
-					$currentStatement->update([
-					'updated_at'=>now()
-				]);
+					CurrentAccountBankStatement::updateNextRows($currentStatement);
 				}
 
 

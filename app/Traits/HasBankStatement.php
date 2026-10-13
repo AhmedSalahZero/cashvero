@@ -19,9 +19,13 @@ trait HasBankStatement
 		->first();	
 		
 		if($firstBankStatementToBeUpdated){
-			$firstBankStatementToBeUpdated->update([
-				'updated_at'=>now()
-			]);
+			/**
+			 * * مش بنعمل update لـ updated_at . لو القيمة ما اتغيرتش
+			 * * (نفس الثانية) Eloquent بيعتبر الصف مش dirty ومش بيطلق
+			 * * updated ، فالـ cascade ما بيبدأش والصفوف اللي بعد
+			 * * رصيد أول المدة بتفضل على الرصيد القديم.
+			 */
+			$firstBankStatementToBeUpdated::updateNextRows($firstBankStatementToBeUpdated);
 		}
 	}
 	
