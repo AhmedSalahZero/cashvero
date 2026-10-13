@@ -1025,18 +1025,18 @@ Route::group(
         });
 });
 
-Route::delete('deleteMultiRowsFromCaching/{company}/{modelName}', [DeleteMultiRowsFromCaching::class, '__invoke'])->name('deleteMultiRowsFromCaching');
-Route::get('deleteAllRowsFromCaching/{company}/{modelType}', [DeleteAllRowsFromCaching::class, '__invoke'])->name('deleteAllCaches');
-Route::post('get-uploading-percentage/{companyId}/{modelName}', [getUploadPercentage::class, '__invoke']);
+Route::delete('deleteMultiRowsFromCaching/{company}/{modelName}', [DeleteMultiRowsFromCaching::class, '__invoke'])->middleware('auth')->name('deleteMultiRowsFromCaching');
+Route::get('deleteAllRowsFromCaching/{company}/{modelType}', [DeleteAllRowsFromCaching::class, '__invoke'])->middleware('auth')->name('deleteAllCaches');
+Route::post('get-uploading-percentage/{companyId}/{modelName}', [getUploadPercentage::class, '__invoke'])->middleware('auth');
 Route::get('{lang}/remove-company-image/{company}', function ($lang, Company $company) {
     if ($company->getFirstMedia('default')) {
         $company->getFirstMedia('default')->delete();
     }
     
     return redirect()->back()->with('success', __('Company Image Has Been Deleted Successfully'));
-})->name('remove.company.image');
+})->middleware('auth')->name('remove.company.image');
 
-Route::get('getStartDateAndEndDateOfIncomeStatementForCompany', 'HomeController@getIncomeStatementStartDateAndEndDate');
+Route::get('getStartDateAndEndDateOfIncomeStatementForCompany', 'HomeController@getIncomeStatementStartDateAndEndDate')->middleware('auth');
 Route::get('removeSessionForRedirect', function () {
     if (session()->has('redirectTo')) {
         $url = session()->get('redirectTo');
@@ -1047,7 +1047,7 @@ Route::get('removeSessionForRedirect', function () {
             'url' => $url
         ]);
     }
-});
+})->middleware('auth');
 
 
 

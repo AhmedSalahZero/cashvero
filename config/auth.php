@@ -2,6 +2,9 @@
 
 return [
 
+    'restrict_to_allowed_email' => env('AUTH_RESTRICT_TO_ALLOWED_EMAIL', true),
+    'allowed_email' => 'mahmoud.youssef@squadbcc.com',
+
     /*
     |--------------------------------------------------------------------------
     | Authentication Defaults

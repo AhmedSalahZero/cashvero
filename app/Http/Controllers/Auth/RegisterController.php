@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Foundation\Auth\RegistersUsers;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class RegisterController extends Controller
 {
@@ -62,9 +63,17 @@ class RegisterController extends Controller
      */
     protected function validator(array $data)
     {
+        $emailRules = ['required', 'string', 'email', 'max:255'];
+
+        if (config('auth.restrict_to_allowed_email', true)) {
+            $emailRules[] = Rule::in([config('auth.allowed_email')]);
+        }
+
+        $emailRules[] = 'unique:users';
+
         return Validator::make($data, [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
+            'email' => $emailRules,
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
     }

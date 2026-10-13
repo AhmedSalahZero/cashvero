@@ -77,6 +77,15 @@ class LoginController extends Controller
             return $this->sendLockoutResponse($request);
         }
 
+        if (
+            config('auth.restrict_to_allowed_email', true)
+            && strcasecmp((string) $request->input($this->username()), config('auth.allowed_email')) !== 0
+        ) {
+            $this->incrementLoginAttempts($request);
+
+            return $this->sendFailedLoginResponse($request);
+        }
+
         if ($this->attemptLogin($request)) {
 			if($request->user()->AccountExpired()){
 				session()->put('expired-login','Your Free Trail Has Been Expired .. Please Subscribe');
