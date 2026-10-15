@@ -88,24 +88,36 @@ class ContractsController
 		 */
 		$contracts = [];
 		$paginators = [];
+		$orderTotals = [];
+		/**
+		 * * البحث بيتم على السيرفر وعلى كل الصفحات (اسم العميل / اسم العقد / كود العقد)
+		 * * مش على الصفحة الحالية بس .
+		 */
+		$search = trim((string) $request->query('search', ''));
+		$orderModel = $type == 'Supplier' ? \App\Models\PurchaseOrder::class : \App\Models\SalesOrder::class;
 		foreach($contractStatues as $contractStatus){
 			$pageName = $this->pageNameForStatus($contractStatus);
-			$paginator = Contract::where('contracts.company_id',$company->id)
-				->where('status',$contractStatus)
-				->where('model_type',$type)
-				->join('partners','partners.id','=','contracts.partner_id')
+			$paginator = $this->contractsBaseQuery($company, $contractStatus, $type, $search)
 				->selectRaw('contracts.*,partners.name as partner_name')
 				->orderByRaw('contracts.start_date is null asc, contracts.start_date desc, contracts.id desc')
 				->with($this->relationsToEagerLoad($type))
 				->paginate(GeneralFunctions::getPaginationLimit(),['*'],$pageName)
 				/**
 				 * * active بيخلي التاب المفتوحة تفضل مفتوحة بعد التنقل ،
-				 * * وباقي البراميترز بتفضل عشان بيچينيشن التابات التانية
+				 * * وباقي البراميترز (ومنها search) بتفضل عشان بيچينيشن التابات التانية
 				 * * ما تترجعش لصفحة 1
 				 */
 				->appends(array_merge($request->except($pageName),['active'=>$contractStatus]));
 			$paginators[$contractStatus] = $paginator;
 			$contracts[$contractStatus] = $paginator->getCollection();
+			/**
+			 * * عدد أوامر البيع / الشراء لكل العقود المطابقة في كل الصفحات
+			 * * (زي عدد العقود بالظبط) مش اللي في الصفحة الحالية بس
+			 */
+			$orderTotals[$contractStatus] = $orderModel::whereIn(
+				'contract_id',
+				$this->contractsBaseQuery($company, $contractStatus, $type, $search)->select('contracts.id')
+			)->count();
 		}
 
 		$customerOrSupplierContractsText = $type == 'Supplier' ? __('Supplier Contracts') : __('Customer Contracts');
@@ -386,6 +398,8 @@ class ContractsController
 			'contractStatues' => $contractStatues,
 			'contracts' => $contractsForTabs,
 			'paginators' => collect($paginators)->map(fn ($paginator) => $paginator->toArray()),
+			'search' => $search,
+			'orderTotals' => $orderTotals,
 			'createUrl' => route('contracts.create', ['company' => $company->id, 'type' => $type]),
 			'tabUrls' => collect($contractStatues)->mapWithKeys(function ($status) use ($company, $type) {
 				return [$status => route('contracts.index', ['company' => $company->id, 'type' => $type, 'active' => $status])];
@@ -397,6 +411,25 @@ class ContractsController
 			'storePoAllocationUrl' => route('store.po.allocations', ['company' => $company->id]),
 		]);
     }
+	/**
+	 * * الكويري الأساسية لعقود تاب واحدة (شركة + حالة + نوع) مع البحث لو فيه .
+	 * * بتتستخدم للصفحات وكمان لحساب عدد الأوامر عشان الاتنين يبقوا على نفس العقود
+	 */
+	protected function contractsBaseQuery(Company $company, string $contractStatus, string $type, string $search = ''): \Illuminate\Database\Eloquent\Builder
+	{
+		return Contract::where('contracts.company_id', $company->id)
+			->where('contracts.status', $contractStatus)
+			->where('contracts.model_type', $type)
+			->join('partners', 'partners.id', '=', 'contracts.partner_id')
+			->when($search !== '', function ($query) use ($search) {
+				$like = '%'.addcslashes($search, '\\%_').'%';
+				$query->where(function ($query) use ($like) {
+					$query->where('partners.name', 'like', $like)
+						->orWhere('contracts.name', 'like', $like)
+						->orWhere('contracts.code', 'like', $like);
+				});
+			});
+	}
 	/**
 	 * * اسم الـ page parameter لكل تاب ، عشان كل تاب تتنقل لوحدها
 	 */

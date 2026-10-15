@@ -5155,5 +5155,12 @@
     "\"This LG is not activated yet. Enter its Activation Date first.\"": "\"هذا الخطاب لم يُفعَّل بعد. أدخل تاريخ التفعيل أولاً.\"",
     "Renewal and Amount To Be Decreased need an activated LG. Edit the LG and enter its Activation Date.": "التجديد والمبلغ المراد تخفيضه يتطلبان خطاباً مفعّلاً. عدّل الخطاب وأدخل تاريخ تفعيله.",
     "Advance Payment LGs only. When the bank activated the guarantee. Leave it empty until then — the cash cover, fees and commission are posted on this date instead of the Issuance Date, and nothing is posted while it is empty.": "لخطابات ضمان الدفعة المقدمة فقط. تاريخ تفعيل البنك للضمان. اتركه فارغاً حتى ذلك الحين — يُسجَّل الغطاء النقدي والمصاريف والعمولة في هذا التاريخ بدلاً من تاريخ الإصدار، ولا يُسجَّل شيء طالما بقي فارغاً.",
-    "An Advance Payment LG saved without an Activation Date stays Unactivated: it already uses facility room, but nothing is posted until you come back, edit it and enter the date.": "خطاب الدفعة المقدمة المحفوظ بدون تاريخ تفعيل يبقى غير مفعّل: فهو يستهلك من المتاح في التسهيل، لكن لا يُسجَّل له شيء حتى تعود وتعدّله وتُدخل التاريخ."
+    "An Advance Payment LG saved without an Activation Date stays Unactivated: it already uses facility room, but nothing is posted until you come back, edit it and enter the date.": "خطاب الدفعة المقدمة المحفوظ بدون تاريخ تفعيل يبقى غير مفعّل: فهو يستهلك من المتاح في التسهيل، لكن لا يُسجَّل له شيء حتى تعود وتعدّله وتُدخل التاريخ.",
+    "Moving the Opening Balance Date to :date will permanently delete :count automatic entries (commissions, fees and interest) dated before it. Nothing was saved.": "نقل تاريخ الرصيد الافتتاحي إلى :date سيؤدي إلى حذف :count حركة تلقائية (عمولات ورسوم وفوائد) قبل هذا التاريخ بشكل نهائي. لم يتم حفظ أي شيء.",
+    ":count automatic entries dated before :date were deleted.": "تم حذف :count حركة تلقائية قبل تاريخ :date.",
+    ":count entries could not be removed from Odoo, so they were kept. Please remove them manually or check the Odoo login details.": "تعذر حذف :count حركة من أودو لذلك تم الاحتفاظ بها. برجاء حذفها يدوياً أو مراجعة بيانات الدخول إلى أودو.",
+    "Do you want to continue?": "هل تريد المتابعة؟",
+    "Please select the rate date": "برجاء اختيار تاريخ السعر",
+    "Rates must be valid numbers": "يجب أن تكون الأسعار أرقاماً صحيحة",
+    "Safe Balance": "رصيد الخزنة"
 }

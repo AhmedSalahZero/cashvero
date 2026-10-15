@@ -6,6 +6,7 @@ use App\Helpers\HDate;
 use App\Support\StatementCascade;
 use App\Traits\IsBankStatement;
 use App\Traits\Models\HasDeleteButTriggerChangeOnLastElement;
+use App\Traits\Models\HasSameDayAppendOrder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\DB;
@@ -53,7 +54,7 @@ use Illuminate\Support\Facades\DB;
  */
 class MediumTermLoanBankStatement extends Model
 {
-    use IsBankStatement, HasDeleteButTriggerChangeOnLastElement;
+    use IsBankStatement, HasDeleteButTriggerChangeOnLastElement,HasSameDayAppendOrder;
 
     /**
      * Written on the row produced when an installment is repaid —
@@ -83,6 +84,24 @@ class MediumTermLoanBankStatement extends Model
         return $minDate;
     }
 
+	public static function sameDayGroupColumns(): array
+	{
+		return ['medium_term_loan_id'];
+	}
+
+	public static function sameDayFirstRowTypes(): array
+	{
+		return ['outstanding_balance'];
+	}
+
+	/**
+	 * * تعديل تاريخ الحركة : بتحتفظ بلحظة انشائها الاصلية وبتترتب وسط حركات اليوم الجديد على اساسها
+	 */
+	public function handleFullDateAfterDateEdit(string $date, $debit, $credit, $additionUpdateData = [])
+	{
+		$this->handleFullDateAfterDateEditAppendOrder($date, $debit, $credit, $additionUpdateData);
+	}
+
     protected static function booted(): void
     {
         static::creating(function (self $model) {
@@ -106,12 +125,10 @@ class MediumTermLoanBankStatement extends Model
             }
 
             $time = now()->format('H:i:s');
-            $fullDateTime = date('Y-m-d H:i:s', strtotime("$date $time"));
-            $fullDateTime = HDate::generateUniqueDateTimeForModel(self::class, 'full_date', $fullDateTime, [
-                ['medium_term_loan_id', '=', $model->medium_term_loan_id],
-            ]);
-
-            $model->full_date = $fullDateTime;
+            /**
+				 * * ترتيب نفس اليوم : تاريخ الحركة ثم لحظة الانشاء الفعلية (الحركة الجديدة بعد كل حركات نفس اليوم)
+				 */
+				$model->full_date = self::nextFullDateAppendOrder($model);
         });
 
         static::created(function (self $model) {

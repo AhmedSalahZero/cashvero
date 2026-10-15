@@ -8,6 +8,7 @@ use App\Enums\LgTypes;
 use App\Helpers\HDate;
 use App\Traits\IsBankStatement;
 use App\Traits\Models\HasDeleteButTriggerChangeOnLastElement;
+use App\Traits\Models\HasSameDayAppendOrder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
@@ -70,7 +71,7 @@ use Illuminate\Support\Facades\DB;
  */
 class LetterOfGuaranteeStatement extends Model
 {
-	use HasDeleteButTriggerChangeOnLastElement,IsBankStatement;
+	use HasDeleteButTriggerChangeOnLastElement,IsBankStatement,HasSameDayAppendOrder;
     protected $guarded = [
         'id'
     ];
@@ -120,6 +121,19 @@ class LetterOfGuaranteeStatement extends Model
 
 	}
 	
+	public static function sameDayGroupColumns(): array
+	{
+		return ['financial_institution_id', 'source', 'lg_facility_id', 'cd_or_td_id', 'lg_type'];
+	}
+
+	/**
+	 * * تعديل تاريخ الحركة : بتحتفظ بلحظة انشائها الاصلية وبتترتب وسط حركات اليوم الجديد على اساسها
+	 */
+	public function handleFullDateAfterDateEdit(string $date, $debit, $credit, $additionUpdateData = [])
+	{
+		$this->handleFullDateAfterDateEditAppendOrder($date, $debit, $credit, $additionUpdateData);
+	}
+
 		protected static function booted(): void
 		{
 			static::creating(function(LetterOfGuaranteeStatement $model){
@@ -132,16 +146,10 @@ class LetterOfGuaranteeStatement extends Model
 					$model->id = $row->deleted_id;
 					DB::table('temp_deleted_statements')->where('company_id',$model->company_id)->where('table_name','letter_of_guarantee_statements')->delete();
 				}
-				$fullDateTime = date('Y-m-d H:i:s', strtotime("$date $time")) ;
 				/**
-				 * * دي علشان لو ليهم نفس التاريخ والوقت بالظبط يزود ثانيه علي التاريخ القديم
+				 * * ترتيب نفس اليوم : تاريخ الحركة ثم لحظة الانشاء الفعلية (الحركة الجديدة بعد كل حركات نفس اليوم)
 				 */
-				$fullDateTime = HDate::generateUniqueDateTimeForModel(self::class,'full_date',$fullDateTime,[
-					[
-						'company_id','=',$model->company_id ,
-					]
-				]) ;
-				$model->full_date = $fullDateTime;
+				$model->full_date = self::nextFullDateAppendOrder($model);
 				
 			});
 			

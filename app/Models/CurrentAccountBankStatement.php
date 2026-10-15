@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\StatementCascade;
+use App\Support\BankStatements\GeneratedMonthEndInterestRows;
 
 use App\Helpers\HDate;
 use App\Interfaces\Models\Interfaces\IHaveStatement;
@@ -187,6 +188,168 @@ class CurrentAccountBankStatement extends Model  implements IHaveStatement
 
 	}
 	
+	/**
+	 * * 0 = رصيد افتتاحي (اول اليوم) ، 1 = حركة عادية (بترتيب الانشاء) ، 2 = فوايد نهاية الشهر (آخر اليوم)
+	 */
+	public static function rankOf(object $row): int
+	{
+		if ((int) ($row->is_beginning_balance ?? 0) === 1) {
+			return 0;
+		}
+		if (in_array($row->interest_type ?? null, GeneratedMonthEndInterestRows::INTEREST_TYPES, true)) {
+			return 2;
+		}
+
+		return 1;
+	}
+
+	/**
+	 * * full_date للحركة الجديدة (نفس الحساب ونفس التاريخ) :
+	 * *  - رصيد افتتاحي  => 00:00:00
+	 * *  - فوايد نهاية الشهر => 23:59:30 وما بعدها
+	 * *  - اي حركة عادية => الوقت الحالي ، بس بعد آخر حركة عادية موجودة في نفس اليوم
+	 */
+	public static function nextFullDate(CurrentAccountBankStatement $model): string
+	{
+		$date = Carbon::make($model->date)->format('Y-m-d');
+		$rank = self::rankOf($model);
+		if ($rank === 0) {
+			return $date.' 00:00:00';
+		}
+		$sameDay = DB::table('current_account_bank_statements')
+			->where('company_id', $model->company_id)
+			->where('financial_institution_account_id', $model->financial_institution_account_id)
+			->where('date', $date);
+		if ($rank === 2) {
+			$existingMonthEndRows = (clone $sameDay)->whereIn('interest_type', GeneratedMonthEndInterestRows::INTEREST_TYPES)->count();
+
+			return Carbon::make($date.' 23:59:30')->addSeconds($existingMonthEndRows)->format('Y-m-d H:i:s');
+		}
+		$proposed = date('Y-m-d H:i:s', strtotime($date.' '.now()->format('H:i:s')));
+		$latestNormal = (clone $sameDay)
+			->where(function ($q) {
+				$q->whereNull('interest_type')->orWhereNotIn('interest_type', GeneratedMonthEndInterestRows::INTEREST_TYPES);
+			})
+			->max('full_date');
+		if ($latestNormal && $proposed <= $latestNormal) {
+			$proposed = Carbon::make($latestNormal)->addSecond()->format('Y-m-d H:i:s');
+		}
+		$cap = $date.' 23:59:29';
+		if ($proposed > $cap) {
+			$proposed = $cap;
+		}
+
+		return HDate::generateUniqueDateTimeForModel(self::class, 'full_date', $proposed, [
+			['company_id', '=', $model->company_id],
+		]);
+	}
+
+	/**
+	 * * الترتيب المطلوب لحركات يوم واحد : (رصيد افتتاحي / عادي / فوايد نهاية الشهر) ثم لحظة الانشاء ثم id
+	 */
+	public static function sortRowsOfOneDay($rows)
+	{
+		return $rows->sortBy(fn ($row) => [
+			self::rankOf($row),
+			(string) ($row->created_at ?: $row->full_date),
+			(int) $row->id,
+		])->values();
+	}
+
+	/**
+	 * * بيعيد ترتيب full_date لحركات يوم واحد لو الترتيب الحالي مش هو المطلوب
+	 * * @return string|null اقدم full_date اتأثر او null لو مفيش تغيير
+	 */
+	public static function resequenceDay(int $companyId, int $accountId, string $date): ?string
+	{
+		$date = Carbon::make($date)->format('Y-m-d');
+		$rows = DB::table('current_account_bank_statements')
+			->where('company_id', $companyId)
+			->where('financial_institution_account_id', $accountId)
+			->where('date', $date)
+			->get(['id', 'is_beginning_balance', 'interest_type', 'created_at', 'full_date', 'beginning_balance']);
+		if ($rows->count() < 2) {
+			return null;
+		}
+		$desired = self::sortRowsOfOneDay($rows);
+		$current = $rows->sortBy(fn ($row) => [(string) $row->full_date, (int) $row->id])->values();
+		if ($desired->pluck('id')->map(fn ($id) => (int) $id)->all() === $current->pluck('id')->map(fn ($id) => (int) $id)->all()) {
+			return null;
+		}
+		// اول يوم في سلسلة الحساب : رصيد البداية بتاع اول صف هو الرصيد الحقيقي فنحافظ عليه لو اتغير اول صف
+		$isFirstDayOfChain = ! DB::table('current_account_bank_statements')
+			->where('company_id', $companyId)->where('financial_institution_account_id', $accountId)
+			->where('date', '<', $date)->exists();
+		$anchorBalance = $isFirstDayOfChain ? $current->first()->beginning_balance : null;
+		$start = Carbon::make($date)->startOfDay();
+		$counters = [0 => 0, 1 => 0, 2 => 0];
+		$minTouched = null;
+		foreach ($desired as $row) {
+			$rank = self::rankOf($row);
+			$newFullDate = match ($rank) {
+				0 => $start->copy()->addSeconds($counters[0]++),
+				1 => $start->copy()->addSeconds(60 + $counters[1]++),
+				default => $start->copy()->setTime(23, 59, 30)->addSeconds($counters[2]++),
+			};
+			$newFullDate = $newFullDate->format('Y-m-d H:i:s');
+			if ((string) $row->full_date !== $newFullDate) {
+				DB::table('current_account_bank_statements')->where('id', $row->id)->update(['full_date' => $newFullDate]);
+				$candidate = min((string) $row->full_date, $newFullDate);
+				$minTouched = $minTouched === null ? $candidate : min($minTouched, $candidate);
+			}
+		}
+		if ($isFirstDayOfChain && (int) $desired->first()->id !== (int) $current->first()->id) {
+			DB::table('current_account_bank_statements')->where('id', $desired->first()->id)->update(['beginning_balance' => $anchorBalance]);
+		}
+
+		return $minTouched;
+	}
+
+	/**
+	 * * اعادة حساب ارصدة الحساب من full_date معين لحد الآخر
+	 */
+	public static function cascadeFrom(int $companyId, int $accountId, string $minFullDate): void
+	{
+		StatementCascade::touchRows(
+			DB::table('current_account_bank_statements')
+				->where('full_date', '>=', $minFullDate)
+				->where('company_id', $companyId)
+				->where('financial_institution_account_id', $accountId),
+			'full_date asc , id asc'
+		);
+	}
+
+	/**
+	 * * تعديل تاريخ حركة حساب جاري : الحركة بتحتفظ بلحظة انشائها الاصلية وبتترتب وسط حركات اليوم الجديد على اساسها
+	 * * نفس توقيع الدالة المشتركة في IsBankStatement (وبنفس معالجة صفوف نهاية الشهر)
+	 */
+	public function handleFullDateAfterDateEdit(string $date, $debit, $credit, $additionUpdateData = [])
+	{
+		$date = Carbon::make($date)->format('Y-m-d');
+		$oldFullDate = (string) $this->full_date;
+		$time = Carbon::make($oldFullDate)->format('H:i:s');
+		$updatedData = [
+			'date' => $date,
+			'full_date' => date('Y-m-d H:i:s', strtotime("$date $time")),
+			'credit' => $credit,
+			'debit' => $debit,
+		];
+		$updatedData = array_merge($updatedData, $additionUpdateData);
+		if (in_array($this->interest_type ?? null, GeneratedMonthEndInterestRows::INTEREST_TYPES, true)) {
+			$updatedData['interest_type'] = Request()->has('is_end_of_month_final') ? 'end_of_month_final' : 'end_of_month';
+		}
+		DB::transaction(function () use ($updatedData, $date, $oldFullDate) {
+			$this->update($updatedData);
+			$accountId = (int) $this->financial_institution_account_id;
+			$minTouched = self::resequenceDay((int) $this->company_id, $accountId, $date);
+			$from = min($oldFullDate, (string) $this->full_date);
+			if ($minTouched) {
+				$from = min($from, $minTouched);
+			}
+			self::cascadeFrom((int) $this->company_id, $accountId, $from);
+		});
+	}
+
 		protected static function booted(): void
 		{
 			static::updating(function(CurrentAccountBankStatement $model){
@@ -207,16 +370,10 @@ class CurrentAccountBankStatement extends Model  implements IHaveStatement
 					$model->id = $row->deleted_id;
 					DB::table('temp_deleted_statements')->where('company_id',$model->company_id)->where('table_name','current_account_bank_statements')->delete();
 				}
-				$fullDateTime = date('Y-m-d H:i:s', strtotime("$date $time")) ;
 				/**
-				 * * دي علشان لو ليهم نفس التاريخ والوقت بالظبط يزود ثانيه علي التاريخ القديم
+				 * * ترتيب نفس اليوم : الرصيد الافتتاحي اولا ، ثم الحركات بترتيب الانشاء الفعلي ، ثم فوايد نهاية الشهر في آخر اليوم
 				 */
-				$fullDateTime = HDate::generateUniqueDateTimeForModel(self::class,'full_date',$fullDateTime,[
-					[
-						'company_id','=',$model->company_id ,
-					]
-				]) ;
-				$model->full_date = $fullDateTime;
+				$model->full_date = self::nextFullDate($model);
 			});
 			
 			static::created(function(CurrentAccountBankStatement $model){

@@ -100,6 +100,140 @@ class CashInSafeStatement extends Model
 		return $minDate;
 
 	}
+	/**
+	 * * Opening-balance rows (type opening-balance / opening_balance_id) must always be the FIRST row of their date.
+	 */
+	public static function isOpeningRow(object $row): bool
+	{
+		return ! empty($row->opening_balance_id) || ($row->type ?? null) === 'opening-balance';
+	}
+
+	/**
+	 * * full_date للحركة الجديدة :
+	 * *  - رصيد افتتاحي  => اول اليوم 00:00:00
+	 * *  - اي حركة تانية => الوقت الحالي ، بس لو فيه حركات في نفس اليوم (نفس الخزنة والعملة) بتتحط بعد آخر واحدة فيهم
+	 * * عشان الترتيب يبقى بتاريخ الحركة ثم ترتيب الانشاء الفعلي بغض النظر عن ساعة اليوم اللي اتسجلت فيها
+	 */
+	public static function nextFullDate(CashInSafeStatement $model): string
+	{
+		$date = Carbon::make($model->date)->format('Y-m-d');
+		if (self::isOpeningRow($model)) {
+			$fullDateTime = $date.' 00:00:00';
+		} else {
+			$fullDateTime = date('Y-m-d H:i:s', strtotime($date.' '.now()->format('H:i:s')));
+			$latestOfTheDay = DB::table('cash_in_safe_statements')
+				->where('company_id', $model->company_id)
+				->where('branch_id', $model->branch_id)
+				->where('currency', $model->currency)
+				->where('date', $date)
+				->max('full_date');
+			if ($latestOfTheDay && $fullDateTime <= $latestOfTheDay) {
+				$fullDateTime = Carbon::make($latestOfTheDay)->addSecond()->format('Y-m-d H:i:s');
+			}
+		}
+
+		/**
+		 * * دي علشان لو ليهم نفس التاريخ والوقت بالظبط يزود ثانيه علي التاريخ القديم
+		 */
+		return HDate::generateUniqueDateTimeForModel(self::class, 'full_date', $fullDateTime, [
+			['company_id', '=', $model->company_id],
+		]);
+	}
+
+	/**
+	 * * الترتيب المطلوب لحركات يوم واحد : الرصيد الافتتاحي اولا ثم بترتيب الانشاء (created_at) ثم id
+	 * * @param \Illuminate\Support\Collection $rows rows with id,type,opening_balance_id,created_at,full_date
+	 */
+	public static function sortRowsOfOneDay($rows)
+	{
+		return $rows->sortBy(fn ($row) => [
+			self::isOpeningRow($row) ? 0 : 1,
+			(string) ($row->created_at ?: $row->full_date),
+			(int) $row->id,
+		])->values();
+	}
+
+	/**
+	 * * بيعيد ترتيب full_date لحركات يوم واحد (نفس الخزنة والعملة) لو الترتيب الحالي مش هو الترتيب المطلوب .
+	 * * @return string|null اقدم full_date اتأثر (قديم او جديد) او null لو مفيش تغيير
+	 */
+	public static function resequenceDay(int $companyId, int $branchId, ?string $currency, string $date): ?string
+	{
+		$date = Carbon::make($date)->format('Y-m-d');
+		$rows = DB::table('cash_in_safe_statements')
+			->where('company_id', $companyId)
+			->where('branch_id', $branchId)
+			->where('currency', $currency)
+			->where('date', $date)
+			->get(['id', 'type', 'opening_balance_id', 'created_at', 'full_date', 'beginning_balance']);
+		if ($rows->count() < 2) {
+			return null;
+		}
+		$desired = self::sortRowsOfOneDay($rows);
+		$current = $rows->sortBy(fn ($row) => [(string) $row->full_date, (int) $row->id])->values();
+		if ($desired->pluck('id')->map(fn ($id) => (int) $id)->all() === $current->pluck('id')->map(fn ($id) => (int) $id)->all()) {
+			return null;
+		}
+		// اول يوم في السلسلة : رصيد البداية بتاع اول صف هو الرصيد الحقيقي فنحافظ عليه لو اتغير اول صف
+		$isFirstDayOfChain = ! DB::table('cash_in_safe_statements')
+			->where('company_id', $companyId)->where('branch_id', $branchId)->where('currency', $currency)
+			->where('date', '<', $date)->exists();
+		$anchorBalance = $isFirstDayOfChain ? $current->first()->beginning_balance : null;
+		$base = Carbon::make($date)->startOfDay();
+		$minTouched = null;
+		foreach ($desired as $index => $row) {
+			$newFullDate = $base->copy()->addSeconds($index)->format('Y-m-d H:i:s');
+			if ((string) $row->full_date !== $newFullDate) {
+				DB::table('cash_in_safe_statements')->where('id', $row->id)->update(['full_date' => $newFullDate]);
+				$candidate = min((string) $row->full_date, $newFullDate);
+				$minTouched = $minTouched === null ? $candidate : min($minTouched, $candidate);
+			}
+		}
+		if ($isFirstDayOfChain && (int) $desired->first()->id !== (int) $current->first()->id) {
+			DB::table('cash_in_safe_statements')->where('id', $desired->first()->id)->update(['beginning_balance' => $anchorBalance]);
+		}
+
+		return $minTouched;
+	}
+
+	/**
+	 * * اعادة حساب ارصدة الخزنة من full_date معين لحد الآخر
+	 */
+	public static function cascadeFrom(int $branchId, string $minFullDate): void
+	{
+		StatementCascade::touchRows(
+			DB::table('cash_in_safe_statements')
+				->where('full_date', '>=', $minFullDate)
+				->where('branch_id', $branchId),
+			'full_date asc , id asc'
+		);
+	}
+
+	/**
+	 * * تعديل تاريخ حركة خزنة : الحركة بتحتفظ بلحظة انشائها الاصلية فبتترتب وسط حركات اليوم الجديد على اساسها
+	 * * (بدل ما تحتفظ بساعة اليوم القديمة) . نفس توقيع الدالة المشتركة في IsBankStatement
+	 */
+	public function handleFullDateAfterDateEdit(string $date, $debit, $credit, $additionUpdateData = [])
+	{
+		$date = Carbon::make($date)->format('Y-m-d');
+		$oldFullDate = (string) $this->full_date;
+		$time = Carbon::make($oldFullDate)->format('H:i:s');
+		DB::transaction(function () use ($date, $debit, $credit, $additionUpdateData, $oldFullDate, $time) {
+			$this->update(array_merge([
+				'date' => $date,
+				'full_date' => date('Y-m-d H:i:s', strtotime("$date $time")),
+				'credit' => $credit,
+				'debit' => $debit,
+			], $additionUpdateData));
+			$minTouched = self::resequenceDay((int) $this->company_id, (int) $this->branch_id, $this->currency, $date);
+			$from = min($oldFullDate, (string) $this->fresh()->full_date);
+			if ($minTouched) {
+				$from = min($from, $minTouched);
+			}
+			self::cascadeFrom((int) $this->branch_id, $from);
+		});
+	}
+
 		protected static function booted(): void
 		{
 			static::creating(function(CashInSafeStatement $model){
@@ -114,17 +248,11 @@ class CashInSafeStatement extends Model
 					DB::table('temp_deleted_statements')->where('company_id',$model->company_id)->where('table_name','cash_in_safe_statements')->delete();
 				}
 			
-				$fullDateTime = date('Y-m-d H:i:s', strtotime("$date $time")) ;
-		
 				/**
-				 * * دي علشان لو ليهم نفس التاريخ والوقت بالظبط يزود ثانيه علي التاريخ القديم
+				 * * ترتيب حركات الخزنة في نفس اليوم : تاريخ الحركة (من الفورم) ثم لحظة الانشاء الفعلية .
+				 * * الحركة الجديدة بتتحط دايما بعد كل حركات نفس اليوم (الرصيد الافتتاحي بس بيفضل الاول) .
 				 */
-				$fullDateTime = HDate::generateUniqueDateTimeForModel(self::class,'full_date',$fullDateTime,[
-					[
-						'company_id','=',$model->company_id ,
-					]
-				]) ;
-				$model->full_date = $fullDateTime;
+				$model->full_date = self::nextFullDate($model);
 				
 			});
 			

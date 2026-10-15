@@ -8,6 +8,7 @@ use App\Helpers\HDate;
 use App\Models\LcSettlementInternalMoneyTransfer;
 use App\Traits\IsBankStatement;
 use App\Traits\Models\HasDeleteButTriggerChangeOnLastElement;
+use App\Traits\Models\HasSameDayStatementOrder;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -83,7 +84,7 @@ use Illuminate\Support\Facades\DB;
  */
 class LcOverdraftBankStatement extends Model
 {
-	use HasDeleteButTriggerChangeOnLastElement,IsBankStatement ;
+	use HasDeleteButTriggerChangeOnLastElement,IsBankStatement ,HasSameDayStatementOrder;
 	protected $guarded =[
 		'id'
 	];
@@ -125,24 +126,11 @@ class LcOverdraftBankStatement extends Model
 				$model->created_at = now();
 				$date = $model->date ;
 				$time  = now()->format('H:i:s');
-				$fullDateTime = date('Y-m-d H:i:s', strtotime("$date $time")) ;
-				
-				$row = DB::table('temp_deleted_statements')->where('company_id',$model->company_id)->where('table_name','lc_overdraft_bank_statements')->first();
-				
-				if($row){
-					$model->id = $row->deleted_id;
-					DB::table('temp_deleted_statements')->where('company_id',$model->company_id)->where('table_name','lc_overdraft_bank_statements')->delete();
-				}
-				
 				/**
-				 * * دي علشان لو ليهم نفس التاريخ والوقت بالظبط يزود ثانيه علي التاريخ القديم
+				 * * ترتيب نفس اليوم : حركة الحد في اول اليوم ، الحركات العادية بترتيب الانشاء ، فوايد نهاية الشهر في آخره
+				 * * (نفس ترتيب الرصيد في التريجر : date ثم id) - مفيش اي تغيير في حساب الارصدة او اولوية التسوية
 				 */
-				$fullDateTime = HDate::generateUniqueDateTimeForModel(self::class,'full_date',$fullDateTime,[
-					[
-						'lc_facility_id','=',$model->lc_facility_id ,
-					]
-				]) ;
-				$model->full_date = $fullDateTime;
+				$model->full_date = self::nextFullDateOnTheSameDay($model, 'lc_facility_id');
 			});
 			
 			static::created(function(self $model){

@@ -7,6 +7,7 @@ use App\Support\StatementCascade;
 use App\Helpers\HDate;
 use App\Traits\IsBankStatement;
 use App\Traits\Models\HasDeleteButTriggerChangeOnLastElement;
+use App\Traits\Models\HasSameDayStatementOrder;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -90,7 +91,7 @@ use Illuminate\Support\Facades\DB;
  */
 class OverdraftAgainstAssignmentOfContractBankStatement extends Model
 {
-	use IsBankStatement,HasDeleteButTriggerChangeOnLastElement;
+	use IsBankStatement,HasDeleteButTriggerChangeOnLastElement,HasSameDayStatementOrder;
 	protected $guarded =[
 		'id'
 	];
@@ -138,16 +139,11 @@ class OverdraftAgainstAssignmentOfContractBankStatement extends Model
 				}
 				
 				$time  = now()->format('H:i:s');
-				$fullDateTime = date('Y-m-d H:i:s', strtotime("$date $time")) ;
 				/**
-				 * * دي علشان لو ليهم نفس التاريخ والوقت بالظبط يزود ثانيه علي التاريخ القديم
+				 * * ترتيب نفس اليوم : حركة الحد في اول اليوم ، الحركات العادية بترتيب الانشاء ، فوايد نهاية الشهر في آخره
+				 * * (نفس ترتيب الرصيد في التريجر : date ثم id) - مفيش اي تغيير في حساب الارصدة او اولوية التسوية
 				 */
-				$fullDateTime = HDate::generateUniqueDateTimeForModel(self::class,'full_date',$fullDateTime,[
-					[
-						'overdraft_against_assignment_of_contract_id','=',$model->overdraft_against_assignment_of_contract_id ,
-					]
-				]) ;
-				$model->full_date = $fullDateTime;
+				$model->full_date = self::nextFullDateOnTheSameDay($model, 'overdraft_against_assignment_of_contract_id');
 			});
 			
 			static::created(function(self $model){

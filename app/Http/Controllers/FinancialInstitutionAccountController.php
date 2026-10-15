@@ -159,8 +159,13 @@ class FinancialInstitutionAccountController
 
 			if($currentAccountBeginningBalance){
 				$currentFullDate =$currentAccountBeginningBalance->full_date ;
-				$time  = Carbon::make($currentFullDate)->format('H:i:s');
-				$newFullDateTime = date('Y-m-d H:i:s', strtotime("$balanceDate $time")) ;
+				/**
+				 * * صف الرصيد الافتتاحي لازم يكون دايما اول صف في يومه : بنحطه في بداية اليوم
+				 * * (00:00:00) بدل ما نحتفظ بالساعة القديمة بتاعته . لو السوبر ادمن حرّك تاريخ
+				 * * الرصيد الافتتاحي للشركة و كان فيه حركة بنفس اليوم الجديد اتسجلت بساعة
+				 * * اقدم ، كانت الحركة دي بتظهر قبل الرصيد الافتتاحي .
+				 */
+				$newFullDateTime = Carbon::make($balanceDate)->startOfDay()->format('Y-m-d H:i:s') ;
 				// $minDateTime = min($currentFullDate ,$newFullDateTime );
 				/**
 				 * * كتابة خام عن قصد : الـ Eloquent events مش بتتطلق هنا ،
@@ -216,8 +221,8 @@ class FinancialInstitutionAccountController
 				);
 			}else{
 
-				$time  = Carbon::make(now())->format('H:i:s');
-				$newFullDateTime = date('Y-m-d H:i:s', strtotime("$balanceDate $time")) ;
+				// نفس القاعدة : صف الرصيد الافتتاحي في بداية اليوم (00:00:00)
+				$newFullDateTime = Carbon::make($balanceDate)->startOfDay()->format('Y-m-d H:i:s') ;
 				DB::table('current_account_bank_statements')->insert([
 					'financial_institution_account_id'=>$financialInstitutionAccount->id,
 					'company_id'=>$company->id,

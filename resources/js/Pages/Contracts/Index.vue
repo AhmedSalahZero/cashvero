@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch, onBeforeUnmount } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import RecordLogButton from '@/Components/RecordLogButton.vue';
@@ -49,7 +49,7 @@ import Pagination from '@/Components/Pagination.vue';
  *
  * Each tab paginates on the server independently (its own `<status>_page`
  * query parameter), so paging one tab leaves the other two where they
- * were. Search stays client-side, on the current page's rows.
+ * were. Search runs on the server across ALL pages (client / contract name / code).
  */
 
 const props = defineProps({
@@ -71,6 +71,9 @@ const props = defineProps({
     hasOdooCredentials: Boolean,
     contractStatues: Array,
     contracts: Object, // { running: [...], running_and_against: [...], finished: [...] }
+    search: { type: String, default: '' },
+    // Orders (Sales / Purchase) across ALL pages of each tab, for the matching contracts — same scope as the paginator total
+    orderTotals: { type: Object, default: () => ({}) },
     paginators: Object, // { running: {...}, running_and_against: {...}, finished: {...} } — Laravel paginator arrays
     createUrl: String,
     tabUrls: Object,
@@ -98,24 +101,33 @@ const currentRows = computed(() => props.contracts[activeTab.value] || []);
 const currentPaginator = computed(() => props.paginators?.[activeTab.value] || null);
 
 /* ── KPIs ─────────────────────────────────────────────────────── */
-// The paginator's `total` is the real contract count; currentRows is
-// only the rows on this page.
+// Both cards cover the whole tab (all pages, and the active search): the
+// paginator's `total` is the real contract count, and `orderTotals` is the
+// real order count computed on the server for the same contracts.
 const totalCount = computed(() => currentPaginator.value?.total ?? currentRows.value.length);
 const totalOrders = computed(() =>
+    props.orderTotals?.[activeTab.value] ??
     currentRows.value.reduce((sum, c) => sum + (c.sub_items?.length || 0), 0)
 );
 
-/* ── Search (client-side, on top of the already-loaded tab data) ─ */
-const search = ref('');
-const filteredRows = computed(() => {
-    if (!search.value) return currentRows.value;
-    const q = search.value.toLowerCase();
-    return currentRows.value.filter(c =>
-        (c.client_name || '').toLowerCase().includes(q) ||
-        (c.name || '').toLowerCase().includes(q) ||
-        (c.contract_code || '').toLowerCase().includes(q)
-    );
+/* ── Search (server-side, across ALL pages) ──────────────────────
+   Typing waits a moment, then asks the server for the matching contracts
+   (client / contract name / code). Every tab goes back to page 1 of the
+   results, and the active tab stays open. */
+const search = ref(props.search || '');
+const filteredRows = computed(() => currentRows.value);
+let searchTimer = null;
+watch(search, (value) => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+        router.get(
+            window.location.pathname,
+            { search: value || undefined, active: activeTab.value },
+            { preserveState: true, preserveScroll: true, replace: true }
+        );
+    }, 400);
 });
+onBeforeUnmount(() => clearTimeout(searchTimer));
 
 /* ── Expand / collapse sub-item rows ─────────────────────────────
    Matches the old page's toggleRow() — click the client name to show

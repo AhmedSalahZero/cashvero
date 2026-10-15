@@ -61,6 +61,7 @@ const props = defineProps({
     submitUrl: String,
     backUrl: String,
     getBankBalanceUrl: String,
+    getSafeBalanceUrl: String,
 });
 
 const page = usePage();
@@ -245,6 +246,33 @@ watch(() => [
 ], loadBankBalance);
 onMounted(loadBankBalance);
 
+/* ── Safe Balance preview (Cash Payment) ───────────────────────────────
+   The safe's end-of-day balance for the selected Branch + Currency on the
+   Payment Date. A safe has no pending items, so there is no Net Balance
+   here — only one box. Uses the same endpoint as the Money Payment form. */
+const safeBalance = ref(null);
+async function loadSafeBalance() {
+    if (form.value.type !== TYPES.CASH_PAYMENT) return;
+    safeBalance.value = null;
+    if (!form.value.delivery_branch_id || !form.value.currency || !props.getSafeBalanceUrl) return;
+    try {
+        const { data } = await window.axios.get(props.getSafeBalanceUrl, {
+            params: {
+                branchId: form.value.delivery_branch_id,
+                currencyName: form.value.currency,
+                balanceDate: form.value.payment_date,
+                modelType: 'CashExpense',
+                modelId: props.model?.id || 0,
+            },
+        });
+        safeBalance.value = data.end_balance ?? 0;
+    } catch (e) {
+        safeBalance.value = null;
+    }
+}
+watch(() => [form.value.type, form.value.delivery_branch_id, form.value.currency, form.value.payment_date], loadSafeBalance);
+onMounted(loadSafeBalance);
+
 function formatNumber(value) {
     return Math.round(Number(value) || 0).toLocaleString('en-US');
 }
@@ -411,6 +439,16 @@ function submit() {
 
             <form @submit.prevent="submit" class="space-y-6">
                 <div class="cvr-card space-y-4">
+                    <!-- Safe Balance preview (Cash Payment) -->
+                    <div v-if="form.type === TYPES.CASH_PAYMENT" class="flex justify-end">
+                        <div class="w-full max-w-xs">
+                            <label class="cvr-form-label">
+                                {{ $t('Safe Balance') }} <span v-if="form.payment_date">[ {{ form.payment_date }} ]</span>
+                            </label>
+                            <input :value="safeBalance === null ? '' : formatNumber(safeBalance)" disabled class="cvr-input w-full px-3 py-2 rounded opacity-80" />
+                        </div>
+                    </div>
+
                     <!-- Balance / Net Balance preview -->
                     <div v-if="form.type === TYPES.OUTGOING_TRANSFER || form.type === TYPES.PAYABLE_CHEQUE" class="flex justify-end">
                         <div class="cvr-form-grid-2 w-full max-w-md">

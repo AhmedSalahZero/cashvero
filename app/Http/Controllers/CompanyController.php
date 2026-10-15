@@ -7,7 +7,9 @@ use App\Models\CompanySystem;
 use App\Models\Partner;
 use App\Models\User;
 use App\Services\Api\OdooService;
+use App\Services\OpeningBalanceDateCleanupService;
 use App\Traits\ImageSave;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 /**
@@ -200,6 +202,36 @@ class CompanyController extends Controller
             'opening_balance_date' => 'required|date',
         ]);
 
+        /**
+         * * لو السوبر ادمن حرّك تاريخ الرصيد الافتتاحي للأمام (مثلا من 1 اغسطس
+         * * الى 1 اكتوبر) فكل الحركات اللي التطبيق حسبها لوحده (عمولات الخطابات
+         * * / الفوايد / رسوم الاصدار والتجديد) و تاريخها قبل التاريخ الجديد
+         * * بتتمسح تلقائي . مفيش مسح الا بعد تأكيد صريح من السوبر ادمن .
+         * * الحركات اللي اتسجلت يدوي ما بتتلمسش .
+         */
+        $autoEntriesCleanup = null;
+        $autoEntriesCount = 0;
+        $oldOpeningBalanceDate = $companySection->opening_balance_date
+            ? Carbon::parse($companySection->opening_balance_date)->format('Y-m-d')
+            : null;
+        $newOpeningBalanceDate = Carbon::parse($request->input('opening_balance_date'))->format('Y-m-d');
+
+        if (OpeningBalanceDateCleanupService::movedForward($oldOpeningBalanceDate, $newOpeningBalanceDate)) {
+            $autoEntriesCleanup = new OpeningBalanceDateCleanupService($companySection, $newOpeningBalanceDate);
+            $autoEntriesCount = $autoEntriesCleanup->countEntries();
+
+            if ($autoEntriesCount > 0 && ! $request->boolean('confirm_delete_auto_entries')) {
+                return redirect()->back()
+                    ->withInput()
+                    ->withErrors([
+                        'confirm_delete_auto_entries' => __(
+                            'Moving the Opening Balance Date to :date will permanently delete :count automatic entries (commissions, fees and interest) dated before it. Nothing was saved.',
+                            ['date' => $newOpeningBalanceDate, 'count' => $autoEntriesCount]
+                        ),
+                    ]);
+            }
+        }
+
         toastr()->success('Updated Successfully');
         $oldSystems = $companySection->getSystemsNames();
         $newSystems = $request->get('systems');
@@ -231,7 +263,7 @@ class CompanyController extends Controller
             $usersWithNewCredentials[] = $user;
         }
         Partner::handleTaxesColumnsToPartnerTable($companySection);
-        $companySection->update($request->except(['image', 'systems', 'odoo_username', 'odoo_db_password']));
+        $companySection->update($request->except(['image', 'systems', 'odoo_username', 'odoo_db_password', 'confirm_delete_auto_entries']));
 
         /**
          * * بنجيب الـ odoo_id بعد ما الشركة تتحدّث
@@ -257,6 +289,20 @@ class CompanyController extends Controller
         }
         ImageSave::saveIfExist('image', $companySection);
         $companySection->syncPermissionForAllUser($systemsToPreserve, $newSystemsToBeAdded);
+
+        if ($autoEntriesCleanup && $autoEntriesCount > 0) {
+            $cleanupResult = $autoEntriesCleanup->run();
+            toastr()->info(__(':count automatic entries dated before :date were deleted.', [
+                'count' => $cleanupResult['deleted'],
+                'date' => $newOpeningBalanceDate,
+            ]));
+            if ($cleanupResult['kept_odoo'] > 0) {
+                toastr()->warning(__(':count entries could not be removed from Odoo, so they were kept. Please remove them manually or check the Odoo login details.', [
+                    'count' => $cleanupResult['kept_odoo'],
+                ]));
+            }
+        }
+
         toastr()->success('Updated Successfully');
 
         return redirect()->back();

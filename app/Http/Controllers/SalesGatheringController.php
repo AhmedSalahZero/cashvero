@@ -326,7 +326,11 @@ class SalesGatheringController extends Controller
 			'companyHasOdoo' => $companyHasOdoo,
 			'createUrl' => route('create.sales.form', ['company' => $company->id, 'model' => $modelName]),
 			'importUrl' => route('salesGatheringImport', ['company' => $company->id, 'model' => $modelName]),
-			'exportUrl' => route('salesGathering.export', ['company' => $company->id, 'model' => $modelName]),
+			'exportUrl' => route('salesGathering.export', array_filter([
+				'company' => $company->id,
+				'model' => $modelName,
+				'loan_id' => in_array($modelName, ['LoanSchedule', 'ContractLoanSchedule'], true) ? $loanId : null,
+			])),
 			'templateFieldsUrl' => route('table.fields.selection.view', ['company' => $company->id, 'model' => $modelName, 'view' => 'sales_gathering']),
 			'currentField' => $fieldValue,
 			'currentValue' => $request->get('value'),
@@ -517,7 +521,15 @@ class SalesGatheringController extends Controller
         // Array Contains Only the name of fields
         $exportable_fields = array_keys($selected_fields);
         
-        $salesGathering = $uploadParams['fullModel']::where('company_id', $company->id)->get();
+        /**
+         * * جدول سداد قرض متوسط الاجل / عقد تأجير تمويلي : التصدير لازم يكون للقرض أو العقد
+         * * اللي المستخدم واقف فيه بس (loan_id) مش كل القروض والعقود في الشركة .
+         */
+        $loanId = request()->query('loan_id');
+        $salesGathering = $uploadParams['fullModel']::where('company_id', $company->id)
+            ->when($modelName === 'LoanSchedule' && $loanId, fn ($q) => $q->where('medium_term_loan_id', $loanId))
+            ->when($modelName === 'ContractLoanSchedule' && $loanId, fn ($q) => $q->where('leasing_contract_id', $loanId))
+            ->get();
         // Customizing the collection to be exported
         $salesGathering = collect($salesGathering)->map(function ($invoice) use ($exportable_fields) {
             $data = [];
@@ -554,7 +566,7 @@ class SalesGatheringController extends Controller
 		
 		$exportNavArr = $modelName != 'LabelingItem' ? [
 			'name'=>__('Export All Data'),
-			'link'=>$user->can($exportPermissionName) ? route('salesGathering.export',['company'=>$company->id , 'model'=>$modelName]):'#',
+			'link'=>$user->can($exportPermissionName) ? route('salesGathering.export',array_filter(['company'=>$company->id , 'model'=>$modelName , 'loan_id'=>in_array($modelName,['LoanSchedule','ContractLoanSchedule'],true) ? $loanId : null])):'#',
 			'show'=>$user->can($exportPermissionName),
 			'icon'=>'fas fa-file-import',
 			'attr'=>[

@@ -8,6 +8,7 @@ use App\Helpers\HDate;
 use App\Interfaces\Models\Interfaces\IHaveStatement;
 use App\Traits\IsBankStatement;
 use App\Traits\Models\HasDeleteButTriggerChangeOnLastElement;
+use App\Traits\Models\HasSameDayAppendOrder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\DB;
@@ -54,7 +55,7 @@ use Illuminate\Support\Facades\DB;
  */
 class LoanStatement extends Model  implements IHaveStatement
 {
-	use HasDeleteButTriggerChangeOnLastElement,IsBankStatement;
+	use HasDeleteButTriggerChangeOnLastElement,IsBankStatement,HasSameDayAppendOrder;
     protected $guarded = [
         'id'
     ];
@@ -101,6 +102,19 @@ class LoanStatement extends Model  implements IHaveStatement
 
 	}
 	
+	public static function sameDayGroupColumns(): array
+	{
+		return ['financial_institution_account_id'];
+	}
+
+	/**
+	 * * تعديل تاريخ الحركة : بتحتفظ بلحظة انشائها الاصلية وبتترتب وسط حركات اليوم الجديد على اساسها
+	 */
+	public function handleFullDateAfterDateEdit(string $date, $debit, $credit, $additionUpdateData = [])
+	{
+		$this->handleFullDateAfterDateEditAppendOrder($date, $debit, $credit, $additionUpdateData);
+	}
+
 		protected static function booted(): void
 		{
 			static::creating(function(self $model){
@@ -116,16 +130,10 @@ class LoanStatement extends Model  implements IHaveStatement
 				
 				$time  = now()->format('H:i:s');
 				
-				$fullDateTime = date('Y-m-d H:i:s', strtotime("$date $time")) ;
 				/**
-				 * * دي علشان لو ليهم نفس التاريخ والوقت بالظبط يزود ثانيه علي التاريخ القديم
+				 * * ترتيب نفس اليوم : تاريخ الحركة ثم لحظة الانشاء الفعلية (الحركة الجديدة بعد كل حركات نفس اليوم)
 				 */
-				$fullDateTime = HDate::generateUniqueDateTimeForModel(self::class,'full_date',$fullDateTime,[
-					[
-						'company_id','=',$model->company_id ,
-					]
-				]) ;
-				$model->full_date = $fullDateTime;
+				$model->full_date = self::nextFullDateAppendOrder($model);
 			});
 			
 			static::created(function(self $model){

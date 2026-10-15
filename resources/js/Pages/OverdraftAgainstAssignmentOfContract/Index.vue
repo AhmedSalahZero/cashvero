@@ -93,7 +93,7 @@ function submitNewRate() {
     router.post(ratesTarget.value.apply_rate_url, {
         ...newRateForm.value,
         company_id: props.company.id,
-    }, { onFinish: () => { ratesTarget.value = null; } });
+    }, { onSuccess: () => { ratesTarget.value = null; } });
 }
 
 const editRateTarget = ref(null);
@@ -112,7 +112,7 @@ function openEditRate(rate) {
 }
 function submitEditRate() {
     router.post(editRateTarget.value.edit_url, editRateForm.value, {
-        onFinish: () => { editRateTarget.value = null; },
+        onSuccess: () => { editRateTarget.value = null; },
     });
 }
 
@@ -505,6 +505,7 @@ function submitRenew() {
                         <div>
                             <label class="cvr-form-label">{{ $t('Date') }} *</label>
                             <input v-model="newRateForm.date_create" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                            <p v-if="flashErrors.date_create && !newRateForm.date_create" class="text-red-600 text-xs mt-1">{{ flashErrors.date_create }}</p>
                         </div>
                         <div>
                             <label class="cvr-form-label">{{ $t('Borrowing Rate') }}</label>
@@ -657,6 +658,7 @@ function submitRenew() {
                         <div>
                             <label class="cvr-form-label">{{ $t('Date') }} *</label>
                             <input v-model="editRateForm.date_edit" type="date" class="cvr-input w-full px-3 py-2 rounded" />
+                            <p v-if="flashErrors.date_edit && !editRateForm.date_edit" class="text-red-600 text-xs mt-1">{{ flashErrors.date_edit }}</p>
                         </div>
                         <div>
                             <label class="cvr-form-label">{{ $t('Borrowing Rate') }}</label>

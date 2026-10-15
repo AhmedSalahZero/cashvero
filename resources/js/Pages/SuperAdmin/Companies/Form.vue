@@ -3,6 +3,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import FormErrorSummary from '@/Components/FormErrorSummary.vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 const props = defineProps({
     mode: String, // 'create' | 'edit'
@@ -15,6 +16,7 @@ const props = defineProps({
     backUrl: String,
 });
 
+const { t } = useI18n();
 const page = usePage();
 const isEdit = props.mode === 'edit';
 
@@ -61,7 +63,14 @@ function errorFor(field) {
 }
 
 const submitting = ref(false);
-function submit() {
+/**
+ * confirmDeleteAutoEntries: false on the first try. If the super admin moved
+ * the Opening Balance Date FORWARD, the server answers with an error saying
+ * how many automatic entries (commissions / fees / interest) would be
+ * deleted. We show that message, and only if the super admin agrees we
+ * send the same form again with confirm_delete_auto_entries = 1.
+ */
+function submit(confirmDeleteAutoEntries = false) {
     submitting.value = true;
     const payload = {
         name: form.value.name,
@@ -82,7 +91,19 @@ function submit() {
         });
         payload.odoo_username = odooUsername;
         payload.odoo_db_password = odooDbPassword;
-        router.put(props.submitUrl, payload, { onFinish: () => { submitting.value = false; } });
+        if (confirmDeleteAutoEntries) payload.confirm_delete_auto_entries = 1;
+
+        let resubmitted = false;
+        router.put(props.submitUrl, payload, {
+            onError: (errors) => {
+                const message = errors?.confirm_delete_auto_entries;
+                if (message && confirm(message + '\n\n' + t('Do you want to continue?'))) {
+                    resubmitted = true;
+                    submit(true);
+                }
+            },
+            onFinish: () => { if (!resubmitted) submitting.value = false; },
+        });
     } else {
         router.post(props.submitUrl, payload, { onFinish: () => { submitting.value = false; } });
     }
@@ -100,7 +121,7 @@ function submit() {
 
             <FormErrorSummary />
 
-            <form @submit.prevent="submit" class="space-y-6" enctype="multipart/form-data">
+            <form @submit.prevent="submit()" class="space-y-6" enctype="multipart/form-data">
                 <!-- Sections -->
                 <div class="cvr-card">
                     <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">{{ $t('Sections') }}</h2>

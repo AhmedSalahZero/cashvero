@@ -459,6 +459,7 @@ class CashExpenseController
 				: route('store.cash.expense', ['company' => $company->id]),
 			'backUrl' => route('view.cash.expense', ['company' => $company->id]),
 			'getBankBalanceUrl' => route('update.balance.and.net.balance.based.on.account.number', ['company' => $company->id]),
+			'getSafeBalanceUrl' => route('get.current.end.balance.of.cash.in.safe.statement', ['company' => $company->id]),
 		];
 
 		if ($isCopy && $props['model']) {

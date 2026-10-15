@@ -109,7 +109,7 @@ class Branch extends Model
 		->when($deliveryDate , function($q) use($deliveryDate){
 			$q->where('date','<=',$deliveryDate);
 		})
-		->orderByRaw('date desc , id desc')
+		->orderByRaw('full_date desc , id desc')
 		->first();
 		if(!$cashInSafeStatement){
 			return 0 ;

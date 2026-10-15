@@ -167,7 +167,7 @@ class RoutePermissionMap
         'get.contracts.for.supplier' => 'money_payment.view',
         'get.leasing.contracts.for.company' => 'money_payment.view',
         'get.suppliers.of.opening-balance' => 'money_payment.view',
-        'get.current.end.balance.of.cash.in.safe.statement' => 'money_payment.view',
+        'get.current.end.balance.of.cash.in.safe.statement' => ['money_payment.view', 'cash_expense.create', 'cash_expense.update'],
 
         /* ──────────────────────── Cash Expense ──────────────────── */
         'view.cash.expense' => 'cash_expense.view',
