@@ -26,7 +26,10 @@
  */
 import { ref, computed, watch, onBeforeUnmount } from 'vue';
 import { useForm, router, Link } from '@inertiajs/vue3';
+import { useI18n } from 'vue-i18n';
 import AppLayout from '@/Layouts/AppLayout.vue';
+
+const { t } = useI18n();
 
 const props = defineProps({
     modelName: String,
@@ -83,10 +86,25 @@ const dateFormatOptions = [
     { value: 'Y-m-d', label: 'Year-Month-Day e.g. [2024-05-15]' },
     { value: 'Y-d-m', label: 'Year-Day-Month e.g. [2024-15-05]' },
 ];
+// Same list the controller validates against — `accept` alone can be
+// bypassed by switching the picker to "All files".
+const ALLOWED_EXTENSIONS = ['xlsx', 'xls', 'csv'];
 function handleFileChange(e) {
-    form.excel_file = e.target.files[0] || null;
+    const file = e.target.files[0] || null;
+    form.clearErrors('excel_file');
+    if (file && !ALLOWED_EXTENSIONS.includes(file.name.split('.').pop().toLowerCase())) {
+        e.target.value = '';
+        form.excel_file = null;
+        form.setError('excel_file', t('Only Excel or CSV files (.xlsx, .xls, .csv) are allowed.'));
+        return;
+    }
+    form.excel_file = file;
 }
+// Users were clicking Upload before choosing a file — keep it locked
+// until both required fields are filled.
+const canUpload = computed(() => !!form.excel_file && !!form.format && !form.processing);
 function submitUpload() {
+    if (!canUpload.value) return;
     form.post(props.uploadUrl, { forceFormData: true });
 }
 
@@ -340,9 +358,10 @@ onBeforeUnmount(() => {
                             <option value="" disabled>{{ $t('Select') }}</option>
                             <option v-for="opt in dateFormatOptions" :key="opt.value" :value="opt.value">{{ $t(opt.label) }}</option>
                         </select>
+                        <p v-if="form.errors.format" class="text-xs text-red-500 mt-1">{{ form.errors.format }}</p>
                     </div>
                 </div>
-                <button @click="submitUpload" :disabled="form.processing" class="cvr-btn-primary px-4 py-1.5 rounded text-sm">{{ $t('Upload') }}</button>
+                <button @click="submitUpload" :disabled="!canUpload" class="cvr-btn-primary px-4 py-1.5 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed">{{ $t('Upload') }}</button>
             </div>
         </div>
     </AppLayout>

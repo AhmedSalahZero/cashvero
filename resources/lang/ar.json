@@ -5174,5 +5174,9 @@
     "Amount To Pay": "المبلغ المطلوب دفعه",
     "Earlier Partial Settlements": "تسويات جزئية سابقة",
     "Return this cheque to unpaid?": "إعادة هذا الشيك إلى غير مدفوع؟",
-    "The cheque movement goes back to its due date in the bank statement.": "ستعود حركة الشيك إلى تاريخ استحقاقه في كشف حساب البنك."
+    "The cheque movement goes back to its due date in the bank statement.": "ستعود حركة الشيك إلى تاريخ استحقاقه في كشف حساب البنك.",
+    "Please choose a file to upload.": "من فضلك اختر ملفاً لرفعه.",
+    "The file failed to upload. Please try again.": "فشل رفع الملف. من فضلك حاول مرة أخرى.",
+    "Only Excel or CSV files (.xlsx, .xls, .csv) are allowed.": "مسموح فقط بملفات Excel أو CSV ‏(.xlsx, .xls, .csv).",
+    "Please choose the date format.": "من فضلك اختر تنسيق التاريخ."
 }

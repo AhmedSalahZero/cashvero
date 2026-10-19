@@ -298,6 +298,21 @@ class SalesGatheringTestController extends Controller
 				'skippedDuplicateCount' => Cache::get(getSkippedDuplicatesCacheKey($company_id, $modelName), 0),
 			]);
 		} else {
+			/**
+			 * * extensions بدل mimes: ملفات الـ csv بتتعرف غالباً كـ text/plain
+			 * * فـ mimes كانت هترفضها رغم إنها سليمة
+			 */
+			request()->validate([
+				'excel_file' => ['required', 'file', 'extensions:xlsx,xls,csv'],
+				'format' => ['required', 'in:d-m-Y,d-M-Y,m-d-Y,Y-m-d,Y-d-m'],
+			], [
+				'excel_file.required' => __('Please choose a file to upload.'),
+				'excel_file.file' => __('The file failed to upload. Please try again.'),
+				'excel_file.uploaded' => __('The file failed to upload. Please try again.'),
+				'excel_file.extensions' => __('Only Excel or CSV files (.xlsx, .xls, .csv) are allowed.'),
+				'format.required' => __('Please choose the date format.'),
+				'format.in' => __('Please choose the date format.'),
+			]);
 			// Get The Selected exportable fields returns a pair of ['field_name' => 'viewing name']
 			$exportable_fields = (new ExportTable)->customizedTableField($company, $modelName, 'selected_fields');
 			// Customizing the collection to be exported
