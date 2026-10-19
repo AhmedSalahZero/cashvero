@@ -5162,5 +5162,17 @@
     "Do you want to continue?": "هل تريد المتابعة؟",
     "Please select the rate date": "برجاء اختيار تاريخ السعر",
     "Rates must be valid numbers": "يجب أن تكون الأسعار أرقاماً صحيحة",
-    "Safe Balance": "رصيد الخزنة"
+    "Safe Balance": "رصيد الخزنة",
+    "Leasing Cheque": "شيك ليزنج",
+    "Leasing Cheque No. :cheque For Contract :contract Installment No. :number": "شيك ليزنج رقم :cheque لعقد :contract القسط رقم :number",
+    "Cheque Marked As Paid Successfully": "تم تحديد الشيك كمدفوع بنجاح",
+    "This cheque is already marked as paid.": "هذا الشيك محدد كمدفوع بالفعل.",
+    "This cheque is not linked to a current account. Edit the installment and choose its account first.": "هذا الشيك غير مرتبط بحساب جاري. عدّل القسط واختر الحساب أولاً.",
+    "This installment has nothing left to pay.": "لا يوجد مبلغ متبقٍ للدفع على هذا القسط.",
+    "Unmark the cheque as paid first.": "أعد الشيك إلى غير مدفوع أولاً.",
+    "Unmark As Paid": "إعادة إلى غير مدفوع",
+    "Amount To Pay": "المبلغ المطلوب دفعه",
+    "Earlier Partial Settlements": "تسويات جزئية سابقة",
+    "Return this cheque to unpaid?": "إعادة هذا الشيك إلى غير مدفوع؟",
+    "The cheque movement goes back to its due date in the bank statement.": "ستعود حركة الشيك إلى تاريخ استحقاقه في كشف حساب البنك."
 }

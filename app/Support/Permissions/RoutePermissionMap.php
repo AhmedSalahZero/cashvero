@@ -320,9 +320,8 @@ class RoutePermissionMap
         'view.down.payment.settlement' => 'down_payment_contract.view',
         'store.down.payment.settlement' => 'down_payment_contract.settle',
         'view.contract.loan.schedule.settlements' => 'contract_loan_schedule.view',
-        'store.contract.loan.schedule.settlements' => 'contract_loan_schedule.create',
-        'edit.contract.loan.schedule.settlements' => 'contract_loan_schedule.update',
-        'update.contract.loan.schedule.settlements' => 'contract_loan_schedule.update',
+        'contract.loan.schedule.mark.as.paid' => 'contract_loan_schedule.update',
+        'contract.loan.schedule.unmark.as.paid' => 'contract_loan_schedule.update',
         'delete.contract.loan.schedule.settlements' => 'contract_loan_schedule.delete',
         'contract.loan.schedule.account.numbers' => 'contract_loan_schedule.view',
 

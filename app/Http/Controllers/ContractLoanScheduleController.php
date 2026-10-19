@@ -6,11 +6,12 @@ use App\Models\AccountType;
 use App\Models\Company;
 use App\Models\ContractLoanSchedule;
 use App\Models\ContractLoanScheduleSettlement;
-use App\Models\FinancialInstitutionAccount;
+use App\Rules\DateMustBeGreaterThanOrEqualDate;
 use App\Rules\DateMustBeLessThanOrEqualDate;
 use App\Support\ShareholderAccounts\AccountNumberLabel;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * ContractLoanScheduleController
@@ -28,12 +29,18 @@ use Illuminate\Http\Request;
  * the (already-migrated) schedule upload/edit-row flow, not by the
  * settlement screen — UNCHANGED, deliberately.
  *
- * ── Frontend migration status (as of this file's last update) ──────
- *   ✅ viewSettlement() / editSettlement() → MIGRATED to Vue +
- *      Inertia. Renders resources/js/Pages/LeasingContractSettlement/Index.vue.
- *   ✅ storeSettlement() / updateSettlement() / deleteSettlement() /
- *      getAccountNumbersForDraweeBank() → UNCHANGED, deliberately. All
- *      already redirect or JSON-appropriately.
+ * ── Leasing cheques follow the supplier payable-cheque lifecycle ────
+ * (2026-10-19) Each installment cheque is posted to its drawee current
+ * account as soon as the schedule row exists, dated at the due date
+ * (ContractLoanSchedule::syncChequeStatement()). Paying it is then ONE
+ * step, exactly like MoneyPaymentController::markChequesAsPaid():
+ * markAsPaid() moves that same row to the actual payment date, and
+ * unmarkAsPaid() moves it back. Partial settlements were removed: each
+ * one used to post its own bank row, which on top of the pre-posted
+ * cheque row would count the money twice. Settlements recorded the old
+ * way are still listed and their last one can still be deleted.
+ *
+ * Renders resources/js/Pages/LeasingContractSettlement/Index.vue.
  */
 class ContractLoanScheduleController extends Controller
 {
@@ -50,15 +57,12 @@ class ContractLoanScheduleController extends Controller
     }
 
     /**
-     * Shows the payment-settlement screen for one contract schedule
-     * (cheque) installment.
-     *
-     * ✅ MIGRATED to Vue + Inertia. Renders
-     * resources/js/Pages/LeasingContractSettlement/Index.vue.
+     * The cheque screen for one installment: its details, and either the
+     * Mark As Paid form or, once paid, the Unmark action.
      */
     public function viewSettlement(Company $company, ContractLoanSchedule $contractLoanSchedule)
     {
-        $contractLoanSchedule->load('leasingContract.contractLoanSchedules', 'draweeBank');
+        $contractLoanSchedule->load('leasingContract.contractLoanSchedules', 'draweeBank', 'settlements');
 
         if (! $contractLoanSchedule->canSettle()) {
             return redirect()
@@ -66,90 +70,56 @@ class ContractLoanScheduleController extends Controller
                 ->with('warning', __('This contract schedule installment is not linked to an active leasing contract with a drawee bank.'));
         }
 
-        return \Inertia\Inertia::render('LeasingContractSettlement/Index', $this->getSettlementPageVars($company, $contractLoanSchedule, null));
-    }
-
-    /**
-     * Shows the edit form for an existing settlement, pre-filled.
-     *
-     * ✅ MIGRATED to Vue + Inertia, same page component as
-     * viewSettlement(), distinguished by a non-null
-     * `editingSettlement` prop.
-     */
-    public function editSettlement(Company $company, Request $request, ContractLoanScheduleSettlement $contractLoanScheduleSettlement)
-    {
-        $contractLoanSchedule = $contractLoanScheduleSettlement->contractLoanSchedule;
-
-        if (! $contractLoanSchedule || ! $contractLoanSchedule->canSettle()) {
-            return redirect()
-                ->back()
-                ->with('warning', __('This contract schedule installment is not linked to an active leasing contract with a drawee bank.'));
-        }
-
-        return \Inertia\Inertia::render('LeasingContractSettlement/Index', $this->getSettlementPageVars($company, $contractLoanSchedule, $contractLoanScheduleSettlement));
+        return \Inertia\Inertia::render('LeasingContractSettlement/Index', $this->getSettlementPageVars($company, $contractLoanSchedule));
     }
 
     /**
      * Builds every prop LeasingContractSettlement/Index.vue needs.
-     * Read-only display data — UNCHANGED source queries, just
-     * reshaped for Vue.
      */
-    protected function getSettlementPageVars(Company $company, ContractLoanSchedule $contractLoanSchedule, ?ContractLoanScheduleSettlement $editingSettlement): array
+    protected function getSettlementPageVars(Company $company, ContractLoanSchedule $contractLoanSchedule): array
     {
-        $currentAccountType = AccountType::onlyCurrentAccount()->first();
-        $currentAccounts = FinancialInstitutionAccount::getAllAccountNumberForCurrency($company->id, $contractLoanSchedule->getCurrency(), $contractLoanSchedule->getFinancialInstitutionId());
+        $account = $contractLoanSchedule->getChequeAccount();
+        $financialInstitutionId = $contractLoanSchedule->getFinancialInstitutionId();
+        $legacySettlements = $contractLoanSchedule->settlements->reject(fn (ContractLoanScheduleSettlement $s) => $s->isChequePayment());
+        $lastLegacySettlementId = $legacySettlements->sortBy('id')->last()?->id;
 
         return [
             'company' => ['id' => $company->id],
             'contractLoanSchedule' => [
                 'id' => $contractLoanSchedule->id,
                 'leasing_contract_name' => $contractLoanSchedule->getLeasingContractName(),
+                'date' => isValidScheduleDate($contractLoanSchedule->getDate()) ? Carbon::make($contractLoanSchedule->getDate())->format('Y-m-d') : null,
                 'date_formatted' => $contractLoanSchedule->getDateFormatted(),
                 'currency' => $contractLoanSchedule->getCurrency(),
                 'beginning_balance_formatted' => $contractLoanSchedule->getBeginningBalanceFormatted(),
                 'cheque_amount_formatted' => $contractLoanSchedule->getChequeAmountFormatted(),
+                'amount_to_pay_formatted' => number_format($contractLoanSchedule->getChequeStatementAmount()),
                 'cheque_number' => $contractLoanSchedule->getChequeNumber(),
                 'drawee_bank_name' => $contractLoanSchedule->hasDraweeBank() ? $contractLoanSchedule->getDraweeBankName() : null,
+                'account_number' => $account
+                    ? AccountNumberLabel::forCurrentAccount($company->id, $financialInstitutionId, $account->account_number)
+                    : null,
                 'interest_amount_formatted' => $contractLoanSchedule->getInterestAmountFormatted(),
                 'principle_amount_formatted' => $contractLoanSchedule->getPrincipleAmountFormatted(),
                 'end_balance_formatted' => $contractLoanSchedule->getEndBalanceFormatted(),
                 'settlement_default_date' => $contractLoanSchedule->getSettlementDefaultDate(),
-                'remaining' => $contractLoanSchedule->getRemaining(),
+                'is_paid' => $contractLoanSchedule->isChequePaid(),
+                'actual_payment_date_formatted' => $contractLoanSchedule->getActualPaymentDateFormatted(),
             ],
-            // {value: stored account number, label: what the user reads}.
-            // The two differ for a shareholder-owned account (D7,
-            // docs/shareholder-accounts.md) — sending only the labels here
-            // would store the owner's name in current_account_number.
-            'currentAccounts' => collect($currentAccounts)
-                ->map(fn ($label, $accountNumber) => ['value' => (string) $accountNumber, 'label' => (string) $label])
-                ->values(),
-            'currentAccountTypeId' => $currentAccountType?->id ?? 0,
-            'financialInstitutionId' => $contractLoanSchedule->getFinancialInstitutionId(),
-            'balanceLookupUrl' => route('update.balance.and.net.balance.based.on.account.number', ['company' => $company->id]),
-            'settlements' => $contractLoanSchedule->settlements->map(function (ContractLoanScheduleSettlement $s) use ($company, $editingSettlement) {
+            // Partial settlements recorded before cheques were pre-posted.
+            'settlements' => $legacySettlements->map(function (ContractLoanScheduleSettlement $s) use ($company, $financialInstitutionId, $lastLegacySettlementId, $contractLoanSchedule) {
                 return [
                     'id' => $s->id,
                     'date_formatted' => $s->getDateFormatted(),
-                    'account_number' => AccountNumberLabel::forCurrentAccount($company->id, $contractLoanSchedule->getFinancialInstitutionId(), $s->getAccountNumber()),
+                    'account_number' => AccountNumberLabel::forCurrentAccount($company->id, $financialInstitutionId, $s->getAccountNumber()),
                     'amount_formatted' => $s->getAmountFormatted(),
-                    'edit_url' => route('edit.contract.loan.schedule.settlements', ['company' => $company->id, 'contractLoanScheduleSettlement' => $s->id]),
-                    'delete_url' => route('delete.contract.loan.schedule.settlements', ['company' => $company->id, 'contractLoanScheduleSettlement' => $s->id]),
-                    'is_being_edited' => $editingSettlement && $editingSettlement->id === $s->id,
+                    'delete_url' => $s->id === $lastLegacySettlementId && ! $contractLoanSchedule->isChequePaid()
+                        ? route('delete.contract.loan.schedule.settlements', ['company' => $company->id, 'contractLoanScheduleSettlement' => $s->id])
+                        : null,
                 ];
             })->values(),
-            // Only the LAST settlement is editable/deletable — same
-            // rule as Loan Schedule Settlement, confirmed from the
-            // same shared original Blade view.
-            'lastSettlementId' => $contractLoanSchedule->settlements->sortBy('date')->last()?->id,
-            'editingSettlement' => $editingSettlement ? [
-                'id' => $editingSettlement->id,
-                'date' => $editingSettlement->getDate(),
-                'amount' => $editingSettlement->getAmount(),
-                'current_account_number' => $editingSettlement->getCurrentAccountNumber(),
-            ] : null,
-            'submitUrl' => $editingSettlement
-                ? route('update.contract.loan.schedule.settlements', ['company' => $company->id, 'contractLoanScheduleSettlement' => $editingSettlement->id])
-                : route('store.contract.loan.schedule.settlements', ['company' => $company->id, 'contractLoanSchedule' => $contractLoanSchedule->id]),
+            'markAsPaidUrl' => route('contract.loan.schedule.mark.as.paid', ['company' => $company->id, 'contractLoanSchedule' => $contractLoanSchedule->id]),
+            'unmarkAsPaidUrl' => route('contract.loan.schedule.unmark.as.paid', ['company' => $company->id, 'contractLoanSchedule' => $contractLoanSchedule->id]),
             'backUrl' => route('view.uploading', ['company' => $company->id, 'loanId' => $contractLoanSchedule->getLeasingContractId(), 'model' => 'ContractLoanSchedule']),
             'navUrls' => [
                 'home' => route('home', ['company' => $company->id]),
@@ -162,138 +132,149 @@ class ContractLoanScheduleController extends Controller
     }
 
     /**
-     * Records a payment settlement against a contract schedule
-     * (cheque) installment. UNCHANGED, deliberately.
+     * Marks the installment cheque as paid on its actual payment date.
+     * Mirrors MoneyPaymentController::markChequesAsPaid(): same date
+     * rules, same balance check, and the already-posted cheque row is
+     * MOVED to the payment date rather than a second row being added.
      */
-    public function storeSettlement(Company $company, Request $request, ContractLoanSchedule $contractLoanSchedule)
+    public function markAsPaid(Company $company, Request $request, ContractLoanSchedule $contractLoanSchedule)
     {
+        abort_unless((int) $contractLoanSchedule->company_id === (int) $company->id, 404);
+
         if (! $contractLoanSchedule->canSettle()) {
             return redirect()
                 ->back()
                 ->with('warning', __('This contract schedule installment is not linked to an active leasing contract with a drawee bank.'));
         }
-
-        /**
-         * * تسوية القسط بتصرف فلوس فعليًا من الحساب
-         * * فما ينفعش تتسجّل بتاريخ بعد النهاردة
-         */
-        $request->validate([
-            'date' => ['required', new DateMustBeLessThanOrEqualDate(null, now(), __('Settlement Date Must Be Less Than Or Equal Today'))],
-        ]);
-
-        $currentAccountNumber = $request->get('current_account_number');
-        $amount = number_unformat($request->get('amount'));
-        $date = $request->get('date');
-
-        $balanceValidationResponse = $this->validateCurrentAccountBalanceForSettlement(
-            $company,
-            $contractLoanSchedule,
-            $currentAccountNumber,
-            $date,
-            $amount
-        );
-
-        if ($balanceValidationResponse) {
-            return $balanceValidationResponse;
+        if ($contractLoanSchedule->isChequePaid()) {
+            return redirect()->back()->with('fail', __('This cheque is already marked as paid.'));
         }
 
-        $settlement = $contractLoanSchedule->settlements()->create([
-            'current_account_number' => $currentAccountNumber,
-            'amount' => $amount,
-            'date' => $date,
-            'company_id' => $company->id,
+        $request->validate([
+            'actual_payment_date' => [
+                'required',
+                new DateMustBeLessThanOrEqualDate(null, now(), __('Payment Date Must Be Less Than Or Equal Today')),
+                new DateMustBeGreaterThanOrEqualDate(null, $contractLoanSchedule->getDate(), __('Payment Date Must Be Greater Than Or Equal Cheque Due Date')),
+            ],
         ]);
 
-        $financialInstitutionId = $contractLoanSchedule->getFinancialInstitutionId();
-        $accountType = AccountType::onlyCurrentAccount()->first();
-        $commentEn = __('Settlement For Contract :contract Installment No. :number', [
-            'contract' => $contractLoanSchedule->getLeasingContractName(),
-            'number' => $contractLoanSchedule->getInstallmentNumber(),
-        ], 'en');
-        $commentAr = __('Settlement For Contract :contract Installment No. :number', [
-            'contract' => $contractLoanSchedule->getLeasingContractName(),
-            'number' => $contractLoanSchedule->getInstallmentNumber(),
-        ], 'ar');
+        $account = $contractLoanSchedule->getChequeAccount();
+        if (! $account) {
+            return redirect()->back()->with('fail', __('This cheque is not linked to a current account. Edit the installment and choose its account first.'));
+        }
 
-        $settlement->handleCreditStatement($company->id, $financialInstitutionId, $accountType, $currentAccountNumber, null, $date, $amount, null, null, $commentEn, $commentAr);
-        $settlement->handleLoanStatement($company->id, $financialInstitutionId, $currentAccountNumber, $date, $amount, $commentEn, $commentAr);
+        $amount = $contractLoanSchedule->getChequeStatementAmount();
+        if ($amount <= 0) {
+            return redirect()->back()->with('fail', __('This installment has nothing left to pay.'));
+        }
 
-        /**
-         * * لو العقد ده اتدفعت منه فواتير موردين من خلال كاش فيرو (نوع الدفع
-         * * Through Leasing) يبقي ليه كشف حساب سحب/سداد خاص بيه .. والقسط
-         * * اللي اتسدد دلوقتي بيرجّع جزء ال principle بتاعه للمتاح فيه.
-         */
-        $settlement->handleLeasingContractRepayment($company->id, $commentEn, $commentAr);
+        $paymentDate = Carbon::make($request->get('actual_payment_date'))->format('Y-m-d');
 
-        // ⚠️ Confirmed fix: this was back(), which leaves the user on
-        // the same settlement page after paying — the natural next
-        // step is seeing the updated schedule table, not re-settling
-        // the same installment. Same destination helper already used
-        // for the upload flow.
+        if ($this->balanceBeforeChequeAt($company, $contractLoanSchedule, $account->account_number, $paymentDate) < $amount) {
+            return redirect()->back()->with('fail', __('Net Balance Less Than Paid Amount'))->withInput();
+        }
+
+        DB::transaction(function () use ($company, $contractLoanSchedule, $account, $amount, $paymentDate) {
+            $settlement = $contractLoanSchedule->settlements()->create([
+                'current_account_number' => $account->account_number,
+                'amount' => $amount,
+                'date' => $paymentDate,
+                'is_cheque_payment' => 1,
+                'company_id' => $company->id,
+            ]);
+
+            // Moves the cheque row from the due date to the payment date.
+            $contractLoanSchedule->refresh()->update(['actual_payment_date' => $paymentDate]);
+
+            $commentEn = $contractLoanSchedule->getChequeStatementComment('en');
+            $commentAr = $contractLoanSchedule->getChequeStatementComment('ar');
+            $settlement->handleLoanStatement($company->id, $contractLoanSchedule->getFinancialInstitutionId(), $account->account_number, $paymentDate, $amount, $commentEn, $commentAr);
+
+            /**
+             * * لو العقد ده اتدفعت منه فواتير موردين من خلال كاش فيرو (نوع الدفع
+             * * Through Leasing) يبقي ليه كشف حساب سحب/سداد خاص بيه .. والقسط
+             * * اللي اتسدد دلوقتي بيرجّع جزء ال principle بتاعه للمتاح فيه.
+             */
+            $settlement->handleLeasingContractRepayment($company->id, $commentEn, $commentAr);
+        });
+
         return redirect()->route('view.uploading', getUploadingRouteParams(
             $company->id,
             'ContractLoanSchedule',
             (string) $contractLoanSchedule->getLeasingContractId()
-        ));
+        ))->with('success', __('Cheque Marked As Paid Successfully'));
     }
 
     /**
-     * Deletes then re-creates the settlement fresh. UNCHANGED.
+     * Returns a paid cheque to unpaid: removes the Mark As Paid settlement
+     * (and the loan / contract ledger rows it posted) and moves the cheque
+     * row back to its due date. Mirrors IsMoneyOut::revertPayableChequeToUnpaid().
      */
-    public function updateSettlement(Company $company, Request $request, ContractLoanScheduleSettlement $contractLoanScheduleSettlement)
+    public function unmarkAsPaid(Company $company, ContractLoanSchedule $contractLoanSchedule)
     {
-        $contractLoanSchedule = $contractLoanScheduleSettlement->contractLoanSchedule;
-        $this->deleteSettlement($company, $request, $contractLoanScheduleSettlement);
-        $this->storeSettlement($company, $request, $contractLoanSchedule);
+        abort_unless((int) $contractLoanSchedule->company_id === (int) $company->id, 404);
+
+        if (! $contractLoanSchedule->isChequePaid()) {
+            return redirect()->back()->with('fail', __('Cheque is not paid'));
+        }
+
+        DB::transaction(function () use ($contractLoanSchedule) {
+            $contractLoanSchedule->settlements()->where('is_cheque_payment', 1)->get()
+                ->each(function (ContractLoanScheduleSettlement $settlement) {
+                    $settlement->deleteAllRelations();
+                    $settlement->delete();
+                });
+
+            $contractLoanSchedule->refresh()->update(['actual_payment_date' => null]);
+        });
 
         return redirect()->route('view.contract.loan.schedule.settlements', [
-            'contractLoanSchedule' => $contractLoanSchedule->id,
             'company' => $company->id,
-        ]);
+            'contractLoanSchedule' => $contractLoanSchedule->id,
+        ])->with('success', __('Cheque Returned To Unpaid Successfully'));
     }
 
     /**
-     * Deletes a settlement and reverses everything it posted.
-     * UNCHANGED.
+     * Deletes a settlement recorded the old (partial) way and reverses
+     * everything it posted. The installment's cheque row grows back by the
+     * same amount through ContractLoanSchedule's `remaining` hook.
      */
     public function deleteSettlement(Company $company, Request $request, ContractLoanScheduleSettlement $contractLoanScheduleSettlement)
     {
+        $schedule = $contractLoanScheduleSettlement->contractLoanSchedule;
+
+        if ($contractLoanScheduleSettlement->isChequePayment() || $schedule?->isChequePaid()) {
+            return back()->with('fail', __('Unmark the cheque as paid first.'));
+        }
+
         $contractLoanScheduleSettlement->deleteAllRelations();
         $contractLoanScheduleSettlement->delete();
 
         return back();
     }
 
-    protected function validateCurrentAccountBalanceForSettlement(
-        Company $company,
-        ContractLoanSchedule $contractLoanSchedule,
-        string $accountNumber,
-        string $date,
-        float $amount,
-        ?ContractLoanScheduleSettlement $editingSettlement = null
-    ): ?\Illuminate\Http\RedirectResponse {
+    /**
+     * The account balance on $date as it was before this cheque left it.
+     * If the cheque row already sits on or before $date (paid on its due
+     * date, or later) it has already been taken out of that balance, so
+     * it is added back — same idea as markChequesAsPaid().
+     */
+    protected function balanceBeforeChequeAt(Company $company, ContractLoanSchedule $contractLoanSchedule, string $accountNumber, string $date): float
+    {
         $accountType = AccountType::onlyCurrentAccount()->first();
-
-        if (! $accountType) {
-            return back()->with('fail', __('Current account type is not configured.'))->withInput();
-        }
-
         $balanceRequest = Request::create('/', 'GET', [
-            'accountType' => $accountType->id,
+            'accountType' => $accountType?->id,
             'accountNumber' => $accountNumber,
             'financialInstitutionId' => $contractLoanSchedule->getFinancialInstitutionId(),
-            'balanceDate' => Carbon::make($date)->format('Y-m-d'),
-            'modelId' => $editingSettlement?->id,
-            'modelType' => 'ContractLoanScheduleSettlement',
+            'balanceDate' => $date,
         ]);
+        $balance = (float) ((new MoneyReceivedController())->updateNetBalanceBasedOnAccountNumber($balanceRequest, $company)->getData()->balance ?? 0);
 
-        $balanceResponse = (new MoneyReceivedController())->updateNetBalanceBasedOnAccountNumber($balanceRequest, $company);
-        $balance = (float) ($balanceResponse->getData()->balance ?? 0);
-
-        if ($amount > $balance) {
-            return back()->with('fail', __('Net Balance Less Than Paid Amount'))->withInput();
+        $chequeRow = $contractLoanSchedule->chequeStatement()->first();
+        if ($chequeRow && Carbon::make($chequeRow->date)->format('Y-m-d') <= $date) {
+            $balance += (float) $chequeRow->credit;
         }
 
-        return null;
+        return $balance;
     }
 }

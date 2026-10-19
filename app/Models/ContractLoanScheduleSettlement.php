@@ -59,6 +59,16 @@ class ContractLoanScheduleSettlement extends Model
         return number_format($this->getAmount());
     }
 
+    /**
+     * The settlement Mark As Paid creates for a leasing cheque. It has no
+     * bank row of its own — the cheque row on the installment
+     * (ContractLoanSchedule::chequeStatement) is what moves the balance.
+     */
+    public function isChequePayment(): bool
+    {
+        return (bool) $this->is_cheque_payment;
+    }
+
     public function getCurrentAccountNumber()
     {
         return $this->current_account_number;

@@ -508,9 +508,8 @@ Route::group(
 
                     Route::get('contract-loan-schedule/account-numbers', 'ContractLoanScheduleController@getAccountNumbersForDraweeBank')->name('contract.loan.schedule.account.numbers');
                     Route::get('contract-loan-schedule-settlement/{contractLoanSchedule}', 'ContractLoanScheduleController@viewSettlement')->name('view.contract.loan.schedule.settlements');
-                    Route::post('contract-loan-schedule-settlements/{contractLoanSchedule}', 'ContractLoanScheduleController@storeSettlement')->name('store.contract.loan.schedule.settlements');
-                    Route::get('edit-contract-loan-schedule-settlement/{contractLoanScheduleSettlement}', 'ContractLoanScheduleController@editSettlement')->name('edit.contract.loan.schedule.settlements');
-                    Route::patch('contract-loan-schedule-settlements/{contractLoanScheduleSettlement}', 'ContractLoanScheduleController@updateSettlement')->name('update.contract.loan.schedule.settlements');
+                    Route::post('contract-loan-schedule/{contractLoanSchedule}/mark-as-paid', 'ContractLoanScheduleController@markAsPaid')->name('contract.loan.schedule.mark.as.paid');
+                    Route::post('contract-loan-schedule/{contractLoanSchedule}/unmark-as-paid', 'ContractLoanScheduleController@unmarkAsPaid')->name('contract.loan.schedule.unmark.as.paid');
                     Route::delete('delete-contract-loan-schedule-settlement/{contractLoanScheduleSettlement}', 'ContractLoanScheduleController@deleteSettlement')->name('delete.contract.loan.schedule.settlements');
 
                     Route::get('medium-term-loan-report', 'MediumTermLoanController@refreshReport')->name('refresh.medium.term.loan.report'); // ajax

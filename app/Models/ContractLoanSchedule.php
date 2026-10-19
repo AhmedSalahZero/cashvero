@@ -7,6 +7,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -24,6 +25,8 @@ use Illuminate\Support\Facades\DB;
  * @property string|null $cheque_number
  * @property int|null $drawee_bank_id
  * @property string|null $account_number
+ * @property string|null $actual_payment_date
+ * @property-read \App\Models\CurrentAccountBankStatement|null $chequeStatement
  * @property-read \App\Models\LeasingContract|null $leasingContract
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\ContractLoanScheduleSettlement> $settlements
  */
@@ -34,6 +37,28 @@ class ContractLoanSchedule extends Model
     protected $guarded = [];
 
     protected $table = 'contract_loan_schedules';
+
+    /**
+     * Columns whose change can move, resize or re-route the cheque row.
+     * `remaining` is here because deleting an older partial settlement
+     * changes what the cheque row still has to carry.
+     */
+    protected const CHEQUE_STATEMENT_COLUMNS = [
+        'date', 'cheque_amount', 'cheque_number', 'drawee_bank_id',
+        'financial_institution_account_id', 'account_number',
+        'actual_payment_date', 'remaining',
+    ];
+
+    protected static function booted(): void
+    {
+        static::created(fn (self $schedule) => $schedule->syncChequeStatement());
+        static::updated(function (self $schedule) {
+            if ($schedule->wasChanged(self::CHEQUE_STATEMENT_COLUMNS)) {
+                $schedule->syncChequeStatement();
+            }
+        });
+        static::deleting(fn (self $schedule) => $schedule->deleteChequeStatement());
+    }
 
     public function scopeCompany($query)
     {
@@ -77,6 +102,162 @@ class ContractLoanSchedule extends Model
     public function settlements(): HasMany
     {
         return $this->hasMany(ContractLoanScheduleSettlement::class, 'contract_loan_schedule_id');
+    }
+
+    /* ─────────────────────────────────────────────────────────────────
+     | Cheque row on the drawee current account
+     |
+     | Same lifecycle as a supplier payable cheque (MoneyPayment): the
+     | cheque is posted as a credit on its account the moment the
+     | installment exists, dated at the due date. Mark As Paid moves that
+     | same row to the actual payment date, Unmark moves it back. The row
+     | is never re-created on payment, so the statement never counts the
+     | cheque twice.
+     ───────────────────────────────────────────────────────────────── */
+
+    public function chequeStatement(): HasOne
+    {
+        return $this->hasOne(CurrentAccountBankStatement::class, 'contract_loan_schedule_id');
+    }
+
+    public function isChequePaid(): bool
+    {
+        return $this->actual_payment_date !== null;
+    }
+
+    public function getActualPaymentDateFormatted(): ?string
+    {
+        return $this->actual_payment_date ? Carbon::make($this->actual_payment_date)->format('d-m-Y') : null;
+    }
+
+    /**
+     * The current account the cheque is drawn on. Prefers the linked
+     * account; falls back to matching the stored account number text for
+     * older rows the 2026-08-15 backfill couldn't link.
+     */
+    public function getChequeAccount(): ?FinancialInstitutionAccount
+    {
+        // A relation loaded before the account was changed still points
+        // at the old account — re-read it when the key no longer matches.
+        if ($this->relationLoaded('financialInstitutionAccount')
+            && $this->financialInstitutionAccount?->id !== ($this->financial_institution_account_id ? (int) $this->financial_institution_account_id : null)) {
+            $this->unsetRelation('financialInstitutionAccount');
+        }
+        if ($this->financialInstitutionAccount) {
+            return $this->financialInstitutionAccount;
+        }
+        $accountNumber = trim((string) $this->getRawOriginal('account_number'));
+        if (! $this->drawee_bank_id || $accountNumber === '') {
+            return null;
+        }
+
+        return FinancialInstitutionAccount::findByAccountNumber($accountNumber, $this->company_id, $this->drawee_bank_id);
+    }
+
+    /**
+     * What the cheque row carries: the cheque amount minus anything older
+     * partial settlements already took out of the bank through rows of
+     * their own. For a schedule paid only through Mark As Paid this is
+     * simply the cheque amount.
+     */
+    public function getChequeStatementAmount(): float
+    {
+        $paidThroughOwnRows = (float) $this->settlements()->where('is_cheque_payment', 0)->sum('amount');
+
+        return max(0, (float) $this->getChequeAmount() - $paidThroughOwnRows);
+    }
+
+    /**
+     * Due date while pending, actual payment date once paid — but never
+     * before the account's opening balance date. Nothing else in the app
+     * may be dated before that row (ReceivingOrPaymentDateRule), and a
+     * cheque placed ahead of it would be folded into the opening line.
+     */
+    public function getChequeStatementDate(?FinancialInstitutionAccount $account = null): ?string
+    {
+        if ($this->isChequePaid()) {
+            $date = Carbon::make($this->actual_payment_date)->format('Y-m-d');
+        } elseif (isValidScheduleDate($this->date)) {
+            $date = Carbon::make($this->date)->format('Y-m-d');
+        } else {
+            return null;
+        }
+
+        $openingDate = $account?->balance_date ? Carbon::make($account->balance_date)->format('Y-m-d') : null;
+
+        return $openingDate && $date < $openingDate ? $openingDate : $date;
+    }
+
+    public function getChequeStatementComment(string $lang): string
+    {
+        return __('Leasing Cheque No. :cheque For Contract :contract Installment No. :number', [
+            'cheque' => $this->getChequeNumber() ?: '-',
+            'contract' => $this->getLeasingContractName(),
+            'number' => $this->getInstallmentNumber(),
+        ], $lang);
+    }
+
+    /**
+     * Brings the cheque row in line with the installment: creates it,
+     * moves it, resizes it, re-routes it to another account, or removes
+     * it when there is nothing left to post. Idempotent.
+     */
+    public function syncChequeStatement(): void
+    {
+        $account = $this->getChequeAccount();
+        $date = $this->getChequeStatementDate($account);
+        $amount = $this->getChequeStatementAmount();
+        $row = $this->chequeStatement()->first();
+
+        if (! $account || ! $date || $amount <= 0) {
+            $this->deleteChequeStatement();
+
+            return;
+        }
+
+        // Moving a row between accounts is a delete + create so both
+        // accounts' running balances are rebuilt from the right date.
+        if ($row && (int) $row->financial_institution_account_id !== (int) $account->id) {
+            $this->deleteChequeStatement();
+            $row = null;
+        }
+
+        $comments = [
+            'comment_en' => $this->getChequeStatementComment('en'),
+            'comment_ar' => $this->getChequeStatementComment('ar'),
+        ];
+
+        if (! $row) {
+            $this->chequeStatement()->create(array_merge($comments, [
+                'financial_institution_account_id' => $account->id,
+                'company_id' => $this->company_id,
+                'credit' => $amount,
+                'date' => $date,
+            ]));
+
+            return;
+        }
+
+        $sameDate = Carbon::make($row->date)->format('Y-m-d') === $date;
+        $sameAmount = abs((float) $row->credit - $amount) < 0.005 && (float) $row->debit == 0;
+        $sameComments = $row->comment_en === $comments['comment_en'] && $row->comment_ar === $comments['comment_ar'];
+
+        if ($sameDate && $sameAmount) {
+            if (! $sameComments) {
+                $row->updateQuietly($comments);
+            }
+
+            return;
+        }
+
+        $row->handleFullDateAfterDateEdit($date, 0, $amount, $comments);
+    }
+
+    public function deleteChequeStatement(): void
+    {
+        // A model delete, not a query delete: the statement's deleting hook
+        // is what rebuilds the account's running balance after it.
+        $this->chequeStatement()->first()?->delete();
     }
 
     public function getFinancialInstitutionId(): ?int

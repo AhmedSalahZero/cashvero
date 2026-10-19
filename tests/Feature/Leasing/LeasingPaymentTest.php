@@ -163,6 +163,9 @@ class LeasingPaymentTest extends TestCase
             }
 
             DB::table('leasing_contract_bank_statements')->where('leasing_contract_id', $this->contract->id)->delete();
+            $scheduleIds = DB::table('contract_loan_schedules')->where('leasing_contract_id', $this->contract->id)->pluck('id');
+            DB::table('loan_statements')->whereIn('contract_loan_schedule_settlement_id', DB::table('contract_loan_schedule_settlements')->whereIn('contract_loan_schedule_id', $scheduleIds)->pluck('id'))->delete();
+            DB::table('contract_loan_schedule_settlements')->whereIn('contract_loan_schedule_id', $scheduleIds)->delete();
             DB::table('contract_loan_schedules')->where('leasing_contract_id', $this->contract->id)->delete();
             LeasingContract::where('id', $this->contract->id)->delete();
         }
@@ -448,7 +451,7 @@ class LeasingPaymentTest extends TestCase
 
     /**
      * Repaying an installment must give the principle half of it back to
-     * the contract's room. Driven through the REAL settlement route, so
+     * the contract's room. Driven through the REAL Mark As Paid route, so
      * it also proves the controller actually calls the posting — a test
      * that called handleLeasingContractRepayment() itself would pass
      * even if nothing on the screen ever reached it.
@@ -463,10 +466,8 @@ class LeasingPaymentTest extends TestCase
 
         // Pay the whole installment: 20,000 interest + 80,000 principle.
         $this->actingAs($this->actor)
-            ->post($this->url('contract-loan-schedule-settlements/'.$schedule->id), [
-                'current_account_number' => $this->currentAccount->account_number,
-                'amount' => 100000.0,
-                'date' => now()->format('Y-m-d'),
+            ->post($this->url('contract-loan-schedule/'.$schedule->id.'/mark-as-paid'), [
+                'actual_payment_date' => now()->format('Y-m-d'),
             ])
             ->assertSessionHasNoErrors();
 
@@ -497,10 +498,8 @@ class LeasingPaymentTest extends TestCase
         $schedule = $this->makeInstallment(interest: 20000.0, principle: 80000.0);
 
         $this->actingAs($this->actor)
-            ->post($this->url('contract-loan-schedule-settlements/'.$schedule->id), [
-                'current_account_number' => $this->currentAccount->account_number,
-                'amount' => 100000.0,
-                'date' => now()->format('Y-m-d'),
+            ->post($this->url('contract-loan-schedule/'.$schedule->id.'/mark-as-paid'), [
+                'actual_payment_date' => now()->format('Y-m-d'),
             ])
             ->assertSessionHasNoErrors();
 
@@ -937,8 +936,8 @@ class LeasingPaymentTest extends TestCase
             'money_payment.update',
             'money_payment.delete',
             'leasing_contract.view',
-            // The installment-settlement screen the repayment tests drive.
-            'contract_loan_schedule.create',
+            // The installment Mark As Paid route the repayment tests drive.
+            'contract_loan_schedule.update',
             // The Statements sidebar route to the same statement.
             'report_leasing_contract_statement.view',
         ] as $key) {

@@ -119,6 +119,22 @@ class SalesGatheringTestJob implements ShouldQueue
 		if ($skippedDuplicateCount > 0) {
 			cache::forever(getSkippedDuplicatesCacheKey($this->company_id, $this->modelName), $skippedDuplicateCount);
 		}
+
+		/**
+		 * * شيكات الليزنج بتنزل في كشف حساب البنك اول ما القسط يتسجل (زي شيكات
+		 * * الموردين) .. والـ insert اللي فوق مباشر على الجدول فا مش بيشغّل
+		 * * الـ hooks بتاعة الموديل ، فبننزلها هنا بعد ما الرفع يخلص.
+		 * @see \App\Models\ContractLoanSchedule::syncChequeStatement()
+		 */
+		if ($this->modelName === 'ContractLoanSchedule') {
+			\App\Models\ContractLoanSchedule::query()
+				->where('company_id', $this->company_id)
+				->where('leasing_contract_id', $this->loanId)
+				->with('leasingContract.contractLoanSchedules', 'financialInstitutionAccount')
+				->orderBy('id')
+				->get()
+				->each(fn (\App\Models\ContractLoanSchedule $schedule) => $schedule->syncChequeStatement());
+		}
     }
 	public function ReplaceAllSpecialCharactersInArrayValuesAndAddExtraFieldsToBeStored(array $items,$modelName ,$loanId )
 	{
