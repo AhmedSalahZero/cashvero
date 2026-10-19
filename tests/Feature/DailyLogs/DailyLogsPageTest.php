@@ -41,10 +41,23 @@ class DailyLogsPageTest extends TestCase
         } catch (\Throwable $e) {
             $this->markTestSkipped('Development database not reachable.');
         }
+
+        /**
+         * * الصفحة بتخفي حركات السيستم ، و الداتا اللي على الجهاز ممكن تكون
+         * * كلها من السيستم — فبنسجّل حركة باسم يوزر حقيقي عشان اختبارات
+         * * الفترة الواسعة تشتغل فعلا بدل ما تعدّي فاضية . كله بيترجع في
+         * * tearDown
+         */
+        DB::beginTransaction();
+        $this->logActivity($this->user(), '2031-05-04 10:00:00');
     }
 
     protected function tearDown(): void
     {
+        if (DB::transactionLevel() > 0) {
+            DB::rollBack();
+        }
+
         config(['database.connections.mysql.database' => $this->originalDatabase]);
         DB::purge('mysql');
 
@@ -82,6 +95,21 @@ class DailyLogsPageTest extends TestCase
         $response = (new DailyLogController)($request, $this->company());
 
         return $response->toResponse($request)->getOriginalContent()->getData()['page']['props'];
+    }
+
+    /** * حركة واحدة على أول موديل متسجّل — من غير يوزر يعني من السيستم */
+    private function logActivity(?User $user, string $at, int $subjectId = 900000): void
+    {
+        DB::table('record_activities')->insert([
+            'subject_type' => ActivityRegistry::models()[0],
+            'subject_id' => $subjectId,
+            'company_id' => $this->company()->id,
+            'user_id' => $user?->id,
+            'user_name' => $user?->name,
+            'event' => 'updated',
+            'description' => null,
+            'created_at' => $at,
+        ]);
     }
 
     /* ───────────── الأقسام ───────────── */
@@ -169,6 +197,25 @@ class DailyLogsPageTest extends TestCase
         $this->assertSame([], $props['sections']);
     }
 
+    /**
+     * * حركات السيستم (أوامر مجدولة ، جوبز) مش شغل حد ، فما بتظهرش — حتى
+     * * لو هي الحركة الوحيدة في اليوم
+     */
+    public function test_system_activity_is_not_shown(): void
+    {
+        $this->logActivity(null, '2031-06-06 10:00:00');
+
+        $this->assertSame([], $this->props('?from=2031-06-06&to=2031-06-06')['sections'],
+            'حركة السيستم ظهرت في السجل اليومي');
+
+        $this->logActivity($this->user(), '2031-06-06 11:00:00', 900001);
+
+        $sections = $this->props('?from=2031-06-06&to=2031-06-06')['sections'];
+
+        $this->assertCount(1, $sections);
+        $this->assertSame(1, $sections[0]['total'], 'حركة اليوزر بس هي اللي تتعدّ');
+    }
+
     /* ───────────── سقف الصفوف ───────────── */
 
     /**
@@ -216,7 +263,7 @@ class DailyLogsPageTest extends TestCase
                     'subject_type' => $class,
                     'subject_id' => 900000 + $i,
                     'company_id' => $this->company()->id,
-                    'user_id' => null,
+                    'user_id' => $this->user()->id,
                     'user_name' => 'Cap Test',
                     'event' => 'created',
                     'description' => 'cap test',

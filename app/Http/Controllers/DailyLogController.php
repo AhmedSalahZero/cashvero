@@ -218,6 +218,12 @@ class DailyLogController extends Controller
              * * فبتظهر مع أي شركة بدل ما تختفي خالص
              */
             ->where(fn ($q) => $q->where('company_id', $company->id)->orWhereNull('company_id'))
+            /**
+             * * حركات السيستم (أوامر مجدولة ، جوبز — زي مزامنة سنين نهاية
+             * * الشهر) مش بتظهر هنا : الصفحة بتجاوب على "مين عمل إيه" ، و
+             * * دي مش شغل حد . بتفضل موجودة في تاريخ السجل نفسه
+             */
+            ->whereNotNull('user_id')
             ->when($filters['event'] !== '', fn ($q) => $q->where('event', $filters['event']))
             ->whereDate('created_at', '>=', $filters['from'])
             ->whereDate('created_at', '<=', $filters['to'])
