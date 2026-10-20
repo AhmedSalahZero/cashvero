@@ -208,6 +208,7 @@ class LetterOfCreditIssuanceController
 
         return [
             'id' => $lc->id,
+            'serial' => $lc->getSerial(),
             // حالة المراجعة — شوف App\Traits\Models\IsReviewable
             'review' => $lc->reviewPayload(),
             'lc_type' => $lc->getLcType(),
@@ -348,22 +349,33 @@ class LetterOfCreditIssuanceController
             $startDate = $filterDates[$type]['startDate'];
             $endDate = $filterDates[$type]['endDate'];
 
+            $searchFieldName = $request->get('field');
+            $value = $request->get('value');
+
+            /**
+             * * الحقل بييجي من الريكويست و بيتحط كاسم عمود في الكويري ،
+             * * فلازم يبقى واحد من اللي في الدروب داون بس
+             */
+            $isSearching = $type === $activeLcType
+                && in_array($searchFieldName, ['serial', 'transaction_name', 'lc_code'], true)
+                && filled($value);
+
             $query = $company->letterOfCreditIssuances()
                 ->with(['financialInstitutionBank', 'beneficiary', 'expenses'])
-                ->where('lc_type', $type)
-                ->whereDate('issuance_date', '>=', $startDate)
-                ->whereDate('issuance_date', '<=', $endDate);
+                ->where('lc_type', $type);
 
-            // Search only ever applies to whichever tab is actually
-            // active — matches the original's own guard exactly
-            // (searchField is one of only 2 real columns offered by
-            // Index.vue's dropdown: transaction_name, lc_code).
-            if ($type === $activeLcType) {
-                $searchFieldName = $request->get('field');
-                $value = $request->get('value');
-                if ($request->has('value') && $searchFieldName) {
-                    $query->where($searchFieldName, 'like', '%'.$value.'%');
-                }
+            // البحث بالرقم المسلسل بيدوّر في كل التواريخ — الرقم نفسه فيه
+            // السنة ، و نافذة الـ ١٨ شهر كانت هتخفي الحركات الأقدم
+            if (! ($isSearching && $searchFieldName === 'serial')) {
+                $query->whereDate('issuance_date', '>=', $startDate)
+                    ->whereDate('issuance_date', '<=', $endDate);
+            }
+
+            // Search only ever applies to whichever tab is actually active.
+            if ($isSearching) {
+                $searchFieldName === 'serial'
+                    ? $query->serialLike($value)
+                    : $query->where($searchFieldName, 'like', '%'.$value.'%');
             }
 
             $paginator = $query

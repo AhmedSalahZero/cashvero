@@ -113,6 +113,7 @@ class InternalMoneyTransferController
         $mapRow = function (InternalMoneyTransfer $model) use ($company) {
             return [
                 'id' => $model->id,
+                'serial' => $model->getSerial(),
                 // حالة المراجعة — شوف App\Traits\Models\IsReviewable
                 'review' => $model->reviewPayload(),
                 'transfer_date_formatted' => $model->getTransferDateFormatted(),
@@ -166,22 +167,22 @@ class InternalMoneyTransferController
             InternalMoneyTransfer::BANK_TO_BANK => [
                 'relation' => 'bankToBankInternalMoneyTransfers',
                 'page' => 'bankToBankInternalMoneyTransfersPage',
-                'searchable' => ['from_account_number', 'to_account_number'],
+                'searchable' => ['serial', 'from_account_number', 'to_account_number'],
             ],
             InternalMoneyTransfer::SAFE_TO_BANK => [
                 'relation' => 'safeToBankInternalMoneyTransfers',
                 'page' => 'safeToBankInternalMoneyTransfersPage',
-                'searchable' => ['to_account_number'],
+                'searchable' => ['serial', 'to_account_number'],
             ],
             InternalMoneyTransfer::BANK_TO_SAFE => [
                 'relation' => 'bankToSafeInternalMoneyTransfers',
                 'page' => 'bankToSafeInternalMoneyTransfersPage',
-                'searchable' => ['from_account_number'],
+                'searchable' => ['serial', 'from_account_number'],
             ],
             InternalMoneyTransfer::SAFE_TO_SAFE => [
                 'relation' => 'safeToSafeInternalMoneyTransfers',
                 'page' => 'safeToSafeInternalMoneyTransfersPage',
-                'searchable' => [],
+                'searchable' => ['serial'],
             ],
         ];
 
@@ -250,6 +251,7 @@ class InternalMoneyTransferController
 			'company' => ['id' => $company->id, 'name' => $company->getName()],
 			'record' => [
 				'id' => $internalMoneyTransfer->id,
+				'serial' => $internalMoneyTransfer->getSerial(),
 				'type' => $this->allTypes()[$type] ?? $type,
 				'date' => $internalMoneyTransfer->getTransferDateFormatted(),
 				'amount' => $internalMoneyTransfer->getAmountFormatted(),

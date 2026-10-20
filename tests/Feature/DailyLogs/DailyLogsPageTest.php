@@ -4,6 +4,7 @@ namespace Tests\Feature\DailyLogs;
 
 use App\Http\Controllers\DailyLogController;
 use App\Models\Company;
+use App\Models\MoneyReceived;
 use Carbon\Carbon;
 use App\Models\RecordActivity;
 use App\Models\User;
@@ -615,6 +616,98 @@ class DailyLogsPageTest extends TestCase
         $this->assertSame([], $missing, 'نصوص الصفحة دي من غير ترجمة: '.implode(', ', $missing));
     }
 
-    /* ───────────── مساعدات ───────────── */
+    /* ───────────── الرقم المسلسل ───────────── */
 
+    /** يوم مالوش داتا حقيقية ، فالأقسام فيها اللي الاختبار سجّله بس */
+    private const SERIAL_DAY = '?from=2031-06-01&to=2031-06-01';
+
+    private function numberedMoneyReceived(): MoneyReceived
+    {
+        $row = MoneyReceived::where('company_id', $this->company()->id)->whereNotNull('serial')->first();
+
+        if (! $row) {
+            $this->markTestSkipped('No numbered money received on file for this company.');
+        }
+
+        return $row;
+    }
+
+    private function logMoneyReceived(int $subjectId, ?string $storedSerial, string $event = 'updated'): void
+    {
+        DB::table('record_activities')->insert([
+            'subject_type' => MoneyReceived::class,
+            'subject_id' => $subjectId,
+            'subject_serial' => $storedSerial,
+            'company_id' => $this->company()->id,
+            'user_id' => $this->user()->id,
+            'user_name' => $this->user()->name,
+            'event' => $event,
+            'created_at' => '2031-06-01 10:00:00',
+        ]);
+    }
+
+    /** @return list<string> عمود "السجل" لكل حركات الماني ريسيد في الصفحة */
+    private function moneyReceivedRecords(string $query): array
+    {
+        $section = collect($this->props($query)['sections'])->firstWhere('key', 'money_received');
+
+        return collect($section['entries'] ?? [])->pluck('record')->all();
+    }
+
+    /** * الحركة بتتعرض برقمها المسلسل الحالي مش بالـ id */
+    public function test_a_record_is_named_by_its_serial(): void
+    {
+        $row = $this->numberedMoneyReceived();
+        $this->logMoneyReceived($row->id, null);
+
+        $this->assertContains(
+            ActivityRegistry::labelFor(MoneyReceived::class).' '.$row->serial,
+            $this->moneyReceivedRecords(self::SERIAL_DAY)
+        );
+    }
+
+    /** * الحركة المحذوفة صفها راح ، فالرقم بييجي من اللي اتحفظ مع الحدث */
+    public function test_a_deleted_record_keeps_its_serial(): void
+    {
+        $this->logMoneyReceived(999999901, 'MR/CIS/2031/06/00077', 'deleted');
+
+        $this->assertContains(
+            ActivityRegistry::labelFor(MoneyReceived::class).' MR/CIS/2031/06/00077',
+            $this->moneyReceivedRecords(self::SERIAL_DAY)
+        );
+    }
+
+    /** * حدث قديم لحركة اتحذفت قبل الأرقام المسلسلة بيفضل #id */
+    public function test_a_record_with_no_serial_falls_back_to_its_id(): void
+    {
+        $this->logMoneyReceived(999999902, null, 'deleted');
+
+        $this->assertContains(
+            ActivityRegistry::labelFor(MoneyReceived::class).' #999999902',
+            $this->moneyReceivedRecords(self::SERIAL_DAY)
+        );
+    }
+
+    /** * البحث بيلاقي الرقم الحالي على الحركة و الرقم المحفوظ مع الحدث */
+    public function test_the_search_finds_a_record_by_its_serial(): void
+    {
+        $row = $this->numberedMoneyReceived();
+        $this->logMoneyReceived($row->id, null);
+        $this->logMoneyReceived(999999903, 'MR/CIS/2031/06/00088', 'deleted');
+
+        $label = ActivityRegistry::labelFor(MoneyReceived::class);
+
+        $this->assertSame([$label.' '.$row->serial], $this->moneyReceivedRecords(self::SERIAL_DAY.'&search='.urlencode($row->serial)));
+        $this->assertSame([$label.' MR/CIS/2031/06/00088'], $this->moneyReceivedRecords(self::SERIAL_DAY.'&search='.urlencode('2031/06/00088')));
+    }
+
+    /** * و الحدث الجديد بيتسجّل و معاه الرقم */
+    public function test_new_activity_stores_the_serial(): void
+    {
+        $row = $this->numberedMoneyReceived();
+        \App\Support\Activity\ActivityLogger::custom($row, 'test entry');
+
+        $this->assertSame($row->serial, RecordActivity::where('subject_type', MoneyReceived::class)
+            ->where('subject_id', $row->id)->latest('id')->value('subject_serial'));
+    }
 }

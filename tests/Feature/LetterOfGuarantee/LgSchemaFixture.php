@@ -21,6 +21,7 @@ trait LgSchemaFixture
     /** @var list<string> */
     private array $lgTables = [
         'record_activities',
+        'serial_sequences',
         'temp_deleted_statements',
         'lg_renewal_date_histories',
         'lg_issuance_advanced_payment_histories',
@@ -96,7 +97,10 @@ trait LgSchemaFixture
             $table->unsignedBigInteger('commission_fees_journal_entry_id')->nullable();
             $table->unsignedBigInteger('issuance_fees_journal_entry_id')->nullable();
             $table->unsignedBigInteger('cancel_journal_entry_id')->nullable();
+            // الرقم المسلسل — شوف App\Support\Serials\SerialRegistry
+            $table->string('serial', 32)->nullable();
             $table->timestamps();
+            $table->unique(['company_id', 'serial']);
         });
 
         Schema::create('financial_institution_accounts', function ($table) {
@@ -213,6 +217,7 @@ trait LgSchemaFixture
             $table->bigIncrements('id');
             $table->string('subject_type')->nullable();
             $table->unsignedBigInteger('subject_id')->nullable();
+            $table->string('subject_serial', 32)->nullable();
             $table->unsignedBigInteger('company_id')->nullable();
             $table->unsignedBigInteger('user_id')->nullable();
             $table->string('user_name')->nullable();
@@ -220,6 +225,20 @@ trait LgSchemaFixture
             $table->text('description')->nullable();
             $table->longText('field_changes')->nullable();
             $table->timestamp('created_at')->nullable();
+        });
+
+        /**
+         * Every new issuance takes a serial number (LG/FIN/2026/10/00001)
+         * from here. @see \App\Support\Serials\SerialAssigner::next()
+         */
+        Schema::create('serial_sequences', function ($table) {
+            $table->bigIncrements('id');
+            $table->unsignedBigInteger('company_id');
+            $table->string('prefix', 16);
+            $table->unsignedSmallInteger('year');
+            $table->unsignedInteger('last_number')->default(0);
+            $table->timestamps();
+            $table->unique(['company_id', 'prefix', 'year']);
         });
 
         Schema::create('temp_deleted_statements', function ($table) {

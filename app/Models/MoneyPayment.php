@@ -25,6 +25,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use App\Traits\Models\HasSerial;
 use App\Traits\Models\IsReviewable;
 
 /**
@@ -148,7 +149,7 @@ use App\Traits\Models\IsReviewable;
  */
 class MoneyPayment extends Model implements IHaveCreditOverdraftStatement, IHaveMediumTermLoanCreditStatement, IHaveLeasingContractCreditStatement
 {
-    use IsReviewable;
+    use IsReviewable, HasSerial;
 
     protected $with = [
         // 'payableCheque'

@@ -102,6 +102,7 @@ function performDelete() {
                 <table class="min-w-full text-sm cvr-sticky-actions">
                     <thead>
                         <tr class="cvr-table-head">
+                            <th class="px-3 py-2 text-start">{{ $t('Serial') }}</th>
                             <th class="px-3 py-2 text-start">{{ $t('Payment Date') }}</th>
                             <th class="px-3 py-2 text-start">{{ $t('Type') }}</th>
                             <th class="px-3 py-2 text-start">{{ $t('Supplier Name') }}</th>
@@ -113,6 +114,7 @@ function performDelete() {
                     </thead>
                     <tbody>
                         <tr v-for="row in rows" :key="row.id" class="cvr-table-row">
+                            <td class="px-3 py-2 whitespace-nowrap">{{ row.serial || '—' }}</td>
                             <td class="px-3 py-2 whitespace-nowrap">{{ row.payment_date }}</td>
                             <td class="px-3 py-2">{{ row.type }}</td>
                             <td class="px-3 py-2">{{ row.supplier_name || '-' }}</td>

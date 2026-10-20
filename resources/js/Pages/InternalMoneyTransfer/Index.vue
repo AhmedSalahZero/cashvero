@@ -191,7 +191,7 @@ const odooErrorTarget = ref(null);
                     <!-- Filters -->
                     <div class="flex flex-wrap items-end gap-3 mb-4">
                         <div>
-                            <label class="cvr-form-label">{{ $t('Search (Account Number)') }}</label>
+                            <label class="cvr-form-label">{{ $t('Search (Serial / Account Number)') }}</label>
                             <input v-model="searchValue" type="text" :placeholder="$t('Search...')" class="cvr-input px-3 py-2 rounded" />
                         </div>
                         <div>
@@ -217,6 +217,7 @@ const odooErrorTarget = ref(null);
                             <thead class="cvr-table-head">
                                 <tr>
                                     <th class="px-3 py-3 text-start">#</th>
+                                    <th class="px-3 py-3 text-start">{{ $t('Serial') }}</th>
                                     <th class="px-3 py-3 text-start">{{ $t('Transfer Date') }}</th>
                                     <th class="px-3 py-3 text-start">{{ $t('Amount') }}</th>
                                     <th class="px-3 py-3 text-start">{{ $t('Currency') }}</th>
@@ -229,6 +230,7 @@ const odooErrorTarget = ref(null);
                             <tbody>
                                 <tr v-for="(row, index) in tabs[type].rows.data" :key="row.id" class="cvr-table-row">
                                     <td class="px-3 py-3 cvr-text-muted">{{ tabs[type].rows.from + index }}</td>
+                                    <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.serial || '—' }}</td>
                                     <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.transfer_date_formatted }}</td>
                                     <td class="px-3 py-3 cvr-num">{{ row.amount_formatted }}</td>
                                     <td class="px-3 py-3 cvr-text-primary">{{ row.currency }}</td>
@@ -268,7 +270,7 @@ const odooErrorTarget = ref(null);
                                     </td>
                                 </tr>
                                 <tr v-if="tabs[type].rows.data.length === 0">
-                                    <td :colspan="5 + columnsFor(type).length" class="px-4 py-8 text-center cvr-text-muted">
+                                    <td :colspan="6 + columnsFor(type).length" class="px-4 py-8 text-center cvr-text-muted">
                                         {{ $t('No') }} {{ label.toLowerCase() }} {{ $t('transfers found.') }}
                                     </td>
                                 </tr>

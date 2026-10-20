@@ -187,6 +187,7 @@ function destroyRow() {
                     <thead class="cvr-table-head">
                         <tr>
                             <th class="px-4 py-3 text-start">#</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Serial') }}</th>
                             <th class="px-4 py-3 text-start">{{ $t('Factoring Date') }}</th>
                             <th class="px-4 py-3 text-start">{{ $t('Factoring Company') }}</th>
                             <th class="px-4 py-3 text-start">{{ $t('Customer') }}</th>
@@ -203,6 +204,7 @@ function destroyRow() {
                     <tbody>
                         <tr v-for="(row, index) in rows" :key="row.id" class="cvr-table-row">
                             <td class="px-4 py-3">{{ rowOffset + index + 1 }}</td>
+                            <td class="px-4 py-3 whitespace-nowrap cvr-text-secondary">{{ row.serial || '—' }}</td>
                             <td class="px-4 py-3 whitespace-nowrap">{{ row.factoring_date_formatted }}</td>
                             <td class="px-4 py-3">{{ row.factoring_company_name }}</td>
                             <td class="px-4 py-3">{{ row.customer_name }}</td>
@@ -242,7 +244,7 @@ function destroyRow() {
                             </td>
                         </tr>
                         <tr v-if="rows.length === 0">
-                            <td colspan="12" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No records found.') }}</td>
+                            <td colspan="13" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No records found.') }}</td>
                         </tr>
                     </tbody>
                 </table>

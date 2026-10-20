@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Traits\Models\HasUserComment;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Traits\Models\HasSerial;
 use App\Traits\Models\IsReviewable;
 
 /**
@@ -24,7 +25,7 @@ use App\Traits\Models\IsReviewable;
  */
 class MultipleCashExpense extends Model
 {
-    use IsReviewable;
+    use IsReviewable, HasSerial;
 
     use HasUserComment;
 

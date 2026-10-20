@@ -24,6 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use App\Traits\Models\HasSerial;
 use App\Traits\Models\IsReviewable;
 
 /**
@@ -148,7 +149,7 @@ use App\Traits\Models\IsReviewable;
  */
 class MoneyReceived extends Model implements IHasDebitCurrentAccountStatement
 {
-    use IsReviewable;
+    use IsReviewable, HasSerial;
 
 	use HasCashInSafe,HasDebitCurrentAccountStatement,HasDebitOverdraftStatement,IsMoney,HasForeignExchangeGainOrLoss ,HasDebitStatements,HasPartnerStatement,HasUserComment,HasNonCustomerOrSupplier;
 

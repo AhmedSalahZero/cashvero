@@ -128,6 +128,7 @@ class FacilityContractDateChangeTest extends TestCase
             $table->bigIncrements('id');
             $table->string('subject_type')->nullable();
             $table->unsignedBigInteger('subject_id')->nullable();
+            $table->string('subject_serial', 32)->nullable();
             $table->unsignedBigInteger('company_id')->nullable();
             $table->unsignedBigInteger('user_id')->nullable();
             $table->string('user_name')->nullable();

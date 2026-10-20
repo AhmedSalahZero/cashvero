@@ -19,6 +19,7 @@ import { mapAccountNumberOptions, accountNumberOption } from '@/composables/useA
 const props = defineProps({
     canReview: { type: Boolean, default: false },
     reviewFilter: { type: String, default: '' },
+    serialFilter: { type: String, default: '' },
     /* Link to this screen's written guide — see App\Support\Instructions\PageInstructions. */
     instructionsUrl: String,
     company: Object,
@@ -32,12 +33,13 @@ const props = defineProps({
     urls: Object,
 });
 
-/* فلتر حالة المراجعة . الصفحة دي مالهاش فلاتر تانية ، فالتغيير بيروح
-   للسيرفر على طول — الفلترة نفسها بتتم على آخر تسوية لكل اعتماد */
+/* فلتر حالة المراجعة و البحث بالرقم المسلسل . التغيير بيروح للسيرفر
+   على طول — الفلترة نفسها بتتم على تسويات كل اعتماد */
 const reviewState = ref(props.reviewFilter || '');
+const serialSearch = ref(props.serialFilter || '');
 
 function applyReviewFilter() {
-    router.get(window.location.pathname, { review: reviewState.value || undefined },
+    router.get(window.location.pathname, { review: reviewState.value || undefined, serial: serialSearch.value || undefined },
         { preserveState: true, preserveScroll: true, replace: true });
 }
 
@@ -163,6 +165,10 @@ function confirmReset() {
                         <option value="not_reviewed">{{ $t('Not reviewed') }}</option>
                     </select>
                 </div>
+                <div>
+                    <label class="cvr-form-label">{{ $t('Serial') }}</label>
+                    <input v-model="serialSearch" @keyup.enter="applyReviewFilter" @change="applyReviewFilter" type="text" :placeholder="$t('Search...')" class="cvr-input px-3 py-2 rounded text-sm" />
+                </div>
             </div>
 
             <div class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto">
@@ -170,6 +176,7 @@ function confirmReset() {
                     <thead class="cvr-table-head">
                         <tr>
                             <th class="px-4 py-3 text-start">#</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Serial') }}</th>
                             <th class="px-4 py-3 text-start">{{ $t('Transaction') }}</th>
                             <th class="px-4 py-3 text-start">{{ $t('Supplier') }}</th>
                             <th class="px-4 py-3 text-start">{{ $t('LC Code') }}</th>
@@ -184,6 +191,7 @@ function confirmReset() {
                     <tbody>
                         <tr v-for="(row, index) in rows" :key="row.letter_of_credit_issuance_id" class="cvr-table-row">
                             <td class="px-4 py-3">{{ (pagination.current_page - 1) * 50 + index + 1 }}</td>
+                            <td class="px-4 py-3 whitespace-nowrap cvr-text-secondary">{{ row.serial || '—' }}</td>
                             <td class="px-4 py-3">{{ row.transaction_name }}</td>
                             <td class="px-4 py-3">{{ row.supplier_name }}</td>
                             <td class="px-4 py-3">{{ row.lc_code }}</td>
@@ -214,7 +222,7 @@ function confirmReset() {
                             </td>
                         </tr>
                         <tr v-if="rows.length === 0">
-                            <td colspan="10" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No bank-financed LC has been paid to a supplier yet.') }}</td>
+                            <td colspan="11" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No bank-financed LC has been paid to a supplier yet.') }}</td>
                         </tr>
                     </tbody>
                 </table>

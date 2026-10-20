@@ -4,6 +4,8 @@ namespace App\Support\Activity;
 
 use App\Models\RecordActivity;
 use App\Models\User;
+use App\Support\Serials\SerialAssigner;
+use App\Support\Serials\SerialRegistry;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -117,6 +119,12 @@ class ActivityLogger
         return RecordActivity::create([
             'subject_type' => $subject::class,
             'subject_id' => $subject->getKey(),
+            /**
+             * Snapshot, like user_name: the Daily Log names a record by its
+             * serial (MR/CIS/2026/10/00001), and once a record is deleted
+             * its row is gone — this is the only place the number survives.
+             */
+            'subject_serial' => SerialRegistry::tracks($subject::class) ? $subject->getAttribute('serial') : null,
             'company_id' => self::companyId($subject),
             'user_id' => $user?->id,
             'user_name' => $user?->name,
@@ -170,6 +178,17 @@ class ActivityLogger
      * @return ?T
      */
     public static function asUpdate(Model $old, callable $callback): mixed
+    {
+        /**
+         * The replacement row also keeps the old row's serial number
+         * (MR/CIS/2026/10/00001) — otherwise every edit would burn a new
+         * number. Wrapped around everything so it holds even when
+         * logging is muted. See SerialAssigner::preserving().
+         */
+        return SerialAssigner::preserving($old, fn () => self::recordAsUpdate($old, $callback));
+    }
+
+    private static function recordAsUpdate(Model $old, callable $callback): mixed
     {
         if (self::isMuted() || ! ActivityRegistry::tracks($old)) {
             return $callback();

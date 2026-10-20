@@ -11,6 +11,7 @@ use App\Support\ShareholderAccounts\AccountNumberLabel;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Traits\Models\HasSerial;
 use App\Traits\Models\IsReviewable;
 
 /**
@@ -117,7 +118,7 @@ use App\Traits\Models\IsReviewable;
  */
 class BuyOrSellCurrency extends Model
 {
-    use IsReviewable;
+    use IsReviewable, HasSerial;
 
 	/**
 	 * * الوصف الافتراضي في IsReviewable ما بيلاقيش حاجة هنا : الحركة دي
@@ -126,7 +127,7 @@ class BuyOrSellCurrency extends Model
 	 */
 	public function reviewDescriptor(): string
 	{
-		$parts = [__('Buy / Sell Currency').' #'.$this->getKey()];
+		$parts = [__('Buy / Sell Currency').' '.$this->reviewRecordNumber()];
 
 		if ($sell = $this->getAmountToSellFormatted()) {
 			$parts[] = __('Sell').' '.$sell.' '.(string) $this->getCurrencyToSellFormatted();

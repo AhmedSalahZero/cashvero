@@ -294,16 +294,28 @@ class MoneyPaymentController
             ];
         }
 
+        $isSerialSearch = $request->get('field') === 'serial' && filled($request->get('value'));
+
         $tabsOut = [];
         foreach ($tabs as $type => $definition) {
             $startDate = $filterDates[$type]['startDate'] ?? null;
             $endDate = $filterDates[$type]['endDate'] ?? null;
+
+            // البحث بالرقم المسلسل بيدوّر في كل التواريخ — الرقم نفسه فيه
+            // السنة ، و نافذة الـ ١٨ شهر كانت هتخفي الحركات الأقدم
+            if ($isSerialSearch && $activeTab === $type) {
+                [$startDate, $endDate] = ['1900-01-01', '2999-12-31'];
+            }
 
             $query = $company->{$definition['query']}($startDate, $endDate, $activeTab);
 
             // الفلتر لازم يتطبّق قبل العدّ و الجمع ، و إلا الإجماليات تحت
             // الجدول بتقول رقم و الصفوف بتقول رقم تاني
             $query = $query->reviewState($request->get('review'));
+
+            if ($isSerialSearch && $activeTab === $type) {
+                $query = $query->serialLike($request->get('value'));
+            }
 
             $totalCount = (clone $query)->count();
             $totalAmount = (clone $query)->sum('paid_amount');
@@ -327,7 +339,7 @@ class MoneyPaymentController
 
             $tabsOut[$type] = [
                 'label' => $definition['label'],
-                'searchFields' => $definition['searchFields'],
+                'searchFields' => ['serial' => __('Serial')] + $definition['searchFields'],
                 'totalCount' => $totalCount,
                 'totalAmount' => round($totalAmount, 2),
                 'paginator' => $paginatorArray,
@@ -383,6 +395,7 @@ class MoneyPaymentController
     {
         $common = [
             'id' => $moneyPayment->id,
+            'serial' => $moneyPayment->getSerial(),
             // حالة المراجعة — شوف App\Traits\Models\IsReviewable
             'review' => $moneyPayment->reviewPayload(),
             'type_formatted' => $moneyPayment->getMoneyTypeFormatted(),
@@ -498,6 +511,7 @@ class MoneyPaymentController
             'company' => ['id' => $company->id, 'name' => $company->getName()],
             'record' => [
                 'id' => $moneyPayment->id,
+                'serial' => $moneyPayment->getSerial(),
                 'type' => $moneyPayment->getMoneyTypeFormatted(),
                 'partner_name' => $moneyPayment->getSupplierName(),
                 'date' => $moneyPayment->getDeliveryDateFormatted(),

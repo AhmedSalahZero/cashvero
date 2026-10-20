@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
+use App\Traits\Models\HasSerial;
 use App\Traits\Models\IsReviewable;
 
 
@@ -105,7 +106,7 @@ use App\Traits\Models\IsReviewable;
  */
 class CashExpense extends Model  implements IHaveCreditOverdraftStatement
 {
-    use IsReviewable;
+    use IsReviewable, HasSerial;
 
 	
 	use IsMoneyOut ,HasForeignExchangeGainOrLoss,HasCreditStatements,HasUserComment,HasNonCustomerOrSupplier,HasCompany;

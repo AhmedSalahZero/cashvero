@@ -284,6 +284,7 @@ const commentTarget = ref(null);
                 <div>
                     <label class="cvr-form-label">{{ $t('Search By') }}</label>
                     <select v-model="searchField" class="cvr-input px-3 py-2 rounded">
+                        <option value="serial">{{ $t('Serial') }}</option>
                         <option value="transaction_name">{{ $t('Transaction Name') }}</option>
                         <option value="lc_code">{{ $t('LC Code') }}</option>
                     </select>
@@ -307,6 +308,7 @@ const commentTarget = ref(null);
                     <thead class="cvr-table-head">
                         <tr>
                             <th class="px-3 py-3 text-start">#</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Serial') }}</th>
                             <th class="px-3 py-3 text-start">{{ $t('Transaction Name') }}</th>
                             <th class="px-3 py-3 text-start">{{ $t('Beneficiary') }}</th>
                             <th class="px-3 py-3 text-start">{{ $t('Source') }}</th>
@@ -322,6 +324,7 @@ const commentTarget = ref(null);
                     <tbody>
                         <tr v-for="(row, index) in currentTab.rows.data" :key="row.id" class="cvr-table-row">
                             <td class="px-3 py-3 cvr-text-secondary">{{ index + 1 }}</td>
+                            <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.serial || '—' }}</td>
                             <td class="px-3 py-3 cvr-text-primary max-w-[12rem] break-words">{{ row.transaction_name }}</td>
                             <td class="px-3 py-3 cvr-text-secondary max-w-[12rem] break-words">{{ row.beneficiary_name }}</td>
                             <td class="px-3 py-3 cvr-text-secondary">{{ row.source_formatted }}</td>
@@ -360,7 +363,7 @@ const commentTarget = ref(null);
                             </td>
                         </tr>
                         <tr v-if="currentTab.rows.data.length === 0">
-                            <td colspan="11" class="px-4 py-8 text-center cvr-text-muted">
+                            <td colspan="12" class="px-4 py-8 text-center cvr-text-muted">
                                 {{ $t('No LC Issuance records found.') }}
                             </td>
                         </tr>

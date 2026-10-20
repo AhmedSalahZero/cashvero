@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
+use App\Traits\Models\HasSerial;
 use App\Traits\Models\IsReviewable;
 
 /**
@@ -182,7 +183,7 @@ use App\Traits\Models\IsReviewable;
  */
 class LetterOfCreditIssuance extends Model
 {
-    use IsReviewable;
+    use IsReviewable, HasSerial;
 
 	use HasBasicStoreRequest,HasCompany,HasForeignExchangeGainOrLoss,HasCommissionStatements,HasLetterOfCreditStatements,HasLetterOfCreditCashCoverStatements,HasCurrentAccountCreditBankStatement,HasDeleteButTriggerChangeOnLastElement,HasUserComment;
 	const LC_FACILITY = 'lc-facility';

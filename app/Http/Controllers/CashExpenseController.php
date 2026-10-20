@@ -92,6 +92,7 @@ class CashExpenseController
 		$mapCommon = function (CashExpense $model) use ($company) {
 			return [
 				'id' => $model->id,
+				'serial' => $model->getSerial(),
     // حالة المراجعة — شوف App\Traits\Models\IsReviewable
     'review' => $model->reviewPayload(),
 				'expense_category_name' => $model->getExpenseCategoryName(),
@@ -156,9 +157,17 @@ class CashExpenseController
 				CashExpense::PAYABLE_CHEQUE => 'getCashExpensePayableCheques',
 			];
 
+			/**
+			 * * البحث بالرقم المسلسل بيدوّر في كل التواريخ — الرقم نفسه فيه
+			 * * السنة ، و نافذة الـ ١٨ شهر كانت هتخفي الحركات الأقدم
+			 */
+			$isSerialSearch = $activeTab === $type && $request->get('field') === 'serial' && filled($request->get('value'));
+			[$queryStartDate, $queryEndDate] = $isSerialSearch ? ['1900-01-01', '2999-12-31'] : [$startDate, $endDate];
+
 			$queryMethod = $queryMethodByType[$type];
-			$paginator = $company->{$queryMethod}($startDate, $endDate, $activeTab)
+			$paginator = $company->{$queryMethod}($queryStartDate, $queryEndDate, $activeTab)
 				->reviewState($request->get('review'))
+				->when($isSerialSearch, fn ($query) => $query->serialLike($request->get('value')))
 				->paginate($paginationPerPage, ['*'], $pageParamByType[$type])
 				->withQueryString();
 
@@ -261,6 +270,7 @@ class CashExpenseController
 			'company' => ['id' => $company->id, 'name' => $company->getName()],
 			'record' => [
 				'id' => $cashExpense->id,
+				'serial' => $cashExpense->getSerial(),
 				'type' => camelizeWithSpace($cashExpense->getType()),
 				'category' => $cashExpense->getExpenseCategoryName(),
 				'expense_name' => $cashExpense->getExpenseName(),

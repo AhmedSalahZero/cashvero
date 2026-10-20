@@ -8,8 +8,11 @@ use App\Models\User;
 use App\Support\Activity\ActivityRegistry;
 use App\Support\Permissions\PermissionRegistry;
 use App\Support\Permissions\PermissionResolver;
+use App\Support\Serials\SerialRegistry;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 /**
@@ -95,6 +98,9 @@ class DailyLogController extends Controller
                 continue;
             }
 
+            $activities = $query->limit(self::ROWS_PER_SECTION)->get();
+            $serials = $this->currentSerials($activities);
+
             $sections[] = [
                 'key' => $key,
                 'label' => $tab['label'],
@@ -105,10 +111,10 @@ class DailyLogController extends Controller
                  */
                 'shown' => min($total, self::ROWS_PER_SECTION),
                 'hasMore' => $total > self::ROWS_PER_SECTION,
-                'entries' => $query->limit(self::ROWS_PER_SECTION)->get()
+                'entries' => $activities
                     ->map(fn (RecordActivity $activity) => array_merge(
                         $activity->toTimelineArray(),
-                        ['record' => ActivityRegistry::labelFor($activity->subject_type).' #'.$activity->subject_id]
+                        ['record' => ActivityRegistry::labelFor($activity->subject_type).' '.$this->recordNumber($activity, $serials)]
                     ))->values(),
             ];
         }
@@ -126,6 +132,44 @@ class DailyLogController extends Controller
             'rowsPerSection' => self::ROWS_PER_SECTION,
             'indexUrl' => route('daily-logs.index', ['company' => $company->id]),
         ]);
+    }
+
+    /**
+     * * رقم الحركة في عمود "السجل" : الرقم المسلسل الحالي لو الحركة لسه
+     * * موجودة (ممكن يكون اتغيّر لو النوع اتعدّل) ، و إلا الرقم اللي
+     * * اتحفظ مع الحدث (الحركة اتحذفت) ، و إلا #id للحركات اللي مالهاش
+     * * رقم مسلسل أصلا
+     *
+     * @param  array<string, array<int|string, string|null>>  $serials
+     */
+    private function recordNumber(RecordActivity $activity, array $serials): string
+    {
+        return ($serials[$activity->subject_type][$activity->subject_id] ?? null)
+            ?: ($activity->subject_serial ?: '#'.$activity->subject_id);
+    }
+
+    /**
+     * * الأرقام المسلسلة الحالية لحركات القسم — استعلام واحد لكل موديل
+     * * مش واحد لكل صف
+     *
+     * @return array<string, array<int|string, string|null>>  class => [id => serial]
+     */
+    private function currentSerials(Collection $activities): array
+    {
+        $serials = [];
+
+        foreach ($activities->groupBy('subject_type') as $class => $rows) {
+            if (! SerialRegistry::tracks($class)) {
+                continue;
+            }
+
+            $serials[$class] = DB::table((new $class)->getTable())
+                ->whereIn('id', $rows->pluck('subject_id')->unique()->values())
+                ->pluck('serial', 'id')
+                ->all();
+        }
+
+        return $serials;
     }
 
     /**
@@ -232,14 +276,26 @@ class DailyLogController extends Controller
              * * بالاسم ، فالمستخدم اللي اتغيّر اسمه بيفضل شغله كله تحته
              */
             ->when($filters['user'] !== '', fn ($q) => $q->where('user_id', $filters['user']))
-            ->when($filters['search'] !== '', function ($q) use ($filters) {
+            ->when($filters['search'] !== '', function ($q) use ($filters, $classes, $company) {
                 $term = $filters['search'];
 
-                $q->where(function ($inner) use ($term) {
+                $q->where(function ($inner) use ($term, $classes, $company) {
                     $inner->where('user_name', 'like', "%{$term}%")
                         ->orWhere('description', 'like', "%{$term}%")
                         ->orWhere('subject_id', $term)
+                        // الرقم المسلسل : المحفوظ مع الحدث (حركة اتحذفت) ...
+                        ->orWhere('subject_serial', 'like', "%{$term}%")
                         ->orWhereIn('user_id', User::where('name', 'like', "%{$term}%")->pluck('id'));
+
+                    // ... و الحالي على الحركة نفسها (لو اتغيّر بتعديل النوع)
+                    foreach (array_filter($classes, [SerialRegistry::class, 'tracks']) as $class) {
+                        $inner->orWhere(fn ($bySerial) => $bySerial
+                            ->where('subject_type', $class)
+                            ->whereIn('subject_id', DB::table((new $class)->getTable())
+                                ->where('company_id', $company->id)
+                                ->where('serial', 'like', "%{$term}%")
+                                ->select('id')));
+                    }
                 });
             })
             ->orderByDesc('id');

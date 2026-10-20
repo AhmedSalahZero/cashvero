@@ -253,6 +253,7 @@ const odooErrorTarget = ref(null);
                 <div>
                     <label class="cvr-form-label">{{ $t('Search By') }}</label>
                     <select v-model="searchField" class="cvr-input px-3 py-2 rounded">
+                        <option value="serial">{{ $t('Serial') }}</option>
                         <option value="transaction_name">{{ $t('Transaction Name') }}</option>
                         <option value="lg_code">{{ $t('LG Code') }}</option>
                         <!-- The list's own "Beneficiary" column — searched by the
@@ -280,6 +281,7 @@ const odooErrorTarget = ref(null);
                     <thead class="cvr-table-head">
                         <tr>
                             <th class="px-3 py-3 text-start">#</th>
+                            <th class="px-3 py-3 text-start">{{ $t('Serial') }}</th>
                             <th class="px-3 py-3 text-start">{{ $t('Transaction Name') }}</th>
                             <th class="px-3 py-3 text-start">{{ $t('Beneficiary') }}</th>
                             <th class="px-3 py-3 text-start">{{ $t('Source') }}</th>
@@ -297,6 +299,7 @@ const odooErrorTarget = ref(null);
                     <tbody>
                         <tr v-for="(row, index) in currentTab.rows" :key="row.id" class="cvr-table-row">
                             <td class="px-3 py-3 cvr-text-secondary">{{ rowOffset + index + 1 }}</td>
+                            <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.serial || '—' }}</td>
                             <td class="px-3 py-3 cvr-text-primary max-w-[12rem] break-words">{{ row.transaction_name }}</td>
                             <td class="px-3 py-3 cvr-text-secondary max-w-[12rem] break-words">{{ row.beneficiary_name }}</td>
                             <td class="px-3 py-3 cvr-text-secondary">{{ row.source_formatted }}</td>
@@ -343,7 +346,7 @@ const odooErrorTarget = ref(null);
                             </td>
                         </tr>
                         <tr v-if="currentTab.rows.length === 0">
-                            <td colspan="13" class="px-4 py-8 text-center cvr-text-muted">
+                            <td colspan="14" class="px-4 py-8 text-center cvr-text-muted">
                                 {{ $t('No LG Issuance records found.') }}
                             </td>
                         </tr>

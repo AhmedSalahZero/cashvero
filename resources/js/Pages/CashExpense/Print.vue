@@ -23,7 +23,7 @@ function triggerPrint() {
                     <p>{{ company.name }}</p>
                 </div>
                 <div class="meta">
-                    <p><strong>{{ $t('Record #') }}</strong> {{ record.id }}</p>
+                    <p><strong>{{ $t('Serial') }}</strong> {{ record.serial || ('#' + record.id) }}</p>
                     <p><strong>{{ $t('Printed At') }}</strong> {{ printedAt }}</p>
                 </div>
             </header>

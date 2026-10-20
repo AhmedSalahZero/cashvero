@@ -118,6 +118,7 @@ class BuyOrSellCurrenciesController
         $mapRow = function (BuyOrSellCurrency $model) use ($company) {
             return [
                 'id' => $model->id,
+                'serial' => $model->getSerial(),
                 // حالة المراجعة — شوف App\Traits\Models\IsReviewable
                 'review' => $model->reviewPayload(),
                 'transaction_date_formatted' => $model->getTransactionDateFormatted(),
@@ -173,22 +174,22 @@ class BuyOrSellCurrenciesController
             BuyOrSellCurrency::BANK_TO_BANK => [
                 'relation' => 'bankToBankBuyOrSellCurrencies',
                 'page' => 'bankToBankBuyOrSellCurrenciesPage',
-                'searchable' => ['from_account_number', 'to_account_number'],
+                'searchable' => ['serial', 'from_account_number', 'to_account_number'],
             ],
             BuyOrSellCurrency::SAFE_TO_BANK => [
                 'relation' => 'safeToBankBuyOrSellCurrencies',
                 'page' => 'safeToBankBuyOrSellCurrenciesPage',
-                'searchable' => ['to_account_number'],
+                'searchable' => ['serial', 'to_account_number'],
             ],
             BuyOrSellCurrency::BANK_TO_SAFE => [
                 'relation' => 'bankToSafeBuyOrSellCurrencies',
                 'page' => 'bankToSafeBuyOrSellCurrenciesPage',
-                'searchable' => ['from_account_number'],
+                'searchable' => ['serial', 'from_account_number'],
             ],
             BuyOrSellCurrency::SAFE_TO_SAFE => [
                 'relation' => 'safeToSafeBuyOrSellCurrencies',
                 'page' => 'safeToSafeBuyOrSellCurrenciesPage',
-                'searchable' => [],
+                'searchable' => ['serial'],
             ],
         ];
 
@@ -253,6 +254,7 @@ class BuyOrSellCurrenciesController
 			'company' => ['id' => $company->id, 'name' => $company->getName()],
 			'record' => [
 				'id' => $buyOrSellCurrency->id,
+				'serial' => $buyOrSellCurrency->getSerial(),
 				'type' => BuyOrSellCurrency::getAllTypes()[$buyOrSellCurrency->getType()] ?? $buyOrSellCurrency->getType(),
 				'date' => $buyOrSellCurrency->getTransactionDateFormatted(),
 				'amount_to_sell' => $buyOrSellCurrency->getAmountToSellFormatted(),

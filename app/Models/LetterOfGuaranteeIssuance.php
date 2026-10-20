@@ -18,6 +18,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
+use App\Traits\Models\HasSerial;
 use App\Traits\Models\IsReviewable;
 
 /**
@@ -169,7 +170,7 @@ use App\Traits\Models\IsReviewable;
  */
 class LetterOfGuaranteeIssuance extends Model
 {
-    use IsReviewable;
+    use IsReviewable, HasSerial;
 
 	/**
 	 * * عملة الخطاب في lg_currency مش في currency ، فالوصف الافتراضي كان
@@ -177,7 +178,7 @@ class LetterOfGuaranteeIssuance extends Model
 	 */
 	public function reviewDescriptor(): string
 	{
-		$parts = [__('LG Issuance').' #'.$this->getKey()];
+		$parts = [__('LG Issuance').' '.$this->reviewRecordNumber()];
 
 		if ($beneficiary = $this->getBeneficiaryName()) {
 			$parts[] = (string) $beneficiary;

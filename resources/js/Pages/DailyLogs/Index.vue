@@ -123,7 +123,7 @@ const eventClass = (name) => ({
                 </div>
                 <div class="flex-1 min-w-[12rem]">
                     <label class="cvr-form-label">{{ $t('Search') }}</label>
-                    <input v-model="search" type="text" class="cvr-input w-full px-3 py-2 rounded" :placeholder="$t('User, description or record id')" />
+                    <input v-model="search" type="text" class="cvr-input w-full px-3 py-2 rounded" :placeholder="$t('User, description, serial or record id')" />
                 </div>
                 <button @click="resetToToday" class="cvr-btn-secondary px-3 py-2 rounded border text-sm whitespace-nowrap">
                     {{ $t('Today') }}

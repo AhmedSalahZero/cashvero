@@ -3,6 +3,7 @@
 namespace App\Services\CompanyData;
 
 use App\Enums\LgTypes;
+use App\Support\Serials\SerialBackfiller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -525,6 +526,20 @@ class CompanyImportService
         }
 
         $report['id_maps'] = $this->idMapSizes();
+
+        /**
+         * Rows copied from a source that predates serial numbers arrive
+         * with serial = NULL — number them now, continuing whatever
+         * serial_sequences the import brought along. The backfiller
+         * writes through the default connection, so only then.
+         */
+        if ($this->target === (string) config('database.default')) {
+            try {
+                $report['serials'] = app(SerialBackfiller::class)->run($companyId);
+            } catch (Throwable $e) {
+                $report['errors'][] = 'Serial backfill failed: '.$e->getMessage();
+            }
+        }
 
         $verification = $this->verify($companyId, $analysis['intersection']);
         $report['verification'] = $verification;

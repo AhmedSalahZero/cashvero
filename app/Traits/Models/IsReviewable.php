@@ -219,7 +219,7 @@ trait IsReviewable
      */
     public function reviewDescriptor(): string
     {
-        $parts = [ActivityRegistry::labelFor(static::class).' #'.$this->getKey()];
+        $parts = [ActivityRegistry::labelFor(static::class).' '.$this->reviewRecordNumber()];
 
         foreach (['getPartnerName', 'getCustomerName', 'getSupplierName', 'getName'] as $method) {
             if (method_exists($this, $method) && ($name = $this->{$method}())) {
@@ -243,6 +243,15 @@ trait IsReviewable
         }
 
         return implode(' · ', array_filter($parts));
+    }
+
+    /**
+     * * الرقم المسلسل لو الموديل عنده (HasSerial) ، و إلا #id —
+     * * ForeignExchangeRate بتتراجع بس مالهاش رقم مسلسل
+     */
+    protected function reviewRecordNumber(): string
+    {
+        return method_exists($this, 'getSerialOrId') ? $this->getSerialOrId() : '#'.$this->getKey();
     }
 
     /**

@@ -48,6 +48,7 @@ class ActivityRegistry
      * entries override these.
      */
     public const DEFAULT_FIELD_LABELS = [
+        'serial' => 'Serial',
         'name' => 'Name',
         'type' => 'Type',
         'status' => 'Status',

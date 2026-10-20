@@ -34,6 +34,7 @@ trait FiltersFactoringTransactions
     protected function factoringSearchFields(): array
     {
         return [
+            'serial' => __('Serial'),
             'factoring_date' => __('Factoring Date'),
             'customer_id' => __('Customer'),
             'factoring_company_id' => __('Factoring Company'),

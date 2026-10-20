@@ -104,6 +104,7 @@ class FactoringWithRecourseController
             'canDelete' => hasAuthFor('factoring_with_recourse.delete'),
             'transactions' => $transactions->through(fn (FactoringTransaction $t) => [
                 'id' => $t->id,
+                'serial' => $t->getSerial(),
                 // حالة المراجعة — شوف App\Traits\Models\IsReviewable
                 'review' => $t->reviewPayload(),
                 'factoring_date_formatted' => $t->getFactoringDateFormatted(),

@@ -54,6 +54,7 @@ class MultipleCashExpenseController extends Controller
             ->when($request->filled('search'), function ($q) use ($request) {
                 $term = trim((string) $request->get('search'));
                 $q->where(fn ($inner) => $inner->where('user_comment', 'like', "%{$term}%")
+                    ->orWhere('serial', 'like', "%{$term}%")
                     ->orWhere('receipt_number', 'like', "%{$term}%")
                     ->orWhere('id', $term));
             })
@@ -83,6 +84,7 @@ class MultipleCashExpenseController extends Controller
             ],
             'rows' => collect($paginator->items())->map(fn (MultipleCashExpense $expense) => [
                 'id' => $expense->id,
+                'serial' => $expense->getSerial(),
                 // حالة المراجعة — شوف App\Traits\Models\IsReviewable
                 'review' => $expense->reviewPayload(),
                 'payment_date' => $expense->getPaymentDateFormatted(),

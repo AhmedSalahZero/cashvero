@@ -7,6 +7,7 @@ use App\Traits\Models\HandlesFactoringStatement;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Traits\Models\HasSerial;
 use App\Traits\Models\IsReviewable;
 
 /**
@@ -34,7 +35,7 @@ use App\Traits\Models\IsReviewable;
  */
 class FactoringTransaction extends Model
 {
-    use IsReviewable;
+    use IsReviewable, HasSerial;
 
     use HandlesFactoringBankDebit, HandlesFactoringStatement;
 

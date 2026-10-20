@@ -281,7 +281,9 @@ class MovementReviewTest extends TestCase
             $this->assertNotNull($entry, 'المراجعة المفروض تتسجّل');
             $this->assertSame(RecordActivity::EVENT_CUSTOM, $entry->event);
             $this->assertStringContainsString($actor->name, $entry->description, 'اسم اللي راجع لازم يكون في الجملة');
-            $this->assertStringContainsString('#'.$row->id, $entry->description, 'الجملة لازم تميّز الصف');
+            // الرقم المسلسل (MR/CIS/2026/10/00001) لو الحركة ليها رقم ، و إلا #id
+            $recordNumber = method_exists($row, 'getSerialOrId') ? $row->getSerialOrId() : '#'.$row->id;
+            $this->assertStringContainsString($recordNumber, $entry->description, 'الجملة لازم تميّز الصف');
             $this->assertStringContainsString('التعليق بتاعي', $entry->description, 'التعليق لازم يتسجّل');
 
             // و فكّ المراجعة بيتسجّل هو كمان

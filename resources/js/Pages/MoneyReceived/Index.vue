@@ -397,6 +397,7 @@ function submitApplyCollection() {
                     <thead class="cvr-table-head">
                         <tr>
                             <th v-if="hasBatchCollection" class="px-4 py-3 text-start">{{ $t('Select') }}</th>
+                            <th class="px-4 py-3 text-start">{{ $t('Serial') }}</th>
                             <th class="px-4 py-3 text-start">{{ $t('Type') }}</th>
                             <th class="px-4 py-3 text-start">{{ $t('Customer Name') }}</th>
 
@@ -469,6 +470,7 @@ function submitApplyCollection() {
                             <td v-if="hasBatchCollection" class="px-4 py-3">
                                 <input type="checkbox" :checked="selectedIds.includes(row.id)" @change="toggleSelect(row.id)" />
                             </td>
+                            <td class="px-4 py-3 whitespace-nowrap cvr-text-secondary">{{ row.serial || '—' }}</td>
                             <td class="px-4 py-3 cvr-text-secondary">{{ row.type_formatted }}</td>
                             <td class="px-4 py-3 cvr-text-primary">{{ row.customer_name }}</td>
 
@@ -587,7 +589,7 @@ function submitApplyCollection() {
                             </td>
                         </tr>
                         <tr v-if="rows.length === 0">
-                            <td colspan="14" class="px-4 py-8 text-center cvr-text-muted">
+                            <td colspan="15" class="px-4 py-8 text-center cvr-text-muted">
                                 {{ $t('No records found for this tab.') }}
                             </td>
                         </tr>

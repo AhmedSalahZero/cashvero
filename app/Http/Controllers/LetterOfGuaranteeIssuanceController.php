@@ -120,6 +120,7 @@ class LetterOfGuaranteeIssuanceController
                 $source = $lg->getSource();
                 return [
                     'id' => $lg->id,
+                    'serial' => $lg->getSerial(),
                     // حالة المراجعة — شوف App\Traits\Models\IsReviewable
                     'review' => $lg->reviewPayload(),
                     'transaction_name' => $lg->getTransactionName(),
@@ -183,7 +184,7 @@ class LetterOfGuaranteeIssuanceController
         $from = $request->get('from');
         $to = $request->get('to');
 
-        if (in_array($field, ['transaction_name', 'lg_code', 'customer_name'], true)) {
+        if (in_array($field, ['serial', 'transaction_name', 'lg_code', 'customer_name'], true)) {
             return is_string($value) && trim($value) !== '';
         }
 
@@ -227,6 +228,7 @@ class LetterOfGuaranteeIssuanceController
         ->when($searchFieldName == 'lg_code', function ($q) use ($value) {
             $q->where('lg_code', 'like', '%'.$value.'%');
         })
+        ->when($searchFieldName == 'serial', fn ($q) => $q->serialLike($value))
         /**
          * Search By → Customer Name. The customer is the LG's
          * beneficiary (`partner_id` → Partner), which is exactly what

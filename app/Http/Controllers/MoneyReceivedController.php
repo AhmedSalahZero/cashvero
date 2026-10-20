@@ -231,10 +231,18 @@ class MoneyReceivedController
             ];
         }
 
+        $isSerialSearch = $request->get('field') === 'serial' && filled($request->get('value'));
+
         $tabsOut = [];
         foreach ($tabs as $type => $definition) {
             $startDate = $filterDates[$type]['startDate'] ?? null;
             $endDate = $filterDates[$type]['endDate'] ?? null;
+
+            // البحث بالرقم المسلسل بيدوّر في كل التواريخ — الرقم نفسه فيه
+            // السنة ، و نافذة الـ ١٨ شهر كانت هتخفي الحركات الأقدم
+            if ($isSerialSearch && $activeTab === $type) {
+                [$startDate, $endDate] = ['1900-01-01', '2999-12-31'];
+            }
 
             // Real, unchanged query builder from Company.php — the exact
             // same method the original Blade page called.
@@ -243,6 +251,10 @@ class MoneyReceivedController
             // الفلتر لازم يتطبّق قبل العدّ و الجمع ، و إلا الإجماليات تحت
             // الجدول بتقول رقم و الصفوف بتقول رقم تاني
             $query = $query->reviewState($request->get('review'));
+
+            if ($isSerialSearch && $activeTab === $type) {
+                $query = $query->serialLike($request->get('value'));
+            }
 
             $totalCount = (clone $query)->count();
             $totalAmount = (clone $query)->sum('received_amount');
@@ -270,7 +282,7 @@ class MoneyReceivedController
 
             $tabsOut[$type] = [
                 'label' => $definition['label'],
-                'searchFields' => $definition['searchFields'],
+                'searchFields' => ['serial' => __('Serial')] + $definition['searchFields'],
                 'totalCount' => $totalCount,
                 'totalAmount' => round($totalAmount, 2),
                 'paginator' => $paginatorArray,
@@ -335,6 +347,7 @@ class MoneyReceivedController
 
         $common = [
             'id' => $moneyReceived->id,
+            'serial' => $moneyReceived->getSerial(),
             // حالة المراجعة — شوف App\Traits\Models\IsReviewable
             'review' => $moneyReceived->reviewPayload(),
             'type_formatted' => $moneyReceived->getMoneyTypeFormatted(),
@@ -517,6 +530,7 @@ class MoneyReceivedController
             'company' => ['id' => $company->id, 'name' => $company->getName()],
             'record' => [
                 'id' => $moneyReceived->id,
+                'serial' => $moneyReceived->getSerial(),
                 'type' => $moneyReceived->getMoneyTypeFormatted(),
                 'partner_name' => $moneyReceived->getCustomerName(),
                 'date' => $moneyReceived->getReceivingDateFormatted(),

@@ -123,6 +123,19 @@ class LcSettlementInternalMoneyTransferController
                 ->values();
         }
 
+        /**
+         * * البحث بالرقم المسلسل : الصف اعتماد ، فبيطلع لو أي تسوية من
+         * * تسوياته رقمها فيه النص ده
+         */
+        $serialSearch = trim((string) $request->get('serial', ''));
+
+        if ($serialSearch !== '') {
+            $allIssuances = $allIssuances
+                ->filter(fn (LetterOfCreditIssuance $lc) => $lc->lcSettlementInternalMoneyTransfers
+                    ->contains(fn (LcSettlementInternalMoneyTransfer $settlement) => stripos((string) $settlement->getSerial(), $serialSearch) !== false))
+                ->values();
+        }
+
         // Paginated in PHP rather than SQL — isPendingBankSettlement() needs
         // each row's own bank-statement rows loaded to evaluate, so the
         // sorting above can't happen inside the query itself. Lists like
@@ -142,6 +155,8 @@ class LcSettlementInternalMoneyTransferController
 
             return [
                 'letter_of_credit_issuance_id' => $lc->id,
+                // الصف اعتماد ، فالرقم المعروض هو رقم آخر تسوية عليه
+                'serial' => $latestSettlement?->getSerial(),
                 'transaction_name' => $lc->getTransactionName(),
                 'supplier_name' => $lc->getSupplierName(),
                 'lc_code' => $lc->getNumber(),
@@ -178,6 +193,7 @@ class LcSettlementInternalMoneyTransferController
             // صلاحية المراجعة — بتقرر يظهر زرار ولا علامة قراءة بس
             'canReview' => \App\Support\Permissions\PermissionResolver::allows(request()->user(), 'lc_settlement_transfer.review'),
             'reviewFilter' => (string) request()->get('review', ''),
+            'serialFilter' => $serialSearch,
             'instructionsUrl' => route('view.instructions', ['company' => $company->id, 'page' => PageInstructions::LC_SETTLEMENT]),
             'company' => ['id' => $company->id, 'name' => $company->getName()],
             'rows' => $rows,

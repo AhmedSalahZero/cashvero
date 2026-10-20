@@ -112,9 +112,9 @@ const filters = ref(
 const searchField = ref('partner_name');
 const searchValue = ref('');
 const searchFieldOptionsByType = {
-    [TYPES.OUTGOING_TRANSFER]: { partner_name: 'Supplier Name', expense_name: 'Expense Name', currency: 'Currency' },
-    [TYPES.CASH_PAYMENT]: { partner_name: 'Supplier Name', expense_name: 'Expense Name', delivery_branch_name: 'Branch', currency: 'Currency', receipt_number: 'Receipt Number' },
-    [TYPES.PAYABLE_CHEQUE]: { partner_name: 'Supplier Name', expense_name: 'Expense Name', currency: 'Currency' },
+    [TYPES.OUTGOING_TRANSFER]: { serial: 'Serial', partner_name: 'Supplier Name', expense_name: 'Expense Name', currency: 'Currency' },
+    [TYPES.CASH_PAYMENT]: { serial: 'Serial', partner_name: 'Supplier Name', expense_name: 'Expense Name', delivery_branch_name: 'Branch', currency: 'Currency', receipt_number: 'Receipt Number' },
+    [TYPES.PAYABLE_CHEQUE]: { serial: 'Serial', partner_name: 'Supplier Name', expense_name: 'Expense Name', currency: 'Currency' },
 };
 
 function applyFilters(type) {
@@ -268,6 +268,7 @@ const odooErrorTarget = ref(null);
                             <thead class="cvr-table-head">
                                 <tr>
                                     <th v-if="canMarkAsPaid && tab.hasBatchCollection" class="px-3 py-3 text-start">{{ $t('Select') }}</th>
+                                    <th class="px-3 py-3 text-start whitespace-nowrap">{{ $t('Serial') }}</th>
                                     <th class="px-3 py-3 text-start whitespace-nowrap">{{ $t('Category') }}</th>
                                     <th class="px-3 py-3 text-start whitespace-nowrap">{{ $t('Expense Name') }}</th>
                                     <th class="px-3 py-3 text-start whitespace-nowrap">{{ $t('Payment Date') }}</th>
@@ -289,6 +290,7 @@ const odooErrorTarget = ref(null);
                                             @change="toggleSelect(type, row.id)"
                                         />
                                     </td>
+                                    <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.serial || '—' }}</td>
                                     <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.expense_category_name }}</td>
                                     <td class="px-3 py-3 whitespace-nowrap cvr-text-primary">{{ row.expense_name }}</td>
                                     <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.payment_date_formatted }}</td>
@@ -345,7 +347,7 @@ const odooErrorTarget = ref(null);
                                     </td>
                                 </tr>
                                 <tr v-if="tab.rows.data.length === 0">
-                                    <td :colspan="8 + columnsByType[type].length" class="px-4 py-8 text-center cvr-text-muted">
+                                    <td :colspan="9 + columnsByType[type].length" class="px-4 py-8 text-center cvr-text-muted">
                                         {{ $t('No') }} {{ tab.label.toLowerCase() }} {{ $t('found.') }}
                                     </td>
                                 </tr>
