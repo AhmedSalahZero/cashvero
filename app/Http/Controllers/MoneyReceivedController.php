@@ -659,6 +659,11 @@ class MoneyReceivedController
             'partnerTypes' => collect(getAllPartnerTypesForCustomers())->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
             'moneyTypes' => $this->moneyTypeOptions(),
             'currencies' => collect($customerInvoiceCurrencies ?: getBanksCurrencies())->map(fn ($label, $code) => ['code' => $code, 'label' => strtoupper($label)])->values(),
+            // Coming from one invoice's row, `currencies` is cut down to that
+            // invoice's currency (it is the Invoice Currency). The Receive
+            // Currency must stay free so a USD invoice can be settled in EGP,
+            // exactly as from the standard form (no invoice id => same list).
+            'receivingCurrencies' => collect(CustomerInvoice::getCurrencies() ?: getBanksCurrencies())->map(fn ($label, $code) => ['code' => $code, 'label' => strtoupper($label)])->values(),
             'selectedBranches' => collect($selectedBranches)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
             'selectedBanks' => collect($banks)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
             'financialInstitutionBanks' => $financialInstitutionBanks->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()]),

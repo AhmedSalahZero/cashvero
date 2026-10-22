@@ -89,6 +89,8 @@ class SidebarMenu
                 self::item(__('Partner Statement'), $user->hasPermissionKey('report_partners_statement.view'), route('view.partners.statement', ['company' => $companyId]), inertia: true, icon: 'handshake'),
                 self::item(__('Taxes & Insurance'), $user->hasPermissionKey('report_taxes_insurance.view'), route('view.taxes.insurance.statement', ['company' => $companyId]), inertia: true, icon: 'receipt'),
                 self::item(__('Withdrawal Statement'), $user->hasPermissionKey('report_withdrawals_settlement.view'), route('view.withdrawals.settlement.report', ['company' => $companyId]), inertia: true, icon: 'arrow-down-circle'),
+                self::item(__('Cheques Report'), $user->hasAnyPermissionKey(['cheques_report_received.view', 'cheques_report_payable.view']), route('view.cheques.report', ['company' => $companyId]), inertia: true, icon: 'receipt'),
+                self::item(__('Down Payment Report'), $user->hasAnyPermissionKey(['down_payment_report_customer.view', 'down_payment_report_supplier.view']), route('view.down.payment.report', ['company' => $companyId]), inertia: true, icon: 'banknote'),
             ]),
 
             'reports' => self::section(__('Reports'), 'chart-line', [

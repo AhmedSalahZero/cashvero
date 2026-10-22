@@ -53,6 +53,11 @@ class ContractsController
     use GeneralFunctions;
 
 	/**
+	 * * التاب الرابعة : كل العقود بغض النظر عن حالتها (بتعرض عمود الحالة)
+	 */
+	public const ALL_TAB = 'all';
+
+	/**
 	 * List page — three tabs (Running / Running And Against /
 	 * Finished), each contract row expandable to show its Sales/
 	 * Purchase Order sub-rows.
@@ -79,6 +84,8 @@ class ContractsController
 			Contract::RUNNING_AND_AGAINST ,
 			Contract::FINISHED 
 		];
+		// الحالات الثلاثة + تاب "الكل"
+		$tabs = array_merge($contractStatues, [self::ALL_TAB]);
 		
 		/**
 		 * * كل تاب ليها بيچينيشن مستقلة بالـ page parameter بتاعها ، عشان
@@ -95,7 +102,7 @@ class ContractsController
 		 */
 		$search = trim((string) $request->query('search', ''));
 		$orderModel = $type == 'Supplier' ? \App\Models\PurchaseOrder::class : \App\Models\SalesOrder::class;
-		foreach($contractStatues as $contractStatus){
+		foreach($tabs as $contractStatus){
 			$pageName = $this->pageNameForStatus($contractStatus);
 			$paginator = $this->contractsBaseQuery($company, $contractStatus, $type, $search)
 				->selectRaw('contracts.*,partners.name as partner_name')
@@ -122,7 +129,7 @@ class ContractsController
 
 		$customerOrSupplierContractsText = $type == 'Supplier' ? __('Supplier Contracts') : __('Customer Contracts');
 		$items = [];
-		foreach($contractStatues as $contractStatus){
+		foreach($tabs as $contractStatus){
 			foreach($contracts[$contractStatus] as $index=>$contract){
 				$contractId = $contract->id ;
 				$invoices = $type === 'Supplier' ? $contract->supplierInvoices : $contract->customerInvoices;
@@ -319,7 +326,7 @@ class ContractsController
 		};
 
 		$contractsForTabs = [];
-		foreach ($contractStatues as $contractStatus) {
+		foreach ($tabs as $contractStatus) {
 			$rows = [];
 			// Walk the paginator collection (already start_date desc), not the
 			// id-keyed $items map — integer keys can confuse later consumers
@@ -344,6 +351,8 @@ class ContractsController
 					'client_name' => $parent['client_name'],
 					'name' => $parent['name'],
 					'contract_code' => $parent['contract_code'],
+					// الحالة الفعلية للعقد — بتتعرض في تاب "الكل"، وأزرار الصف بتعتمد عليها مش على التاب
+					'status' => $contract->status,
 					'start_date' => $parent['start_date'],
 					'end_date' => $parent['end_date'],
 					'amount_formatted' => $parent['amount'],
@@ -395,13 +404,13 @@ class ContractsController
 			 * * أودو نفسه ، فزرار الـ Allocate بيتشال من عقود الموردين
 			 */
 			'hasOdooCredentials' => $company->hasOdooIntegrationCredentials(),
-			'contractStatues' => $contractStatues,
+			'contractStatues' => $tabs,
 			'contracts' => $contractsForTabs,
 			'paginators' => collect($paginators)->map(fn ($paginator) => $paginator->toArray()),
 			'search' => $search,
 			'orderTotals' => $orderTotals,
 			'createUrl' => route('contracts.create', ['company' => $company->id, 'type' => $type]),
-			'tabUrls' => collect($contractStatues)->mapWithKeys(function ($status) use ($company, $type) {
+			'tabUrls' => collect($tabs)->mapWithKeys(function ($status) use ($company, $type) {
 				return [$status => route('contracts.index', ['company' => $company->id, 'type' => $type, 'active' => $status])];
 			}),
 			'clientsWithContracts' => $type === 'Supplier'
@@ -418,7 +427,7 @@ class ContractsController
 	protected function contractsBaseQuery(Company $company, string $contractStatus, string $type, string $search = ''): \Illuminate\Database\Eloquent\Builder
 	{
 		return Contract::where('contracts.company_id', $company->id)
-			->where('contracts.status', $contractStatus)
+			->when($contractStatus !== self::ALL_TAB, fn ($query) => $query->where('contracts.status', $contractStatus))
 			->where('contracts.model_type', $type)
 			->join('partners', 'partners.id', '=', 'contracts.partner_id')
 			->when($search !== '', function ($query) use ($search) {

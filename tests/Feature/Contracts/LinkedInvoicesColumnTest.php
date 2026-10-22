@@ -298,8 +298,11 @@ class LinkedInvoicesColumnTest extends TestCase
         preg_match('/<thead class="cvr-table-head">(.*?)<\/thead>/s', $page, $head);
         $columns = preg_match_all('/<th /', $head[1] ?? '');
 
-        $this->assertSame(9, $columns, 'المفروض ٩ أعمدة بعد الإضافة');
-        $this->assertStringContainsString('colspan="9"', $page,
+        // ٩ أعمدة ثابتة + عمود الحالة ، وهو بيظهر في تاب "الكل" بس
+        $this->assertSame(10, $columns, 'المفروض ٩ أعمدة + عمود الحالة');
+        $this->assertSame(1, preg_match_all('/<th v-if="showStatusColumn"/', $head[1] ?? ''),
+            'عمود الحالة لازم يظهر في تاب "الكل" بس');
+        $this->assertStringContainsString(':colspan="showStatusColumn ? 10 : 9"', $page,
             'صف "مفيش عقود" لازم يمتد على الأعمدة كلها');
     }
 }

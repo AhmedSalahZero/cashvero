@@ -128,9 +128,9 @@ function destroyRow() {
                 ({{ letterOfGuaranteeIssuance.source_formatted }})
             </p>
 
-            <!-- Add / Edit form — only shown if editing, or the LG has
-                 expired (matches the original's exact rule: you can't
-                 add a renewal until the current term is done). -->
+            <!-- Add / Edit form — shown when editing, or when the LG is
+                 activated and not cancelled. Renewal is allowed before
+                 the current expiry date. -->
             <div v-if="canShowForm" class="cvr-card mb-6">
                 <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-4">
                     {{ isEdit ? $t('Edit Renewal') : $t('Adjusted Renewal Date Section') }}
@@ -226,7 +226,7 @@ function destroyRow() {
                 </form>
             </div>
             <div v-else class="mb-6 px-4 py-3 rounded cvr-badge-pending text-sm">
-                {{ $t('This LG hasn\'t reached its current expiry date yet — a new renewal can only be added once it\'s expired.') }}
+                {{ $t('This LG cannot be renewed yet. Enter its Activation Date first, or it has been cancelled.') }}
             </div>
 
             <!-- History table -->

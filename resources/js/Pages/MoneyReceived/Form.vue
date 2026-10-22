@@ -38,6 +38,10 @@ const props = defineProps({
     partnerTypes: Array,
     moneyTypes: Array,
     currencies: Array,
+    // Options for "Receive Currency". Create sends it separately because
+    // `currencies` gets cut down to the invoice's own currency when the form
+    // is opened from an invoice row; edit doesn't send it (falls back).
+    receivingCurrencies: Array,
     selectedBranches: Array,
     selectedBanks: Array,       // drawee/drawl banks (for Cheque)
     financialInstitutionBanks: Array,
@@ -547,7 +551,7 @@ function submit() {
                         <label class="cvr-form-label">{{ $t('Receive Currency*') }}</label>
                         <select v-model="receivingCurrency" class="cvr-input w-full px-3 py-2 rounded">
                             <option value="">{{ $t('Select') }}</option>
-                            <option v-for="c in currencies" :key="c.code" :value="c.code">{{ c.label }}</option>
+                            <option v-for="c in (receivingCurrencies || currencies)" :key="c.code" :value="c.code">{{ c.label }}</option>
                         </select>
                     </div>
                     <div>

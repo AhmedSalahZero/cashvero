@@ -717,6 +717,30 @@ class LgAdvancePaymentActivationTest extends TestCase
         $this->assertNull($finalPage['letterOfGuaranteeIssuance']['activation_date_formatted']);
     }
 
+    public function test_the_renewal_form_is_shown_before_the_current_expiry_when_the_lg_is_activated(): void
+    {
+        $activated = $this->issue(['activation_date' => self::ACTIVATION_DATE]);
+
+        $this->assertFalse($activated->isExpired());
+        $this->assertTrue($this->renewalPage($activated)['canShowForm']);
+    }
+
+    public function test_the_renewal_form_is_hidden_until_an_advance_payment_lg_is_activated(): void
+    {
+        $unactivated = $this->issue();
+
+        $this->assertFalse($unactivated->isExpired());
+        $this->assertFalse($this->renewalPage($unactivated)['canShowForm']);
+    }
+
+    public function test_the_renewal_form_is_hidden_for_a_cancelled_lg(): void
+    {
+        $letterOfGuaranteeIssuance = $this->issue(['activation_date' => self::ACTIVATION_DATE]);
+        $letterOfGuaranteeIssuance->update(['status' => LetterOfGuaranteeIssuance::CANCELLED]);
+
+        $this->assertFalse($this->renewalPage($letterOfGuaranteeIssuance->fresh())['canShowForm']);
+    }
+
     // ---------------------------------------------------------------
     // cancellation
     // ---------------------------------------------------------------
@@ -768,6 +792,37 @@ class LgAdvancePaymentActivationTest extends TestCase
         $this->assertCount(1, $refunds);
         $this->assertEquals(10000, $refunds[0]->debit);
         $this->assertSame(self::ACTIVATION_DATE, Carbon::make($refunds[0]->date)->format('Y-m-d'));
+    }
+
+    public function test_a_cancelled_index_row_carries_the_cancellation_date(): void
+    {
+        $this->issue(['lg_code' => 'LG-RUN']);
+        $cancelled = $this->issue(['lg_code' => 'LG-OFF', 'activation_date' => self::ACTIVATION_DATE]);
+        $this->cancel($cancelled, '2026-06-01');
+
+        $method = new ReflectionMethod(LetterOfGuaranteeIssuanceController::class, 'buildTabRows');
+        $method->setAccessible(true);
+        $tab = $method->invoke(
+            new LetterOfGuaranteeIssuanceController,
+            new LengthAwarePaginator(LetterOfGuaranteeIssuance::query()->orderBy('id')->get()->all(), 2, 15),
+            Company::findOrFail(self::COMPANY)
+        );
+
+        $byCode = collect($tab['rows'])->keyBy('lg_code');
+        $this->assertFalse($byCode['LG-RUN']['is_cancelled']);
+        $this->assertNull($byCode['LG-RUN']['cancellation_date_formatted']);
+        $this->assertTrue($byCode['LG-OFF']['is_cancelled']);
+        $this->assertSame('01-06-2026', $byCode['LG-OFF']['cancellation_date_formatted']);
+    }
+
+    public function test_the_index_vue_shows_the_cancellation_date_for_cancelled_rows(): void
+    {
+        $vue = file_get_contents(resource_path('js/Pages/LetterOfGuaranteeIssuance/Index.vue'));
+
+        $this->assertStringContainsString('v-if="row.is_cancelled"', $vue);
+        $this->assertStringContainsString('openCancellationDate(row)', $vue);
+        $this->assertStringContainsString('cancellationDateTarget.cancellation_date_formatted', $vue);
+        $this->assertStringContainsString('$t(\'Cancellation Date\')', $vue);
     }
 
     public function test_setting_a_cancelled_lg_back_to_running_restores_the_cash_cover(): void
@@ -946,6 +1001,7 @@ class LgAdvancePaymentActivationTest extends TestCase
     public function test_renewing_an_activated_lg_posts_the_new_term_from_the_old_expiry(): void
     {
         $letterOfGuaranteeIssuance = $this->issue(['activation_date' => self::ACTIVATION_DATE]);
+        $this->assertFalse($letterOfGuaranteeIssuance->isExpired());
 
         (new LetterOfGuaranteeIssuanceRenewalDateController)->store(
             StoreLgRenewalDateRequest::create('/', 'POST', [

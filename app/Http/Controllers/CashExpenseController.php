@@ -500,7 +500,10 @@ class CashExpenseController
 		$data = $request->only(['type','odoo_id','payment_date','currency','cash_expense_category_name_id','user_comment','journal_entry_id','odoo_id']);
 		$cashExpenseCategoryNameId= $request->get('cash_expense_category_name_id');
 		$cashExpenseCategoryName = CashExpenseCategoryName::find($cashExpenseCategoryNameId);
-		$subCategoryName = $cashExpenseCategoryName->getName();
+		/**
+		 * @var CashExpenseCategoryName $cashExpenseCategoryName
+		 */
+		$subCategoryName = $cashExpenseCategoryName->getName() ;
 		$date = Carbon::make($data['payment_date'])->format('Y-m-d');
 		$currencyName = $data['currency'];
 		$data['user_id'] = auth()->user()->id ;

@@ -774,6 +774,45 @@ class PermissionRegistry
                 'export' => ['view lg by bank name report'],
             ],
         ],
+        // Cheques Report / Down Payment Report read what Money Received and
+        // Money Payment already hold, so each KIND rides the grant of the screen
+        // it reads: whoever could open Money Received could already see received
+        // cheques and customer down payments. They are separate modules, one per
+        // kind, on purpose: a module that listed BOTH legacy names would be
+        // reverse-resolved by keysForLegacy() from either one, and a user holding
+        // only 'view money received' would start passing can('view supplier payment').
+        'cheques_report_received' => [
+            'label' => 'Received Cheques Report',
+            'group' => 'reports',
+            'actions' => [
+                'view' => ['view money received'],
+                'export' => ['view money received'],
+            ],
+        ],
+        'cheques_report_payable' => [
+            'label' => 'Payable Cheques Report',
+            'group' => 'reports',
+            'actions' => [
+                'view' => ['view supplier payment'],
+                'export' => ['view supplier payment'],
+            ],
+        ],
+        'down_payment_report_customer' => [
+            'label' => 'Customer Down Payment Report',
+            'group' => 'reports',
+            'actions' => [
+                'view' => ['view money received'],
+                'export' => ['view money received'],
+            ],
+        ],
+        'down_payment_report_supplier' => [
+            'label' => 'Supplier Down Payment Report',
+            'group' => 'reports',
+            'actions' => [
+                'view' => ['view supplier payment'],
+                'export' => ['view supplier payment'],
+            ],
+        ],
         'report_cash_expense_statement' => [
             'label' => 'Cash Expense Statement',
             'group' => 'reports',

@@ -565,6 +565,16 @@ class RoutePermissionMap
         'result.lg.by.bank.name.report' => 'report_lg_by_bank.view',
         'export.lg.by.bank.name.report' => 'report_lg_by_bank.export',
         'print.lg.by.bank.name.report' => 'report_lg_by_bank.export',
+        // One screen per report, two kinds inside it: opening the screen needs
+        // either kind, and the controller offers only the kinds the user holds.
+        'view.cheques.report' => ['cheques_report_received.view', 'cheques_report_payable.view'],
+        'result.cheques.report' => ['cheques_report_received.view', 'cheques_report_payable.view'],
+        'export.cheques.report' => ['cheques_report_received.export', 'cheques_report_payable.export'],
+        'print.cheques.report' => ['cheques_report_received.export', 'cheques_report_payable.export'],
+        'view.down.payment.report' => ['down_payment_report_customer.view', 'down_payment_report_supplier.view'],
+        'result.down.payment.report' => ['down_payment_report_customer.view', 'down_payment_report_supplier.view'],
+        'export.down.payment.report' => ['down_payment_report_customer.export', 'down_payment_report_supplier.export'],
+        'print.down.payment.report' => ['down_payment_report_customer.export', 'down_payment_report_supplier.export'],
         'view.cash.expense.statement' => 'report_cash_expense_statement.view',
         'result.cash.expense.statement' => 'report_cash_expense_statement.view',
         'export.cash.expense.statement' => 'report_cash_expense_statement.export',

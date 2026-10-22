@@ -13,10 +13,10 @@ namespace App\Traits;
  * silently drift apart on what a row means.
  *
  * Note: `renewal_date` arrives ALREADY FORMATTED from the SQL query
- * itself (a `CASE WHEN status = 'cancelled' THEN 'cancelled' ELSE
- * DATE_FORMAT(...)` expression) — it can legitimately be the literal
- * string "cancelled" instead of a date. This is read as-is, never
- * re-parsed with Carbon.
+ * itself. LG By Bank Name always sends the formatted renewal date, plus
+ * `cancellation_date` when the row is cancelled. LG By Beneficiary Name
+ * still sends the literal string "cancelled" in place of that date.
+ * This is read as-is, never re-parsed with Carbon.
  */
 trait LgListReportRows
 {
@@ -44,6 +44,7 @@ trait LgListReportRows
             'source' => $lgsSources[$row->source] ?? $row->source,
             'lgAmount' => (float) ($row->lg_amount ?? 0),
             'renewalDate' => $row->renewal_date, // already formatted (or "cancelled") by the SQL query itself
+            'cancellationDate' => $row->cancellation_date ?? null,
             'cashCoverAmount' => (float) ($row->cash_cover_amount ?? 0),
             'lgCommissionRate' => $row->lg_commission_rate,
             'status' => $row->lg_status ?? null, // 'running' | 'expired' | 'cancelled' — computed in fetchRows()

@@ -579,6 +579,16 @@ class LetterOfGuaranteeIssuance extends Model
         $renewalDate = $this->getRenewalDate() ;
         return $renewalDate ? Carbon::make($renewalDate)->format('d-m-Y'):null ;
     }
+    public function getCancellationDate()
+    {
+        return $this->cancellation_date;
+    }
+    public function getCancellationDateFormatted()
+    {
+        $cancellationDate = $this->getCancellationDate();
+
+        return $cancellationDate ? Carbon::make($cancellationDate)->format('d-m-Y') : null;
+    }
     public function setRenewalDateAttribute($value)
     {
         $date = explode('/', $value);

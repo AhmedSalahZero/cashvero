@@ -59,6 +59,7 @@ class StoreCashExpenseRequest extends FormRequest
 		
         return [
 			'type'=>'required',
+			'cash_expense_category_name_id'=>'required|numeric',
 			/**
 			 * * ما ينفعش ندفع مصروف نقدي بتاريخ بعد النهاردة
 			 * * نفس القاعدة الموجودة في ReceivingOrPaymentDateRule للقبض والصرف

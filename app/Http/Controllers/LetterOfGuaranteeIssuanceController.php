@@ -140,6 +140,7 @@ class LetterOfGuaranteeIssuanceController
                     'movement_date' => $lg->getMovementDate(),
                     'issuance_date_formatted' => $lg->getIssuanceDateFormatted(),
                     'renewal_date_formatted' => $lg->getRenewalDateFormatted(),
+                    'cancellation_date_formatted' => $lg->getCancellationDateFormatted(),
                     'is_running' => $lg->isRunning(),
                     'is_expired' => $lg->isExpired(),
                     'is_cancelled' => $lg->isCancelled(),

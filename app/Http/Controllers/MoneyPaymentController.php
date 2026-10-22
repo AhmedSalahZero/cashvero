@@ -641,6 +641,9 @@ class MoneyPaymentController
             'partnerTypes' => collect(getAllPartnerTypesForSuppliers())->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
             'moneyTypes' => $this->moneyTypeOptions(),
             'currencies' => collect($selectedCurrency ? [$selectedCurrency => $selectedCurrency] : getBanksCurrencies())->map(fn ($label, $code) => ['code' => $code, 'label' => strtoupper($label)])->values(),
+            // Same as Money Received: the Pay Currency stays free even when
+            // the form was opened from a single invoice's row.
+            'paymentCurrencies' => collect(getBanksCurrencies())->map(fn ($label, $code) => ['code' => $code, 'label' => strtoupper($label)])->values(),
             'selectedBranches' => collect($selectedBranches)->map(fn ($name, $id) => ['id' => $id, 'name' => $name])->values(),
             'financialInstitutionBanks' => $financialInstitutionBanks->map(fn ($b) => ['id' => $b->id, 'name' => $b->getName()]),
             'accountTypes' => $accountTypes->map(fn ($a) => ['id' => $a->id, 'name' => $a->getName()]),

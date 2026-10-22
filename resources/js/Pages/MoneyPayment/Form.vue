@@ -32,6 +32,8 @@ const props = defineProps({
     partnerTypes: Array,
     moneyTypes: Array,
     currencies: Array,
+    // Options for "Pay Currency" — see MoneyReceived/Form.vue's receivingCurrencies.
+    paymentCurrencies: Array,
     selectedBranches: Array,
     financialInstitutionBanks: Array,
     accountTypes: Array,
@@ -625,7 +627,7 @@ function submit() {
                         <label class="cvr-form-label">{{ $t('Pay Currency') }} *</label>
                         <select v-model="paymentCurrency" class="cvr-input w-full px-3 py-2 rounded">
                             <option value="">{{ $t('Select') }}</option>
-                            <option v-for="c in currencies" :key="c.code" :value="c.code">{{ c.label }}</option>
+                            <option v-for="c in (paymentCurrencies || currencies)" :key="c.code" :value="c.code">{{ c.label }}</option>
                         </select>
                     </div>
                     <div>

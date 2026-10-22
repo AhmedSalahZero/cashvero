@@ -235,7 +235,7 @@ abstract class AbstractStatementExport implements FromCollection, ShouldAutoSize
      * summing across rows is meaningless) is handled by
      * writeSpecialTotalsCells(), which subclasses override.
      */
-    private function addTotalsRow($sheet, int $lastDataRow, string $lastColumnLetter): void
+    protected function addTotalsRow($sheet, int $lastDataRow, string $lastColumnLetter): void
     {
         $totalsRow = $lastDataRow + 1;
         $sheet->setCellValue("A{$totalsRow}", 'TOTAL');

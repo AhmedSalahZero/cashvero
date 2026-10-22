@@ -70,11 +70,11 @@ const props = defineProps({
     // contracts rather than left there to fight the sync.
     hasOdooCredentials: Boolean,
     contractStatues: Array,
-    contracts: Object, // { running: [...], running_and_against: [...], finished: [...] }
+    contracts: Object, // { running: [...], running_and_against: [...], finished: [...], all: [...] }
     search: { type: String, default: '' },
     // Orders (Sales / Purchase) across ALL pages of each tab, for the matching contracts — same scope as the paginator total
     orderTotals: { type: Object, default: () => ({}) },
-    paginators: Object, // { running: {...}, running_and_against: {...}, finished: {...} } — Laravel paginator arrays
+    paginators: Object, // { running: {...}, running_and_against: {...}, finished: {...}, all: {...} } — Laravel paginator arrays
     createUrl: String,
     tabUrls: Object,
     clientsWithContracts: Array, // Supplier side only — customers to allocate a PO across
@@ -86,6 +86,15 @@ const tabLabels = {
     running: 'Running',
     running_and_against: 'Running And Against',
     finished: 'Finished',
+    all: 'All',
+};
+
+/* The fourth tab lists every contract whatever its state, so it is the
+   only one that needs to say which state each row is in. */
+const statusBadgeClasses = {
+    running: 'cvr-badge-active',
+    running_and_against: 'cvr-badge-facility',
+    finished: 'cvr-badge-inactive',
 };
 
 const activeTab = ref(props.activeTab || 'running');
@@ -98,6 +107,7 @@ function switchTab(key) {
 }
 
 const currentRows = computed(() => props.contracts[activeTab.value] || []);
+const showStatusColumn = computed(() => activeTab.value === 'all');
 const currentPaginator = computed(() => props.paginators?.[activeTab.value] || null);
 
 /* ── KPIs ─────────────────────────────────────────────────────── */
@@ -337,6 +347,7 @@ function submitAllocations() {
                             <th class="px-4 py-3 text-start">{{ $t('Amount') }}</th>
                             <th class="px-4 py-3 text-end">{{ $t('Linked Invoices') }}</th>
                             <th class="px-4 py-3 text-end">{{ $t('Completion') }}</th>
+                            <th v-if="showStatusColumn" class="px-4 py-3 text-start">{{ $t('Status') }}</th>
                             <th class="px-4 py-3 text-start">{{ $t('Actions') }}</th>
                         </tr>
                     </thead>
@@ -380,6 +391,10 @@ function submitAllocations() {
                                     </span>
                                 </td>
 
+                                <td v-if="showStatusColumn" class="px-4 py-3 whitespace-nowrap">
+                                    <span class="cvr-badge" :class="statusBadgeClasses[row.status] || 'cvr-badge-inactive'">{{ $t(tabLabels[row.status] || row.status) }}</span>
+                                </td>
+
                                 <td class="px-4 py-3">
                                     <div class="flex items-center gap-2">
                                         <RecordLogButton subject="Contract" :id="row.id" :company-id="company.id" />
@@ -402,21 +417,21 @@ function submitAllocations() {
                                         >{{ $t('Supplier Contracts (') }}{{ row.related_contracts.length }})</button>
 
                                         <button
-                                            v-if="activeTab === 'running'"
+                                            v-if="row.status === 'running'"
                                             @click="confirmMarkFinished(row)"
                                             class="cvr-action-btn"
                                             :title="$t('Mark As Finished')"
                                         >✔️</button>
 
                                         <button
-                                            v-if="activeTab === 'running_and_against' && canApprove"
+                                            v-if="row.status === 'running_and_against' && canApprove"
                                             @click="confirmMarkFinished(row)"
                                             class="cvr-action-btn"
                                             :title="$t('Mark As Finished')"
                                         >👍</button>
 
                                         <button
-                                            v-if="activeTab === 'finished' && canApprove && !row.is_assigned_as_collateral"
+                                            v-if="row.status === 'finished' && canApprove && !row.is_assigned_as_collateral"
                                             @click="confirmMarkRunning(row)"
                                             class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs"
                                             :title="$t('Back to Running')"
@@ -426,7 +441,7 @@ function submitAllocations() {
                                              not plain Running — that path is what reverses the
                                              overdraft-limit row written when they were finished. -->
                                         <button
-                                            v-if="activeTab === 'finished' && canApprove && row.is_assigned_as_collateral"
+                                            v-if="row.status === 'finished' && canApprove && row.is_assigned_as_collateral"
                                             @click="confirmMarkRunningAndAgainst(row)"
                                             class="cvr-action-btn"
                                             :title="$t('Mark As Running And Against')"
@@ -455,8 +470,8 @@ function submitAllocations() {
                                     <td class="px-4 py-2 cvr-text-secondary text-xs">{{ subItem.order_number }}</td>
                                     <td class="px-4 py-2 cvr-text-muted text-xs">{{ $t('Amount') }}</td>
                                     <!-- colspan follows the header: Amount + the two
-                                         new columns (Linked Invoices, Completion). -->
-                                    <td class="px-4 py-2 cvr-num text-xs" colspan="4">{{ subItem.amount_formatted }}</td>
+                                         new columns (Linked Invoices, Completion), + Status on the All tab. -->
+                                    <td class="px-4 py-2 cvr-num text-xs" :colspan="showStatusColumn ? 5 : 4">{{ subItem.amount_formatted }}</td>
                                     <td class="px-4 py-2">
                                         <!-- Hidden once the company is on Odoo — allocation comes from there -->
                                         <button
@@ -472,7 +487,7 @@ function submitAllocations() {
                         </template>
 
                         <tr v-if="filteredRows.length === 0">
-                            <td colspan="9" class="px-4 py-8 text-center cvr-text-muted">
+                            <td :colspan="showStatusColumn ? 10 : 9" class="px-4 py-8 text-center cvr-text-muted">
                                 {{ $t('No') }} {{ type.toLowerCase() }} {{ $t('contracts found.') }}
                             </td>
                         </tr>

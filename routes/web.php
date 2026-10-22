@@ -770,6 +770,18 @@ Route::group(
                     Route::get('lg-by-bank-name-report', 'LgByBankNameReportController@result')->name('result.lg.by.bank.name.report');
                     Route::get('lg-by-bank-name-report/export', 'LgByBankNameReportController@exportExcel')->name('export.lg.by.bank.name.report');
                     Route::get('lg-by-bank-name-report/print', 'LgByBankNameReportController@print')->name('print.lg.by.bank.name.report');
+
+                    // Cheques Report - received / payable cheques due on or after a date.
+                    Route::get('cheques-report', 'ChequesReportController@index')->name('view.cheques.report');
+                    Route::get('cheques-report/result', 'ChequesReportController@result')->name('result.cheques.report');
+                    Route::get('cheques-report/export', 'ChequesReportController@exportExcel')->name('export.cheques.report');
+                    Route::get('cheques-report/print', 'ChequesReportController@print')->name('print.cheques.report');
+
+                    // Down Payment Report - customer / supplier down payments with settled amount and balance.
+                    Route::get('down-payment-report', 'DownPaymentReportController@index')->name('view.down.payment.report');
+                    Route::get('down-payment-report/result', 'DownPaymentReportController@result')->name('result.down.payment.report');
+                    Route::get('down-payment-report/export', 'DownPaymentReportController@exportExcel')->name('export.down.payment.report');
+                    Route::get('down-payment-report/print', 'DownPaymentReportController@print')->name('print.down.payment.report');
                     
                     Route::get('lg-lc-bank-statement', 'LGLCSBanktatementController@index')->name('view.lg.lc.bank.statement');
                     Route::get('lg-lc-bank-statement/result', 'LGLCSBanktatementController@result')->name('result.lg.lc.bank.statement');

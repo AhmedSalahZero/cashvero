@@ -96,14 +96,18 @@ function goToPage(url) {
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-blue">📜</div>
                     <div>
-                        <p class="cvr-kpi-label">{{ $t('Total Amount') }}</p>
+                        <p class="cvr-kpi-label">{{ $t('Total Amount') }} · {{ $t('Total (without cancellation)') }}</p>
+                        <p class="cvr-kpi-value cvr-num-blue">{{ formatAmount(kpis.totalLgAmountWithoutCancellation) }}</p>
+                        <p class="cvr-kpi-label mt-2">{{ $t('Total (with cancellation)') }}</p>
                         <p class="cvr-kpi-value cvr-num-blue">{{ formatAmount(kpis.totalLgAmount) }}</p>
                     </div>
                 </div>
                 <div class="cvr-kpi-card">
                     <div class="cvr-kpi-icon cvr-kpi-icon-green">🛡️</div>
                     <div>
-                        <p class="cvr-kpi-label">{{ $t('Total Cash Cover') }}</p>
+                        <p class="cvr-kpi-label">{{ $t('Total Cash Cover') }} · {{ $t('Total (without cancellation)') }}</p>
+                        <p class="cvr-kpi-value cvr-num-green">{{ formatAmount(kpis.totalCashCoverWithoutCancellation) }}</p>
+                        <p class="cvr-kpi-label mt-2">{{ $t('Total (with cancellation)') }}</p>
                         <p class="cvr-kpi-value cvr-num-green">{{ formatAmount(kpis.totalCashCoverAmount) }}</p>
                     </div>
                 </div>
@@ -152,9 +156,30 @@ function goToPage(url) {
                                 <td class="px-3 py-2.5 text-start cvr-text-secondary">{{ row.source }}</td>
                                 <td v-if="showStatusColumn" class="px-3 py-2.5 text-center" :class="rowStatusClass(row)">{{ rowStatusLabel(row) }}</td>
                                 <td class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(row.lgAmount) }}</td>
-                                <td class="px-3 py-2.5 text-center" :class="row.renewalDate === 'cancelled' ? 'cvr-num-red font-medium' : 'cvr-text-secondary'">{{ row.renewalDate }}</td>
+                                <td class="px-3 py-2.5 text-center cvr-text-secondary">
+                                    <div>{{ row.renewalDate }}</div>
+                                    <div v-if="row.status === 'cancelled'" class="cvr-num-red font-medium">
+                                        {{ row.cancellationDate ? $t('cancelled (:date)', { date: row.cancellationDate }) : 'cancelled' }}
+                                    </div>
+                                </td>
                                 <td class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(row.cashCoverAmount) }}</td>
                                 <td class="px-3 py-2.5 text-right cvr-num">{{ row.lgCommissionRate }}</td>
+                            </tr>
+                            <tr class="cvr-table-row font-medium">
+                                <td class="px-3 py-2.5 text-center">-</td>
+                                <td class="px-3 py-2.5 text-start" :colspan="showStatusColumn ? 7 : 6">{{ $t('Total (without cancellation)') }}</td>
+                                <td class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(kpis.totalLgAmountWithoutCancellation) }}</td>
+                                <td class="px-3 py-2.5 text-center">-</td>
+                                <td class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(kpis.totalCashCoverWithoutCancellation) }}</td>
+                                <td class="px-3 py-2.5 text-right">-</td>
+                            </tr>
+                            <tr class="cvr-table-row font-medium">
+                                <td class="px-3 py-2.5 text-center">-</td>
+                                <td class="px-3 py-2.5 text-start" :colspan="showStatusColumn ? 7 : 6">{{ $t('Total (with cancellation)') }}</td>
+                                <td class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(kpis.totalLgAmount) }}</td>
+                                <td class="px-3 py-2.5 text-center">-</td>
+                                <td class="px-3 py-2.5 text-right cvr-num">{{ formatAmount(kpis.totalCashCoverAmount) }}</td>
+                                <td class="px-3 py-2.5 text-right">-</td>
                             </tr>
                             <tr v-if="rows.length === 0">
                                 <td :colspan="showStatusColumn ? 12 : 11" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No Letters of Guarantee found for these filters.') }}</td>

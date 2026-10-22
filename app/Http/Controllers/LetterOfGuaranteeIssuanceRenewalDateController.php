@@ -130,12 +130,11 @@ class LetterOfGuaranteeIssuanceRenewalDateController
 			],
 			'rows' => $rows,
 			'mode' => $model ? 'edit' : 'create',
-			// The original only shows the add/edit form at all when
-			// either editing an existing row, or the LG has expired
-			// (you can't renew an LG that hasn't reached its current
-			// expiry yet). Same rule as TD's renewal page. An Advance
-			// Payment LG that isn't activated yet has nothing to renew.
-			'canShowForm' => (bool) $model || ($letterOfGuaranteeIssuance->isExpired() && $letterOfGuaranteeIssuance->isActivated()),
+			// Form is shown when editing, or when the LG is activated
+			// and not cancelled. Renewal is allowed before the current
+			// expiry date. An Advance Payment LG that isn't activated
+			// yet has nothing to renew.
+			'canShowForm' => (bool) $model || ($letterOfGuaranteeIssuance->isActivated() && ! $letterOfGuaranteeIssuance->isCancelled()),
 			'formDefaults' => [
 				// See class docblock — this is NOT simply "the
 				// previous row's date" in edit mode.

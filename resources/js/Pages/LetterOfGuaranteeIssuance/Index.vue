@@ -159,6 +159,10 @@ function submitCancel() {
     router.post(cancelTarget.value.cancel_url, cancelForm.value, { onFinish: () => { cancelTarget.value = null; } });
 }
 
+/* ── Cancellation date (read-only, cancelled rows) ──────────── */
+const cancellationDateTarget = ref(null);
+function openCancellationDate(row) { cancellationDateTarget.value = row; }
+
 /* ── Back To Running modal ───────────────────────────────────── */
 const backToRunningTarget = ref(null);
 function openBackToRunning(row) { backToRunningTarget.value = row; }
@@ -338,6 +342,7 @@ const odooErrorTarget = ref(null);
 
                                     <button v-if="!row.review?.is_reviewed && permissions.canCancel && (row.is_running || row.is_expired)" @click="openCancel(row)" class="cvr-action-btn" :title="$t('Cancel Letter')">🚫</button>
                                     <button v-if="!row.review?.is_reviewed && permissions.canUpdate && row.is_running && row.is_advanced_payment && row.is_activated" @click="openAdvancedPayment(row)" class="cvr-action-btn" :title="$t('Amount To Be Decreased')">⚖️</button>
+                                    <button v-if="row.is_cancelled" @click="openCancellationDate(row)" class="cvr-action-btn" :title="$t('Cancellation Date')">📅</button>
                                     <button v-if="!row.review?.is_reviewed && permissions.canCancel && row.is_cancelled" @click="openBackToRunning(row)" class="cvr-action-btn" :title="$t('Back To Running')">↩️</button>
 
                                     <Link v-if="permissions.canUpdate && !row.is_cancelled" :href="row.edit_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">{{ $t('Edit') }}</Link>
@@ -407,6 +412,18 @@ const odooErrorTarget = ref(null);
                     <div class="flex justify-end gap-2">
                         <button @click="cancelTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
                         <button @click="submitCancel" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm') }}</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cancellation date modal -->
+            <div v-if="cancellationDateTarget" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-sm">
+                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Cancellation Date') }}</h2>
+                    <label class="cvr-form-label">{{ $t('Cancellation Date') }}</label>
+                    <input disabled :value="cancellationDateTarget.cancellation_date_formatted || '—'" class="cvr-input w-full px-3 py-2 rounded mb-4" />
+                    <div class="flex justify-end">
+                        <button @click="cancellationDateTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
                     </div>
                 </div>
             </div>

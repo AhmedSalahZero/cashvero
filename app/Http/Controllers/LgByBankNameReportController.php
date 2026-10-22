@@ -166,7 +166,7 @@ class LgByBankNameReportController
             ->join('financial_institutions', 'financial_institutions.id', '=', 'letter_of_guarantee_issuances.financial_institution_id')
             ->join('banks', 'banks.id', '=', 'financial_institutions.bank_id')
             ->selectRaw(
-                'letter_of_guarantee_issuances.id as id , letter_of_guarantee_issuances.partner_id as partner_id , partners.name as partner_name , letter_of_guarantee_issuances.lg_type as lg_type , letter_of_guarantee_issuances.transaction_name as transaction_name, letter_of_guarantee_issuances.lg_code as lg_code, letter_of_guarantee_issuances.source as source ,banks.name_en as financial_institution_name , letter_of_guarantee_issuances.lg_amount as lg_amount , case when letter_of_guarantee_issuances.status = \'cancelled\' then \'cancelled\' else (DATE_FORMAT(letter_of_guarantee_issuances.renewal_date,\'%d-%m-%Y\')) end as renewal_date , '.self::CASH_COVER_SQL.' as cash_cover_amount, letter_of_guarantee_issuances.is_activated as is_activated, letter_of_guarantee_issuances.lg_commission_rate as lg_commission_rate , case when letter_of_guarantee_issuances.status = \'cancelled\' then \'cancelled\' when letter_of_guarantee_issuances.renewal_date <= NOW() then \'expired\' else \'running\' end as lg_status '
+                'letter_of_guarantee_issuances.id as id , letter_of_guarantee_issuances.partner_id as partner_id , partners.name as partner_name , letter_of_guarantee_issuances.lg_type as lg_type , letter_of_guarantee_issuances.transaction_name as transaction_name, letter_of_guarantee_issuances.lg_code as lg_code, letter_of_guarantee_issuances.source as source ,banks.name_en as financial_institution_name , letter_of_guarantee_issuances.lg_amount as lg_amount , DATE_FORMAT(letter_of_guarantee_issuances.renewal_date,\'%d-%m-%Y\') as renewal_date , DATE_FORMAT(COALESCE(letter_of_guarantee_issuances.cancellation_date, cancellation_statement.date),\'%d-%m-%Y\') as cancellation_date , '.self::CASH_COVER_SQL.' as cash_cover_amount, letter_of_guarantee_issuances.is_activated as is_activated, letter_of_guarantee_issuances.lg_commission_rate as lg_commission_rate , case when letter_of_guarantee_issuances.status = \'cancelled\' then \'cancelled\' when letter_of_guarantee_issuances.renewal_date <= NOW() then \'expired\' else \'running\' end as lg_status '
             )
             // Without an ORDER BY, MySQL is free to return these rows in any
             // order it likes, and it does not have to pick the same one
@@ -200,14 +200,13 @@ class LgByBankNameReportController
         // They are SQL SUMs over the same WHERE clause now, so a large
         // report no longer has to be read into PHP just to be added up.
         $paginator = $this->paginateStatement($data['query'], self::ROWS_PER_PAGE);
-        $sums = $this->statementSums($data['query'], [
-            'total_lg_amount' => 'letter_of_guarantee_issuances.lg_amount',
-            'total_cash_cover' => self::CASH_COVER_SQL,
-        ]);
+        $sums = $this->bankReportSums($data['query']);
 
         $kpis = [
             'totalLgAmount' => $sums['total_lg_amount'],
             'totalCashCoverAmount' => $sums['total_cash_cover'],
+            'totalLgAmountWithoutCancellation' => $sums['total_lg_amount_without_cancellation'],
+            'totalCashCoverWithoutCancellation' => $sums['total_cash_cover_without_cancellation'],
             'transactionCount' => $paginator->total(),
         ];
 
@@ -242,6 +241,63 @@ class LgByBankNameReportController
      */
 
     /**
+     * Amount and cash cover for the whole filtered report, with and
+     * without cancelled rows. The screen, the export, and the printout
+     * all read these so the three cannot disagree.
+     *
+     * @param  callable():\Illuminate\Database\Query\Builder  $query
+     * @return array<string, float>
+     */
+    private function bankReportSums(callable $query): array
+    {
+        return $this->statementSums($query, [
+            'total_lg_amount' => 'letter_of_guarantee_issuances.lg_amount',
+            'total_cash_cover' => self::CASH_COVER_SQL,
+            'total_lg_amount_without_cancellation' => "CASE WHEN letter_of_guarantee_issuances.status = 'cancelled' THEN 0 ELSE letter_of_guarantee_issuances.lg_amount END",
+            'total_cash_cover_without_cancellation' => "CASE WHEN letter_of_guarantee_issuances.status = 'cancelled' THEN 0 ELSE (".self::CASH_COVER_SQL.') END',
+        ]);
+    }
+
+    /**
+     * Renewal date on the first line. A cancelled LG adds the cancellation
+     * date underneath. No cancellation date means the word alone.
+     */
+    private function renewalDateCell(array $mapped): string
+    {
+        $renewalDate = (string) ($mapped['renewalDate'] ?? '');
+        if (($mapped['status'] ?? null) !== 'cancelled') {
+            return $renewalDate;
+        }
+
+        $cancellationDate = $mapped['cancellationDate'] ?? null;
+        $cancelledLine = $cancellationDate
+            ? __('cancelled (:date)', ['date' => $cancellationDate])
+            : 'cancelled';
+
+        return $renewalDate."\n".$cancelledLine;
+    }
+
+    /**
+     * @return array<string, float|string>
+     */
+    private function totalExportRow(string $label, float $amount, float $cashCover): array
+    {
+        return [
+            '#' => '',
+            'Bank Name' => $label,
+            'Beneficiary Name' => '',
+            'LG Type' => '',
+            'Transaction Name' => '',
+            'LG Code' => '',
+            'Source' => '',
+            'Amount' => $amount,
+            'Renewal Date' => '',
+            'Cash Cover' => $cashCover,
+            'Commission Rate %' => '',
+        ];
+    }
+
+    /**
      * The headings and the rows for the WHOLE range, in one place.
      *
      * Shared by the Excel export and by Print so the two can never show
@@ -274,12 +330,15 @@ class LgByBankNameReportController
                 'LG Code' => $this->lgCodeForExport($mapped),
                 'Source' => $mapped['source'],
                 'Amount' => $mapped['lgAmount'],
-                'Renewal Date' => $mapped['renewalDate'],
+                'Renewal Date' => $this->renewalDateCell($mapped),
                 'Cash Cover' => $mapped['cashCoverAmount'],
                 'Commission Rate %' => $mapped['lgCommissionRate'],
             ];
         });
 
+        $sums = $this->bankReportSums($data['query']);
+        $rows->push($this->totalExportRow(__('Total (without cancellation)'), $sums['total_lg_amount_without_cancellation'], $sums['total_cash_cover_without_cancellation']));
+        $rows->push($this->totalExportRow(__('Total (with cancellation)'), $sums['total_lg_amount'], $sums['total_cash_cover']));
 
         return [$headings, $rows, ['LG-By-Bank-Name', strtoupper((string) $data['currency'])], null];
     }
