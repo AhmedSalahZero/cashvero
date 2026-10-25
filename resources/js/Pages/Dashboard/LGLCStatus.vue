@@ -104,6 +104,7 @@ function fmt(value) {
    this modal's totals row always foots to the Limit/Outstanding/
    Room/Cash Cover cards above it. */
 const limitDetailsModal = ref(null); // { rows, totals, showReserved } | null
+const facilityDetailsModal = ref(null);
 function openLimitDetails(sectionKey) {
     const rows = props.reports?.[sectionKey]?.[activeCurrency.value]?.limitDetailsByBank || [];
     const totals = rows.reduce((acc, r) => ({
@@ -116,6 +117,36 @@ function openLimitDetails(sectionKey) {
     // Only LGs can be reserved: an unactivated Advance Payment LG holds
     // its amount against the facility limit without any statement row.
     limitDetailsModal.value = { rows, totals, showReserved: sectionKey === 'lg' };
+    facilityDetailsModal.value = null;
+}
+
+/* A bank row is the sum of its active facilities. When that bank has
+   more than one contract, this second modal lists each one with the
+   same figures, so a fully used contract (room 0) is visible beside
+   the contract that still has room. */
+function openFacilityDetails(row) {
+    const facilities = row.facilities || [];
+    if (facilities.length < 2) {
+        return;
+    }
+    const totals = facilities.reduce((acc, facility) => ({
+        limit: acc.limit + (Number(facility.limit) || 0),
+        outstanding: acc.outstanding + (Number(facility.outstanding) || 0),
+        reserved: acc.reserved + (Number(facility.reserved) || 0),
+        room: acc.room + (Number(facility.room) || 0),
+        cash_cover: acc.cash_cover + (Number(facility.cash_cover) || 0),
+    }), { limit: 0, outstanding: 0, reserved: 0, room: 0, cash_cover: 0 });
+    facilityDetailsModal.value = {
+        bankName: row.financial_institution_name,
+        facilities,
+        totals,
+        showReserved: !!limitDetailsModal.value?.showReserved,
+    };
+}
+
+function closeLimitDetails() {
+    limitDetailsModal.value = null;
+    facilityDetailsModal.value = null;
 }
 
 /* ── LG / LC sections — structurally identical, generalized rather
@@ -278,7 +309,17 @@ function tableRows(section) {
                         </thead>
                         <tbody>
                             <tr v-for="(row, i) in limitDetailsModal.rows" :key="i" class="cvr-table-row">
-                                <td class="px-2 py-2">{{ row.financial_institution_name }}</td>
+                                <td class="px-2 py-2">
+                                    <div class="flex items-center gap-2">
+                                        <span>{{ row.financial_institution_name }}</span>
+                                        <button
+                                            v-if="(row.facilities || []).length > 1"
+                                            type="button"
+                                            class="cvr-btn-secondary px-2 py-0.5 rounded border text-xs whitespace-nowrap"
+                                            @click="openFacilityDetails(row)"
+                                        >{{ $t('Contracts') }}</button>
+                                    </div>
+                                </td>
                                 <td class="px-2 py-2 text-right cvr-num-blue">{{ fmt(row.limit) }}</td>
                                 <td class="px-2 py-2 text-right cvr-num-amber">{{ fmt(row.outstanding) }}</td>
                                 <td v-if="limitDetailsModal.showReserved" class="px-2 py-2 text-right cvr-num-amber">{{ fmt(row.reserved) }}</td>
@@ -297,7 +338,54 @@ function tableRows(section) {
                         </tbody>
                     </table>
                     <div class="flex justify-end">
-                        <button @click="limitDetailsModal = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                        <button @click="closeLimitDetails" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- One bank, more than one facility contract -->
+            <div v-if="facilityDetailsModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-6xl max-h-[85vh] overflow-auto">
+                    <h2 class="text-lg font-medium cvr-text-primary mb-1">{{ $t('Contracts') }}</h2>
+                    <p class="text-sm cvr-text-muted mb-4">{{ facilityDetailsModal.bankName }}</p>
+                    <table class="min-w-full text-sm mb-4">
+                        <thead class="cvr-table-head">
+                            <tr>
+                                <th class="px-2 py-2 text-start">{{ $t('Contract Name') }}</th>
+                                <th class="px-2 py-2 text-start">{{ $t('Start Date') }}</th>
+                                <th class="px-2 py-2 text-start">{{ $t('End Date') }}</th>
+                                <th class="px-2 py-2 text-right">{{ $t('Limit') }}</th>
+                                <th class="px-2 py-2 text-right">{{ $t('Outstanding') }}</th>
+                                <th v-if="facilityDetailsModal.showReserved" class="px-2 py-2 text-right" :title="$t('Unactivated Advance Payment LGs')">{{ $t('Reserved') }}</th>
+                                <th class="px-2 py-2 text-right">{{ $t('Room') }}</th>
+                                <th class="px-2 py-2 text-right">{{ $t('Cash Cover') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="facility in facilityDetailsModal.facilities" :key="facility.id" class="cvr-table-row">
+                                <td class="px-2 py-2">{{ facility.name || '—' }}</td>
+                                <td class="px-2 py-2 whitespace-nowrap">{{ facility.contract_start_date || '—' }}</td>
+                                <td class="px-2 py-2 whitespace-nowrap">{{ facility.contract_end_date || '—' }}</td>
+                                <td class="px-2 py-2 text-right cvr-num-blue">{{ fmt(facility.limit) }}</td>
+                                <td class="px-2 py-2 text-right cvr-num-amber">{{ fmt(facility.outstanding) }}</td>
+                                <td v-if="facilityDetailsModal.showReserved" class="px-2 py-2 text-right cvr-num-amber">{{ fmt(facility.reserved) }}</td>
+                                <td class="px-2 py-2 text-right cvr-num-green">{{ fmt(facility.room) }}</td>
+                                <td class="px-2 py-2 text-right cvr-num">{{ fmt(facility.cash_cover) }}</td>
+                            </tr>
+                            <tr class="font-semibold cvr-summary-row">
+                                <td class="px-2 py-2">{{ $t('Total') }}</td>
+                                <td class="px-2 py-2"></td>
+                                <td class="px-2 py-2"></td>
+                                <td class="px-2 py-2 text-right cvr-num-blue">{{ fmt(facilityDetailsModal.totals.limit) }}</td>
+                                <td class="px-2 py-2 text-right cvr-num-amber">{{ fmt(facilityDetailsModal.totals.outstanding) }}</td>
+                                <td v-if="facilityDetailsModal.showReserved" class="px-2 py-2 text-right cvr-num-amber">{{ fmt(facilityDetailsModal.totals.reserved) }}</td>
+                                <td class="px-2 py-2 text-right cvr-num-green">{{ fmt(facilityDetailsModal.totals.room) }}</td>
+                                <td class="px-2 py-2 text-right cvr-num">{{ fmt(facilityDetailsModal.totals.cash_cover) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="flex justify-end">
+                        <button @click="facilityDetailsModal = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
                     </div>
                 </div>
             </div>

@@ -222,6 +222,104 @@ class ChequesReportTest extends TestCase
         );
     }
 
+    public function test_payable_includes_leasing_installment_cheques(): void
+    {
+        $this->payableCheque('PAY-CHQ-WITH-LEASE', '2099-11-01', 'EGP', 400);
+
+        $leasingCompanyName = 'Leasing Co '.uniqid();
+        $leasingCompanyId = DB::table('leasing_companies')->insertGetId([
+            'company_id' => $this->company->id,
+            'name' => $leasingCompanyName,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $contractId = DB::table('leasing_contracts')->insertGetId([
+            'company_id' => $this->company->id,
+            'leasing_company_id' => $leasingCompanyId,
+            'status' => 'running',
+            'name' => 'Lease '.uniqid(),
+            'currency' => 'egp',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('contract_loan_schedules')->insert([
+            [
+                'leasing_contract_id' => $contractId,
+                'company_id' => $this->company->id,
+                'date' => '2099-11-02',
+                'cheque_amount' => 900,
+                'remaining' => 0,
+                'cheque_number' => 'LEASE-CHQ-PENDING',
+                'drawee_bank_id' => $this->deliveryBankId,
+                'actual_payment_date' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'leasing_contract_id' => $contractId,
+                'company_id' => $this->company->id,
+                'date' => '2099-11-03',
+                'cheque_amount' => 1200,
+                'remaining' => 50,
+                'cheque_number' => 'LEASE-CHQ-PAID',
+                'drawee_bank_id' => $this->deliveryBankId,
+                'actual_payment_date' => '2099-11-03',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'leasing_contract_id' => $contractId,
+                'company_id' => $this->company->id,
+                'date' => '2099-10-01',
+                'cheque_amount' => 10,
+                'remaining' => 10,
+                'cheque_number' => 'LEASE-CHQ-EARLY',
+                'drawee_bank_id' => $this->deliveryBankId,
+                'actual_payment_date' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'leasing_contract_id' => $contractId,
+                'company_id' => $this->company->id,
+                'date' => '2099-11-04',
+                'cheque_amount' => 0,
+                'remaining' => 0,
+                'cheque_number' => 'LEASE-CHQ-ZERO',
+                'drawee_bank_id' => $this->deliveryBankId,
+                'actual_payment_date' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $response = $this->actingAs($this->userWith(['view supplier payment']))
+            ->get($this->resultUrl(['type' => 'payable', 'due_date' => '2099-11-01', 'currencies' => ['EGP']]))
+            ->assertOk();
+
+        $rows = collect($response->viewData('page')['props']['paginator']['data']);
+        $numbers = $rows->pluck('chequeNumber')->all();
+        $this->assertContains('PAY-CHQ-WITH-LEASE', $numbers);
+        $this->assertContains('LEASE-CHQ-PENDING', $numbers);
+        $this->assertContains('LEASE-CHQ-PAID', $numbers);
+        $this->assertNotContains('LEASE-CHQ-EARLY', $numbers);
+        $this->assertNotContains('LEASE-CHQ-ZERO', $numbers);
+
+        $pending = $rows->firstWhere('chequeNumber', 'LEASE-CHQ-PENDING');
+        $this->assertSame($leasingCompanyName, $pending['partnerName']);
+        $this->assertSame(900.0, $pending['amount']);
+        $this->assertSame('EGP', $pending['currency']);
+        $this->assertSame('pending', $pending['status']);
+        $this->assertSame('leasing', $pending['source']);
+
+        $paid = $rows->firstWhere('chequeNumber', 'LEASE-CHQ-PAID');
+        $this->assertSame(1200.0, $paid['amount']);
+        $this->assertSame('paid', $paid['status']);
+        $this->assertSame(__('Paid'), $paid['statusLabel']);
+
+        $this->assertSame(2500.0, collect($response->viewData('page')['props']['kpis']['perCurrency'])->firstWhere('currency', 'EGP')['total']);
+    }
+
     public function test_payable_cheques_come_from_money_payments(): void
     {
         $this->payableCheque('PAY-CHQ-1', '2099-09-01', 'EGP', 750);

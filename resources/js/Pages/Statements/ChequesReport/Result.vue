@@ -124,7 +124,7 @@ function statusClass(status) {
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="(row, index) in rows" :key="row.id" class="cvr-table-row">
+                            <tr v-for="(row, index) in rows" :key="`${row.source}-${row.id}`" class="cvr-table-row">
                                 <td class="px-3 py-2.5 text-center cvr-text-secondary">{{ rowOffset + index + 1 }}</td>
                                 <td class="px-3 py-2.5 text-start cvr-text-primary">{{ row.partnerName }}</td>
                                 <td class="px-3 py-2.5 text-center cvr-text-secondary">{{ row.chequeNumber }}</td>

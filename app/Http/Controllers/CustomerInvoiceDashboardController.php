@@ -1161,6 +1161,14 @@ class CustomerInvoiceDashboardController extends Controller
 							 * * نفس الحجز اللي فورم الاصدار بيطرحه من الـ room
 							 */
 							$details[$currencyName][$currentLgOrLcType][] = [
+								'id' => (int) $currentLastLetterOfGuaranteeOrCreditFacility->id,
+								'name' => $currentLastLetterOfGuaranteeOrCreditFacility->name,
+								'contract_start_date' => $currentLastLetterOfGuaranteeOrCreditFacility->contract_start_date
+									? Carbon::parse($currentLastLetterOfGuaranteeOrCreditFacility->contract_start_date)->format('d-m-Y')
+									: null,
+								'contract_end_date' => $currentLastLetterOfGuaranteeOrCreditFacility->contract_end_date
+									? Carbon::parse($currentLastLetterOfGuaranteeOrCreditFacility->contract_end_date)->format('d-m-Y')
+									: null,
 								'limit'=>$currentLimit =  $currentLastLetterOfGuaranteeOrCreditFacility->limit  ,
 								'outstanding_balance'=> $currentOutstanding = $statementTableFullClassName::getTotalOutstandingBalanceForAllTypes($currentLastLetterOfGuaranteeOrCreditFacility->id,$company->id,$financialInstitutionBankId,$currencyName,$debug)  , 
 								'reserved'=> $currentReserved = $currentLgOrLcType == 'lg' ? LetterOfGuaranteeIssuance::reservedForUnactivated($company->id, $currencyName, (int) $financialInstitutionBankId, LetterOfGuaranteeIssuance::LG_FACILITY, (int) $currentLastLetterOfGuaranteeOrCreditFacility->id) : 0 ,
@@ -1196,6 +1204,9 @@ class CustomerInvoiceDashboardController extends Controller
 				// just grouped by bank name instead of listed per facility,
 				// so the totals here always foot to the same Limit/
 				// Outstanding/Room/Cash Cover KPI values shown on the cards.
+				// Each bank also keeps its facilities[] so a bank with more
+				// than one active contract can open a second popup. The
+				// bank totals above are still the sum of those contracts.
 				$limitDetailsByBank = [];
 				foreach ($details[$currencyName][$currentLgOrLcType] ?? [] as $facilityRow) {
 					$bankName = $facilityRow['financial_institution_name'];
@@ -1207,6 +1218,7 @@ class CustomerInvoiceDashboardController extends Controller
 							'reserved' => 0.0,
 							'room' => 0.0,
 							'cash_cover' => 0.0,
+							'facilities' => [],
 						];
 					}
 					$limitDetailsByBank[$bankName]['limit'] += $facilityRow['limit'];
@@ -1214,6 +1226,17 @@ class CustomerInvoiceDashboardController extends Controller
 					$limitDetailsByBank[$bankName]['reserved'] += $facilityRow['reserved'];
 					$limitDetailsByBank[$bankName]['room'] += $facilityRow['room'];
 					$limitDetailsByBank[$bankName]['cash_cover'] += $facilityRow['cash_cover'];
+					$limitDetailsByBank[$bankName]['facilities'][] = [
+						'id' => $facilityRow['id'],
+						'name' => $facilityRow['name'],
+						'contract_start_date' => $facilityRow['contract_start_date'],
+						'contract_end_date' => $facilityRow['contract_end_date'],
+						'limit' => $facilityRow['limit'],
+						'outstanding' => $facilityRow['outstanding_balance'],
+						'reserved' => $facilityRow['reserved'],
+						'room' => $facilityRow['room'],
+						'cash_cover' => $facilityRow['cash_cover'],
+					];
 				}
 				$reports[$currentLgOrLcType][$currencyName]['limitDetailsByBank'] = array_values($limitDetailsByBank);
 

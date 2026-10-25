@@ -20,18 +20,23 @@ use Inertia\Inertia;
  * ------------------------------------------------------------------
  * "Cheques Report" — every cheque whose due date is on or after a chosen
  * date, either the cheques RECEIVED from customers (Money Received) or the
- * cheques PAYABLE to suppliers (Money Payment), in one or more currencies.
+ * cheques PAYABLE to suppliers (Money Payment) and to leasing companies
+ * (installment cheques on contract_loan_schedules), in one or more currencies.
  *
  * Received cheques live in `cheques` (one row per Money Received cheque) and
- * payable cheques in `payable_cheques` (one per Money Payment cheque), so the
- * two share a screen but not a query — see receivedQuery()/payableQuery(),
- * which expose the same column aliases so everything after them is shared.
+ * payable cheques in `payable_cheques` (one per Money Payment cheque). Leasing
+ * installment cheques are a second payable source. The two payable queries
+ * are filtered on their own columns, then unioned, because a select alias
+ * cannot be used in WHERE. Both expose the same column aliases so everything
+ * after them is shared.
  *
  *   - Currency   is the currency the cheque itself is written in:
  *                receiving_currency / payment_currency, not the invoice's.
  *   - Bank       is the drawee bank for a received cheque (the customer's
- *                bank, as on the Money Received tabs) and the delivery bank
- *                for a payable one (the company's own bank).
+ *                bank, as on the Money Received tabs) and the company's own
+ *                bank for a payable one: delivery_bank_id on a Money Payment
+ *                cheque, drawee_bank_id on a leasing installment. Both are
+ *                financial-institution ids.
  *   - Cheques of a Cash Expense are not Money Payments and are not listed.
  *
  * The bank filter lives on the result page and narrows the table, the
@@ -132,6 +137,7 @@ class ChequesReportController
 
     /**
      * Cheques paid to suppliers through Money Payment.
+     * `source` keeps a row key unique once leasing installments are unioned in.
      */
     private function payableQuery(Company $company): Builder
     {
@@ -151,6 +157,46 @@ class ChequesReportController
                 'money_payments.payment_currency AS currency',
                 'payable_cheques.due_date AS due_date',
                 'payable_cheques.status AS status',
+                "'money_payment' AS source",
+            ]));
+    }
+
+    /**
+     * Post-dated installment cheques issued to a leasing company. These are
+     * not rows in payable_cheques. The face amount is cheque_amount, so a
+     * paid installment still shows the amount that was written on the cheque.
+     * Currency is matched case-insensitively because some contracts store egp
+     * while the report filter sends EGP.
+     */
+    private function leasingPayableQuery(Company $company, array $filters, bool $withBank): Builder
+    {
+        $currencies = array_map(fn ($currency) => strtoupper((string) $currency), $filters['currencies']);
+
+        return DB::table('contract_loan_schedules')
+            ->join('leasing_contracts', 'leasing_contracts.id', '=', 'contract_loan_schedules.leasing_contract_id')
+            ->join('leasing_companies', 'leasing_companies.id', '=', 'leasing_contracts.leasing_company_id')
+            ->leftJoin('financial_institutions', 'financial_institutions.id', '=', 'contract_loan_schedules.drawee_bank_id')
+            ->leftJoin('banks', 'banks.id', '=', 'financial_institutions.bank_id')
+            ->where('contract_loan_schedules.company_id', $company->id)
+            ->where('contract_loan_schedules.cheque_amount', '>', 0)
+            ->whereNotNull('contract_loan_schedules.date')
+            // A blank or zero due date never qualifies. Comparing against the
+            // literal 0000-00-00 is rejected when the server forbids zero dates,
+            // and whereDate against the chosen due date already drops them.
+            ->whereDate('contract_loan_schedules.date', '>=', $filters['due_date'])
+            ->when($currencies !== [], fn ($q) => $q->whereIn(DB::raw('UPPER(leasing_contracts.currency)'), $currencies))
+            ->when($withBank && $filters['bank_id'], fn ($q) => $q->where('contract_loan_schedules.drawee_bank_id', $filters['bank_id']))
+            ->selectRaw(implode(', ', [
+                'contract_loan_schedules.id AS id',
+                'leasing_companies.name AS partner_name',
+                'contract_loan_schedules.cheque_number AS cheque_number',
+                'contract_loan_schedules.drawee_bank_id AS bank_id',
+                "COALESCE(NULLIF(banks.view_name, ''), financial_institutions.name) AS bank_name",
+                'contract_loan_schedules.cheque_amount AS amount',
+                'leasing_contracts.currency AS currency',
+                'contract_loan_schedules.date AS due_date',
+                "IF(contract_loan_schedules.actual_payment_date IS NULL, 'pending', 'paid') AS status",
+                "'leasing' AS source",
             ]));
     }
 
@@ -177,11 +223,25 @@ class ChequesReportController
      */
     private function freshQuery(Company $company, array $filters, bool $withBank = true): Builder
     {
-        $base = $filters['type'] === self::RECEIVED ? $this->receivedQuery($company) : $this->payableQuery($company);
+        if ($filters['type'] === self::RECEIVED) {
+            return $this->applyFilters($this->receivedQuery($company), $filters, $withBank)
+                ->orderBy('cheques.due_date')
+                ->orderBy('cheques.id');
+        }
 
-        return $this->applyFilters($base, $filters, $withBank)
-            ->orderBy($filters['type'] === self::RECEIVED ? 'cheques.due_date' : 'payable_cheques.due_date')
-            ->orderBy($filters['type'] === self::RECEIVED ? 'cheques.id' : 'payable_cheques.id');
+        // Filter each payable source on its own tables, then sort the union
+        // by the shared aliases. applyFilters() cannot run on the union:
+        // it names payable_cheques / money_payments columns the leasing
+        // half does not have.
+        return DB::query()
+            ->fromSub(
+                $this->applyFilters($this->payableQuery($company), $filters, $withBank)
+                    ->unionAll($this->leasingPayableQuery($company, $filters, $withBank)),
+                'payable_cheques_report'
+            )
+            ->orderBy('due_date')
+            ->orderBy('id')
+            ->orderBy('source');
     }
 
     /**
@@ -257,6 +317,7 @@ class ChequesReportController
             'dueDate' => $row->due_date ? Carbon::parse($row->due_date)->format('d-m-Y') : null,
             'status' => $row->status,
             'statusLabel' => $this->statusLabel($type, $row->status),
+            'source' => isset($row->source) ? (string) $row->source : $type,
         ];
     }
 
@@ -267,7 +328,6 @@ class ChequesReportController
 
         $paginator = $this->paginateStatement(fn () => $this->freshQuery($company, $filters), self::ROWS_PER_PAGE);
         $paginator->setCollection($paginator->getCollection()->map(fn ($row) => $this->mapRow($row, $type)));
-
         $totals = $this->totals($company, $filters);
 
         return Inertia::render('Statements/ChequesReport/Result', [

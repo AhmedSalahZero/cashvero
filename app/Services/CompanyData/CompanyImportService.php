@@ -288,6 +288,9 @@ class CompanyImportService
 
     private string $target;
 
+    /** Read connection. Import uses mysql_source; an in-database clone uses the target connection. */
+    private string $source;
+
     /** @var array<string, array<int|string, int|string>> */
     private array $idMaps = [];
 
@@ -328,14 +331,25 @@ class CompanyImportService
     /** Off while re-pointing target-only tables, where an unmapped id is expected. */
     private bool $nullUnresolvedFks = true;
 
+    /**
+     * When a parent row in this copy has not been inserted yet, keep the
+     * original id and rewrite it after every table has been copied.
+     *
+     * @var array<int, array{table: string, pk: int|string, column: string, old: int|string, ref: string}>
+     */
+    private array $pendingParentFks = [];
+
+    private bool $deferPendingParentFks = false;
+
     public function __construct(?string $targetConnection = null)
     {
         $this->target = $targetConnection ?? (string) config('database.default');
+        $this->source = self::SOURCE;
     }
 
     public function sourceConnection(): string
     {
-        return self::SOURCE;
+        return $this->source;
     }
 
     public function targetConnection(): string
@@ -360,7 +374,7 @@ class CompanyImportService
      */
     public function analyze(int $companyId): array
     {
-        $sourceTables = $this->companyIdTables(self::SOURCE);
+        $sourceTables = $this->companyIdTables($this->source);
         $targetTables = $this->companyIdTables($this->target);
 
         $intersection = array_values(array_intersect($sourceTables, $targetTables));
@@ -377,13 +391,13 @@ class CompanyImportService
             if (in_array($table, self::SKIP_COPY, true)) {
                 continue;
             }
-            $sourceCounts[$table] = (int) DB::connection(self::SOURCE)->table($table)->where('company_id', $companyId)->count();
+            $sourceCounts[$table] = (int) DB::connection($this->source)->table($table)->where('company_id', $companyId)->count();
             $targetCounts[$table] = (int) DB::connection($this->target)->table($table)->where('company_id', $companyId)->count();
         }
 
         return [
             'company_id' => $companyId,
-            'source_db' => (string) DB::connection(self::SOURCE)->getDatabaseName(),
+            'source_db' => (string) DB::connection($this->source)->getDatabaseName(),
             'target_db' => (string) DB::connection($this->target)->getDatabaseName(),
             'intersection' => $intersection,
             'source_only' => $sourceOnly,
@@ -391,7 +405,7 @@ class CompanyImportService
             'source_counts' => $sourceCounts,
             'target_counts' => $targetCounts,
             'collisions' => $this->findCollisions($companyId, $intersection),
-            'source_company' => DB::connection(self::SOURCE)->table('companies')->where('id', $companyId)->first(),
+            'source_company' => DB::connection($this->source)->table('companies')->where('id', $companyId)->first(),
             'target_company' => DB::connection($this->target)->table('companies')->where('id', $companyId)->first(),
         ];
     }
@@ -401,6 +415,7 @@ class CompanyImportService
      */
     public function import(int $companyId, bool $dryRun = false): array
     {
+        $this->source = self::SOURCE;
         $this->idMaps = [];
         $this->fkCache = [];
         $this->knownTables = [];
@@ -603,6 +618,303 @@ class CompanyImportService
     }
 
     /**
+     * Copy one company onto a new row in the same database.
+     *
+     * Primary keys are remapped. The source company is not wiped and its
+     * names are not changed. Money sums are compared before and after the
+     * new company's display names are replaced.
+     *
+     * When a transaction is already open (tests), this method does not
+     * commit and does not drop statement triggers — DROP TRIGGER would
+     * commit the caller's transaction.
+     *
+     * @return array{ok: bool, new_company_id: int|null, report: array<string, mixed>}
+     */
+    public function cloneToNewCompany(int $sourceCompanyId, string $name): array
+    {
+        $this->source = $this->target;
+        $this->resetCopyState();
+
+        $report = [
+            'copied' => [],
+            'users' => [],
+            'indirect' => [],
+            'media' => [],
+            'errors' => [],
+            'verification' => null,
+            'verification_after_names' => null,
+            'new_company_id' => null,
+        ];
+
+        $name = trim($name);
+        if ($name === '') {
+            $report['errors'][] = 'The new company name is empty.';
+
+            return ['ok' => false, 'new_company_id' => null, 'report' => $report];
+        }
+
+        $sourceCompany = DB::connection($this->source)->table('companies')->where('id', $sourceCompanyId)->first();
+        if (! $sourceCompany) {
+            $report['errors'][] = "Company {$sourceCompanyId} was not found.";
+
+            return ['ok' => false, 'new_company_id' => null, 'report' => $report];
+        }
+
+        if ($this->companyNameTaken($name)) {
+            $report['errors'][] = "A company named {$name} already exists.";
+
+            return ['ok' => false, 'new_company_id' => null, 'report' => $report];
+        }
+
+        $tables = $this->companyIdTables($this->source);
+        $this->primeKnownTables($tables);
+        $preflight = $this->preflight($sourceCompanyId, $tables);
+        $tables = $preflight['ordered_tables'];
+        $this->copySet = $this->buildCopySet($tables);
+        $report['import_order'] = $tables;
+        $blocking = array_values(array_filter(
+            $preflight['errors'],
+            fn ($error) => ! str_starts_with($error, 'Import order has parent-after-child')
+                && ! str_starts_with($error, 'Unresolved cyclic FK tables')
+        ));
+        if ($blocking !== []) {
+            $report['errors'] = array_merge($report['errors'], $blocking);
+            $report['preflight'] = $preflight;
+
+            return ['ok' => false, 'new_company_id' => null, 'report' => $report];
+        }
+        // Cycles are rewritten after every table has a new id. FK checks stay off until then.
+        $this->deferPendingParentFks = true;
+
+        $connection = DB::connection($this->target);
+        $ownsTransaction = $connection->transactionLevel() === 0;
+        $suspendedTriggers = [];
+        $newCompanyId = null;
+
+        try {
+            $connection->statement('SET FOREIGN_KEY_CHECKS=0');
+            if ($ownsTransaction) {
+                $suspendedTriggers = $this->suspendBalanceCalculationTriggers();
+                $report['triggers_suspended'] = count($suspendedTriggers);
+                $connection->beginTransaction();
+            }
+
+            try {
+                $newCompanyId = $this->insertClonedCompanyRow($sourceCompanyId, $name);
+                $this->idMaps['companies'][$sourceCompanyId] = $newCompanyId;
+                $report['new_company_id'] = $newCompanyId;
+                $report['copied']['companies'] = 'inserted';
+
+                $this->copyUsersAndMembership($sourceCompanyId, $report);
+                $this->copyCompanyIdTables($sourceCompanyId, $tables, $report);
+                $this->applyDeferredSelfForeignKeys();
+                $this->copyIndirectTables($sourceCompanyId, $report);
+                $this->copyCompanyMedia($sourceCompanyId, $report);
+                $this->applyPendingParentForeignKeys();
+
+                $verification = $this->compareCompanyCopies($sourceCompanyId, $newCompanyId, $tables);
+                $report['verification'] = $verification;
+                if (! $verification['ok']) {
+                    throw new \RuntimeException('Clone verification failed: row counts or money sums differ.');
+                }
+
+                (new DemoCompanyAnonymizer())->anonymize($newCompanyId);
+
+                $afterNames = $this->compareCompanyCopies($sourceCompanyId, $newCompanyId, $tables);
+                $report['verification_after_names'] = $afterNames;
+                if (! $afterNames['ok']) {
+                    throw new \RuntimeException('Money sums changed while renaming the new company.');
+                }
+
+                try {
+                    $report['serials'] = app(SerialBackfiller::class)->run($newCompanyId);
+                } catch (Throwable $e) {
+                    $report['errors'][] = 'Serial backfill failed: '.$e->getMessage();
+                }
+
+                if ($ownsTransaction) {
+                    $connection->commit();
+                }
+            } catch (Throwable $e) {
+                if ($ownsTransaction && $connection->transactionLevel() > 0) {
+                    $connection->rollBack();
+                }
+                throw $e;
+            }
+
+            $connection->statement('SET FOREIGN_KEY_CHECKS=1');
+        } catch (Throwable $e) {
+            try {
+                $connection->statement('SET FOREIGN_KEY_CHECKS=1');
+            } catch (Throwable) {
+            }
+            $report['errors'][] = $e->getMessage();
+            $report['ok'] = false;
+
+            return ['ok' => false, 'new_company_id' => $ownsTransaction ? null : $newCompanyId, 'report' => $report];
+        } finally {
+            try {
+                $this->restoreBalanceCalculationTriggers($suspendedTriggers);
+            } catch (Throwable $restoreError) {
+                $report['errors'][] = 'Failed to restore statement triggers: '.$restoreError->getMessage();
+                $report['ok'] = false;
+
+                return ['ok' => false, 'new_company_id' => $newCompanyId, 'report' => $report];
+            }
+        }
+
+        if (! empty($report['errors']) && ! isset($report['ok'])) {
+            // Serial backfill is recorded but does not undo a verified copy.
+        }
+
+        return ['ok' => empty(array_filter($report['errors'], fn ($error) => ! str_starts_with($error, 'Serial backfill'))), 'new_company_id' => $newCompanyId, 'report' => $report];
+    }
+
+    /**
+     * @param  array<int, string>  $tables
+     * @return array{ok: bool, mismatches: array<int, array<string, mixed>>, checks: int}
+     */
+    private function compareCompanyCopies(int $sourceCompanyId, int $newCompanyId, array $tables): array
+    {
+        $mismatches = [];
+        $checks = 0;
+
+        foreach ($tables as $table) {
+            if (in_array($table, self::SKIP_COPY, true) || $table === 'companies') {
+                continue;
+            }
+            if (! Schema::connection($this->target)->hasTable($table)
+                || ! Schema::connection($this->target)->hasColumn($table, 'company_id')) {
+                continue;
+            }
+
+            $checks++;
+            $sourceCount = (int) DB::connection($this->source)->table($table)->where('company_id', $sourceCompanyId)->count();
+            $newCount = (int) DB::connection($this->target)->table($table)->where('company_id', $newCompanyId)->count();
+            if ($sourceCount !== $newCount) {
+                $mismatches[] = [
+                    'table' => $table,
+                    'type' => 'count',
+                    'source' => $sourceCount,
+                    'target' => $newCount,
+                ];
+            }
+
+            foreach ($this->moneyColumns($table) as $column) {
+                $checks++;
+                $sourceSum = $this->moneySum($this->source, $table, $column, $sourceCompanyId);
+                $newSum = $this->moneySum($this->target, $table, $column, $newCompanyId);
+                if ($sourceSum !== $newSum) {
+                    $mismatches[] = [
+                        'table' => $table,
+                        'type' => 'sum',
+                        'column' => $column,
+                        'source' => $sourceSum,
+                        'target' => $newSum,
+                    ];
+                }
+            }
+        }
+
+        foreach (self::INDIRECT as $table => $config) {
+            if (! Schema::connection($this->target)->hasTable($table)) {
+                continue;
+            }
+            $checks++;
+            $sourceCount = $this->selectIndirectRows($this->source, $sourceCompanyId, $table, $config)->count();
+            $newCount = $this->countIndirectOnTarget($newCompanyId, $table, $config);
+            if ($sourceCount !== $newCount) {
+                $mismatches[] = [
+                    'table' => $table,
+                    'type' => 'indirect_count',
+                    'source' => $sourceCount,
+                    'target' => $newCount,
+                ];
+            }
+        }
+
+        return [
+            'ok' => count($mismatches) === 0,
+            'mismatches' => $mismatches,
+            'checks' => $checks,
+        ];
+    }
+
+    private function insertClonedCompanyRow(int $sourceCompanyId, string $name): int
+    {
+        $row = DB::connection($this->source)->table('companies')->where('id', $sourceCompanyId)->first();
+        if (! $row) {
+            throw new \RuntimeException("Company {$sourceCompanyId} was not found.");
+        }
+
+        $payload = $this->filterColumns('companies', (array) $row);
+        unset($payload['id'], $payload['deleted_at']);
+        $payload['name'] = $this->companyNameJson($payload['name'] ?? null, $name);
+        if (array_key_exists('is_caching_now', $payload)) {
+            $payload['is_caching_now'] = 0;
+        }
+        $payload['created_at'] = now();
+        $payload['updated_at'] = now();
+
+        return (int) DB::connection($this->target)->table('companies')->insertGetId($payload);
+    }
+
+    private function companyNameJson(mixed $existing, string $name): string
+    {
+        $decoded = is_string($existing) ? json_decode($existing, true) : null;
+        if (! is_array($decoded) || $decoded === []) {
+            $decoded = ['en' => $name, 'ar' => $name];
+        } else {
+            foreach ($decoded as $locale => $value) {
+                $decoded[$locale] = $name;
+            }
+        }
+
+        return json_encode($decoded, JSON_UNESCAPED_UNICODE);
+    }
+
+    private function companyNameTaken(string $name): bool
+    {
+        $query = DB::connection($this->target)->table('companies');
+        if (Schema::connection($this->target)->hasColumn('companies', 'deleted_at')) {
+            $query->whereNull('deleted_at');
+        }
+
+        foreach ($query->pluck('name') as $stored) {
+            $decoded = json_decode((string) $stored, true);
+            if (is_array($decoded)) {
+                foreach ($decoded as $value) {
+                    if ((string) $value === $name) {
+                        return true;
+                    }
+                }
+            } elseif ((string) $stored === $name) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function resetCopyState(): void
+    {
+        $this->idMaps = [];
+        $this->fkCache = [];
+        $this->knownTables = [];
+        $this->orderCycleBreaks = [];
+        $this->accountTypeModelNames = null;
+        $this->deferredSelfFks = [];
+        $this->copySet = [];
+        $this->unresolvedFks = [];
+        $this->nullableCache = [];
+        $this->resolvedUserIds = [];
+        $this->sourceIdCache = [];
+        $this->nullUnresolvedFks = true;
+        $this->pendingParentFks = [];
+        $this->deferPendingParentFks = false;
+    }
+
+    /**
      * Re-runnable parity check against source (no writes).
      *
      * @return array{ok: bool, mismatches: array<int, array<string, mixed>>, checks: int}
@@ -610,7 +922,7 @@ class CompanyImportService
     public function verify(int $companyId, ?array $intersection = null): array
     {
         $intersection = $intersection ?? array_values(array_intersect(
-            $this->companyIdTables(self::SOURCE),
+            $this->companyIdTables($this->source),
             $this->companyIdTables($this->target)
         ));
 
@@ -624,12 +936,12 @@ class CompanyImportService
             if (in_array($table, self::SKIP_COPY, true)) {
                 continue;
             }
-            if (! Schema::connection(self::SOURCE)->hasTable($table) || ! Schema::connection($this->target)->hasTable($table)) {
+            if (! Schema::connection($this->source)->hasTable($table) || ! Schema::connection($this->target)->hasTable($table)) {
                 continue;
             }
 
             $checks++;
-            $sourceCount = (int) DB::connection(self::SOURCE)->table($table)->where('company_id', $companyId)->count();
+            $sourceCount = (int) DB::connection($this->source)->table($table)->where('company_id', $companyId)->count();
             $targetCount = (int) DB::connection($this->target)->table($table)->where('company_id', $companyId)->count();
             if ($sourceCount !== $targetCount) {
                 $mismatches[] = [
@@ -642,7 +954,7 @@ class CompanyImportService
 
             foreach ($this->moneyColumns($table) as $column) {
                 $checks++;
-                $sourceSum = $this->moneySum(self::SOURCE, $table, $column, $companyId);
+                $sourceSum = $this->moneySum($this->source, $table, $column, $companyId);
                 $targetSum = $this->moneySum($this->target, $table, $column, $companyId);
                 if ($sourceSum !== $targetSum) {
                     $mismatches[] = [
@@ -657,11 +969,11 @@ class CompanyImportService
         }
 
         foreach (self::INDIRECT as $table => $config) {
-            if (! Schema::connection(self::SOURCE)->hasTable($table) || ! Schema::connection($this->target)->hasTable($table)) {
+            if (! Schema::connection($this->source)->hasTable($table) || ! Schema::connection($this->target)->hasTable($table)) {
                 continue;
             }
             $checks++;
-            $sourceCount = $this->selectIndirectRows(self::SOURCE, $companyId, $table, $config)->count();
+            $sourceCount = $this->selectIndirectRows($this->source, $companyId, $table, $config)->count();
             $targetCount = $this->countIndirectOnTarget($companyId, $table, $config);
             if ($sourceCount !== $targetCount) {
                 $mismatches[] = [
@@ -747,7 +1059,7 @@ class CompanyImportService
     public function checkForeignKeyIntegrity(int $companyId, ?array $tables = null): array
     {
         $tables = $tables ?? array_values(array_intersect(
-            $this->companyIdTables(self::SOURCE),
+            $this->companyIdTables($this->source),
             $this->companyIdTables($this->target)
         ));
 
@@ -778,10 +1090,10 @@ class CompanyImportService
                 $checks++;
                 $targetStats = $this->countOrphanFkStats($this->target, $table, $column, $parent, $companyId);
                 $sourceStats = ['orphans' => 0, 'cross_company' => 0];
-                if (Schema::connection(self::SOURCE)->hasTable($table)
-                    && Schema::connection(self::SOURCE)->hasColumn($table, $column)
-                    && Schema::connection(self::SOURCE)->hasTable($parent)) {
-                    $sourceStats = $this->countOrphanFkStats(self::SOURCE, $table, $column, $parent, $companyId);
+                if (Schema::connection($this->source)->hasTable($table)
+                    && Schema::connection($this->source)->hasColumn($table, $column)
+                    && Schema::connection($this->source)->hasTable($parent)) {
+                    $sourceStats = $this->countOrphanFkStats($this->source, $table, $column, $parent, $companyId);
                 }
 
                 if ($targetStats['orphans'] > 0 || $sourceStats['orphans'] > 0
@@ -809,15 +1121,15 @@ class CompanyImportService
                 if ($hasTypeCol) {
                     $poly = $this->countPolymorphicOrphans($this->target, $table, $idCol, $typeCol, $companyId);
                     $sourcePoly = 0;
-                    if (Schema::connection(self::SOURCE)->hasTable($table)
-                        && Schema::connection(self::SOURCE)->hasColumn($table, $idCol)) {
-                        $sourcePoly = $this->countPolymorphicOrphans(self::SOURCE, $table, $idCol, $typeCol, $companyId)['orphans'];
+                    if (Schema::connection($this->source)->hasTable($table)
+                        && Schema::connection($this->source)->hasColumn($table, $idCol)) {
+                        $sourcePoly = $this->countPolymorphicOrphans($this->source, $table, $idCol, $typeCol, $companyId)['orphans'];
                     }
                 } elseif ($idCol === 'cd_or_td_id') {
                     $poly = $this->countCdOrTdOrphans($this->target, $table, $companyId);
-                    $sourcePoly = Schema::connection(self::SOURCE)->hasTable($table)
-                        && Schema::connection(self::SOURCE)->hasColumn($table, $idCol)
-                        ? $this->countCdOrTdOrphans(self::SOURCE, $table, $companyId)['orphans']
+                    $sourcePoly = Schema::connection($this->source)->hasTable($table)
+                        && Schema::connection($this->source)->hasColumn($table, $idCol)
+                        ? $this->countCdOrTdOrphans($this->source, $table, $companyId)['orphans']
                         : 0;
                 } else {
                     continue;
@@ -841,8 +1153,8 @@ class CompanyImportService
                 && Schema::connection($this->target)->hasColumn($table, 'invoice_type')) {
                 $checks++;
                 $poly = $this->countInvoiceTypeOrphans($this->target, $companyId);
-                $sourcePoly = Schema::connection(self::SOURCE)->hasTable($table)
-                    ? $this->countInvoiceTypeOrphans(self::SOURCE, $companyId)['orphans']
+                $sourcePoly = Schema::connection($this->source)->hasTable($table)
+                    ? $this->countInvoiceTypeOrphans($this->source, $companyId)['orphans']
                     : 0;
                 if ($poly['orphans'] > 0 || $sourcePoly > 0) {
                     $orphans[] = [
@@ -1029,7 +1341,7 @@ class CompanyImportService
 
         $connection = Schema::connection($this->target)->hasTable('account_types')
             ? $this->target
-            : self::SOURCE;
+            : $this->source;
 
         $this->accountTypeModelNames = [];
         if (Schema::connection($connection)->hasTable('account_types')) {
@@ -1075,7 +1387,7 @@ class CompanyImportService
                 continue;
             }
 
-            $sourceIds = DB::connection(self::SOURCE)->table($table)
+            $sourceIds = DB::connection($this->source)->table($table)
                 ->where('company_id', $companyId)
                 ->orderBy('id')
                 ->pluck('id')
@@ -1165,7 +1477,7 @@ class CompanyImportService
      */
     private function upsertCompanyRow(int $companyId, array &$report): void
     {
-        $row = DB::connection(self::SOURCE)->table('companies')->where('id', $companyId)->first();
+        $row = DB::connection($this->source)->table('companies')->where('id', $companyId)->first();
         if (! $row) {
             throw new \RuntimeException("Source company {$companyId} missing.");
         }
@@ -1200,12 +1512,12 @@ class CompanyImportService
             }
 
             $inserted = 0;
-            $orderCol = $this->primaryKeyColumn($table, self::SOURCE) ?? 'id';
-            $query = DB::connection(self::SOURCE)->table($table)->where('company_id', $companyId);
+            $orderCol = $this->primaryKeyColumn($table, $this->source) ?? 'id';
+            $query = DB::connection($this->source)->table($table)->where('company_id', $companyId);
             // Statement "latest" KPIs use date/id (not full_date). full_date can disagree with id
             // on the same calendar day; inserting in full_date order remaps ids so the wrong
             // row becomes latest and Cash & Banks balances diverge. Always follow source id.
-            if (Schema::connection(self::SOURCE)->hasColumn($table, $orderCol)) {
+            if (Schema::connection($this->source)->hasColumn($table, $orderCol)) {
                 $query->orderBy($orderCol);
             }
 
@@ -1225,11 +1537,11 @@ class CompanyImportService
      */
     private function copyUsersAndMembership(int $companyId, array &$report): void
     {
-        if (! Schema::connection(self::SOURCE)->hasTable('companies_users')) {
+        if (! Schema::connection($this->source)->hasTable('companies_users')) {
             return;
         }
 
-        $memberships = DB::connection(self::SOURCE)->table('companies_users')
+        $memberships = DB::connection($this->source)->table('companies_users')
             ->where('company_id', $companyId)
             ->get();
 
@@ -1240,7 +1552,7 @@ class CompanyImportService
 
         foreach ($memberships as $membership) {
             $sourceUserId = (int) $membership->user_id;
-            $sourceUser = DB::connection(self::SOURCE)->table('users')->where('id', $sourceUserId)->first();
+            $sourceUser = DB::connection($this->source)->table('users')->where('id', $sourceUserId)->first();
             if (! $sourceUser) {
                 $skipped++;
 
@@ -1271,14 +1583,15 @@ class CompanyImportService
                 }
             }
 
+            $membershipCompanyId = (int) ($this->idMaps['companies'][$companyId] ?? $companyId);
             $exists = DB::connection($this->target)->table('companies_users')
-                ->where('company_id', $companyId)
+                ->where('company_id', $membershipCompanyId)
                 ->where('user_id', $targetUserId)
                 ->exists();
 
             if (! $exists) {
                 DB::connection($this->target)->table('companies_users')->insert([
-                    'company_id' => $companyId,
+                    'company_id' => $membershipCompanyId,
                     'user_id' => $targetUserId,
                 ]);
                 $linked++;
@@ -1300,12 +1613,12 @@ class CompanyImportService
     private function copyIndirectTables(int $companyId, array &$report): void
     {
         foreach (self::INDIRECT as $table => $config) {
-            if (! Schema::connection(self::SOURCE)->hasTable($table) || ! Schema::connection($this->target)->hasTable($table)) {
+            if (! Schema::connection($this->source)->hasTable($table) || ! Schema::connection($this->target)->hasTable($table)) {
                 continue;
             }
 
-            $rows = $this->selectIndirectRows(self::SOURCE, $companyId, $table, $config);
-            $pk = $this->primaryKeyColumn($table, self::SOURCE) ?? 'id';
+            $rows = $this->selectIndirectRows($this->source, $companyId, $table, $config);
+            $pk = $this->primaryKeyColumn($table, $this->source) ?? 'id';
             $inserted = 0;
 
             foreach ($rows as $row) {
@@ -1328,14 +1641,14 @@ class CompanyImportService
      */
     private function copyCompanyMedia(int $companyId, array &$report): void
     {
-        if (! Schema::connection(self::SOURCE)->hasTable('media') || ! Schema::connection($this->target)->hasTable('media')) {
+        if (! Schema::connection($this->source)->hasTable('media') || ! Schema::connection($this->target)->hasTable('media')) {
             return;
         }
 
         $pk = $this->primaryKeyColumn('media', $this->target) ?? 'id';
 
-        // The company row keeps its id, so model_id maps to itself.
-        $batches = [['App\\Models\\Company', 'companies', [$companyId => $companyId]]];
+        $companyMap = $this->idMaps['companies'] ?? [$companyId => $companyId];
+        $batches = [['App\\Models\\Company', 'companies', $companyMap]];
         foreach ($this->mediaMorphTargets() as $type => $parent) {
             if ($parent === 'companies') {
                 continue;
@@ -1349,7 +1662,7 @@ class CompanyImportService
         $copied = [];
         foreach ($batches as [$type, $parent, $map]) {
             $inserted = 0;
-            $rows = DB::connection(self::SOURCE)->table('media')
+            $rows = DB::connection($this->source)->table('media')
                 ->where('model_type', $type)
                 ->whereIn('model_id', array_keys($map))
                 ->orderBy($pk)
@@ -1518,6 +1831,27 @@ class CompanyImportService
             ];
         }
 
+        if ($this->deferPendingParentFks) {
+            foreach ($this->fkColumnsFor($table) as $column => $refTable) {
+                if ($refTable === $table || $refTable === 'users' || ! isset($this->copySet[$refTable])) {
+                    continue;
+                }
+                if (! array_key_exists($column, $row) || $this->isEmptyFk($row[$column])) {
+                    continue;
+                }
+                if (isset($this->idMaps[$refTable][$row[$column]])) {
+                    continue;
+                }
+                $this->pendingParentFks[] = [
+                    'table' => $table,
+                    'pk' => $newId,
+                    'column' => $column,
+                    'old' => $row[$column],
+                    'ref' => $refTable,
+                ];
+            }
+        }
+
         return $newId;
     }
 
@@ -1576,8 +1910,8 @@ class CompanyImportService
     private function sourceRowExists(string $parent, mixed $id): bool
     {
         if (! isset($this->sourceIdCache[$parent])) {
-            $this->sourceIdCache[$parent] = Schema::connection(self::SOURCE)->hasTable($parent)
-                ? array_flip(array_map('strval', DB::connection(self::SOURCE)->table($parent)->pluck('id')->all()))
+            $this->sourceIdCache[$parent] = Schema::connection($this->source)->hasTable($parent)
+                ? array_flip(array_map('strval', DB::connection($this->source)->table($parent)->pluck('id')->all()))
                 : [];
         }
 
@@ -1616,7 +1950,7 @@ class CompanyImportService
         }
 
         $resolved = null;
-        $sourceUser = DB::connection(self::SOURCE)->table('users')->where('id', $sourceUserId)->first();
+        $sourceUser = DB::connection($this->source)->table('users')->where('id', $sourceUserId)->first();
         if ($sourceUser && ! empty($sourceUser->email)) {
             $targetUser = DB::connection($this->target)->table('users')->where('email', $sourceUser->email)->first();
             if ($targetUser) {
@@ -1890,6 +2224,30 @@ class CompanyImportService
         $this->deferredSelfFks = [];
     }
 
+    private function applyPendingParentForeignKeys(): void
+    {
+        foreach ($this->pendingParentFks as $item) {
+            $newParent = $this->idMaps[$item['ref']][$item['old']] ?? null;
+            $pk = $this->primaryKeyColumn($item['table'], $this->target) ?? 'id';
+            if ($newParent !== null) {
+                DB::connection($this->target)->table($item['table'])
+                    ->where($pk, $item['pk'])
+                    ->update([$item['column'] => $newParent]);
+
+                continue;
+            }
+
+            $nullable = $this->columnIsNullable($item['table'], $item['column']);
+            $this->recordUnresolvedFk($item['table'], $item['column'], $item['ref'], $item['old'], $nullable);
+            if ($nullable) {
+                DB::connection($this->target)->table($item['table'])
+                    ->where($pk, $item['pk'])
+                    ->update([$item['column'] => null]);
+            }
+        }
+        $this->pendingParentFks = [];
+    }
+
     /**
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
@@ -1907,6 +2265,10 @@ class CompanyImportService
             if (isset($this->idMaps[$refTable][$old])) {
                 $payload[$column] = $this->idMaps[$refTable][$old];
 
+                continue;
+            }
+
+            if ($this->deferPendingParentFks && $refTable !== 'users' && isset($this->copySet[$refTable])) {
                 continue;
             }
 
@@ -2016,8 +2378,8 @@ class CompanyImportService
         $map = [];
 
         // Formal FKs from information_schema (source DB).
-        $database = DB::connection(self::SOURCE)->getDatabaseName();
-        $fks = DB::connection(self::SOURCE)->table('information_schema.KEY_COLUMN_USAGE')
+        $database = DB::connection($this->source)->getDatabaseName();
+        $fks = DB::connection($this->source)->table('information_schema.KEY_COLUMN_USAGE')
             ->where('TABLE_SCHEMA', $database)
             ->where('TABLE_NAME', $table)
             ->whereNotNull('REFERENCED_TABLE_NAME')
@@ -2083,7 +2445,7 @@ class CompanyImportService
         }
         $prefix = substr($column, 0, -3);
         $typeCol = $prefix.'_type';
-        if (! Schema::connection(self::SOURCE)->hasColumn($table, $typeCol)
+        if (! Schema::connection($this->source)->hasColumn($table, $typeCol)
             && ! Schema::connection($this->target)->hasColumn($table, $typeCol)) {
             return false;
         }
@@ -2232,7 +2594,7 @@ class CompanyImportService
                 $any = false;
                 foreach ($config['parent_tables'] as $parentTable => $fk) {
                     if (! Schema::connection($this->target)->hasColumn($childTable, $fk)
-                        && ! Schema::connection(self::SOURCE)->hasColumn($childTable, $fk)) {
+                        && ! Schema::connection($this->source)->hasColumn($childTable, $fk)) {
                         continue;
                     }
                     if (! Schema::connection($parentConnection)->hasTable($parentTable)) {
@@ -2406,12 +2768,12 @@ class CompanyImportService
             if (in_array($table, self::SKIP_COPY, true)) {
                 continue;
             }
-            if (! Schema::connection(self::SOURCE)->hasTable($table)
-                || ! Schema::connection(self::SOURCE)->hasColumn($table, 'company_id')) {
+            if (! Schema::connection($this->source)->hasTable($table)
+                || ! Schema::connection($this->source)->hasColumn($table, 'company_id')) {
                 continue;
             }
             $map = $this->fkColumnsFor($table);
-            foreach (Schema::connection(self::SOURCE)->getColumnListing($table) as $column) {
+            foreach (Schema::connection($this->source)->getColumnListing($table) as $column) {
                 if ($column === 'id' || $column === 'company_id' || ! str_ends_with($column, '_id')) {
                     continue;
                 }
@@ -2429,7 +2791,7 @@ class CompanyImportService
                 if ($table === 'odoo_settings') {
                     continue;
                 }
-                $count = (int) DB::connection(self::SOURCE)->table($table)
+                $count = (int) DB::connection($this->source)->table($table)
                     ->where('company_id', $companyId)
                     ->whereNotNull($column)
                     ->where($column, '!=', 0)
@@ -2455,7 +2817,7 @@ class CompanyImportService
     {
         $mismatches = [];
         foreach (self::GLOBAL_ID_TABLES as $table) {
-            if (! Schema::connection(self::SOURCE)->hasTable($table)
+            if (! Schema::connection($this->source)->hasTable($table)
                 || ! Schema::connection($this->target)->hasTable($table)) {
                 $mismatches[] = [
                     'table' => $table,
@@ -2464,7 +2826,7 @@ class CompanyImportService
 
                 continue;
             }
-            $sourceIds = DB::connection(self::SOURCE)->table($table)->orderBy('id')->pluck('id')->all();
+            $sourceIds = DB::connection($this->source)->table($table)->orderBy('id')->pluck('id')->all();
             $targetIds = DB::connection($this->target)->table($table)->orderBy('id')->pluck('id')->all();
             if ($sourceIds !== $targetIds) {
                 $mismatches[] = [
@@ -2641,7 +3003,7 @@ class CompanyImportService
         $cols = [];
         foreach ($candidates as $column) {
             if (Schema::connection($this->target)->hasColumn($table, $column)
-                && Schema::connection(self::SOURCE)->hasColumn($table, $column)
+                && Schema::connection($this->source)->hasColumn($table, $column)
             ) {
                 $cols[] = $column;
             }
