@@ -100,6 +100,7 @@ class CompanyImportServiceTest extends TestCase
 
         $this->assertSame('partners', $global['customer_id']);
         $this->assertSame('partners', $global['supplier_id']);
+        $this->assertSame('partners', $global['shareholder_partner_id']);
         $this->assertSame('partners', $byTable['customer_invoices']['customer_id']);
         $this->assertSame('partners', $byTable['supplier_invoices']['supplier_id']);
         $this->assertSame('letter_of_guarantee_facilities', $global['lg_facility_id']);

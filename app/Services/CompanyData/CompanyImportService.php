@@ -60,6 +60,7 @@ class CompanyImportService
     private const FK_COLUMN_MAP = [
         'customer_id' => 'partners',
         'supplier_id' => 'partners',
+        'shareholder_partner_id' => 'partners',
         'branch_id' => 'branch',
         'delivery_branch_id' => 'branch',
         'receiving_branch_id' => 'branch',
@@ -598,7 +599,11 @@ class CompanyImportService
 
         $unmapped = $this->findUnmappedLocalIdColumns($tables, $companyId);
         if (count($unmapped)) {
-            $errors[] = 'Unmapped local *_id columns with data: '.count($unmapped);
+            $labels = array_map(
+                fn (array $item) => $item['table'].'.'.$item['column'].' ('.$item['rows'].')',
+                $unmapped
+            );
+            $errors[] = 'Unmapped local *_id columns with data: '.implode(', ', $labels);
         }
 
         $globalMismatches = $this->checkGlobalIdTablesParity();
@@ -694,7 +699,7 @@ class CompanyImportService
         try {
             $connection->statement('SET FOREIGN_KEY_CHECKS=0');
             if ($ownsTransaction) {
-                $suspendedTriggers = $this->suspendBalanceCalculationTriggers();
+                $suspendedTriggers = $this->suspendBalanceCalculationTriggers(false);
                 $report['triggers_suspended'] = count($suspendedTriggers);
                 $connection->beginTransaction();
             }
@@ -1850,6 +1855,32 @@ class CompanyImportService
                     'ref' => $refTable,
                 ];
             }
+
+            foreach (['model', 'statementable', 'commentable', 'taggable', 'subject'] as $morph) {
+                $typeCol = $morph.'_type';
+                $idCol = $morph.'_id';
+                if (! isset($row[$typeCol], $row[$idCol]) || $this->isEmptyFk($row[$idCol])) {
+                    continue;
+                }
+                $type = (string) $row[$typeCol];
+                if ($type === 'App\\Models\\Company' || $type === 'Company') {
+                    continue;
+                }
+                $refTable = $this->tableForMorphType($type);
+                if ($refTable === null || ! isset($this->copySet[$refTable])) {
+                    continue;
+                }
+                if (isset($this->idMaps[$refTable][$row[$idCol]])) {
+                    continue;
+                }
+                $this->pendingParentFks[] = [
+                    'table' => $table,
+                    'pk' => $newId,
+                    'column' => $idCol,
+                    'old' => $row[$idCol],
+                    'ref' => $refTable,
+                ];
+            }
         }
 
         return $newId;
@@ -2295,8 +2326,8 @@ class CompanyImportService
             }
         }
 
-        // Morph pairs: model_type + model_id (and similar)
-        foreach (['model', 'statementable', 'commentable', 'taggable'] as $morph) {
+        // Morph pairs: model_type + model_id, subject_type + subject_id, and similar.
+        foreach (['model', 'statementable', 'commentable', 'taggable', 'subject'] as $morph) {
             $typeCol = $morph.'_type';
             $idCol = $morph.'_id';
             if (! isset($payload[$typeCol], $payload[$idCol]) || $this->isEmptyFk($payload[$idCol])) {
@@ -2306,9 +2337,11 @@ class CompanyImportService
             if ($type === 'App\\Models\\Company' || $type === 'Company') {
                 continue;
             }
-            $refTable = self::MORPH_TABLES[$type] ?? self::MORPH_TABLES[class_basename($type)] ?? null;
+            $refTable = $this->tableForMorphType($type);
             if ($refTable && isset($this->idMaps[$refTable][$payload[$idCol]])) {
                 $payload[$idCol] = $this->idMaps[$refTable][$payload[$idCol]];
+            } elseif ($refTable && $this->deferPendingParentFks && isset($this->copySet[$refTable])) {
+                continue;
             } elseif ($refTable && $this->nullUnresolvedFks && isset($this->copySet[$refTable])) {
                 // Blanking one half of a morph pair would corrupt the row — flag instead.
                 $this->recordUnresolvedFk($table, $idCol, $refTable, $payload[$idCol], false);
@@ -2450,8 +2483,25 @@ class CompanyImportService
             return false;
         }
 
-        return in_array($prefix, ['model', 'statementable', 'commentable', 'taggable', 'invoice'], true)
+        return in_array($prefix, ['model', 'statementable', 'commentable', 'taggable', 'invoice', 'subject'], true)
             || $column === 'invoice_id';
+    }
+
+    private function tableForMorphType(string $type): ?string
+    {
+        $mapped = self::MORPH_TABLES[$type] ?? self::MORPH_TABLES[class_basename($type)] ?? null;
+        if ($mapped && $this->tableExists($mapped)) {
+            return $mapped;
+        }
+
+        if (class_exists($type) && is_subclass_of($type, \Illuminate\Database\Eloquent\Model::class)) {
+            $table = (new $type)->getTable();
+            if ($this->tableExists($table)) {
+                return $table;
+            }
+        }
+
+        return $mapped && $this->tableExists($mapped) ? $mapped : null;
     }
 
     private function guessReferencedTable(string $column, ?string $table = null): ?string
@@ -2912,9 +2962,12 @@ class CompanyImportService
      * triggers on statement tables so imported balances stay intact and child rows
      * (e.g. *_withdrawals) are not double-created by triggers + table copy.
      *
+     * A clone drops every trigger. Invoice triggers rewrite stored amounts, and
+     * a trigger whose DEFINER account is gone rejects the insert outright.
+     *
      * @return array<int, array{name: string, sql: string}>
      */
-    private function suspendBalanceCalculationTriggers(): array
+    private function suspendBalanceCalculationTriggers(bool $statementTablesOnly = true): array
     {
         $saved = [];
         $triggers = DB::connection($this->target)->select('SHOW TRIGGERS');
@@ -2925,13 +2978,15 @@ class CompanyImportService
             $event = (string) ($trigger->Event ?? '');
             $name = (string) ($trigger->Trigger ?? '');
 
-            if (! $this->isStatementTable($table)) {
+            if ($statementTablesOnly && ! $this->isStatementTable($table)) {
                 continue;
             }
-            $suspendBefore = $timing === 'BEFORE' && in_array($event, ['INSERT', 'UPDATE', 'DELETE'], true);
-            $suspendAfterInsert = $timing === 'AFTER' && $event === 'INSERT';
-            if (! $suspendBefore && ! $suspendAfterInsert) {
-                continue;
+            if ($statementTablesOnly) {
+                $suspendBefore = $timing === 'BEFORE' && in_array($event, ['INSERT', 'UPDATE', 'DELETE'], true);
+                $suspendAfterInsert = $timing === 'AFTER' && $event === 'INSERT';
+                if (! $suspendBefore && ! $suspendAfterInsert) {
+                    continue;
+                }
             }
             if ($name === '') {
                 continue;
