@@ -63,6 +63,13 @@ class CloneCompanyToNewOneTest extends TestCase
             'exchange_rate' => 1,
             'invoice_number' => 'BILL-KEEP',
         ]);
+        $receivedId = (int) DB::table('money_received')->insertGetId([
+            'company_id' => $sourceId,
+            'partner_id' => $customerId,
+            'comment_en' => 'Issuance [ Real Customer ]',
+            'comment_ar' => 'إصدار [ Real Customer ]',
+            'user_comment' => 'Note about Real Customer',
+        ]);
 
         $demoName = 'Clone Demo '.uniqid();
         $result = (new CompanyImportService())->cloneToNewCompany($sourceId, $demoName);
@@ -100,6 +107,63 @@ class CloneCompanyToNewOneTest extends TestCase
         $this->assertSame($sourceName, json_decode((string) DB::table('companies')->where('id', $sourceId)->value('name'), true)['en']);
         $this->assertNull(DB::table('partners')->where('company_id', $newId)->where('name', 'Real Customer')->first());
         $this->assertSame($bothId, (int) DB::table('partners')->where('company_id', $sourceId)->where('name', 'Real Both')->value('id'));
+
+        $sourceReceipt = DB::table('money_received')->where('id', $receivedId)->first();
+        $this->assertStringContainsString('Real Customer', $sourceReceipt->comment_en);
+        $this->assertStringContainsString('Real Customer', $sourceReceipt->comment_ar);
+        $this->assertStringContainsString('Real Customer', $sourceReceipt->user_comment);
+
+        $clonedReceipt = DB::table('money_received')->where('company_id', $newId)->first();
+        $customerName = DemoCompanyAnonymizer::COMPANY_NAMES[0];
+        $this->assertStringContainsString($customerName, $clonedReceipt->comment_en);
+        $this->assertStringContainsString($customerName, $clonedReceipt->comment_ar);
+        $this->assertStringContainsString($customerName, $clonedReceipt->user_comment);
+        $this->assertStringNotContainsString('Real Customer', $clonedReceipt->comment_en);
+        $this->assertStringNotContainsString('Real Customer', $clonedReceipt->comment_ar);
+        $this->assertStringNotContainsString('Real Customer', $clonedReceipt->user_comment);
+    }
+
+    public function test_an_existing_company_with_the_same_name_is_replaced(): void
+    {
+        $template = DB::table('companies')->whereNull('deleted_at')->orderBy('id')->first();
+        if (! $template) {
+            $this->markTestSkipped('No company row to copy a column shape from.');
+        }
+
+        $sourceName = 'Clone Source '.uniqid();
+        $sourceId = $this->companyFromTemplate($template, $sourceName);
+        $this->partner($sourceId, 'Real Customer', customer: true);
+
+        $demoName = 'Clone Demo '.uniqid();
+        $oldId = $this->companyFromTemplate($template, $demoName);
+        $oldPartnerId = $this->partner($oldId, 'Old Demo Partner', customer: true);
+
+        $result = (new CompanyImportService())->cloneToNewCompany($sourceId, $demoName);
+
+        $this->assertTrue($result['ok'], json_encode($result['report']['errors'] ?? $result['report']['verification']['mismatches'] ?? []));
+        $this->assertSame([$oldId], $result['report']['replaced_company_ids']);
+        $newId = (int) $result['new_company_id'];
+        $this->assertNotSame($oldId, $newId);
+        $this->assertNotSame($sourceId, $newId);
+
+        $this->assertNull(DB::table('companies')->where('id', $oldId)->first());
+        $this->assertNull(DB::table('partners')->where('id', $oldPartnerId)->first());
+        $this->assertNull(DB::table('partners')->where('company_id', $newId)->where('name', 'Old Demo Partner')->first());
+        $this->assertSame(['Customer 1'], DB::table('partners')->where('company_id', $newId)->orderBy('id')->pluck('name')->all());
+
+        $this->assertSame($sourceName, json_decode((string) DB::table('companies')->where('id', $sourceId)->value('name'), true)['en']);
+        $this->assertSame('Real Customer', DB::table('partners')->where('company_id', $sourceId)->value('name'));
+    }
+
+    private function companyFromTemplate(object $template, string $name): int
+    {
+        $payload = (array) $template;
+        unset($payload['id']);
+        $payload['name'] = json_encode(['en' => $name, 'ar' => $name], JSON_UNESCAPED_UNICODE);
+        $payload['is_caching_now'] = 0;
+        $payload['deleted_at'] = null;
+
+        return (int) DB::table('companies')->insertGetId($payload);
     }
 
     private function partner(int $companyId, string $name, bool $customer = false, bool $supplier = false, bool $employee = false): int

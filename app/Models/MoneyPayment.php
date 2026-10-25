@@ -279,6 +279,19 @@ class MoneyPayment extends Model implements IHaveCreditOverdraftStatement, IHave
             $moneyPayment->deleteRelations();
         });
     }
+
+    /**
+     * The stored comment is written once, on create. After the supplier on an
+     * opening-balance payable cheque changes, the bank statement still reads
+     * this text, so it has to be generated again from the current partner.
+     */
+    public function rewriteCommentFromCurrentSupplier(): void
+    {
+        $this->unsetRelation('partner');
+        $this->comment_en = self::generateComment($this, 'en');
+        $this->comment_ar = self::generateComment($this, 'ar');
+        $this->save();
+    }
     
     
     public static function getAllTypes()

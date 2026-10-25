@@ -665,11 +665,17 @@ class CompanyImportService
             return ['ok' => false, 'new_company_id' => null, 'report' => $report];
         }
 
-        if ($this->companyNameTaken($name)) {
-            $report['errors'][] = "A company named {$name} already exists.";
+        if ($this->storedNameMatches($sourceCompany->name ?? null, $name)) {
+            $report['errors'][] = "Company {$sourceCompanyId} is already named {$name}.";
 
             return ['ok' => false, 'new_company_id' => null, 'report' => $report];
         }
+
+        $replaceIds = array_values(array_filter(
+            $this->companyIdsNamed($name),
+            fn (int $id) => $id !== $sourceCompanyId
+        ));
+        $report['replaced_company_ids'] = $replaceIds;
 
         $tables = $this->companyIdTables($this->source);
         $this->primeKnownTables($tables);
@@ -705,6 +711,11 @@ class CompanyImportService
             }
 
             try {
+                foreach ($replaceIds as $replaceId) {
+                    $this->wipeTargetCompany($replaceId, $tables, $report);
+                    DB::connection($this->target)->table('companies')->where('id', $replaceId)->delete();
+                }
+
                 $newCompanyId = $this->insertClonedCompanyRow($sourceCompanyId, $name);
                 $this->idMaps['companies'][$sourceCompanyId] = $newCompanyId;
                 $report['new_company_id'] = $newCompanyId;
@@ -878,27 +889,42 @@ class CompanyImportService
         return json_encode($decoded, JSON_UNESCAPED_UNICODE);
     }
 
-    private function companyNameTaken(string $name): bool
+    /**
+     * Active companies whose name JSON matches in any locale.
+     *
+     * @return array<int, int>
+     */
+    private function companyIdsNamed(string $name): array
     {
         $query = DB::connection($this->target)->table('companies');
         if (Schema::connection($this->target)->hasColumn('companies', 'deleted_at')) {
             $query->whereNull('deleted_at');
         }
 
-        foreach ($query->pluck('name') as $stored) {
-            $decoded = json_decode((string) $stored, true);
-            if (is_array($decoded)) {
-                foreach ($decoded as $value) {
-                    if ((string) $value === $name) {
-                        return true;
-                    }
-                }
-            } elseif ((string) $stored === $name) {
-                return true;
+        $ids = [];
+        foreach ($query->get(['id', 'name']) as $company) {
+            if ($this->storedNameMatches($company->name, $name)) {
+                $ids[] = (int) $company->id;
             }
         }
 
-        return false;
+        return $ids;
+    }
+
+    private function storedNameMatches(mixed $stored, string $name): bool
+    {
+        $decoded = json_decode((string) $stored, true);
+        if (is_array($decoded)) {
+            foreach ($decoded as $value) {
+                if ((string) $value === $name) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        return (string) $stored === $name;
     }
 
     private function resetCopyState(): void

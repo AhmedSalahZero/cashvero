@@ -720,6 +720,7 @@ class OpeningBalancesController
     			 */
                 $currentMoneyPayment = $openingBalance->payableCheques()->where('money_payments.id', $id)->first() ;
                 $currentMoneyPayment->update(array_merge($dataToUpdate, ['updated_at'=>now()]));
+                $currentMoneyPayment->rewriteCommentFromCurrentSupplier();
                 $currentMoneyPayment->payableCheque->update(array_merge($pivotData, ['updated_at'=>now()]));
                 $currentStatement = $currentMoneyPayment->getCurrentStatement();
 

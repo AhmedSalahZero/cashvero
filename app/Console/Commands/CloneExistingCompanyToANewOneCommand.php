@@ -45,6 +45,11 @@ class CloneExistingCompanyToANewOneCommand extends Command
             return self::FAILURE;
         }
 
+        $replaced = $report['replaced_company_ids'] ?? [];
+        if ($replaced !== []) {
+            $this->line('Replaced company id: '.implode(', ', $replaced));
+        }
+
         $copied = 0;
         foreach ($report['copied'] ?? [] as $count) {
             if (is_int($count)) {
