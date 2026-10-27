@@ -557,12 +557,7 @@ class Company extends Model implements HasMedia
 			$value = Request('value');
 			$from = Request('from');
 			$to = Request('to');
-			$query->when($searchFieldName == 'partner_name',function() use ($query,$value){
-				$query->whereHas('partner',function($query) use ($value){
-					$query->where('name', 'like', '%'.$value.'%');
-				});
-			})
-			->when($searchFieldName == 'payment_date',function() use ($query,$from,$to){
+			$query->when($searchFieldName == 'payment_date',function() use ($query,$from,$to){
 				$query->whereBetween('payment_date', [$from, $to]);
 			})
 			->when($searchFieldName == 'paid_amount',function() use ($query,$value){
@@ -591,7 +586,6 @@ class Company extends Model implements HasMedia
 			});
 		})
 		->with([
-			'partner:id,name',
 			'cashPayment.deliveryBranch:id,name',
 			'cashExpenseCategoryName:id,name,cash_expense_category_id',
 			'cashExpenseCategoryName.cashExpenseCategory:id,name',
@@ -607,12 +601,7 @@ class Company extends Model implements HasMedia
 			$value = Request('value');
 			$from = Request('from');
 			$to = Request('to');
-			$query->when($searchFieldName == 'partner_name',function() use ($query,$value){
-				$query->whereHas('partner',function($query) use ($value){
-					$query->where('name', 'like', '%'.$value.'%');
-				});
-			})
-			->when($searchFieldName == 'payment_date',function() use ($query,$from,$to){
+			$query->when($searchFieldName == 'payment_date',function() use ($query,$from,$to){
 				$query->whereBetween('payment_date', [$from, $to]);
 			})
 			->when($searchFieldName == 'paid_amount',function() use ($query,$value){
@@ -641,7 +630,6 @@ class Company extends Model implements HasMedia
 			});
 		})
 		->with([
-			'partner:id,name',
 			'outgoingTransfer.deliveryBank.bank:id,view_name,name_en,name_ar',
 			'cashExpenseCategoryName:id,name,cash_expense_category_id',
 			'cashExpenseCategoryName.cashExpenseCategory:id,name',
@@ -656,12 +644,7 @@ class Company extends Model implements HasMedia
 			$value = Request('value');
 			$from = Request('from');
 			$to = Request('to');
-			$query->when($searchFieldName == 'partner_name',function() use ($query,$value){
-				$query->whereHas('partner',function($query) use ($value){
-					$query->where('name', 'like', '%'.$value.'%');
-				});
-			})
-			->when($searchFieldName == 'payment_date',function() use ($query,$from,$to){
+			$query->when($searchFieldName == 'payment_date',function() use ($query,$from,$to){
 				$query->whereBetween('payment_date', [$from, $to]);
 			})
 			->when($searchFieldName == 'paid_amount',function() use ($query,$value){
@@ -690,7 +673,6 @@ class Company extends Model implements HasMedia
 			});
 		})
 		->with([
-			'partner:id,name',
 			'payableCheque:id,cash_expense_id,money_payment_id,status,cheque_number,delivery_bank_id,account_type,account_number,due_date',
 			'payableCheque.deliveryBank.bank:id,view_name,name_en,name_ar',
 			'cashExpenseCategoryName:id,name,cash_expense_category_id',

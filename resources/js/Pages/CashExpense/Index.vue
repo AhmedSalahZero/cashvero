@@ -109,12 +109,12 @@ const filters = ref(
         endDate: tabs.value[type].endDate,
     }]))
 );
-const searchField = ref('partner_name');
+const searchField = ref('serial');
 const searchValue = ref('');
 const searchFieldOptionsByType = {
-    [TYPES.OUTGOING_TRANSFER]: { serial: 'Serial', partner_name: 'Supplier Name', expense_name: 'Expense Name', currency: 'Currency' },
-    [TYPES.CASH_PAYMENT]: { serial: 'Serial', partner_name: 'Supplier Name', expense_name: 'Expense Name', delivery_branch_name: 'Branch', currency: 'Currency', receipt_number: 'Receipt Number' },
-    [TYPES.PAYABLE_CHEQUE]: { serial: 'Serial', partner_name: 'Supplier Name', expense_name: 'Expense Name', currency: 'Currency' },
+    [TYPES.OUTGOING_TRANSFER]: { serial: 'Serial', expense_name: 'Expense Name', currency: 'Currency' },
+    [TYPES.CASH_PAYMENT]: { serial: 'Serial', expense_name: 'Expense Name', delivery_branch_name: 'Branch', currency: 'Currency', receipt_number: 'Receipt Number' },
+    [TYPES.PAYABLE_CHEQUE]: { serial: 'Serial', expense_name: 'Expense Name', currency: 'Currency' },
 };
 
 function applyFilters(type) {

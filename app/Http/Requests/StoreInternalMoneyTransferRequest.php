@@ -22,6 +22,7 @@ class StoreInternalMoneyTransferRequest extends FormRequest
 	{
 		$this->merge([
 			'amount'=>number_unformat($this->get('amount')),
+			'transfer_days'=>number_unformat($this->get('transfer_days')),
 		]);
 		return [];
 	}
