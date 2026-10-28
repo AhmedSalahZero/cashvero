@@ -495,6 +495,9 @@ Route::group(
                     Route::put('financial-institutions/{financialInstitution}/medium-term-loan/{mediumTermLoan}/update', 'MediumTermLoanController@update')->name('loans.update');
                     Route::delete('financial-institutions/{financialInstitution}/medium-term-loan/{mediumTermLoan}/delete', 'MediumTermLoanController@destroy')->name('loans.destroy');
                     Route::delete('financial-institutions/{financialInstitution}/medium-term-loan/{mediumTermLoan}/schedule', 'MediumTermLoanController@destroySchedule')->name('loans.schedule.destroy');
+                    Route::post('financial-institutions/{financialInstitution}/medium-term-loan/{mediumTermLoan}/early-settlement', 'MediumTermLoanController@storeEarlySettlement')->name('loans.early.settlement.store');
+                    Route::patch('financial-institutions/{financialInstitution}/medium-term-loan/{mediumTermLoan}/early-settlement', 'MediumTermLoanController@updateEarlySettlement')->name('loans.early.settlement.update');
+                    Route::delete('financial-institutions/{financialInstitution}/medium-term-loan/{mediumTermLoan}/early-settlement', 'MediumTermLoanController@destroyEarlySettlement')->name('loans.early.settlement.destroy');
                  
                  
                 

@@ -12,6 +12,7 @@ use App\Models\FinancialInstitutionAccount;
 use App\Models\LoanSchedule;
 use App\Models\LoanScheduleSettlement;
 use App\Models\MediumTermLoan;
+use App\Models\MediumTermLoanEarlySettlement;
 use App\Rules\DateMustBeLessThanOrEqualDate;
 use App\Support\ShareholderAccounts\AccountNumberLabel;
 use App\Traits\GeneralFunctions;
@@ -144,8 +145,19 @@ class MediumTermLoanController
                     'statement_url' => route('loans.statement', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'mediumTermLoan' => $loan->id]),
                     'edit_url' => route('loans.edit', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'mediumTermLoan' => $loan->id]),
                     'delete_url' => route('loans.destroy', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'mediumTermLoan' => $loan->id]),
+                    'currency' => $loan->getCurrency(),
+                    'is_early_settled' => $loan->isEarlySettled(),
+                    'status_formatted' => $loan->getStatusFormatted(),
+                    'early_settlement_preview' => $loan->isEarlySettled() ? null : $this->getEarlySettlementPreviewForView($loan),
+                    'early_settlement' => $this->getEarlySettlementForView($company, $loan),
+                    'early_settlement_url' => route('loans.early.settlement.store', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'mediumTermLoan' => $loan->id]),
                 ];
             })->values(),
+            'earlySettlementAccountTypes' => MediumTermLoanEarlySettlement::getAllowedAccountTypes()
+                ->map(fn (AccountType $accountType) => ['id' => $accountType->id, 'name' => $accountType->getName()])
+                ->values(),
+            'earlySettlementAccounts' => $this->getEarlySettlementAccounts($company, $financialInstitution, $mediumTermLoans->map->getCurrency()->unique()->values()->all()),
+            'balanceLookupUrl' => route('update.balance.and.net.balance.based.on.account.number', ['company' => $company->id]),
             'canUpload' => hasAuthFor('medium_term_loan.create'),
             'canUpdate' => hasAuthFor('medium_term_loan.update'),
             'canDelete' => hasAuthFor('medium_term_loan.delete'),
@@ -158,6 +170,73 @@ class MediumTermLoanController
                 'notifications' => route('view.notifications', ['company' => $company->id, 'type' => 'all']),
             ],
         ]);
+    }
+
+    /**
+     * What the Early Settlement popup shows before saving: the first open
+     * installment, how many are open, and the remaining principle (the
+     * amount's default) and interest.
+     */
+    protected function getEarlySettlementPreviewForView(MediumTermLoan $loan): ?array
+    {
+        $preview = $loan->getEarlySettlementPreview();
+        if (! $preview['open_installments_count']) {
+            return null;
+        }
+
+        return [
+            'first_installment_number' => $preview['first_installment_number'],
+            'first_installment_date_formatted' => $preview['first_installment_date_formatted'],
+            'open_installments_count' => $preview['open_installments_count'],
+            'remaining_principle' => $preview['remaining_principle'],
+            'remaining_interest' => $preview['remaining_interest'],
+        ];
+    }
+
+    protected function getEarlySettlementForView(Company $company, MediumTermLoan $loan): ?array
+    {
+        $earlySettlement = $loan->earlySettlement;
+        if (! $earlySettlement) {
+            return null;
+        }
+
+        return [
+            'id' => $earlySettlement->id,
+            'date' => Carbon::make($earlySettlement->getDate())->format('Y-m-d'),
+            'date_formatted' => $earlySettlement->getDateFormatted(),
+            'amount' => (float) $earlySettlement->getAmount(),
+            'fee_amount' => (float) $earlySettlement->getFeeAmount(),
+            'account_type_id' => (int) $earlySettlement->getAccountTypeId(),
+            'account_type_name' => $earlySettlement->accountType?->getName(),
+            'account_number' => $earlySettlement->getAccountNumber(),
+            'principle_settled' => (float) $earlySettlement->getPrincipleSettled(),
+            'interest_waived' => (float) $earlySettlement->getInterestWaived(),
+            'update_url' => route('loans.early.settlement.update', ['company' => $company->id, 'financialInstitution' => $loan->getFinancialInstitutionId(), 'mediumTermLoan' => $loan->id]),
+            'delete_url' => route('loans.early.settlement.destroy', ['company' => $company->id, 'financialInstitution' => $loan->getFinancialInstitutionId(), 'mediumTermLoan' => $loan->id]),
+        ];
+    }
+
+    /**
+     * Accounts the early settlement can be paid from, keyed
+     * [currency][accountTypeId] => [{value, label}] — same lookup as
+     * CashExpenseController::getAccountNumbersForAccountType(), done once
+     * per currency on the page instead of over AJAX.
+     */
+    protected function getEarlySettlementAccounts(Company $company, FinancialInstitution $financialInstitution, array $currencies): array
+    {
+        $accountTypes = MediumTermLoanEarlySettlement::getAllowedAccountTypes();
+        $result = [];
+        foreach ($currencies as $currency) {
+            foreach ($accountTypes as $accountType) {
+                $accounts = ('\App\Models\\'.$accountType->getModelName())::getAllAccountNumberForCurrency($company->id, $currency, $financialInstitution->id);
+                $result[$currency][$accountType->id] = collect($accounts)
+                    ->map(fn ($label, $accountNumber) => ['value' => (string) $accountNumber, 'label' => (string) $label])
+                    ->values()
+                    ->all();
+            }
+        }
+
+        return $result;
     }
 
     /**
@@ -215,12 +294,13 @@ class MediumTermLoanController
             ],
             'breakdown' => $breakdown['rows'],
             'totals' => $breakdown['totals'],
+            'earlySettlement' => $this->getEarlySettlementForView($company, $mediumTermLoan),
             'ledger' => $ledger->map(function (\App\Models\MediumTermLoanBankStatement $row) use ($company) {
                 return [
                     'id' => $row->id,
                     'date_formatted' => $row->date ? \Carbon\Carbon::make($row->date)->format('d-m-Y') : __('N/A'),
                     'type' => $row->type,
-                    'is_repayment' => $row->type === \App\Models\MediumTermLoanBankStatement::INSTALLMENT_REPAYMENT,
+                    'is_repayment' => in_array($row->type, [\App\Models\MediumTermLoanBankStatement::INSTALLMENT_REPAYMENT, \App\Models\MediumTermLoanBankStatement::EARLY_SETTLEMENT], true),
                     'beginning_balance' => (float) $row->beginning_balance,
                     'debit' => (float) $row->debit,
                     'credit' => (float) $row->credit,
@@ -491,6 +571,9 @@ class MediumTermLoanController
      */
     public function destroySchedule(Company $company, FinancialInstitution $financialInstitution, MediumTermLoan $mediumTermLoan)
     {
+        if ($response = $this->failIfEarlySettled($mediumTermLoan)) {
+            return $response;
+        }
         DB::transaction(function () use ($mediumTermLoan) {
             foreach ($mediumTermLoan->loanSchedules as $schedule) {
                 foreach ($schedule->settlements as $settlement) {
@@ -518,6 +601,9 @@ class MediumTermLoanController
             return redirect()
                 ->back()
                 ->with('fail', __('Supplier payments have already been made from this loan, so it can\'t be deleted. Delete those payments first.'));
+        }
+        if ($response = $this->failIfEarlySettled($mediumTermLoan)) {
+            return $response;
         }
 
         $mediumTermLoan->deleteRelations();
@@ -601,7 +687,7 @@ class MediumTermLoanController
             'currentAccountTypeId' => $currentAccountType?->id ?? 0,
             'financialInstitutionId' => $loanSchedule->getFinancialInstitutionId(),
             'balanceLookupUrl' => route('update.balance.and.net.balance.based.on.account.number', ['company' => $company->id]),
-            'settlements' => $loanSchedule->settlements->map(function (LoanScheduleSettlement $s) use ($company, $editingSettlement) {
+            'settlements' => $loanSchedule->settlements->map(function (LoanScheduleSettlement $s) use ($company, $editingSettlement, $loanSchedule) {
                 return [
                     'id' => $s->id,
                     'date_formatted' => $s->getDateFormatted(),
@@ -647,6 +733,9 @@ class MediumTermLoanController
             return redirect()
                 ->back()
                 ->with('warning', __('This loan schedule installment is not linked to an active medium term loan.'));
+        }
+        if ($response = $this->failIfEarlySettled($loanSchedule->mediumTermLoan)) {
+            return $response;
         }
 
         /**
@@ -723,6 +812,9 @@ class MediumTermLoanController
     public function updateLoanScheduleSettlement(Company $company, Request $request, LoanScheduleSettlement $loanScheduleSettlement)
     {
         $loanSchedule = $loanScheduleSettlement->loanSchedule;
+        if ($response = $this->failIfEarlySettled($loanSchedule?->mediumTermLoan)) {
+            return $response;
+        }
         $this->deleteLoanScheduleSettlement($company, $request, $loanScheduleSettlement);
         $this->storeLoanScheduleSettlement($company, $request, $loanSchedule);
         return redirect()->route('view.loan.schedule.settlements', ['loanSchedule' => $loanSchedule->id, 'company' => $company->id]);
@@ -734,9 +826,193 @@ class MediumTermLoanController
      */
     public function deleteLoanScheduleSettlement(Company $company, Request $request, LoanScheduleSettlement $loanScheduleSettlement)
     {
+        if ($response = $this->failIfEarlySettled($loanScheduleSettlement->loanSchedule?->mediumTermLoan)) {
+            return $response;
+        }
         $loanScheduleSettlement->deleteAllRelations();
         $loanScheduleSettlement->delete();
         return back();
+    }
+
+    /**
+     * Early Settlement — the customer pays off the rest of the loan in one
+     * go. The bank sums the remaining principle (the agreed amount) and adds
+     * an early-settlement fee. Money moves once, from the chosen account;
+     * every open installment is closed without a cash movement of its own.
+     * @see MediumTermLoanEarlySettlement
+     */
+    public function storeEarlySettlement(Company $company, Request $request, FinancialInstitution $financialInstitution, MediumTermLoan $mediumTermLoan)
+    {
+        if ($response = $this->failIfEarlySettled($mediumTermLoan)) {
+            return $response;
+        }
+        if (! count($mediumTermLoan->getEarlySettlementPreview()['loan_schedule_ids'])) {
+            return back()->with('fail', __('This loan has no open installments to settle.'));
+        }
+
+        $data = $this->validateEarlySettlementRequest($company, $request, $mediumTermLoan, null);
+        if ($data instanceof \Illuminate\Http\RedirectResponse) {
+            return $data;
+        }
+
+        DB::transaction(function () use ($mediumTermLoan, $data) {
+            MediumTermLoanEarlySettlement::settle($mediumTermLoan, ...$data);
+        });
+
+        return redirect()
+            ->route('loans.index', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id])
+            ->with('success', __('Loan Has Been Early Settled Successfully'));
+    }
+
+    /**
+     * Same delete-then-reapply pattern as the rest of this controller, but
+     * the balance is validated BEFORE anything is reversed, and both steps
+     * share one transaction — so a failed edit leaves the original intact.
+     */
+    public function updateEarlySettlement(Company $company, Request $request, FinancialInstitution $financialInstitution, MediumTermLoan $mediumTermLoan)
+    {
+        $earlySettlement = $mediumTermLoan->earlySettlement;
+        if (! $earlySettlement) {
+            return back()->with('fail', __('This loan has not been early settled.'));
+        }
+
+        $data = $this->validateEarlySettlementRequest($company, $request, $mediumTermLoan, $earlySettlement);
+        if ($data instanceof \Illuminate\Http\RedirectResponse) {
+            return $data;
+        }
+
+        DB::transaction(function () use ($mediumTermLoan, $earlySettlement, $data) {
+            $earlySettlement->reverse();
+            MediumTermLoanEarlySettlement::settle($mediumTermLoan->refresh(), ...$data);
+        });
+
+        return redirect()
+            ->route('loans.index', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id])
+            ->with('success', __('Item Has Been Updated Successfully'));
+    }
+
+    /**
+     * Reverses the early settlement completely: removes its statement rows,
+     * re-opens every installment it closed (remaining recomputed from the
+     * normal settlements on it) and puts the loan back to running.
+     */
+    public function destroyEarlySettlement(Company $company, FinancialInstitution $financialInstitution, MediumTermLoan $mediumTermLoan)
+    {
+        $earlySettlement = $mediumTermLoan->earlySettlement;
+        if (! $earlySettlement) {
+            return back()->with('fail', __('This loan has not been early settled.'));
+        }
+
+        DB::transaction(function () use ($earlySettlement) {
+            $earlySettlement->reverse();
+        });
+
+        return redirect()
+            ->route('loans.index', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id])
+            ->with('success', __('Item Has Been Delete Successfully'));
+    }
+
+    /**
+     * @return array{0: string, 1: float, 2: float, 3: AccountType, 4: string}|\Illuminate\Http\RedirectResponse
+     *         the positional arguments MediumTermLoanEarlySettlement::settle() takes after the loan
+     */
+    protected function validateEarlySettlementRequest(Company $company, Request $request, MediumTermLoan $mediumTermLoan, ?MediumTermLoanEarlySettlement $editingEarlySettlement)
+    {
+        /**
+         * * السداد المعجل بيصرف فلوس فعلا من الحساب .. فا ما ينفعش يتسجل
+         * * بتاريخ بعد النهاردة
+         */
+        $request->validate([
+            'date' => ['required', new DateMustBeLessThanOrEqualDate(null, now()->format('Y-m-d'), __('Early Settlement Date Must Be Less Than Or Equal Today'))],
+            'amount' => ['required'],
+            'account_type_id' => ['required'],
+            'account_number' => ['required'],
+        ]);
+
+        $date = Carbon::make($request->get('date'))->format('Y-m-d');
+        $amount = (float) number_unformat($request->get('amount'));
+        $feeAmount = (float) number_unformat($request->get('fee_amount') ?: 0);
+        $accountNumber = (string) $request->get('account_number');
+
+        if ($amount <= 0) {
+            return back()->with('fail', __('Early Settlement Amount Must Be Greater Than Zero'))->withInput();
+        }
+        if ($feeAmount < 0) {
+            return back()->with('fail', __('Early Settlement Fees Can Not Be Negative'))->withInput();
+        }
+
+        /**
+         * * السداد المعجل بيبدأ بعد اخر قسط اتدفع .. فا ما ينفعش يكون قبل
+         * * تاريخ اخر سداد عادي على القرض
+         */
+        $lastSettlementDate = LoanScheduleSettlement::whereIn('loan_schedule_id', $mediumTermLoan->loanSchedules()->select('id'))->max('date');
+        if ($lastSettlementDate && $date < Carbon::make($lastSettlementDate)->format('Y-m-d')) {
+            return back()->with('fail', __('Early Settlement Date Must Be On Or After The Last Installment Payment Date :date', ['date' => Carbon::make($lastSettlementDate)->format('d-m-Y')]))->withInput();
+        }
+
+        /**
+         * * حساب جاري او اوفردرافت .. في بنك القرض نفسه وبعملته
+         */
+        $accountType = MediumTermLoanEarlySettlement::getAllowedAccountTypes()->firstWhere('id', (int) $request->get('account_type_id'));
+        $availableAccounts = $accountType
+            ? ('\App\Models\\'.$accountType->getModelName())::getAllAccountNumberForCurrency($company->id, $mediumTermLoan->getCurrency(), $mediumTermLoan->getFinancialInstitutionId())
+            : [];
+        if (! $accountType || ! array_key_exists($accountNumber, $availableAccounts)) {
+            return back()->with('fail', __('Please Select A Valid Account'))->withInput();
+        }
+
+        if ($response = $this->validateAccountBalanceForEarlySettlement($company, $mediumTermLoan, $accountType, $accountNumber, $date, $amount + $feeAmount, $editingEarlySettlement)) {
+            return $response;
+        }
+
+        return [$date, $amount, $feeAmount, $accountType, $accountNumber];
+    }
+
+    /**
+     * Same balance check as validateCurrentAccountBalanceForSettlement(),
+     * for any cash account type (an overdraft is checked against its room).
+     * In edit mode the endpoint adds the old amount back when the account
+     * is unchanged.
+     */
+    protected function validateAccountBalanceForEarlySettlement(
+        Company $company,
+        MediumTermLoan $mediumTermLoan,
+        AccountType $accountType,
+        string $accountNumber,
+        string $date,
+        float $amount,
+        ?MediumTermLoanEarlySettlement $editingEarlySettlement
+    ): ?\Illuminate\Http\RedirectResponse {
+        $balanceRequest = Request::create('/', 'GET', array_filter([
+            'accountType' => $accountType->id,
+            'accountNumber' => $accountNumber,
+            'financialInstitutionId' => $mediumTermLoan->getFinancialInstitutionId(),
+            'balanceDate' => $date,
+            'modelId' => $editingEarlySettlement?->id,
+            'modelType' => $editingEarlySettlement ? 'MediumTermLoanEarlySettlement' : null,
+        ]));
+
+        $balanceResponse = (new MoneyReceivedController())->updateNetBalanceBasedOnAccountNumber($balanceRequest, $company);
+        $balance = (float) ($balanceResponse->getData()->balance ?? 0);
+
+        if ($amount > $balance) {
+            return back()->with('fail', __('Net Balance Less Than Paid Amount'))->withInput();
+        }
+
+        return null;
+    }
+
+    /**
+     * * القرض اللي اتسدد سداد معجل اتقفل .. اي تغيير في اقساطه او سداداتها
+     * * لازم يستنى لحد ما السداد المعجل نفسه يتحذف
+     */
+    protected function failIfEarlySettled(?MediumTermLoan $mediumTermLoan): ?\Illuminate\Http\RedirectResponse
+    {
+        if ($mediumTermLoan && $mediumTermLoan->isEarlySettled()) {
+            return back()->with('fail', __('This loan has been early settled. Delete the early settlement first.'));
+        }
+
+        return null;
     }
 
     protected function validateCurrentAccountBalanceForSettlement(

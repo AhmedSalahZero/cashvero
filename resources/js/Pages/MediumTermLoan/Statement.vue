@@ -29,6 +29,10 @@ const props = defineProps({
     breakdown: Array,
     totals: Object,
     ledger: Array,
+    /* null unless the loan was early settled — {date_formatted, amount,
+       fee_amount, account_type_name, account_number, principle_settled,
+       interest_waived} */
+    earlySettlement: Object,
     backUrl: String,
     navUrls: Object,
 });
@@ -81,6 +85,10 @@ const hasSchedule = computed(() => (props.breakdown || []).length > 0);
                             <span class="cvr-text-muted">{{ $t('Paid') }}</span>
                             <span class="cvr-num">{{ fmt(totals.interest_paid) }}</span>
                         </div>
+                        <div v-if="totals.interest_waived > 0" class="flex justify-between">
+                            <span class="cvr-text-muted">{{ $t('Waived (Early Settlement)') }}</span>
+                            <span class="cvr-num">{{ fmt(totals.interest_waived) }}</span>
+                        </div>
                         <div class="flex justify-between font-semibold">
                             <span class="cvr-text-secondary">{{ $t('Remaining') }}</span>
                             <span class="cvr-num">{{ fmt(totals.interest_remaining) }}</span>
@@ -102,6 +110,10 @@ const hasSchedule = computed(() => (props.breakdown || []).length > 0);
                         <div class="flex justify-between">
                             <span class="cvr-text-muted">{{ $t('Paid') }}</span>
                             <span class="cvr-num">{{ fmt(totals.principle_paid) }}</span>
+                        </div>
+                        <div v-if="totals.principle_early_settled > 0" class="flex justify-between">
+                            <span class="cvr-text-muted">{{ $t('Paid By Early Settlement') }}</span>
+                            <span class="cvr-num">{{ fmt(totals.principle_early_settled) }}</span>
                         </div>
                         <div class="flex justify-between font-semibold">
                             <span class="cvr-text-secondary">{{ $t('Remaining') }}</span>
@@ -144,6 +156,37 @@ const hasSchedule = computed(() => (props.breakdown || []).length > 0);
                 </div>
             </div>
 
+            <!-- ── Early settlement: one cash movement closed every open installment ── -->
+            <div v-if="earlySettlement" class="cvr-card mb-6">
+                <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-3">{{ $t('Early Settlement') }}</h2>
+                <div class="grid gap-x-6 gap-y-2 text-sm" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+                    <div class="flex justify-between">
+                        <span class="cvr-text-muted">{{ $t('Date') }}</span>
+                        <span>{{ earlySettlement.date_formatted }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="cvr-text-muted">{{ $t('Early Settlement Amount') }}</span>
+                        <span class="cvr-num">{{ fmt(earlySettlement.amount) }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="cvr-text-muted">{{ $t('Early Settlement Fees') }}</span>
+                        <span class="cvr-num">{{ fmt(earlySettlement.fee_amount) }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="cvr-text-muted">{{ $t('Paid From') }}</span>
+                        <span>{{ earlySettlement.account_type_name }} · {{ earlySettlement.account_number }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="cvr-text-muted">{{ $t('Remaining Principle Settled') }}</span>
+                        <span class="cvr-num">{{ fmt(earlySettlement.principle_settled) }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="cvr-text-muted">{{ $t('Interest Waived') }}</span>
+                        <span class="cvr-num">{{ fmt(earlySettlement.interest_waived) }}</span>
+                    </div>
+                </div>
+            </div>
+
             <!-- ── Per-installment breakdown ───────────────────────────── -->
             <h2 class="text-sm font-semibold cvr-text-secondary uppercase tracking-wide mb-2">{{ $t('Installment Breakdown') }}</h2>
             <div class="cvr-card-bg cvr-border border rounded-lg overflow-hidden overflow-x-auto mb-8">
@@ -170,10 +213,13 @@ const hasSchedule = computed(() => (props.breakdown || []).length > 0);
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="row in breakdown" :key="row.number" class="cvr-table-row">
+                        <tr v-for="row in breakdown" :key="row.number" class="cvr-table-row" :class="{ 'opacity-70': row.is_early_settled }">
                             <td class="px-3 py-3 cvr-text-secondary">{{ row.number }}</td>
                             <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.date_formatted }}</td>
-                            <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.status }}</td>
+                            <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">
+                                <span v-if="row.is_early_settled" class="cvr-badge cvr-badge-info">{{ $t(row.status) }}</span>
+                                <template v-else>{{ $t(row.status) }}</template>
+                            </td>
                             <td class="px-3 py-3 text-right cvr-num cvr-border border-l">{{ fmt(row.installment_due) }}</td>
                             <td class="px-3 py-3 text-right cvr-num">{{ fmt(row.installment_paid) }}</td>
                             <td class="px-3 py-3 text-right cvr-num">{{ fmt(row.installment_remaining) }}</td>
@@ -231,7 +277,7 @@ const hasSchedule = computed(() => (props.breakdown || []).length > 0);
                             <tr v-for="row in ledger" :key="row.id" class="cvr-table-row">
                                 <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.date_formatted }}</td>
                                 <td class="px-3 py-3 cvr-text-secondary">
-                                    {{ row.is_repayment ? 'Installment Repayment' : 'Drawdown' }}
+                                    {{ row.type === 'early_settlement' ? $t('Early Settlement') : (row.is_repayment ? 'Installment Repayment' : 'Drawdown') }}
                                     <span v-if="row.comment" class="cvr-text-muted"> — {{ row.comment }}</span>
                                 </td>
                                 <td class="px-3 py-3 text-right cvr-num">{{ fmt(row.beginning_balance) }}</td>

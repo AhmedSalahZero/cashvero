@@ -266,7 +266,8 @@ class SalesGatheringController extends Controller
 				}
 			}
 			$settlementUrl = null;
-			if ($modelName === 'LoanSchedule' && $item->hasMediumTermLoan()) {
+			// القسط اللي اتقفل بسداد معجل ماعلهوش حاجه تتدفع
+			if ($modelName === 'LoanSchedule' && $item->hasMediumTermLoan() && ! $item->isEarlySettled()) {
 				$settlementUrl = route('view.loan.schedule.settlements', ['company' => $company->id, 'loanSchedule' => $item->id]);
 			} elseif ($modelName === 'ContractLoanSchedule' && $item->canSettle()) {
 				$settlementUrl = route('view.contract.loan.schedule.settlements', ['company' => $company->id, 'contractLoanSchedule' => $item->id]);
@@ -468,7 +469,17 @@ class SalesGatheringController extends Controller
         }
 
         $blockedIds = \App\Support\Invoices\InvoiceMoneyLinks::idsWithMoney($modelName, $ids);
-        $deletableIds = array_values(array_diff($ids, $blockedIds));
+        /**
+         * * اقساط القرض اللي اتسدد سداد معجل ما تتحذفش .. القرض اتقفل وحذف
+         * * اقساطه هيسيب حركة السداد المعجل من غير اقساط .. لازم السداد
+         * * المعجل نفسه يتحذف الاول
+         */
+        $earlySettledIds = $modelName === 'LoanSchedule'
+            ? \App\Models\LoanSchedule::whereIn('id', $ids)
+                ->whereIn('medium_term_loan_id', \App\Models\MediumTermLoan::where('status', \App\Models\MediumTermLoan::EARLY_SETTLED)->select('id'))
+                ->pluck('id')->map(fn ($id) => (int) $id)->all()
+            : [];
+        $deletableIds = array_values(array_diff($ids, $blockedIds, $earlySettledIds));
 
         $deleted = 0;
 
@@ -477,6 +488,13 @@ class SalesGatheringController extends Controller
                 $row->delete();
                 $deleted++;
             }
+        }
+
+        if ($earlySettledIds !== []) {
+            return redirect()->back()->with('fail', __(':deleted row(s) deleted. :kept installment(s) belong to early settled loans and were kept. Delete the early settlement first.', [
+                'deleted' => $deleted,
+                'kept' => count($earlySettledIds),
+            ]));
         }
 
         return redirect()->back()->with(

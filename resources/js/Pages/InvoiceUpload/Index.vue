@@ -302,7 +302,7 @@ function submitPrint() {
                             <td v-for="(cell, ci) in row.cells" :key="ci" class="px-3 py-2 text-center cvr-text-primary">
                                 <span class="block truncate max-w-[220px]" :title="cell">{{ cell }}</span>
                             </td>
-                            <td v-if="isScheduleModel" class="px-3 py-2 text-center cvr-text-secondary">{{ row.status }}</td>
+                            <td v-if="isScheduleModel" class="px-3 py-2 text-center cvr-text-secondary">{{ row.status ? $t(row.status) : '' }}</td>
                             <td v-if="isScheduleModel" class="px-3 py-2 text-center cvr-num">{{ row.remaining }}</td>
                             <td class="px-4 py-2 text-center">
                                 <div class="flex items-center justify-center gap-2">

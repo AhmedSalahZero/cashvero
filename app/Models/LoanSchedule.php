@@ -169,9 +169,35 @@ class LoanSchedule extends Model
 	{
 		return $this->remaining ?: 0 ;
 	}
-	public function getRemainingFormatted():string 
+	public function getRemainingFormatted():string
 	{
 		return number_format($this->getRemaining());
+	}
+	/**
+	 * * المتبقي = قيمة القسط - مجموع السدادات اللي عليه .. والقسط اللي اتقفل
+	 * * بسداد معجل متبقيه دايما صفر
+	 */
+	public function recalculateRemaining():void
+	{
+		if ($this->isEarlySettled()) {
+			$this->update(['remaining'=>0]);
+			return ;
+		}
+		$totalSettlement = 0 ;
+		foreach($this->settlements()->get() as $settlement){
+			$totalSettlement+= $settlement->getAmount();
+		}
+		$this->update([
+			'remaining'=>$this->getSchedulePayment() - $totalSettlement
+		]);
+	}
+	/**
+	 * * القسط دا اتقفل بسداد معجل للقرض
+	 * @see MediumTermLoanEarlySettlement
+	 */
+	public function isEarlySettled():bool
+	{
+		return (bool) $this->medium_term_loan_early_settlement_id ;
 	}
 	public function getInstallmentNumber()
 	{

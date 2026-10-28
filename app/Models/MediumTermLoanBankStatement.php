@@ -67,6 +67,12 @@ class MediumTermLoanBankStatement extends Model
      * so paying it never touches the drawn balance).
      */
     const INSTALLMENT_REPAYMENT = 'installment_repayment';
+    /**
+     * Written on the row produced by an early settlement — `debit` is the
+     * whole principle still outstanding, so the drawn balance goes back to
+     * zero and room is restored. See MediumTermLoanEarlySettlement.
+     */
+    const EARLY_SETTLEMENT = 'early_settlement';
 
     protected $guarded = ['id'];
 

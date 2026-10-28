@@ -459,6 +459,9 @@ class SalesGatheringTestController extends Controller
 		if ($modelName == 'ContractLoanSchedule') {
 			$loanId = $contractId;
 		}
+		if ($modelName == 'LoanSchedule' && MediumTermLoan::find($loanId)?->isEarlySettled()) {
+			return redirect()->back()->with('fail', __('This loan has been early settled. Delete the early settlement first.'));
+		}
 
 		if (in_array($modelName, ['LoanSchedule', 'ContractLoanSchedule'], true)) {
 			$shapeError = $this->validateScheduleUploadShape($company, $modelName, $loanId);
@@ -1125,6 +1128,10 @@ class SalesGatheringTestController extends Controller
 			$tableDataArr['company_id'] = $companyId;
 			$tableDataArr = $this->removeCommaFromNumbers($tableDataArr);
 			$tableDataArr = $this->prepareLoanScheduleRowForStorage($companyId, $tableDataArr, $request);
+			// القرض اللي اتسدد سداد معجل اتقفل .. مفيش اقساط جديدة عليه
+			if (MediumTermLoan::find($tableDataArr['medium_term_loan_id'] ?? null)?->isEarlySettled()) {
+				return redirect()->back()->with('fail', __('This loan has been early settled. Delete the early settlement first.'));
+			}
 			$model->create($tableDataArr);
 		}
 

@@ -66,16 +66,7 @@ class LoanScheduleSettlement extends Model
 	}
 	public function updateLoanScheduleRemaining()
 	{
-		$loanSchedule = $this->loanSchedule ;
-		$totalSettlement = 0 ;
-		foreach($loanSchedule->settlements as $settlement){
-			$totalSettlement+= $settlement->getAmount();
-		}
-		$totalLoanScheduleAmount = $loanSchedule->getSchedulePayment();
-		$loanSchedule->update([
-			'remaining'=>$totalLoanScheduleAmount - $totalSettlement 
-		]);
-		
+		$this->loanSchedule->recalculateRemaining();
 	}
 	
     public function scopeCompany($query)

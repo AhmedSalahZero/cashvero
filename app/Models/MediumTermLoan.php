@@ -5,8 +5,10 @@ namespace App\Models;
 use App\Traits\HasBasicStoreRequest;
 use App\Traits\HasOdooPaymentMethod;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
@@ -78,6 +80,11 @@ class MediumTermLoan extends Model implements \App\Interfaces\Models\ISyncsWithO
 		'is_shareholder_account' => false,
 	];
 	const RUNNING = 'running';
+	/**
+	 * * القرض اتسدد سداد معجل .. كل اقساطه المفتوحة اتقفلت
+	 * @see MediumTermLoanEarlySettlement
+	 */
+	const EARLY_SETTLED = 'early_settled';
 
 	/**
 	 * * القرض اتصرف بالفعل قبل ما الشركة تدخل على كاش فيرو .. مش هينفع تدفع بيه
@@ -223,6 +230,76 @@ class MediumTermLoan extends Model implements \App\Interfaces\Models\ISyncsWithO
 	{
 		return $this->hasMany(LoanSchedule::class,'medium_term_loan_id','id');
 	}
+	public function earlySettlement():HasOne
+	{
+		return $this->hasOne(MediumTermLoanEarlySettlement::class,'medium_term_loan_id','id');
+	}
+	public function isEarlySettled():bool
+	{
+		return $this->status === self::EARLY_SETTLED ;
+	}
+	public function getStatusFormatted():string
+	{
+		return $this->isEarlySettled() ? __('Early Settled') : __('Running');
+	}
+	/**
+	 * * الاقساط اللي السداد المعجل هيقفلها: كل قسط لسه عليه فلوس (حتى لو
+	 * * اتدفع نصه) .. مرتبة بالتاريخ
+	 */
+	public function getOpenSchedulesForEarlySettlement():Collection
+	{
+		return $this->loanSchedules()
+			->with('settlements')
+			->where('schedule_payment','>',0)
+			->where('remaining','>',0)
+			->whereNull('medium_term_loan_early_settlement_id')
+			->orderBy('date')
+			->orderBy('id')
+			->get();
+	}
+	/**
+	 * * ملخص اللي هيتقفل بالسداد المعجل: من اول اي قسط ، وكام قسط ، وال
+	 * * principle
+	 * * المتبقي (دا اللي البنك بيجمعه للعميل) والفايدة المتبقية اللي مش هتتدفع.
+	 *
+	 * * القسط المدفوع جزء منه: اللي اتدفع بيروح للفايدة الاول (نفس قاعدة
+	 * * السداد العادي) .. فا المتبقي من ال
+	 * * principle
+	 * * بيتحسب بعد كدا.
+	 * @see LoanScheduleSettlement::principlePaidFor()
+	 *
+	 * @return array{loan_schedule_ids: list<int>, first_loan_schedule_id: int|null, first_installment_number: int|null, first_installment_date_formatted: string|null, open_installments_count: int, remaining_principle: float, remaining_interest: float}
+	 */
+	public function getEarlySettlementPreview():array
+	{
+		$openSchedules = $this->getOpenSchedulesForEarlySettlement();
+		$remainingPrinciple = 0.0 ;
+		$remainingInterest = 0.0 ;
+		foreach ($openSchedules as $schedule) {
+			/**
+			 * @var LoanSchedule $schedule
+			 */
+			$interestDue  = (float) $schedule->getInterestAmount();
+			$principleDue = (float) $schedule->getPrincipleAmount();
+			$paid = (float) $schedule->settlements->sum('amount');
+			$remainingPrinciple += max(0, $principleDue - LoanScheduleSettlement::principlePaidFor($paid,$interestDue,$principleDue));
+			$remainingInterest += max(0, $interestDue - LoanScheduleSettlement::interestPaidFor($paid,$interestDue));
+		}
+		/**
+		 * @var LoanSchedule|null $firstSchedule
+		 */
+		$firstSchedule = $openSchedules->first();
+
+		return [
+			'loan_schedule_ids'=>$openSchedules->pluck('id')->all() ,
+			'first_loan_schedule_id'=>$firstSchedule?->id ,
+			'first_installment_number'=>$firstSchedule ? $firstSchedule->getInstallmentNumber() : null ,
+			'first_installment_date_formatted'=>$firstSchedule?->getDateFormatted() ,
+			'open_installments_count'=>$openSchedules->count() ,
+			'remaining_principle'=>round($remainingPrinciple,2) ,
+			'remaining_interest'=>round($remainingInterest,2) ,
+		];
+	}
     public function deleteRelations()
     {
 		$this->loanSchedules->each(function(LoanSchedule $loanSchedule){
@@ -251,8 +328,11 @@ class MediumTermLoan extends Model implements \App\Interfaces\Models\ISyncsWithO
 			? $this->loanSchedules
 			: $this->loanSchedules()->get();
 
+		/**
+		 * * القسط اللي اتقفل بسداد معجل مش جاي .. القرض خلاص اتسدد
+		 */
 		$nextInstallment = $schedules
-			->filter(fn ($schedule) => $schedule->date >= $date)
+			->filter(fn ($schedule) => $schedule->date >= $date && ! $schedule->isEarlySettled())
 			->sortBy('date')
 			->first();
 
@@ -431,6 +511,8 @@ class MediumTermLoan extends Model implements \App\Interfaces\Models\ISyncsWithO
 			->where('currency',$currencyName)
 			->where('financial_institution_id',$financialInstitutionId)
 			->where('consumption_status',self::CONSUMPTION_NEW)
+			// القرض اللي اتسدد سداد معجل اتقفل .. مفيش منه سحب تاني
+			->where('status','!=',self::EARLY_SETTLED)
 			->whereNotNull('account_number')
 			->where('account_number','!=','');
 
@@ -504,6 +586,8 @@ class MediumTermLoan extends Model implements \App\Interfaces\Models\ISyncsWithO
 			'interest_due'=>0.0 , 'interest_paid'=>0.0 , 'interest_remaining'=>0.0 ,
 			'principle_due'=>0.0 , 'principle_paid'=>0.0 , 'principle_remaining'=>0.0 ,
 			'installment_due'=>0.0 , 'installment_paid'=>0.0 , 'installment_remaining'=>0.0 ,
+			// اللي اتقفل بالسداد المعجل .. علشان المستحق = المدفوع + المتبقي + دول
+			'principle_early_settled'=>0.0 , 'interest_waived'=>0.0 ,
 		];
 
 		$number = 0 ;
@@ -531,32 +615,55 @@ class MediumTermLoan extends Model implements \App\Interfaces\Models\ISyncsWithO
 			 */
 			$interestPaid  = LoanScheduleSettlement::interestPaidFor($paid,$interestDue);
 			$princiblePaid = LoanScheduleSettlement::principlePaidFor($paid,$interestDue,$principleDue);
+			$interestRemaining = max(0,$interestDue - $interestPaid) ;
+			$principleRemaining = max(0,$principleDue - $princiblePaid) ;
+			$installmentRemaining = max(0,$installment - $paid) ;
+
+			/**
+			 * * القسط اللي اتقفل بسداد معجل ماعلهوش حاجه تاني: ال
+			 * * principle
+			 * * المتبقي اتسدد في السداد المعجل والفايدة المتبقية مش هتتدفع
+			 * * (المدفوع فعلا قبل كدا بيفضل زي ما هو)
+			 */
+			$isEarlySettled = $schedule->isEarlySettled();
+			$principleEarlySettled = $isEarlySettled ? $principleRemaining : 0.0 ;
+			$interestWaived = $isEarlySettled ? $interestRemaining : 0.0 ;
+			if ($isEarlySettled) {
+				$interestRemaining = 0.0 ;
+				$principleRemaining = 0.0 ;
+				$installmentRemaining = 0.0 ;
+			}
 
 			$rows[] = [
 				'number'=>$number ,
 				'date_formatted'=>$schedule->getDateFormatted() ,
 				'raw_date'=>$schedule->getDate() ,
 				'status'=>$schedule->getStatusFormatted() ,
+				'is_early_settled'=>$isEarlySettled ,
 				'installment_due'=>$installment ,
 				'installment_paid'=>$paid ,
-				'installment_remaining'=>max(0,$installment - $paid) ,
+				'installment_remaining'=>$installmentRemaining ,
 				'interest_due'=>$interestDue ,
 				'interest_paid'=>$interestPaid ,
-				'interest_remaining'=>max(0,$interestDue - $interestPaid) ,
+				'interest_remaining'=>$interestRemaining ,
 				'principle_due'=>$principleDue ,
 				'principle_paid'=>$princiblePaid ,
-				'principle_remaining'=>max(0,$principleDue - $princiblePaid) ,
+				'principle_remaining'=>$principleRemaining ,
+				'principle_early_settled'=>$principleEarlySettled ,
+				'interest_waived'=>$interestWaived ,
 			];
 
 			$totals['interest_due'] += $interestDue ;
 			$totals['interest_paid'] += $interestPaid ;
-			$totals['interest_remaining'] += max(0,$interestDue - $interestPaid) ;
+			$totals['interest_remaining'] += $interestRemaining ;
 			$totals['principle_due'] += $principleDue ;
 			$totals['principle_paid'] += $princiblePaid ;
-			$totals['principle_remaining'] += max(0,$principleDue - $princiblePaid) ;
+			$totals['principle_remaining'] += $principleRemaining ;
 			$totals['installment_due'] += $installment ;
 			$totals['installment_paid'] += $paid ;
-			$totals['installment_remaining'] += max(0,$installment - $paid) ;
+			$totals['installment_remaining'] += $installmentRemaining ;
+			$totals['principle_early_settled'] += $principleEarlySettled ;
+			$totals['interest_waived'] += $interestWaived ;
 		}
 
 		return ['rows'=>$rows , 'totals'=>$totals];
