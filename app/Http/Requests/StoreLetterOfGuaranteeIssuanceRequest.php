@@ -78,6 +78,7 @@ class StoreLetterOfGuaranteeIssuanceRequest extends FormRequest
     {
         return [
 			'transaction_name'=>['required'],
+			'lg_type'=>['required'],
 			'lg_fees_and_commission_account_id'=>'required',
 			/**
 			 * * تاريخ الاصدار لازم يقع على الناحية الصح من تاريخ الرصيد
