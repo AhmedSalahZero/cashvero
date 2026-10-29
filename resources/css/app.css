@@ -603,6 +603,10 @@ body {
     transition: var(--cvr-transition);
 }
 .cvr-btn-danger:hover { background-color: var(--cvr-danger-bg); }
+/* Confirm Delete is disabled while its request runs, so a double-click
+   can't send a second DELETE for a record that is already gone. */
+.cvr-btn-danger:disabled { opacity: .6; cursor: not-allowed; }
+.cvr-btn-danger:disabled:hover { background-color: transparent; }
 
 /* ── Action Icon Buttons ──────────────────────────────────────── */
 .cvr-action-btn {

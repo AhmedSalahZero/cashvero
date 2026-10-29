@@ -164,9 +164,12 @@ onBeforeUnmount(stopPolling);
    returns a plain redirect. ─────────────────────────────────────── */
 const deleteTarget = ref(null);
 function confirmDelete(row) { deleteTarget.value = row; }
+const deletingRow = ref(false);
 function destroyRow() {
+    if (deletingRow.value) return;
+    deletingRow.value = true;
     router.delete(deleteTarget.value.deleteUrl, {
-        onFinish: () => { deleteTarget.value = null; },
+        onFinish: () => { deletingRow.value = false; deleteTarget.value = null; },
     });
 }
 
@@ -356,7 +359,7 @@ function submitPrint() {
                     <p class="text-sm cvr-text-muted mb-4">{{ $t('This action cannot be undone.') }}</p>
                     <div class="flex justify-end gap-2">
                         <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Delete') }}</button>
+                        <button @click="destroyRow" :disabled="deletingRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ deletingRow ? $t('Deleting...') : $t('Delete') }}</button>
                     </div>
                 </div>
             </div>

@@ -37,9 +37,12 @@ function toggleArchiveExpand(row) {
 const deleteRenewalTarget = ref(null);
 function confirmDeleteRenewal(row) { deleteRenewalTarget.value = row; }
 function cancelDeleteRenewal() { deleteRenewalTarget.value = null; }
+const deletingRenewal = ref(false);
 function destroyRenewal() {
+    if (deletingRenewal.value) return;
+    deletingRenewal.value = true;
     router.delete(deleteRenewalTarget.value.delete_renewal_url, {
-        onFinish: () => { deleteRenewalTarget.value = null; },
+        onFinish: () => { deletingRenewal.value = false; deleteRenewalTarget.value = null; },
     });
 }
 
@@ -62,8 +65,11 @@ const currencyCount = computed(() => new Set(props.rows.map(r => r.currency)).si
 const deleteTarget = ref(null);
 function confirmDelete(row) { deleteTarget.value = row; }
 function cancelDelete() { deleteTarget.value = null; }
+const deletingRow = ref(false);
 function destroyRow() {
-    router.delete(deleteTarget.value.delete_url, { onFinish: () => { deleteTarget.value = null; } });
+    if (deletingRow.value) return;
+    deletingRow.value = true;
+    router.delete(deleteTarget.value.delete_url, { onFinish: () => { deletingRow.value = false; deleteTarget.value = null; } });
 }
 
 /* ── Lock / Unlock confirmation ──────────────────────────────────
@@ -126,8 +132,11 @@ function submitEditRate() {
 const deleteRateTarget = ref(null);
 function confirmDeleteRate(rate) { deleteRateTarget.value = rate; }
 function cancelDeleteRate() { deleteRateTarget.value = null; }
+const deletingRate = ref(false);
 function destroyRate() {
-    router.get(deleteRateTarget.value.delete_url, {}, { onFinish: () => { deleteRateTarget.value = null; } });
+    if (deletingRate.value) return;
+    deletingRate.value = true;
+    router.get(deleteRateTarget.value.delete_url, {}, { onFinish: () => { deletingRate.value = false; deleteRateTarget.value = null; } });
 }
 
 /* ── Lending Information modal — links a customer's real contract to
@@ -193,8 +202,11 @@ function submitEditLending() {
 const deleteLendingTarget = ref(null);
 function confirmDeleteLending(info) { deleteLendingTarget.value = info; }
 function cancelDeleteLending() { deleteLendingTarget.value = null; }
+const deletingLending = ref(false);
 function destroyLending() {
-    router.get(deleteLendingTarget.value.delete_url, {}, { onFinish: () => { deleteLendingTarget.value = null; } });
+    if (deletingLending.value) return;
+    deletingLending.value = true;
+    router.get(deleteLendingTarget.value.delete_url, {}, { onFinish: () => { deletingLending.value = false; deleteLendingTarget.value = null; } });
 }
 
 /* ── Facility Renewal — Phase 4 ───────────────────────────────────
@@ -465,7 +477,7 @@ function submitRenew() {
                     </p>
                     <div class="flex justify-end gap-2">
                         <button @click="cancelDeleteRenewal" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
-                        <button @click="destroyRenewal" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
+                        <button @click="destroyRenewal" :disabled="deletingRenewal" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ deletingRenewal ? $t('Deleting...') : $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>
@@ -476,7 +488,7 @@ function submitRenew() {
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to delete this item?') }}</h2>
                     <div class="flex justify-end gap-2">
                         <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
+                        <button @click="destroyRow" :disabled="deletingRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ deletingRow ? $t('Deleting...') : $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>
@@ -690,7 +702,7 @@ function submitRenew() {
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to delete this item?') }}</h2>
                     <div class="flex justify-end gap-2">
                         <button @click="cancelDeleteRate" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
-                        <button @click="destroyRate" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
+                        <button @click="destroyRate" :disabled="deletingRate" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ deletingRate ? $t('Deleting...') : $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>
@@ -829,7 +841,7 @@ function submitRenew() {
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to delete this item?') }}</h2>
                     <div class="flex justify-end gap-2">
                         <button @click="cancelDeleteLending" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
-                        <button @click="destroyLending" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
+                        <button @click="destroyLending" :disabled="deletingLending" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ deletingLending ? $t('Deleting...') : $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>

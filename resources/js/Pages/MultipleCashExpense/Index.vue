@@ -54,9 +54,12 @@ function confirmDelete(row) {
     deleteTarget.value = row;
 }
 
+const deleting = ref(false);
 function performDelete() {
+    if (deleting.value) return;
+    deleting.value = true;
     router.delete(deleteTarget.value.delete_url, {
-        onFinish: () => { deleteTarget.value = null; },
+        onFinish: () => { deleting.value = false; deleteTarget.value = null; },
     });
 }
 </script>
@@ -215,7 +218,7 @@ function performDelete() {
                     <p class="cvr-text-primary mb-4">{{ $t('Do you want to delete this item?') }}</p>
                     <div class="flex justify-end gap-2">
                         <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
-                        <button @click="performDelete" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
+                        <button @click="performDelete" :disabled="deleting" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ deleting ? $t('Deleting...') : $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>

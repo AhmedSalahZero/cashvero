@@ -43,8 +43,11 @@ const filteredRows = computed(() => {
 const deleteTarget = ref(null);
 function confirmDelete(row) { deleteTarget.value = row; }
 function cancelDelete() { deleteTarget.value = null; }
+const deletingRow = ref(false);
 function destroyRow() {
-    router.delete(deleteTarget.value.delete_url, { onFinish: () => { deleteTarget.value = null; } });
+    if (deletingRow.value) return;
+    deletingRow.value = true;
+    router.delete(deleteTarget.value.delete_url, { onFinish: () => { deletingRow.value = false; deleteTarget.value = null; } });
 }
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-EG', { maximumFractionDigits: 2 });
@@ -149,10 +152,13 @@ function submitEarlySettlement() {
 }
 
 const earlySettlementDeleteTarget = ref(null);
+const deletingEarlySettlement = ref(false);
 function destroyEarlySettlement() {
+    if (deletingEarlySettlement.value) return;
+    deletingEarlySettlement.value = true;
     router.delete(earlySettlementDeleteTarget.value.early_settlement.delete_url, {
         preserveScroll: true,
-        onFinish: () => { earlySettlementDeleteTarget.value = null; },
+        onFinish: () => { deletingEarlySettlement.value = false; earlySettlementDeleteTarget.value = null; },
     });
 }
 </script>
@@ -249,7 +255,7 @@ function destroyEarlySettlement() {
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to delete this item?') }}</h2>
                     <div class="flex justify-end gap-2">
                         <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
+                        <button @click="destroyRow" :disabled="deletingRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ deletingRow ? $t('Deleting...') : $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>
@@ -345,7 +351,7 @@ function destroyEarlySettlement() {
                     <p class="text-sm cvr-text-secondary mb-4">{{ $t('Its bank movements will be deleted and every installment it closed will go back to how it was before.') }}</p>
                     <div class="flex justify-end gap-2">
                         <button @click="earlySettlementDeleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
-                        <button @click="destroyEarlySettlement" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
+                        <button @click="destroyEarlySettlement" :disabled="deletingEarlySettlement" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ deletingEarlySettlement ? $t('Deleting...') : $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>

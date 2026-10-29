@@ -16,9 +16,12 @@ const { can } = usePermissions();
 const deleteTarget = ref(null);
 function confirmDelete(role) { deleteTarget.value = role; }
 function cancelDelete() { deleteTarget.value = null; }
+const deletingRole = ref(false);
 function destroyRole() {
+    if (deletingRole.value) return;
+    deletingRole.value = true;
     router.delete(deleteTarget.value.delete_url, {
-        onFinish: () => { deleteTarget.value = null; },
+        onFinish: () => { deletingRole.value = false; deleteTarget.value = null; },
     });
 }
 </script>
@@ -103,7 +106,7 @@ function destroyRole() {
                     </p>
                     <div class="flex justify-end gap-2">
                         <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Cancel') }}</button>
-                        <button @click="destroyRole" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Delete Role') }}</button>
+                        <button @click="destroyRole" :disabled="deletingRole" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ deletingRole ? $t('Deleting...') : $t('Delete Role') }}</button>
                     </div>
                 </div>
             </div>

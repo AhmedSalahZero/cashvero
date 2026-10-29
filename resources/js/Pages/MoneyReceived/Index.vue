@@ -150,13 +150,19 @@ function firstValidationMessage(errors) {
     }
     return '';
 }
+const deletingRow = ref(false);
 function destroyRow() {
+    if (deletingRow.value) return;
+    deletingRow.value = true;
     deleteError.value = '';
     router.delete(deleteTarget.value.delete_url, {
         onSuccess: () => closeDelete(),
         onError: (errors) => {
             deleteError.value = firstValidationMessage(errors);
         },
+        // The modal stays open on a validation error, so the button has to
+        // come back to life for another try.
+        onFinish: () => { deletingRow.value = false; },
     });
 }
 
@@ -617,7 +623,7 @@ function submitApplyCollection() {
                     <p v-if="deleteError" class="text-sm mb-4" style="color: var(--cvr-danger-text)">{{ deleteError }}</p>
                     <div class="flex justify-end gap-2">
                         <button @click="closeDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
+                        <button @click="destroyRow" :disabled="deletingRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ deletingRow ? $t('Deleting...') : $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>

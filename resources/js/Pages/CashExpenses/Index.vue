@@ -40,9 +40,12 @@ function toggle(id) {
 const deleteTarget = ref(null);
 function confirmDelete(row) { deleteTarget.value = row; }
 function cancelDelete() { deleteTarget.value = null; }
+const deletingRow = ref(false);
 function destroyRow() {
+    if (deletingRow.value) return;
+    deletingRow.value = true;
     router.delete(deleteTarget.value.delete_url, {
-        onFinish: () => { deleteTarget.value = null; },
+        onFinish: () => { deletingRow.value = false; deleteTarget.value = null; },
     });
 }
 </script>
@@ -149,7 +152,7 @@ function destroyRow() {
                     <p class="text-sm cvr-text-muted mb-4">{{ $t('This will also remove its') }} {{ deleteTarget.items.length }} {{ $t('expense item(s).') }}</p>
                     <div class="flex justify-end gap-2">
                         <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ $t('Confirm Delete') }}</button>
+                        <button @click="destroyRow" :disabled="deletingRow" class="cvr-btn-danger px-3 py-1.5 rounded border">{{ deletingRow ? $t('Deleting...') : $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>

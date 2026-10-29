@@ -42,8 +42,11 @@ const { can } = usePermissions();
    `delete.cashflow.report` route, so both obey the same key that
    RoutePermissionMap enforces on it. */
 const deleteTarget = ref(null);
+const deletingReport = ref(false);
 function destroyReport() {
-    router.delete(deleteTarget.value.delete_url, { onFinish: () => { deleteTarget.value = null; } });
+    if (deletingReport.value) return;
+    deletingReport.value = true;
+    router.delete(deleteTarget.value.delete_url, { onFinish: () => { deletingReport.value = false; deleteTarget.value = null; } });
 }
 </script>
 
@@ -146,7 +149,7 @@ function destroyReport() {
                     <p class="text-sm cvr-text-muted mb-4">{{ $t('Are you sure you want to delete this item?') }}</p>
                     <div class="flex justify-end gap-2">
                         <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
-                        <button @click="destroyReport" class="cvr-btn-danger px-3 py-1.5 rounded">{{ $t('Delete') }}</button>
+                        <button @click="destroyReport" :disabled="deletingReport" class="cvr-btn-danger px-3 py-1.5 rounded">{{ deletingReport ? $t('Deleting...') : $t('Delete') }}</button>
                     </div>
                 </div>
             </div>

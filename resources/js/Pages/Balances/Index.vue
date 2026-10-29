@@ -284,9 +284,12 @@ function submitSettle() {
 /* Deleting the settlement IS the reversal — every allocation it made
    is taken back and both sides' invoices recompute. */
 const settlementToDelete = ref(null);
+const deletingSettlement = ref(false);
 function destroySettlement() {
+    if (deletingSettlement.value) return;
+    deletingSettlement.value = true;
     router.delete(settlementToDelete.value.delete_url, {
-        onFinish: () => { settlementToDelete.value = null; closeSettle(); },
+        onFinish: () => { deletingSettlement.value = false; settlementToDelete.value = null; closeSettle(); },
     });
 }
 
@@ -679,7 +682,7 @@ function formatAmount(value) {
                     </p>
                     <div class="flex items-center justify-end gap-2">
                         <button @click="settlementToDelete = null" class="cvr-btn-secondary px-4 py-2 rounded border text-sm">{{ $t('Cancel') }}</button>
-                        <button @click="destroySettlement" class="cvr-btn-danger px-4 py-2 rounded text-sm">{{ $t('Delete') }}</button>
+                        <button @click="destroySettlement" :disabled="deletingSettlement" class="cvr-btn-danger px-4 py-2 rounded text-sm">{{ deletingSettlement ? $t('Deleting...') : $t('Delete') }}</button>
                     </div>
                 </div>
             </div>

@@ -54,9 +54,12 @@ function badgeClass(typeLabel) {
 const deleteTarget = ref(null);
 function confirmDelete(account) { deleteTarget.value = account; }
 function cancelDelete() { deleteTarget.value = null; }
+const deletingAccount = ref(false);
 function destroyAccount() {
+    if (deletingAccount.value) return;
+    deletingAccount.value = true;
     router.delete(deleteTarget.value.delete_url, {
-        onFinish: () => { deleteTarget.value = null; },
+        onFinish: () => { deletingAccount.value = false; deleteTarget.value = null; },
     });
 }
 
@@ -226,8 +229,8 @@ function toggleLock() {
                         <button @click="cancelDelete" class="cvr-btn-secondary px-3 py-1.5 rounded border">
                             {{ $t('Close') }}
                         </button>
-                        <button @click="destroyAccount" class="cvr-btn-danger px-3 py-1.5 rounded border">
-                            {{ $t('Confirm Delete') }}
+                        <button @click="destroyAccount" :disabled="deletingAccount" class="cvr-btn-danger px-3 py-1.5 rounded border">
+                            {{ deletingAccount ? $t('Deleting...') : $t('Confirm Delete') }}
                         </button>
                     </div>
                 </div>

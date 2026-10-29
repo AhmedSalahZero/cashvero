@@ -130,8 +130,11 @@ function submitRevertDifference() {
 
 /* ── Delete confirmation ──────────────────────────────────────── */
 const deleteTarget = ref(null);
+const deletingRow = ref(false);
 function destroyRow() {
-    router.delete(deleteTarget.value.delete_url, { onFinish: () => { deleteTarget.value = null; } });
+    if (deletingRow.value) return;
+    deletingRow.value = true;
+    router.delete(deleteTarget.value.delete_url, { onFinish: () => { deletingRow.value = false; deleteTarget.value = null; } });
 }
 </script>
 
@@ -346,7 +349,7 @@ function destroyRow() {
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Do you want to delete this item?') }}</h2>
                     <div class="flex justify-end gap-2">
                         <button @click="deleteTarget = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
-                        <button @click="destroyRow" class="cvr-btn-danger px-3 py-1.5 rounded">{{ $t('Confirm Delete') }}</button>
+                        <button @click="destroyRow" :disabled="deletingRow" class="cvr-btn-danger px-3 py-1.5 rounded">{{ deletingRow ? $t('Deleting...') : $t('Confirm Delete') }}</button>
                     </div>
                 </div>
             </div>
