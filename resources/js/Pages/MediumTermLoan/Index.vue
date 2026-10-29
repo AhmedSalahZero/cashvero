@@ -21,6 +21,9 @@ const props = defineProps({
     /* Early Settlement popup data. Accounts are keyed
        [currency][accountTypeId] => [{value, label}] — current accounts and
        overdrafts at this bank, in the loan's currency. */
+    /* False in production: the "Early Settlement" button is hidden there.
+       Edit / Delete of an existing early settlement are unaffected. */
+    earlySettlementEnabled: Boolean,
     earlySettlementAccountTypes: Array,
     earlySettlementAccounts: Object,
     balanceLookupUrl: String,
@@ -230,7 +233,7 @@ function destroyEarlySettlement() {
                                     <a v-if="canUpload" :href="row.upload_schedule_url" class="cvr-action-btn" :title="$t('Upload Loan Schedule & Apply Payments')">📤💵</a>
                                     <Link :href="row.statement_url" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs" :title="$t('Interest & principle: due vs paid, plus the drawdown ledger')">{{ $t('Statement') }}</Link>
                                     <template v-if="canManageSchedule()">
-                                        <button v-if="!row.is_early_settled && row.early_settlement_preview" @click="openEarlySettlement(row)" class="cvr-btn-copper inline-flex items-center px-2 py-1 rounded text-xs">{{ $t('Early Settlement') }}</button>
+                                        <button v-if="earlySettlementEnabled && !row.is_early_settled && row.early_settlement_preview" @click="openEarlySettlement(row)" class="cvr-btn-copper inline-flex items-center px-2 py-1 rounded text-xs">{{ $t('Early Settlement') }}</button>
                                         <template v-if="row.early_settlement">
                                             <button @click="openEarlySettlement(row)" class="cvr-btn-secondary inline-flex items-center px-2 py-1 rounded border text-xs">{{ $t('Edit Early Settlement') }}</button>
                                             <button @click="earlySettlementDeleteTarget = row" class="cvr-btn-danger inline-flex items-center px-2 py-1 rounded border text-xs">{{ $t('Delete Early Settlement') }}</button>

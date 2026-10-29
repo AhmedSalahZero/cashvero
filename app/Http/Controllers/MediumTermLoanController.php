@@ -153,6 +153,8 @@ class MediumTermLoanController
                     'early_settlement_url' => route('loans.early.settlement.store', ['company' => $company->id, 'financialInstitution' => $financialInstitution->id, 'mediumTermLoan' => $loan->id]),
                 ];
             })->values(),
+            // The button that starts an early settlement is not offered in production.
+            'earlySettlementEnabled' => ! app()->environment('production'),
             'earlySettlementAccountTypes' => MediumTermLoanEarlySettlement::getAllowedAccountTypes()
                 ->map(fn (AccountType $accountType) => ['id' => $accountType->id, 'name' => $accountType->getName()])
                 ->values(),
