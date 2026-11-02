@@ -5260,11 +5260,12 @@
     "Cheques In Safe Notifications Days": "أيام الإشعار للشيكات في الخزينة",
     "Coming Receivable Cheques": "الشيكات المستحقة القادمة",
     "Coming Payable Cheques Notifications Days": "أيام الإشعار قبل استحقاق شيكات الدفع",
-    "LG :code Expires After :days Days": "خطاب الضمان :code ينتهي بعد :days يوم",
-    ":name Expires After :days Days": ":name ينتهي بعد :days يوم",
     "Facility Name": "اسم التسهيل",
     "Past Due Since (Days)": "متأخر منذ (أيام)",
     "Due After (Days)": "يستحق بعد (أيام)",
     "Due Since (Days)": "مستحق منذ (أيام)",
-    "Cheque Date": "تاريخ الشيك"
+    "Cheque Date": "تاريخ الشيك",
+    "Expired since :days days": "منتهي منذ :days يوم",
+    "Expires today": "ينتهي اليوم",
+    "Expires after :days days": "ينتهي بعد :days يوم"
 }

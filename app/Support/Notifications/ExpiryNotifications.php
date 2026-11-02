@@ -24,10 +24,12 @@ use Illuminate\Database\Eloquent\Model;
  * * بتتبني مع باقي الاشعارات في
  * * CheckDueAndPastedInvoicesJob
  * * (اللي بيمسح اشعارات الشركة ويعيد بنائها كل ما المستخدم يدخل الشركة)
- * * وبتشمل اللي هيخلص من النهاردة لحد عدد الايام اللي في اعدادات الاشعارات:
+ * * وبتشمل اللي تاريخ انتهاءه <= النهاردة + عدد الايام اللي في اعدادات الاشعارات:
  * *   - خطاب الضمان: 7 ايام افتراضيا ، مقسم على نوع الخطاب
  * *   - التسهيل: 30 يوم افتراضيا ، مقسم على نوع التسهيل
- * * اللي خلص فعلا مش بيظهر هنا .. ليه تقرير Expired LGs.
+ * * يعني اللي خلص فعلا (ولسه ما اتلغاش / ما اتجددش) بيظهر هو كمان ، علشان
+ * * لما العد يوصل صفر او اقل يبقى منتهي ولازم المستخدم يشوفه.
+ * * عمود Status بيقول "انتهى من كام يوم" او "هينتهي بعد كام يوم".
  *
  * * التجديد بيحدّث تاريخ الانتهاء على الخطاب/التسهيل نفسه
  * * (renewal_date / contract_end_date) فا مش محتاجين جدول التاريخ.
@@ -133,7 +135,8 @@ final class ExpiryNotifications
             ->with(['beneficiary', 'financialInstitutionBank'])
             ->where('company_id', $company->id)
             ->where('status', '!=', LetterOfGuaranteeIssuance::CANCELLED)
-            ->whereBetween('renewal_date', [$today->format('Y-m-d'), $until->format('Y-m-d')])
+            // No lower bound: an LG already past its expiry is still shown.
+            ->where('renewal_date', '<=', $until->format('Y-m-d'))
             ->orderBy('renewal_date')
             ->get();
 
@@ -142,13 +145,13 @@ final class ExpiryNotifications
             if (! isset(LgTypes::getAll()[$lg->getLgType()])) {
                 continue;
             }
-            $expiryDate = Carbon::make($lg->getRenewalDate());
-            $daysLeft = (int) $today->diffInDays($expiryDate, true);
-            $replace = ['code' => $lg->getLgCode(), 'days' => $daysLeft];
+            $expiryDate = Carbon::make($lg->getRenewalDate())->startOfDay();
+            $subject = __('LG', [], 'en').' '.$lg->getLgCode();
+            $subjectAr = __('LG', [], 'ar').' '.$lg->getLgCode();
 
             $company->notify(new DueInvoiceNotification(
-                __('LG :code Expires After :days Days', $replace, 'en'),
-                __('LG :code Expires After :days Days', $replace, 'ar'),
+                $subject.' — '.self::status($today, $expiryDate, 'en'),
+                $subjectAr.' — '.self::status($today, $expiryDate, 'ar'),
                 self::lgType($lg->getLgType()),
                 self::LG_TAP_TYPE,
                 [
@@ -160,7 +163,7 @@ final class ExpiryNotifications
                     'Cash Cover' => number_format($lg->is_activated ? (float) $lg->getCashCoverAmount() : 0, 2),
                     'Expiry Date' => $expiryDate->format('d-m-Y'),
                     'Currency' => $lg->getLgCurrency(),
-                    'Days Left' => $daysLeft,
+                    'Status' => self::status($today, $expiryDate),
                 ]
             ));
         }
@@ -174,21 +177,20 @@ final class ExpiryNotifications
 
             $facilities = $model::query()
                 ->where('company_id', $company->id)
-                ->whereBetween($endDateColumn, [$today->format('Y-m-d'), $until->format('Y-m-d')])
+                // No lower bound: a facility already past its end date is still shown.
+                ->where($endDateColumn, '<=', $until->format('Y-m-d'))
                 // القرض اللي اتسدد سداد معجل اتقفل خلاص
                 ->when($facilityType === self::MEDIUM_TERM_LOAN, fn ($query) => $query->where('status', '!=', MediumTermLoan::EARLY_SETTLED))
                 ->orderBy($endDateColumn)
                 ->get();
 
             foreach ($facilities as $facility) {
-                $expiryDate = Carbon::make($facility->{$endDateColumn});
-                $daysLeft = (int) $today->diffInDays($expiryDate, true);
+                $expiryDate = Carbon::make($facility->{$endDateColumn})->startOfDay();
                 $facilityName = self::facilityName($facilityType, $facility);
-                $replace = ['name' => $facilityName, 'days' => $daysLeft];
 
                 $company->notify(new DueInvoiceNotification(
-                    __(':name Expires After :days Days', $replace, 'en'),
-                    __(':name Expires After :days Days', $replace, 'ar'),
+                    $facilityName.' — '.self::status($today, $expiryDate, 'en'),
+                    $facilityName.' — '.self::status($today, $expiryDate, 'ar'),
                     self::facilityType($facilityType),
                     self::FACILITY_TAP_TYPE,
                     [
@@ -197,11 +199,30 @@ final class ExpiryNotifications
                         'Expiry Date' => $expiryDate->format('d-m-Y'),
                         'Limit' => number_format((float) $facility->limit, 2),
                         'Currency' => $facility->currency,
-                        'Days Left' => $daysLeft,
+                        'Status' => self::status($today, $expiryDate),
                     ]
                 ));
             }
         }
+    }
+
+    /**
+     * "Expired since 5 days" / "Expires today" / "Expires after 3 days" —
+     * one column for every row, since the bell's table takes its headings
+     * from the first row's keys.
+     */
+    private static function status(Carbon $today, Carbon $expiryDate, ?string $locale = null): string
+    {
+        $days = (int) $today->diffInDays($expiryDate, true);
+
+        if ($expiryDate->lt($today)) {
+            return __('Expired since :days days', ['days' => $days], $locale);
+        }
+        if ($expiryDate->eq($today)) {
+            return __('Expires today', [], $locale);
+        }
+
+        return __('Expires after :days days', ['days' => $days], $locale);
     }
 
     /** The bank — or the leasing / factoring company — the facility is with. */

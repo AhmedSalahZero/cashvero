@@ -19,10 +19,10 @@ use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 /**
- * The bell warns about LGs and facilities that are about to expire:
- * from today up to the days set in Notification Settings (7 for an LG,
- * 30 for a facility, by default). Already-expired ones are left to the
- * Expired LGs report.
+ * The bell warns about LGs and facilities that expire within the days set
+ * in Notification Settings (7 for an LG, 30 for a facility, by default) —
+ * and about those already past their expiry, which stay listed until they
+ * are cancelled or renewed.
  *
  * Runs against the development database inside a rolled-back transaction.
  */
@@ -144,7 +144,7 @@ class ExpiryNotificationsTest extends TestCase
         return $user->fresh();
     }
 
-    public function test_an_lg_expiring_within_the_default_seven_days_is_notified(): void
+    public function test_an_lg_expiring_within_seven_days_or_already_expired_is_notified(): void
     {
         $this->lg('EXP-LG-SOON', 3);
         $this->lg('EXP-LG-LATER', 10);
@@ -158,14 +158,15 @@ class ExpiryNotificationsTest extends TestCase
         $this->assertContains('EXP-LG-SOON', $codes);
         $this->assertNotContains('EXP-LG-LATER', $codes, 'Ten days away is outside the default 7-day window.');
         $this->assertNotContains('EXP-LG-CANCELLED', $codes);
-        $this->assertNotContains('EXP-LG-EXPIRED', $codes, 'Already expired LGs belong to the Expired LGs report.');
+        $this->assertContains('EXP-LG-EXPIRED', $codes, 'Once the count reaches zero or below the LG is expired, and must still be shown.');
 
         $soon = collect($rows)->firstWhere('LG Code', 'EXP-LG-SOON');
         $this->assertSame($this->beneficiary->name, $soon['Beneficiary Name']);
         $this->assertSame('5,000.00', $soon['LG Amount']);
         $this->assertSame('500.00', $soon['Cash Cover']);
         $this->assertSame('EGP', $soon['Currency']);
-        $this->assertSame(3, $soon['Days Left']);
+        $this->assertSame('Expires after 3 days', $soon['Status']);
+        $this->assertSame('Expired since 1 days', collect($rows)->firstWhere('LG Code', 'EXP-LG-EXPIRED')['Status']);
     }
 
     public function test_the_lg_window_follows_the_notification_setting(): void
@@ -178,22 +179,28 @@ class ExpiryNotificationsTest extends TestCase
         $this->assertContains('EXP-LG-LATER', array_column($this->notified(ExpiryNotifications::lgType('bid-bond')), 'LG Code'));
     }
 
-    public function test_a_facility_expiring_within_thirty_days_is_notified(): void
+    public function test_a_facility_expiring_within_thirty_days_or_already_expired_is_notified(): void
     {
         $this->cleanOverdraft('EXP-OD-SOON', 20);
         $this->cleanOverdraft('EXP-OD-LATER', 45);
+        $this->cleanOverdraft('EXP-OD-EXPIRED', -1);
+        $this->cleanOverdraft('EXP-OD-TODAY', 0);
 
         $this->rebuild();
 
         $rows = $this->notified(ExpiryNotifications::facilityType(ExpiryNotifications::CLEAN_OVERDRAFT));
         $names = array_column($rows, 'Facility Name');
         $this->assertContains('EXP-OD-SOON', $names);
+        $this->assertContains('EXP-OD-EXPIRED', $names);
+        $this->assertContains('EXP-OD-TODAY', $names);
         $this->assertNotContains('EXP-OD-LATER', $names);
+        $this->assertSame('Expired since 1 days', collect($rows)->firstWhere('Facility Name', 'EXP-OD-EXPIRED')['Status']);
+        $this->assertSame('Expires today', collect($rows)->firstWhere('Facility Name', 'EXP-OD-TODAY')['Status']);
 
         $soon = collect($rows)->firstWhere('Facility Name', 'EXP-OD-SOON');
         $this->assertSame($this->bank->getName(), $soon['Bank Name']);
         $this->assertSame('250,000.00', $soon['Limit']);
-        $this->assertSame(20, $soon['Days Left']);
+        $this->assertSame('Expires after 20 days', $soon['Status']);
     }
 
     public function test_the_bell_lists_only_the_facility_types_the_company_has(): void
@@ -232,6 +239,6 @@ class ExpiryNotificationsTest extends TestCase
         $this->actingAs($user)
             ->getJson(route('notifications.detail', ['company' => $this->company->id, 'type' => ExpiryNotifications::facilityType(ExpiryNotifications::CLEAN_OVERDRAFT)]))
             ->assertOk()
-            ->assertJsonPath('headers', ['Bank Name', 'Facility Name', 'Expiry Date', 'Limit', 'Currency', 'Days Left']);
+            ->assertJsonPath('headers', ['Bank Name', 'Facility Name', 'Expiry Date', 'Limit', 'Currency', 'Status']);
     }
 }
