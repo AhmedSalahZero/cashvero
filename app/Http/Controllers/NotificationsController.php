@@ -79,18 +79,26 @@ class NotificationsController
 	 */
 	public function detail(Company $company, string $type)
 	{
+		/**
+		 * * الراوت دا عام (PUBLIC_ROUTES) فا لازم نتأكد هنا ان النوع دا من اللي
+		 * * الجرس بيعرضه للمستخدم .. من غير كدا اي حد يقدر يجيب صفوف اي نوع باللينك
+		 */
+		abort_unless(in_array($type, \App\Notification::visibleSubTypes(), true), 403);
+
 		$items = $company->notifications->where('data.type', $type)->values();
 		$first = $items->first();
 		$dataArray = $first ? (is_array($first->data) ? $first->data : json_decode(json_encode($first->data), true)) : [];
-		$headers = $first ? array_keys($dataArray['data_array'] ?? []) : [];
+		$keys = $first ? array_keys($dataArray['data_array'] ?? []) : [];
+		// The keys are stored in English; the modal shows them as column headers.
+		$headers = array_map(fn ($key) => __($key), $keys);
 
 		return response()->json([
 			'title' => \App\Notification::getAllMainTypes()[$type] ?? $type,
 			'headers' => $headers,
-			'rows' => $items->map(function ($notification) use ($headers) {
+			'rows' => $items->map(function ($notification) use ($keys, $headers) {
 				$data = is_array($notification->data) ? $notification->data : json_decode(json_encode($notification->data), true);
 				$row = $data['data_array'] ?? [];
-				return collect($headers)->mapWithKeys(fn ($h) => [$h => $row[$h] ?? '---'])->all();
+				return array_combine($headers, array_map(fn ($key) => $row[$key] ?? '---', $keys));
 			})->values(),
 		]);
 	}

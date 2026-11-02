@@ -774,6 +774,16 @@ class PermissionRegistry
                 'export' => ['view lg by bank name report'],
             ],
         ],
+        'report_lg_expired' => [
+            'label' => 'Expired LGs',
+            'group' => 'reports',
+            // INHERITED: listed under LG By Bank Name, so whoever could open
+            // that report gets this one too.
+            'actions' => [
+                'view' => ['view lg by bank name report'],
+                'export' => ['view lg by bank name report'],
+            ],
+        ],
         // Cheques Report / Down Payment Report read what Money Received and
         // Money Payment already hold, so each KIND rides the grant of the screen
         // it reads: whoever could open Money Received could already see received

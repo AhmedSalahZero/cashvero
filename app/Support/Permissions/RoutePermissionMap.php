@@ -568,6 +568,10 @@ class RoutePermissionMap
         'result.lg.by.bank.name.report' => 'report_lg_by_bank.view',
         'export.lg.by.bank.name.report' => 'report_lg_by_bank.export',
         'print.lg.by.bank.name.report' => 'report_lg_by_bank.export',
+        'view.expired.lgs.report' => 'report_lg_expired.view',
+        'result.expired.lgs.report' => 'report_lg_expired.view',
+        'export.expired.lgs.report' => 'report_lg_expired.export',
+        'print.expired.lgs.report' => 'report_lg_expired.export',
         // One screen per report, two kinds inside it: opening the screen needs
         // either kind, and the controller offers only the kinds the user holds.
         'view.cheques.report' => ['cheques_report_received.view', 'cheques_report_payable.view'],

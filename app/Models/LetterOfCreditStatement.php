@@ -298,6 +298,30 @@ class LetterOfCreditStatement extends Model
 		}
 		return abs($totalLastOutstandingBalanceOfFourTypes) ; 
 	}
+	/**
+	 * Outstanding against an LC facility the way its own issuance form
+	 * measures it (LetterOfCreditFacilityController::updateOutstandingBalanceAndLimits):
+	 * the latest end balance of every LC type, with NO currency filter.
+	 * The `currency` column holds each issuance's cash-cover currency, which
+	 * differs between LCs on the same facility, while the amounts themselves
+	 * are always stored in the company's main currency.
+	 */
+	public static function getFacilityOutstandingAcrossCurrencies(int $lcFacilityId , int $companyId , int $financialInstitutionId):float
+	{
+		$total = 0 ;
+		foreach(LcTypes::getAll() as $lcTypeId => $lcTypeNameFormatted){
+			$letterOfCreditStatement = DB::table((new self)->getTable())
+				->where('company_id',$companyId)
+				->where('financial_institution_id',$financialInstitutionId)
+				->where('lc_facility_id',$lcFacilityId)
+				->where('lc_type',$lcTypeId)
+				->where('source',LetterOfCreditIssuance::LC_FACILITY)
+				->orderByRaw('date desc , id desc')
+				->first();
+			$total += $letterOfCreditStatement ? $letterOfCreditStatement->end_balance : 0 ;
+		}
+		return abs($total) ;
+	}
 	public static function getDashboardDataForFinancialInstitution(int $companyId , int $financialInstitutionId,string $currencyName,string $lcType)
 	{
 			$letterOfCreditStatement = DB::table((new self)->getTable())

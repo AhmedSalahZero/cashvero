@@ -33,6 +33,8 @@ use Illuminate\Database\Eloquent\Model;
  * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\NotificationSetting whereSupplierPastDuesInvoicesNotificationsDays($value)
  * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\NotificationSetting whereUpdatedAt($value)
  * @property int $coming_receivable_cheques_notifications_days
+ * @property int $lg_expiry_notification_days
+ * @property int $facility_expiry_notification_days
  * @method static \Illuminate\Database\Eloquent\Builder<static>|\App\NotificationSetting whereComingReceivableChequesNotificationsDays($value)
  * @mixin \Eloquent
  */
@@ -47,6 +49,8 @@ class NotificationSetting extends Model
 	const CHEQUES_IN_SAFE_NOTIFICATIONS_DAYS = 3;
 	const COMING_RECEIVABLE_CHEQUES_NOTIFICATIONS_DAYS = 3;
 	const COMING_PAYABLE_CHEQUES_NOTIFICATIONS_DAYS = 3;
+	const LG_EXPIRY_NOTIFICATION_DAYS = 7;
+	const FACILITY_EXPIRY_NOTIFICATION_DAYS = 30;
 	
 	public function getId()
 	{
@@ -119,6 +123,20 @@ class NotificationSetting extends Model
 	public function getSupplierPastDuesInvoicesNotificationsDays()
 	{
 		return $this->supplier_past_dues_invoices_notifications_days;
+	}
+	/**
+	 * * عدد الايام اللي قبل تاريخ انتهاء خطاب الضمان الجرس بينبه فيها
+	 */
+	public function getLgExpiryNotificationDays()
+	{
+		return $this->lg_expiry_notification_days;
+	}
+	/**
+	 * * عدد الايام اللي قبل تاريخ انتهاء التسهيل (اوفردرافت / LG / LC / فاكتورينج / قرض / تأجير) الجرس بينبه فيها
+	 */
+	public function getFacilityExpiryNotificationDays()
+	{
+		return $this->facility_expiry_notification_days;
 	}
 	
 

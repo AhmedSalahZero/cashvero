@@ -47,6 +47,8 @@ function formatAmount(value) {
                             <th class="px-3 py-3 text-start">{{ $t('Start Date') }}</th>
                             <th class="px-3 py-3 text-start">{{ $t('End Date') }}</th>
                             <th class="px-3 py-3 text-right">{{ $t('Limit Amount') }}</th>
+                            <th class="px-3 py-3 text-right">{{ $t('Outstanding') }}</th>
+                            <th class="px-3 py-3 text-right">{{ $t('Room') }}</th>
                             <th class="px-3 py-3 text-start">{{ $t('Currency') }}</th>
                         </tr>
                     </thead>
@@ -54,7 +56,7 @@ function formatAmount(value) {
                         <tr v-for="(row, index) in filteredRows" :key="row.id" class="cvr-table-row">
                             <td class="px-3 py-3 cvr-text-secondary">{{ index + 1 }}</td>
                             <td class="px-3 py-3 whitespace-nowrap">
-                                <span :class="row.facility_type === 'Letter Of Guarantee' ? 'cvr-badge-info' : 'cvr-badge-facility'" class="px-2 py-0.5 rounded text-xs font-medium">
+                                <span :class="row.kind === 'lg' ? 'cvr-badge-info' : 'cvr-badge-facility'" class="px-2 py-0.5 rounded text-xs font-medium">
                                     {{ row.facility_type }}
                                 </span>
                             </td>
@@ -63,10 +65,12 @@ function formatAmount(value) {
                             <td class="px-3 py-3 cvr-text-secondary whitespace-nowrap">{{ row.start_date }}</td>
                             <td class="px-3 py-3 cvr-text-secondary whitespace-nowrap">{{ row.end_date }}</td>
                             <td class="px-3 py-3 cvr-text-secondary text-right whitespace-nowrap">{{ formatAmount(row.limit_amount) }}</td>
+                            <td class="px-3 py-3 cvr-text-secondary text-right whitespace-nowrap">{{ formatAmount(row.outstanding) }}</td>
+                            <td class="px-3 py-3 cvr-text-secondary text-right whitespace-nowrap">{{ row.room === null ? '—' : formatAmount(row.room) }}</td>
                             <td class="px-3 py-3 cvr-text-secondary whitespace-nowrap">{{ row.currency }}</td>
                         </tr>
                         <tr v-if="filteredRows.length === 0">
-                            <td colspan="8" class="px-4 py-8 text-center cvr-text-muted">
+                            <td colspan="10" class="px-4 py-8 text-center cvr-text-muted">
                                 {{ $t('No LG or LC facilities found.') }}
                             </td>
                         </tr>

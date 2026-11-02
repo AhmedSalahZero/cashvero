@@ -9,6 +9,7 @@ use App\Models\FinancialInstitution;
 use App\Models\PayableCheque;
 use App\Notification;
 use App\Notifications\DueInvoiceNotification;
+use App\Support\Notifications\ExpiryNotifications;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -650,8 +651,12 @@ class CheckDueAndPastedInvoicesJob implements ShouldQueue
 				
 				
             }
-			
-			
+
+			/**
+			 * * خطابات الضمان والتسهيلات اللي قربت تخلص .. برا شروط الفواتير اللي
+			 * * فوق علشان تشتغل حتى لو الشركة ماعندهاش فواتير خالص
+			 */
+			ExpiryNotifications::notify($company);
         }
 	}
 }

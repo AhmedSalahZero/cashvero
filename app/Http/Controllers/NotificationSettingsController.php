@@ -29,6 +29,8 @@ class NotificationSettingsController
         'supplier_coming_dues_invoices_notifications_days',
         'supplier_past_dues_invoices_notifications_days',
         'coming_payable_cheques_notifications_days',
+        'lg_expiry_notification_days',
+        'facility_expiry_notification_days',
     ];
 
     public function index(Company $company, Request $request)
@@ -48,6 +50,8 @@ class NotificationSettingsController
                 'supplier_coming_dues_invoices_notifications_days' => NotificationSetting::SUPPLIER_COMING_DUES_INVOICES_NOTIFICATIONS_DAYS,
                 'supplier_past_dues_invoices_notifications_days' => NotificationSetting::SUPPLIER_PAST_DUES_INVOICES_NOTIFICATIONS_DAYS,
                 'coming_payable_cheques_notifications_days' => NotificationSetting::COMING_PAYABLE_CHEQUES_NOTIFICATIONS_DAYS,
+                'lg_expiry_notification_days' => NotificationSetting::LG_EXPIRY_NOTIFICATION_DAYS,
+                'facility_expiry_notification_days' => NotificationSetting::FACILITY_EXPIRY_NOTIFICATION_DAYS,
             ],
             'submitUrl' => route('notifications-settings.store', ['company' => $company->id]),
         ]);
@@ -55,6 +59,10 @@ class NotificationSettingsController
 
     public function store(Request $request, Company $company)
     {
+        $request->validate([
+            'lg_expiry_notification_days' => ['nullable', 'integer', 'min:0'],
+            'facility_expiry_notification_days' => ['nullable', 'integer', 'min:0'],
+        ]);
         $setting = $company->notificationSetting;
         $data = $request->only(self::FIELDS);
         $setting ? $setting->update($data) : $company->notificationSetting()->create($data);

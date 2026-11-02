@@ -20,6 +20,10 @@ const filteredRows = computed(() => {
         (r.owner_name || '').toLowerCase().includes(q)
     );
 });
+
+function formatAmount(value) {
+    return Number(value || 0).toLocaleString('en-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 </script>
 
 <template>
@@ -44,6 +48,7 @@ const filteredRows = computed(() => {
                             <th class="px-3 py-3 text-start">{{ $t('Account Type') }}</th>
                             <th class="px-3 py-3 text-start">{{ $t('Account Number') }}</th>
                             <th v-if="canViewShareholderAccounts" class="px-3 py-3 text-start">{{ $t('Owner') }}</th>
+                            <th class="px-3 py-3 text-right">{{ $t('End Balance (Today)') }}</th>
                             <th class="px-3 py-3 text-start">{{ $t('Currency') }}</th>
                         </tr>
                     </thead>
@@ -54,10 +59,11 @@ const filteredRows = computed(() => {
                             <td class="px-3 py-3 cvr-text-secondary whitespace-nowrap">{{ row.account_type }}</td>
                             <td class="px-3 py-3 cvr-text-secondary whitespace-nowrap">{{ row.account_number }}</td>
                             <td v-if="canViewShareholderAccounts" class="px-3 py-3 cvr-text-secondary whitespace-nowrap">{{ row.owner_name }}</td>
+                            <td class="px-3 py-3 text-right whitespace-nowrap" :class="row.end_balance < 0 ? 'cvr-num-red' : 'cvr-text-secondary'">{{ formatAmount(row.end_balance) }}</td>
                             <td class="px-3 py-3 cvr-text-secondary whitespace-nowrap">{{ row.currency }}</td>
                         </tr>
                         <tr v-if="filteredRows.length === 0">
-                            <td :colspan="canViewShareholderAccounts ? 6 : 5" class="px-4 py-8 text-center cvr-text-muted">
+                            <td :colspan="canViewShareholderAccounts ? 7 : 6" class="px-4 py-8 text-center cvr-text-muted">
                                 {{ $t('No bank accounts found.') }}
                             </td>
                         </tr>

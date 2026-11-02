@@ -44,6 +44,13 @@ const sections = [
             ['coming_payable_cheques_notifications_days', 'Coming Payable Cheques Notifications Days'],
         ],
     },
+    {
+        title: 'Letter Of Guarantee & Facilities Notifications',
+        fields: [
+            ['lg_expiry_notification_days', 'LG Expiry Notifications Days'],
+            ['facility_expiry_notification_days', 'Facilities Expiry Notifications Days'],
+        ],
+    },
 ];
 
 const form = reactive(
@@ -77,13 +84,13 @@ function submit() {
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div v-for="[name, label] in section.fields" :key="name">
                             <label class="cvr-form-label">
-                                {{ label }} <span class="cvr-num-red">*</span>
+                                {{ $t(label) }} <span class="cvr-num-red">*</span>
                             </label>
                             <input
                                 v-model="form[name]"
                                 type="text"
                                 required
-                                :placeholder="label"
+                                :placeholder="$t(label)"
                                 class="cvr-input w-full px-3 py-2 rounded"
                             />
                         </div>

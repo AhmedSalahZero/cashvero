@@ -5,6 +5,7 @@ namespace App;
 use App\Helpers\HArr;
 use App\Models\Company;
 use App\Models\User;
+use App\Support\Notifications\ExpiryNotifications;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -47,6 +48,12 @@ class Notification extends Model
 	const CHEQUE_PAST_DUE = 'cheque_past_due';
 	const CHEQUE_CURRENT_DUE = 'cheque_current_due';
 	const COMING_RECEIVABLE_CHEQUES_NOTIFICATIONS_DAYS = 'coming_receivable_cheques_notifications_days';
+	/**
+	 * * خطابات ضمان / تسهيلات قربت تخلص — الانواع الفرعية بتاعتهم بتتبني من
+	 * @see ExpiryNotifications::lgType() / ExpiryNotifications::facilityType()
+	 */
+	const LETTER_OF_GUARANTEE = ExpiryNotifications::LG_TAP_TYPE;
+	const FACILITY = ExpiryNotifications::FACILITY_TAP_TYPE;
 
     protected $guarded = ['id'];
 
@@ -86,6 +93,22 @@ class Notification extends Model
 		// Payable cheques are issued from Money Payment.
 		'view current payable cheques notifications'       => 'view supplier payment',
 		'view coming payable cheques notifications'        => 'view supplier payment',
+
+		// An LG about to expire → the LG issuance screen.
+		'view letter of guarantee expiry notifications'    => 'view letter of guarantee issuance',
+
+		// A facility about to expire → that facility's own screen.
+		'view clean overdraft expiry notifications'        => 'view clean overdraft',
+		'view fully secured overdraft expiry notifications' => 'view fully secured overdraft',
+		'view overdraft against commercial paper expiry notifications' => 'view overdraft against commercial paper',
+		'view overdraft against assignment of contract expiry notifications' => 'view overdraft against assignment of contract',
+		'view letter of guarantee facility expiry notifications' => 'view letter of guarantee facility',
+		'view letter of credit facility expiry notifications' => 'view letter of credit facility',
+		'view medium term loan expiry notifications'       => 'view medium term loan',
+		// Leasing and factoring borrow other screens' legacy names, so their
+		// own canonical keys are the precise gate.
+		'view leasing contract expiry notifications'       => 'leasing_contract.view',
+		'view factoring contract expiry notifications'     => 'factoring_contract.view',
 	];
 
 	/**
@@ -118,7 +141,7 @@ class Notification extends Model
 			self::COMING_RECEIVABLE_CHEQUES_NOTIFICATIONS_DAYS => __('Cheque Coming Dues'),
 			// self::CHEQUE_UNDER_COLLECTION_SINCE_DAYS => __('Cheques Under Collection Since Days'),
 		
-		];
+		] + ExpiryNotifications::lgTitles() + ExpiryNotifications::facilityTitles();
 	}
 	public static function getAllTypesFormatted():array 
 	{
@@ -192,8 +215,44 @@ class Notification extends Model
 				])
 			];
 		}
-	
+ 
+		if(self::userCanSee($user, 'view letter of guarantee expiry notifications')){
+			$items[self::LETTER_OF_GUARANTEE] = [
+				'title'=>__('Letter Of Guarantee') ,
+				'subitems'=>array_keys(ExpiryNotifications::lgTitles()),
+			];
+		}
+		/**
+		 * * كل نوع تسهيل ورا صلاحية شاشته .. والانواع اللي الشركة ماعندهاش منها
+		 * * حاجه بتتشال في formatForMenuItem لانها محتاجة الشركة
+		 */
+		$facilitySubitems = HArr::filterTrulyValue([
+			self::userCanSee($user, 'view clean overdraft expiry notifications') ? ExpiryNotifications::facilityType(ExpiryNotifications::CLEAN_OVERDRAFT) : false,
+			self::userCanSee($user, 'view fully secured overdraft expiry notifications') ? ExpiryNotifications::facilityType(ExpiryNotifications::FULLY_SECURED_OVERDRAFT) : false,
+			self::userCanSee($user, 'view overdraft against commercial paper expiry notifications') ? ExpiryNotifications::facilityType(ExpiryNotifications::OVERDRAFT_AGAINST_COMMERCIAL_PAPER) : false,
+			self::userCanSee($user, 'view overdraft against assignment of contract expiry notifications') ? ExpiryNotifications::facilityType(ExpiryNotifications::OVERDRAFT_AGAINST_ASSIGNMENT_OF_CONTRACT) : false,
+			self::userCanSee($user, 'view letter of guarantee facility expiry notifications') ? ExpiryNotifications::facilityType(ExpiryNotifications::LG_FACILITY) : false,
+			self::userCanSee($user, 'view letter of credit facility expiry notifications') ? ExpiryNotifications::facilityType(ExpiryNotifications::LC_FACILITY) : false,
+			self::userCanSee($user, 'view factoring contract expiry notifications') ? ExpiryNotifications::facilityType(ExpiryNotifications::FACTORING_CONTRACT) : false,
+			self::userCanSee($user, 'view medium term loan expiry notifications') ? ExpiryNotifications::facilityType(ExpiryNotifications::MEDIUM_TERM_LOAN) : false,
+			self::userCanSee($user, 'view leasing contract expiry notifications') ? ExpiryNotifications::facilityType(ExpiryNotifications::LEASING_CONTRACT) : false,
+		]);
+		if(count($facilitySubitems)){
+			$items[self::FACILITY] = [
+				'title'=>__('Facilities') ,
+				'subitems'=>$facilitySubitems,
+			];
+		}
+
 		return $items ; 
+	}
+	/**
+	 * * كل الانواع الفرعية اللي المستخدم الحالي مسموحله يشوفها
+	 * @return list<string>
+	 */
+	public static function visibleSubTypes():array
+	{
+		return collect(self::getAllTypesFormatted())->pluck('subitems')->flatten()->unique()->values()->all();
 	}
 	public static function formatForMenuItem(Company $company):array 
 	{
@@ -201,8 +260,18 @@ class Notification extends Model
 
 		foreach(self::getAllTypesFormatted() as $mainTypeId => $detailArray ){
 			$mainCount = 0 ;
+			/**
+			 * * التسهيلات: بيظهر بس الانواع اللي الشركة عندها منها فعلا
+			 */
+			if($mainTypeId === self::FACILITY){
+				$detailArray['subitems'] = array_values(array_intersect($detailArray['subitems'], ExpiryNotifications::facilityTypesHeldBy($company->id)));
+				if(! count($detailArray['subitems'])){
+					continue ;
+				}
+			}
 			
 			$mainArr = [
+				'key'=>$mainTypeId,
 				'title'=>$detailArray['title'],
 				'link'=>'#',
 				'show'=>true ,

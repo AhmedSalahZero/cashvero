@@ -1,6 +1,6 @@
 <script setup>
 import { Link, usePage, router } from '@inertiajs/vue3';
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useTheme } from '@/composables/useTheme';
 import ToastStack from '@/Components/ToastStack.vue';
 import { useToasts } from '@/composables/useToasts';
@@ -202,10 +202,72 @@ const totalNotificationCount = computed(() =>
     notificationMenu.value.reduce((sum, cat) => sum + (cat.count || 0), 0)
 );
 
+/* The panel lists the parents only; hovering one opens its children in a
+   flyout beside the panel (inline-end side: left in English, right in
+   Arabic — the side with room, since the bell sits at the inline-end of
+   the header). Touch screens have no hover, so on mobile a tap opens the
+   children underneath the parent instead. */
+const activeNotificationParent = ref(null);
+let notificationFlyoutCloseTimer = null;
+/* The flyout opens level with the hovered parent, not at the top of the
+   panel — otherwise reaching a low parent's children means dragging the
+   pointer up across the other parents, each of which takes over. */
+const notificationPanel = ref(null);
+const notificationFlyout = ref(null);
+const notificationFlyoutTop = ref(0);
+async function showNotificationChildren(cat, event = null) {
+    clearTimeout(notificationFlyoutCloseTimer);
+    activeNotificationParent.value = cat.key;
+    // Re-entering the flyout itself passes no event: keep it where it is.
+    if (!event?.currentTarget || !notificationPanel.value) return;
+    const panelTop = notificationPanel.value.getBoundingClientRect().top;
+    notificationFlyoutTop.value = event.currentTarget.getBoundingClientRect().top - panelTop;
+    // Keep a tall list inside the window: lift it by whatever it overflows,
+    // but never above the top of the window.
+    await nextTick();
+    const overflow = notificationFlyout.value
+        ? notificationFlyout.value.getBoundingClientRect().bottom - (window.innerHeight - 8)
+        : 0;
+    if (overflow > 0) notificationFlyoutTop.value = Math.max(notificationFlyoutTop.value - overflow, 8 - panelTop);
+}
+function hideNotificationChildrenSoon() {
+    // A short delay lets the pointer travel from the parent into the flyout.
+    clearTimeout(notificationFlyoutCloseTimer);
+    notificationFlyoutCloseTimer = setTimeout(() => { activeNotificationParent.value = null; }, 150);
+}
+function toggleNotificationChildren(cat) {
+    activeNotificationParent.value = activeNotificationParent.value === cat.key ? null : cat.key;
+}
+const activeNotificationCategory = computed(() =>
+    notificationMenu.value.find(cat => cat.key === activeNotificationParent.value) ?? null
+);
+function closeNotifications() {
+    notificationsOpen.value = false;
+    activeNotificationParent.value = null;
+}
+const notificationsRoot = ref(null);
+function onNotificationsOutsideClick(event) {
+    if (notificationsOpen.value && notificationsRoot.value && !notificationsRoot.value.contains(event.target)) {
+        closeNotifications();
+    }
+}
+function onNotificationsEscape(event) {
+    if (event.key === 'Escape' && notificationsOpen.value) closeNotifications();
+}
+onMounted(() => {
+    document.addEventListener('click', onNotificationsOutsideClick);
+    document.addEventListener('keydown', onNotificationsEscape);
+});
+onUnmounted(() => {
+    document.removeEventListener('click', onNotificationsOutsideClick);
+    document.removeEventListener('keydown', onNotificationsEscape);
+    clearTimeout(notificationFlyoutCloseTimer);
+});
+
 const notificationDetail = ref(null);
 const notificationDetailLoading = ref(false);
 async function openNotificationDetail(sub) {
-    notificationsOpen.value = false;
+    closeNotifications();
     notificationDetailLoading.value = true;
     notificationDetail.value = { title: sub.title, headers: [], rows: [] };
     try {
@@ -459,9 +521,9 @@ if (page.flash?.success || page.flash?.error) {
                     </Link>
 
                     <!-- Notifications bell -->
-                    <div class="relative">
+                    <div ref="notificationsRoot" class="relative">
                         <button
-                            @click="notificationsOpen = !notificationsOpen"
+                            @click="notificationsOpen ? closeNotifications() : (notificationsOpen = true)"
                             class="cvr-action-btn relative"
                             :title="$t('Notifications')"
                         >
@@ -472,31 +534,73 @@ if (page.flash?.success || page.flash?.error) {
                             >{{ totalNotificationCount }}</span>
                         </button>
 
-                        <div
-                            v-if="notificationsOpen"
-                            class="absolute end-0 mt-2 w-80 cvr-modal rounded-lg shadow-lg z-50 py-2"
-                        >
-                            <div class="px-4 py-2 flex items-center justify-between">
-                                <p class="text-sm font-semibold cvr-text-primary">{{ $t('Notifications') }}</p>
-                                <button @click="notificationsOpen = false" class="text-xs cvr-text-muted">✕</button>
-                            </div>
-                            <div v-if="notificationMenu.length === 0" class="px-4 py-6 text-center text-sm cvr-text-muted">
-                                {{ $t('Nothing to show.') }}
-                            </div>
-                            <div v-for="(cat, i) in notificationMenu" :key="i" class="px-4 py-2 border-t" style="border-color: var(--cvr-border);">
-                                <div class="flex items-center justify-between mb-1">
-                                    <p class="text-xs font-bold uppercase tracking-wide" style="color: var(--cvr-blue-text);">{{ cat.title }}</p>
-                                    <span v-if="cat.count > 0" class="cvr-num-red text-xs font-bold">{{ cat.count }}</span>
+                        <!-- No overflow on this wrapper: the panel scrolls, the flyout
+                             sits beside it and must not be clipped by that scroll. -->
+                        <div v-if="notificationsOpen" class="absolute end-0 mt-2 z-50">
+                            <div ref="notificationPanel" class="w-72 cvr-modal rounded-lg shadow-lg py-2 max-h-[70vh] overflow-y-auto">
+                                <div class="px-4 py-2 flex items-center justify-between">
+                                    <p class="text-sm font-semibold cvr-text-primary">{{ $t('Notifications') }}</p>
+                                    <button @click="closeNotifications" class="text-xs cvr-text-muted">✕</button>
                                 </div>
-                                <button
-                                    v-for="(sub, j) in cat.submenu"
-                                    :key="j"
-                                    @click="openNotificationDetail(sub)"
-                                    class="w-full flex items-center justify-between text-xs py-1 px-1 rounded cvr-table-row"
-                                >
-                                    <span class="cvr-text-secondary">{{ sub.title }}</span>
-                                    <span :class="sub.count > 0 ? 'cvr-num-amber font-semibold' : 'cvr-text-muted'">{{ sub.count }}</span>
-                                </button>
+                                <div v-if="notificationMenu.length === 0" class="px-4 py-6 text-center text-sm cvr-text-muted">
+                                    {{ $t('Nothing to show.') }}
+                                </div>
+                                <div v-for="cat in notificationMenu" :key="cat.key" class="border-t" style="border-color: var(--cvr-border);">
+                                    <button
+                                        @mouseenter="!isMobileNav && showNotificationChildren(cat, $event)"
+                                        @mouseleave="!isMobileNav && hideNotificationChildrenSoon()"
+                                        @click="isMobileNav ? toggleNotificationChildren(cat) : showNotificationChildren(cat, $event)"
+                                        class="w-full flex items-center justify-between gap-2 px-4 py-2.5 cvr-table-row"
+                                        :style="activeNotificationParent === cat.key ? { backgroundColor: 'var(--cvr-bg-hover)' } : null"
+                                        :aria-expanded="activeNotificationParent === cat.key"
+                                    >
+                                        <span class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide" style="color: var(--cvr-blue-text);">
+                                            <NavIcon
+                                                :name="isMobileNav ? 'chevron-down' : (isRtl ? 'chevron-right' : 'chevron-left')"
+                                                :size="14"
+                                            />
+                                            {{ cat.title }}
+                                        </span>
+                                        <span :class="cat.count > 0 ? 'cvr-num-red text-xs font-bold' : 'cvr-text-muted text-xs'">{{ cat.count }}</span>
+                                    </button>
+                                    <!-- Mobile: children open underneath the parent. -->
+                                    <div v-if="isMobileNav && activeNotificationParent === cat.key" class="px-4 pb-2">
+                                        <button
+                                            v-for="(sub, j) in cat.submenu"
+                                            :key="j"
+                                            @click="openNotificationDetail(sub)"
+                                            class="w-full flex items-center justify-between text-xs py-1 px-1 rounded cvr-table-row"
+                                        >
+                                            <span class="cvr-text-secondary">{{ sub.title }}</span>
+                                            <span :class="sub.count > 0 ? 'cvr-num-amber font-semibold' : 'cvr-text-muted'">{{ sub.count }}</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Desktop: the hovered parent's children, beside the panel. -->
+                            <div
+                                v-if="!isMobileNav && activeNotificationCategory"
+                                @mouseenter="showNotificationChildren(activeNotificationCategory)"
+                                @mouseleave="hideNotificationChildrenSoon"
+                                ref="notificationFlyout"
+                                :style="{ top: notificationFlyoutTop + 'px' }"
+                                class="absolute end-full me-2 w-72 cvr-modal rounded-lg shadow-lg py-2 max-h-[70vh] overflow-y-auto"
+                            >
+                                <p class="px-4 py-2 text-xs font-bold uppercase tracking-wide" style="color: var(--cvr-blue-text);">
+                                    {{ activeNotificationCategory.title }}
+                                </p>
+                                <div class="px-3 pb-1">
+                                    <button
+                                        v-for="(sub, j) in activeNotificationCategory.submenu"
+                                        :key="j"
+                                        @click="openNotificationDetail(sub)"
+                                        class="w-full flex items-center justify-between text-xs py-1.5 px-1 rounded cvr-table-row"
+                                    >
+                                        <span class="cvr-text-secondary text-start">{{ sub.title }}</span>
+                                        <span :class="sub.count > 0 ? 'cvr-num-amber font-semibold' : 'cvr-text-muted'">{{ sub.count }}</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

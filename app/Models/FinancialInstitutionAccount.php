@@ -298,6 +298,36 @@ class FinancialInstitutionAccount extends Model implements \App\Interfaces\Model
 	{
 		return 'current_account_bank_statements';
 	}
+	/**
+	 * * رصيد اخر المدة لكل حساب في تاريخ معين ، باستعلام واحد لكل الحسابات.
+	 * * اخر صف بتاريخ <= التاريخ دا بنفس ترتيب التريجر (full_date ثم id) ،
+	 * * والحركات المجدولة اللي لسه ما اتفعّلتش (is_active = 0) مش بتتحسب.
+	 *
+	 * @param list<int> $accountIds
+	 * @return array<int, float> account id => end balance, in the account's own currency
+	 */
+	public static function endBalancesAt(int $companyId , array $accountIds , string $date):array
+	{
+		if ($accountIds === []) {
+			return [];
+		}
+		$latestIds = DB::table(self::getBankStatementTableName())
+			->select([
+				'financial_institution_account_id',
+				DB::raw("SUBSTRING_INDEX(GROUP_CONCAT(id ORDER BY full_date DESC, id DESC SEPARATOR ','), ',', 1) as latest_id"),
+			])
+			->where('company_id', $companyId)
+			->where('is_active', 1)
+			->where('date', '<=', $date)
+			->whereIn('financial_institution_account_id', $accountIds)
+			->groupBy('financial_institution_account_id');
+
+		return DB::table(self::getBankStatementTableName().' as statements')
+			->joinSub($latestIds, 'latest_rows', fn ($join) => $join->on('statements.id', '=', 'latest_rows.latest_id'))
+			->pluck('statements.end_balance', 'statements.financial_institution_account_id')
+			->map(fn ($endBalance) => (float) $endBalance)
+			->all();
+	}
 	public function getOpeningBalanceFromCurrentAccountBankStatement()
 	{
 		return $this->currentAccountBankStatements->where('is_beginning_balance',1)->first();

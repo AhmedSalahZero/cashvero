@@ -774,6 +774,12 @@ Route::group(
                     Route::get('lg-by-bank-name-report/export', 'LgByBankNameReportController@exportExcel')->name('export.lg.by.bank.name.report');
                     Route::get('lg-by-bank-name-report/print', 'LgByBankNameReportController@print')->name('print.lg.by.bank.name.report');
 
+                    // Expired LGs - every LG past its expiry as of today, never cancelled.
+                    Route::get('show-expired-lgs-report', 'ExpiredLgsReportController@index')->name('view.expired.lgs.report');
+                    Route::get('expired-lgs-report', 'ExpiredLgsReportController@result')->name('result.expired.lgs.report');
+                    Route::get('expired-lgs-report/export', 'ExpiredLgsReportController@exportExcel')->name('export.expired.lgs.report');
+                    Route::get('expired-lgs-report/print', 'ExpiredLgsReportController@print')->name('print.expired.lgs.report');
+
                     // Cheques Report - received / payable cheques due on or after a date.
                     Route::get('cheques-report', 'ChequesReportController@index')->name('view.cheques.report');
                     Route::get('cheques-report/result', 'ChequesReportController@result')->name('result.cheques.report');

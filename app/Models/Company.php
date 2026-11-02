@@ -391,6 +391,16 @@ class Company extends Model implements HasMedia
         $notificationSetting = $this->notificationSetting ;
         return  $notificationSetting  ? $notificationSetting->getComingPayableChequeNotificationDays() : NotificationSetting::COMING_RECEIVABLE_CHEQUES_NOTIFICATIONS_DAYS ;
     }
+    public function getLgExpiryNotificationDays():int
+    {
+        $notificationSetting = $this->notificationSetting ;
+        return  (int) ($notificationSetting?->getLgExpiryNotificationDays() ?? NotificationSetting::LG_EXPIRY_NOTIFICATION_DAYS) ;
+    }
+    public function getFacilityExpiryNotificationDays():int
+    {
+        $notificationSetting = $this->notificationSetting ;
+        return  (int) ($notificationSetting?->getFacilityExpiryNotificationDays() ?? NotificationSetting::FACILITY_EXPIRY_NOTIFICATION_DAYS) ;
+    }
     public function letterOfGuaranteeIssuances():HasMany
     {
         return $this->hasMany(LetterOfGuaranteeIssuance::class, 'company_id', 'id')->orderByRaw("case status when 'cancelled' then 2 else 1 end , renewal_date asc ");

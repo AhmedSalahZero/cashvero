@@ -45,6 +45,8 @@ function formatAmount(value) {
                             <th class="px-3 py-3 text-start">{{ $t('Account Type') }}</th>
                             <th class="px-3 py-3 text-start">{{ $t('Account Number') }}</th>
                             <th class="px-3 py-3 text-right">{{ $t('Limit Amount') }}</th>
+                            <th class="px-3 py-3 text-right">{{ $t('Outstanding') }}</th>
+                            <th class="px-3 py-3 text-right">{{ $t('Room') }}</th>
                             <th class="px-3 py-3 text-start">{{ $t('Currency') }}</th>
                         </tr>
                     </thead>
@@ -55,10 +57,12 @@ function formatAmount(value) {
                             <td class="px-3 py-3 cvr-text-secondary whitespace-nowrap">{{ row.account_type }}</td>
                             <td class="px-3 py-3 cvr-text-secondary whitespace-nowrap">{{ row.account_number }}</td>
                             <td class="px-3 py-3 cvr-text-secondary text-right whitespace-nowrap">{{ formatAmount(row.limit_amount) }}</td>
+                            <td class="px-3 py-3 cvr-text-secondary text-right whitespace-nowrap">{{ formatAmount(row.outstanding) }}</td>
+                            <td class="px-3 py-3 cvr-text-secondary text-right whitespace-nowrap">{{ row.room === null ? '—' : formatAmount(row.room) }}</td>
                             <td class="px-3 py-3 cvr-text-secondary whitespace-nowrap">{{ row.currency }}</td>
                         </tr>
                         <tr v-if="filteredRows.length === 0">
-                            <td colspan="6" class="px-4 py-8 text-center cvr-text-muted">
+                            <td colspan="8" class="px-4 py-8 text-center cvr-text-muted">
                                 {{ $t('No ODA or MTL facilities found.') }}
                             </td>
                         </tr>

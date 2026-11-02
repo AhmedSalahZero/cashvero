@@ -64,6 +64,7 @@ class StatementPrintTest extends TestCase
             'lg / lc' => [\App\Http\Controllers\LGLCSBanktatementController::class, 'print.lg.lc.bank.statement'],
             'lg by bank' => [\App\Http\Controllers\LgByBankNameReportController::class, 'print.lg.by.bank.name.report'],
             'lg by beneficiary' => [\App\Http\Controllers\LgByBeneficiaryNameReportController::class, 'print.lg.by.beneficiary.name.report'],
+            'expired lgs' => [\App\Http\Controllers\ExpiredLgsReportController::class, 'print.expired.lgs.report'],
             'cash cover' => [\App\Http\Controllers\CashCoverStatementController::class, 'print.cash.cover.statement'],
         ];
     }

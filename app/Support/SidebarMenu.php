@@ -83,6 +83,7 @@ class SidebarMenu
                 self::item(__('Leasing Contract Statement'), $user->hasPermissionKey('report_leasing_contract_statement.view'), route('view.leasing.contract.statement', ['company' => $companyId]), inertia: true, icon: 'truck'),
                 self::item(__('LG By Beneficiary Name'), $user->hasPermissionKey('report_lg_by_beneficiary.view'), route('view.lg.by.beneficiary.name.report', ['company' => $companyId]), inertia: true, icon: 'file-badge'),
                 self::item(__('LG By Bank Name'), $user->hasPermissionKey('report_lg_by_bank.view'), route('view.lg.by.bank.name.report', ['company' => $companyId]), inertia: true, icon: 'building'),
+                self::item(__('Expired LGs'), $user->hasPermissionKey('report_lg_expired.view'), route('view.expired.lgs.report', ['company' => $companyId]), inertia: true, icon: 'file-badge'),
                 self::item(__('LG & LC Statement'), $user->hasPermissionKey('report_lg_lc_statement.view'), route('view.lg.lc.bank.statement', ['company' => $companyId]), inertia: true, icon: 'files'),
                 self::item(__('Cash Cover Statement'), $user->hasPermissionKey('cash_cover_statement.view'), route('view.cash.cover.statement', ['company' => $companyId]), inertia: true, icon: 'file-badge'),
                 self::item(__('Cash Expense Statement'), $user->hasPermissionKey('report_cash_expense_statement.view'), route('view.cash.expense.statement', ['company' => $companyId]), inertia: true, icon: 'credit-card'),
