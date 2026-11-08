@@ -3,29 +3,25 @@
 namespace App\Listeners;
 
 use App\Models\Log;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Queue\InteractsWithQueue;
+use App\Models\User;
+use Illuminate\Auth\Events\Logout;
 
 class LogSuccessfulLogout
 {
     /**
-     * Create the event listener.
-     *
-     * @return void
+     * بيسجل سطر logout في logs. أي خطأ هنا ما يمنعش الخروج.
      */
-    public function __construct()
+    public function handle(Logout $event): void
     {
-        //
-    }
+        $user = $event->user;
+        if (! $user instanceof User) {
+            return;
+        }
 
-    /**
-     * Handle the event.
-     *
-     * @param  object  $event
-     * @return void
-     */
-    public function handle($event)
-    {
-		Log::storeNewLogRecord('successLogout');
+        try {
+            Log::storeSessionEvent('successLogout', $user);
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 }

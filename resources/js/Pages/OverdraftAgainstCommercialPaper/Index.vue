@@ -134,7 +134,7 @@ const deletingRate = ref(false);
 function destroyRate() {
     if (deletingRate.value) return;
     deletingRate.value = true;
-    router.get(deleteRateTarget.value.delete_url, {}, { onFinish: () => { deletingRate.value = false; deleteRateTarget.value = null; } });
+    router.delete(deleteRateTarget.value.delete_url, { onFinish: () => { deletingRate.value = false; deleteRateTarget.value = null; } });
 }
 
 /* ── Facility Renewal — Phase 1 ───────────────────────────────────

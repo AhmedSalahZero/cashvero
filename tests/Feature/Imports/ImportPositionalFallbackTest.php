@@ -26,6 +26,8 @@ use Tests\TestCase;
  */
 class ImportPositionalFallbackTest extends TestCase
 {
+    use \Tests\Support\UsesFixtureDatabase;
+
     /**
      * The company's configured field order for SupplierInvoice, which
      * is what the positional fallback walks. Note supplier_code and

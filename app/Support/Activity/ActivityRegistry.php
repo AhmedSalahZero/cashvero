@@ -291,7 +291,8 @@ class ActivityRegistry
             'module' => 'user',
             'title' => 'getName',
             // Never record the hash, and `email` changes are worth seeing.
-            'ignore' => ['password', 'remember_token', 'max_users'],
+            // last_login_at بيتحدث مع كل login، مش تعديل على المستخدم.
+            'ignore' => ['password', 'remember_token', 'max_users', 'last_login_at'],
         ],
         Models\Company::class => ['label' => 'Company', 'module' => 'company'],
     ];

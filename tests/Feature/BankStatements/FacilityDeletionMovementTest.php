@@ -29,6 +29,8 @@ use Tests\TestCase;
  */
 class FacilityDeletionMovementTest extends TestCase
 {
+    use \Tests\Support\UsesFixtureDatabase;
+
     private const COMPANY = 148;
 
     private const FACILITY = 7;

@@ -25,6 +25,8 @@ use Tests\TestCase;
  */
 class InvoiceFormTest extends TestCase
 {
+    use \Tests\Support\UsesFixtureDatabase;
+
     private const COMPANY = 900;
 
     private const OTHER_COMPANY = 901;

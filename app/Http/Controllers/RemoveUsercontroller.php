@@ -58,7 +58,13 @@ class RemoveUsercontroller extends Controller
         $user_id = $request->get('user_id') ;
      
         $user = User::where('id',$user_id)->firstOrFail();
-            $user->delete();
+
+        // Security (SEC-15): never your own account, never a Super Admin or another company's
+        // user (unless the person doing it is a Super Admin).
+        abort_if($user->id === $request->user()->id, 403, __('You cannot delete your own account.'));
+        abort_unless($user->canBeManagedBy($request->user()), 403, __('You do not have permission to perform this action.'));
+
+        $user->delete();
 
         $redirect = redirect()->back()->with('success', __('User deleted successfully.'));
 

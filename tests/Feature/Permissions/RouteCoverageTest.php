@@ -143,6 +143,10 @@ class RouteCoverageTest extends TestCase
             'debugbar.cache.delete', 'debugbar.queries.explain',
             'livewire.upload-file', 'default-livewire.update',
 
+            // Upload progress poll. It is a POST only because the page polls it that way; it changes nothing
+            // (it reads counters for the company in the address, which canViewCurrentCompany already gates).
+            'upload.percentage',
+
             /**
              * Messaging. These change data — they create conversations,
              * post messages, soft-delete them and move a ticket's

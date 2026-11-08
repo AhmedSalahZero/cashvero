@@ -88,6 +88,7 @@ trait PrintsReport
             'VAT Amount', 'Total Deductions', 'Net Balance', 'Total Collections', 'Total Payments',
             'Settlement Amount', 'Charge Amount', 'Outstanding Balance', 'Collected Amount',
             'Facility Amount', 'Cash Cover', 'Issuance Amount', 'Aging',
+            'Interest', 'Commission', 'Charges', 'Total', 'Share %', 'Amount In Main Currency',
         ];
 
         return array_values(array_intersect($headings, $numeric));

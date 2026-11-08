@@ -14,6 +14,8 @@ use Tests\TestCase;
  */
 class SyncInvoicePartnerNamesCommandTest extends TestCase
 {
+    use \Tests\Support\UsesFixtureDatabase;
+
     private const COMPANY = 940;
 
     private const OTHER_COMPANY = 941;

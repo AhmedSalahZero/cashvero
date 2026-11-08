@@ -774,6 +774,16 @@ class PermissionRegistry
                 'export' => ['view lg by bank name report'],
             ],
         ],
+        // Reads the same bank statements as the Bank Statement report, so
+        // whoever could already see those keeps seeing this.
+        'report_bank_charges_analysis' => [
+            'label' => 'Bank Interest, Commissions & Charges Analysis',
+            'group' => 'reports',
+            'actions' => [
+                'view' => ['view bank statement report'],
+                'export' => ['view bank statement report'],
+            ],
+        ],
         'report_lg_expired' => [
             'label' => 'Expired LGs',
             'group' => 'reports',

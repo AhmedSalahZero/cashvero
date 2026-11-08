@@ -230,10 +230,10 @@ class LgIssuanceImportTemplateService
         $rules = [
             'category_name' => 'required|in:new-issuance,opening-balance',
             'transaction_name' => 'required|string',
-            'financial_institution_id' => 'required|exists:financial_institutions,id',
+            'financial_institution_id' => ['required', \Illuminate\Validation\Rule::exists('financial_institutions', 'id')->where('company_id', $company->id)],
             'lg_type' => 'required|in:'.implode(',', array_keys(LgTypes::getAll())),
             'lg_code' => 'required|string',
-            'partner_id' => 'required|exists:partners,id',
+            'partner_id' => ['required', \Illuminate\Validation\Rule::exists('partners', 'id')->where('company_id', $company->id)],
             'activation_date' => 'exclude_unless:lg_type,'.LgTypes::ADVANCED_PAYMENT_LGS.'|nullable|date|after_or_equal:issuance_date|before_or_equal:today',
             'issuance_date' => 'required|date',
             'lg_duration_months' => 'required|numeric|min:1',
@@ -246,15 +246,15 @@ class LgIssuanceImportTemplateService
             'issuance_fees' => 'nullable|numeric|min:0',
             'lg_commission_interval' => 'required|in:quarterly,annually',
             'lg_fees_and_commission_account_type' => 'required|exists:account_types,id',
-            'lg_fees_and_commission_account_id' => 'required|exists:financial_institution_accounts,id',
+            'lg_fees_and_commission_account_id' => ['required', \Illuminate\Validation\Rule::exists('financial_institution_accounts', 'id')->where('company_id', $company->id)],
         ];
 
         if ($source === LgSources::LG_FACILITY) {
-            $rules['lg_facility_id'] = 'required|exists:letter_of_guarantee_facilities,id';
+            $rules['lg_facility_id'] = ['required', \Illuminate\Validation\Rule::exists('letter_of_guarantee_facilities', 'id')->where('company_id', $company->id)];
             $rules['cash_cover_rate'] = 'required|numeric|min:0';
             $rules['cash_cover_amount'] = 'required|numeric|min:0';
             $rules['cash_cover_deducted_from_account_type'] = 'required|exists:account_types,id';
-            $rules['cash_cover_deducted_from_account_id'] = 'required|exists:financial_institution_accounts,id';
+            $rules['cash_cover_deducted_from_account_id'] = ['required', \Illuminate\Validation\Rule::exists('financial_institution_accounts', 'id')->where('company_id', $company->id)];
         }
 
         if (in_array($source, [LgSources::AGAINST_CD, LgSources::AGAINST_TD], true)) {

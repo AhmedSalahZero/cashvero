@@ -26,6 +26,7 @@ use Spatie\Permission\Traits\HasRoles;
  * @property string|null $max_users
  * @property int|null $acceptance_of_privacy_policy
  * @property string|null $remember_token
+ * @property \Illuminate\Support\Carbon|null $last_login_at
  * @property int|null $created_by
  * @property int|null $updated_by
  * @property \Illuminate\Support\Carbon|null $created_at
@@ -106,6 +107,11 @@ class User extends Authenticatable implements HasMedia
     protected $casts = [
         'email_verified_at' => 'datetime',
         'dark_mode' => 'boolean',
+        'last_login_at' => 'datetime',
+        // Security (SEC-06): always store a hash, never the typed text. Laravel skips values that are already hashed.
+        'password' => 'hashed',
+        // Security (SEC-02): the Odoo password is kept encrypted in the database.
+        'odoo_db_password' => \App\Casts\EncryptedOrPlain::class,
     ];
     public function companies():BelongsToMany
     {
@@ -303,6 +309,26 @@ class User extends Authenticatable implements HasMedia
 	{
 		return $this->hasMany(Log::class , 'user_id','id');
 	}
+	/**
+	 * May $actor edit or remove this user?
+	 * Super Admin: anyone. Everyone else: only ordinary users who share at least one company
+	 * with them, never a Super Admin. (Security fix SEC-14 / SEC-15.)
+	 */
+	public function canBeManagedBy(User $actor): bool
+	{
+		if ($actor->isSuperAdmin()) {
+			return true;
+		}
+
+		if ($this->isSuperAdmin()) {
+			return false;
+		}
+
+		$mine = $actor->companies->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+		return $this->companies->pluck('id')->map(fn ($id) => (int) $id)->intersect($mine)->isNotEmpty();
+	}
+
 	public function hasRole($roleName):bool
 	{
 		return $this->roles->first()->name == $roleName ;

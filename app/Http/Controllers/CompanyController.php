@@ -60,6 +60,9 @@ use Illuminate\Http\Request;
  */
 class CompanyController extends Controller
 {
+    /** Security (SEC-05): the only Company columns the form may set; anything else sent is ignored. */
+    private const FORM_FIELDS = ['name', 'main_functional_currency', 'opening_balance_date', 'odoo_db_url', 'odoo_db_name', 'odoo_integration_start_date'];
+
     private const ROWS_PER_PAGE = 20;
 
     /**
@@ -127,11 +130,15 @@ class CompanyController extends Controller
     public function store(Request $request)
     {
         $request->validate([
+            // Security (SEC-39): refuse Odoo addresses that point at the server itself or a private network.
+            'odoo_db_url' => ['nullable', 'string', 'max:255', new \App\Rules\SafeOdooUrl],
             'opening_balance_date' => 'required|date',
+            // Security (SEC-07): the logo must really be a picture.
+            'image' => ['nullable', 'image', 'max:4096'],
         ]);
 
         toastr()->success('Created Successfully');
-        $companySection = Company::create($request->except(['image', 'systems', 'is_api']));
+        $companySection = Company::create($request->only(self::FORM_FIELDS));
         foreach ($request->get('systems') as $systemName) {
             $companySection->systems()->create([
                 'system_name' => $systemName,
@@ -150,8 +157,24 @@ class CompanyController extends Controller
      * ✅ MIGRATED to Vue + Inertia — shares the same page component as
      * create() (resources/js/Pages/SuperAdmin/Companies/Form.vue).
      */
+    /**
+     * Security (SEC-36): a permission alone is not enough to change a company. A Super Admin may touch any
+     * company; anyone else only one they belong to, and never delete one.
+     */
+    private function authorizeCompany(Company $companySection, bool $superAdminOnly = false): void
+    {
+        $user = auth()->user();
+
+        $allowed = \App\Support\Permissions\PermissionResolver::isSuperAdmin($user)
+            || (! $superAdminOnly && $user && $user->companies->contains('id', $companySection->id));
+
+        abort_unless($allowed, 403, __('You do not have permission to perform this action.'));
+    }
+
     public function edit(Company $companySection)
     {
+        $this->authorizeCompany($companySection);
+
         return \Inertia\Inertia::render('SuperAdmin/Companies/Form', $this->getCommonViewVars($companySection));
     }
 
@@ -198,8 +221,17 @@ class CompanyController extends Controller
      */
     public function update(Request $request, Company $companySection)
     {
+        $this->authorizeCompany($companySection);
+
         $request->validate([
+            // Security (SEC-39): the Odoo address is only checked when it is being changed, so a company that
+            // already has an address saved can still be edited.
+            'odoo_db_url' => $request->input('odoo_db_url') != $companySection->odoo_db_url
+                ? ['nullable', 'string', 'max:255', new \App\Rules\SafeOdooUrl]
+                : ['nullable', 'string', 'max:255'],
             'opening_balance_date' => 'required|date',
+            // Security (SEC-07): the logo must really be a picture.
+            'image' => ['nullable', 'image', 'max:4096'],
         ]);
 
         /**
@@ -263,7 +295,7 @@ class CompanyController extends Controller
             $usersWithNewCredentials[] = $user;
         }
         Partner::handleTaxesColumnsToPartnerTable($companySection);
-        $companySection->update($request->except(['image', 'systems', 'odoo_username', 'odoo_db_password', 'confirm_delete_auto_entries']));
+        $companySection->update($request->only(self::FORM_FIELDS));
 
         /**
          * * بنجيب الـ odoo_id بعد ما الشركة تتحدّث
@@ -314,6 +346,8 @@ class CompanyController extends Controller
      */
     public function destroy(Company $companySection)
     {
+        $this->authorizeCompany($companySection, true);
+
         toastr()->error('Deleted Successfully');
 
         $companySection->delete();

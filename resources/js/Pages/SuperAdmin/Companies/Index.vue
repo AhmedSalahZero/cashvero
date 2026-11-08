@@ -45,7 +45,7 @@ function destroyRow() {
 
 function removeImage(row) {
     if (!row.remove_image_url) return;
-    router.get(row.remove_image_url);
+    router.delete(row.remove_image_url);
 }
 </script>
 

@@ -59,6 +59,14 @@ class RemoveCompanyController extends Controller
             __('You do not have permission to perform this action.')
         );
 
+        // Security (SEC-36): deleting a whole company and all its data is for a Super Admin only,
+        // whatever permissions the user happens to hold.
+        abort_unless(
+            \App\Support\Permissions\PermissionResolver::isSuperAdmin($request->user()),
+            403,
+            __('You do not have permission to perform this action.')
+        );
+
         $company_id = $request->get('company_id') ;
      
         $company = Company::where('id',$company_id)->firstOrFail();

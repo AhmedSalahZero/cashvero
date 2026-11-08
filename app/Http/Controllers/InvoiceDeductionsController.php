@@ -40,7 +40,11 @@ class InvoiceDeductionsController
 	public function update(UpdateInvoiceDeductionRequest $request , Company $company ,  $InvoiceId , $invoiceModelName ){
 		$totalDeductions = array_sum(array_column($request->input('deductions',[]),'amount'));
 
-		$invoice = ('App\Models\\'.$invoiceModelName)::find($InvoiceId);
+		// Security (SEC-32): only the two invoice kinds are allowed here, and the invoice must belong to
+		// THIS company. Before, any model name and any id from the address were accepted, so a user of
+		// one company could wipe or change the deductions of another company's invoice.
+		abort_unless(in_array($invoiceModelName, ['CustomerInvoice', 'SupplierInvoice'], true), 404);
+		$invoice = ('App\\Models\\'.$invoiceModelName)::where('company_id', $company->id)->findOrFail($InvoiceId);
 		$currentBalance  =$invoice->net_balance + $invoice->deductions->sum('pivot.amount');
 		$invoice->net_balance = $currentBalance - $totalDeductions;
 		

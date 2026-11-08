@@ -23,6 +23,8 @@ use Tests\TestCase;
  */
 class CashExpenseCopyTest extends TestCase
 {
+    use \Tests\Support\UsesFixtureDatabase;
+
     private const COMPANY = 800;
 
     private const CATEGORY = 810;

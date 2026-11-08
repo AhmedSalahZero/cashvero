@@ -15,6 +15,23 @@ use Illuminate\Validation\Validator;
  */
 class StoreMultipleCashExpenseRequest extends FormRequest
 {
+    /** The company in the address (route model or number), so "exists" rules can be limited to it. */
+    private function routeCompanyId(): ?int
+    {
+        $company = $this->route('company');
+
+        return $company instanceof \App\Models\Company ? (int) $company->id : (is_numeric($company) ? (int) $company : null);
+    }
+
+    /** exists:table,id, but only among the company's own records. */
+    private function ownRecord(string $table, string $column = 'id')
+    {
+        $rule = \Illuminate\Validation\Rule::exists($table, $column);
+        $companyId = $this->routeCompanyId();
+
+        return $companyId ? $rule->where('company_id', $companyId) : $rule;
+    }
+
     public function authorize(): bool
     {
         return true;
@@ -35,7 +52,7 @@ class StoreMultipleCashExpenseRequest extends FormRequest
 
             /* البنود */
             'items' => ['required', 'array', 'min:1'],
-            'items.*.cash_expense_category_name_id' => ['required', 'integer', 'exists:cash_expense_category_names,id'],
+            'items.*.cash_expense_category_name_id' => ['required', 'integer', $this->ownRecord('cash_expense_category_names')],
             'items.*.paid_amount' => ['required', 'numeric', 'gt:0'],
 
             /* تفاصيل الدفع */
@@ -50,7 +67,7 @@ class StoreMultipleCashExpenseRequest extends FormRequest
             /* التوزيع على العقود — مربوط ببند بعينه */
             'allocations' => ['nullable', 'array'],
             'allocations.*.item_index' => ['required_with:allocations.*.contract_id', 'integer', 'min:0'],
-            'allocations.*.contract_id' => ['nullable', 'integer', 'exists:contracts,id'],
+            'allocations.*.contract_id' => ['nullable', 'integer', $this->ownRecord('contracts')],
             'allocations.*.amount' => ['nullable', 'numeric', 'min:0'],
         ];
     }

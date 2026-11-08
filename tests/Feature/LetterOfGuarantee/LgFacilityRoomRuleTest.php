@@ -20,6 +20,8 @@ use Tests\TestCase;
  */
 class LgFacilityRoomRuleTest extends TestCase
 {
+    use \Tests\Support\UsesFixtureDatabase;
+
     private const COMPANY_ID = 9101;
 
     private const BANK_ID = 9102;

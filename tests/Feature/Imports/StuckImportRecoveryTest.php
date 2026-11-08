@@ -171,12 +171,15 @@ class StuckImportRecoveryTest extends TestCase
     /* ───────────── التوصيلات ───────────── */
 
     /** * لازم يكون فيه راوت يفرّغ الحالة الواقفة */
-    public function test_the_reset_route_exists_and_is_a_get(): void
+    public function test_the_reset_route_exists_and_is_a_post(): void
     {
         $route = \Illuminate\Support\Facades\Route::getRoutes()->getByName('salesGatheringTest.resetImport');
 
         $this->assertNotNull($route, 'الراوت اللي بيفرّغ الرفع الواقف مش متسجل');
-        $this->assertContains('GET', $route->methods());
+        // POST on purpose: a link (GET) that changes data can be triggered by a browser pre-fetch
+        // or a crafted link. The Import page sends it as a POST button.
+        $this->assertContains('POST', $route->methods());
+        $this->assertNotContains('GET', $route->methods());
     }
 
     /**

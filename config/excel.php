@@ -206,7 +206,7 @@ return [
     |
     */
     'value_binder' => [
-        'default' => Maatwebsite\Excel\DefaultValueBinder::class,
+        'default' => App\Support\Excel\SafeValueBinder::class,
     ],
 
     'cache' => [

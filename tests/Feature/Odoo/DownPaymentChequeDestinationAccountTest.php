@@ -101,7 +101,7 @@ class DownPaymentChequeDestinationAccountTest extends TestCase
 
     public function test_a_supplier_down_payment_cheque_targets_the_advances_to_suppliers_account(): void
     {
-        $cheque = MoneyPayment::where('type', 'cheque')
+        $cheque = MoneyPayment::where('type', MoneyPayment::PAYABLE_CHEQUE)
             ->get()
             ->first(fn ($m) => $m->getPartnerType() === 'is_supplier' && $m->isDownPayment());
 
@@ -178,7 +178,7 @@ class DownPaymentChequeDestinationAccountTest extends TestCase
      */
     public function test_cash_expenses_are_unaffected(): void
     {
-        $expense = \App\Models\CashExpense::where('type', 'cheque')
+        $expense = \App\Models\CashExpense::where('type', \App\Models\CashExpense::PAYABLE_CHEQUE)
             ->get()
             ->first(fn ($m) => $m->isChequeOrChequePayment());
 

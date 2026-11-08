@@ -20,7 +20,7 @@ import { router, usePage } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
 const props = defineProps({
-    user: Object, // { name, email, avatar_url, odoo_username, odoo_db_password }
+    user: Object, // { name, email, avatar_url, odoo_username, odoo_db_password_set }
     hasOdooCredentials: Boolean,
     submitUrl: String,
 });
@@ -31,7 +31,9 @@ const hasOdooCredentials = props.hasOdooCredentials;
 const name = ref(props.user.name);
 const email = ref(props.user.email);
 const odooUsername = ref(props.user.odoo_username ?? '');
-const odooDbPassword = ref(props.user.odoo_db_password ?? '');
+// The saved password is never sent to the browser; an empty box means "keep the current one".
+const odooDbPassword = ref('');
+const odooPasswordIsSet = !!props.user.odoo_db_password_set;
 
 const avatarFile = ref(null);
 const avatarPreview = ref(props.user.avatar_url);
@@ -112,7 +114,7 @@ function submit() {
                         </div>
                         <div>
                             <label class="cvr-form-label">{{ $t('Odoo Database Password / API Key') }}</label>
-                            <input v-model="odooDbPassword" type="text" class="cvr-input w-full px-3 py-2 rounded" />
+                            <input v-model="odooDbPassword" type="password" autocomplete="new-password" :placeholder="odooPasswordIsSet ? $t('Saved — leave empty to keep it') : ''" class="cvr-input w-full px-3 py-2 rounded" />
                             <p v-if="errorFor('odoo_db_password')" class="text-xs mt-1 cvr-num-red">{{ errorFor('odoo_db_password') }}</p>
                         </div>
                     </div>

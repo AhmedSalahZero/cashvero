@@ -281,6 +281,10 @@ class CompanyImportServiceTest extends TestCase
             $this->markTestSkipped('mysql / mysql_source unreachable');
         }
 
+        if (config('database.connections.mysql_source.database') === 'cashvero_test_source') {
+            $this->markTestSkipped('Needs the real Odoo-analysis source database (veroanalysis): a copy of the test database is not a real source.');
+        }
+
         $svc = $this->service();
         $analysis = $svc->analyze(92);
         if (! $analysis['source_company']) {

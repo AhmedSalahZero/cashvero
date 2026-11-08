@@ -24,6 +24,8 @@ use Tests\TestCase;
  */
 class BalanceDateVsGeneratedInterestRowsTest extends TestCase
 {
+    use \Tests\Support\UsesFixtureDatabase;
+
     private const TABLE = 'current_account_bank_statements';
     private const ACCOUNT = 356;
     private const OTHER_ACCOUNT = 315;

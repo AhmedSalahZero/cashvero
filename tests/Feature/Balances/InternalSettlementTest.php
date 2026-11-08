@@ -31,6 +31,8 @@ use Tests\TestCase;
  */
 class InternalSettlementTest extends TestCase
 {
+    use \Tests\Support\UsesFixtureDatabase;
+
     private const COMPANY = 700;
 
     private const DUAL = 70;           // customer AND supplier
@@ -244,7 +246,7 @@ class InternalSettlementTest extends TestCase
         $buffer = '';
         $statements = [];
 
-        foreach (preg_split('/\R/', $sql) as $line) {
+        foreach (preg_split('/\R/u', $sql) as $line) {
             if (preg_match('/^\s*delimiter\s+(\S+)\s*$/i', $line, $m)) {
                 $delimiter = $m[1];
 

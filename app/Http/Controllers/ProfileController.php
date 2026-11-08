@@ -33,7 +33,8 @@ class ProfileController extends Controller
 				'email' => $user->email,
 				'avatar_url' => $user->getFirstMediaUrl() ?: null,
 				'odoo_username' => $user->odoo_username,
-				'odoo_db_password' => $user->odoo_db_password,
+				// Security (SEC-03): never send the password itself, only whether one is saved.
+				'odoo_db_password_set' => filled($user->odoo_db_password),
 			],
 			'hasOdooCredentials' => $hasOdooCredentials,
 			'submitUrl' => route('profile.update'),
@@ -61,12 +62,15 @@ class ProfileController extends Controller
 		$hasOdooCredentials = $user->companies->contains(fn (Company $company) => $company->hasOdooCredentials());
 
 		if ($hasOdooCredentials) {
+			// An empty password box means "keep the saved one" (the page no longer receives it).
+			$odooPassword = filled($request->odoo_db_password) ? $request->odoo_db_password : $user->odoo_db_password;
+
 			$odooCredentialsChanged = $request->odoo_username !== $user->odoo_username
-				|| $request->odoo_db_password !== $user->odoo_db_password;
+				|| $odooPassword !== $user->odoo_db_password;
 
 			$user->update([
 				'odoo_username' => $request->odoo_username,
-				'odoo_db_password' => $request->odoo_db_password,
+				'odoo_db_password' => $odooPassword,
 			]);
 
 			/**

@@ -53,6 +53,12 @@ class ForecastedProjectCollectionPhasesTest extends TestCase
     {
         parent::setUp();
 
+        // The scenarios below use fixed 2026 dates (invoices due 15/10/2026, a contract ending 2027...).
+        // Real "today" moves on, and the report treats an invoice due before today as past due and
+        // schedules a monthly contract only from next month - so the expected numbers would change
+        // with the calendar. Freeze the clock to the date those scenarios were written for.
+        $this->travelTo(\Carbon\Carbon::parse('2026-10-01 10:00:00'));
+
         $this->originalDatabase = config('database.connections.mysql.database');
         config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
         DB::purge('mysql');

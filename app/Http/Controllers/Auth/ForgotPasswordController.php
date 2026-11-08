@@ -27,6 +27,21 @@ class ForgotPasswordController extends Controller
      * which this page reads exactly the way Login.vue already reads
      * `status`/`expiredLogin`.
      */
+    /**
+     * Security (SEC-18): answer exactly the same whether or not the e-mail belongs to an account, so a
+     * stranger cannot use this form to find out who uses CashVero. (No e-mail is sent for unknown addresses.)
+     */
+    protected function sendResetLinkFailedResponse(\Illuminate\Http\Request $request, $response)
+    {
+        if ($response === \Illuminate\Support\Facades\Password::INVALID_USER) {
+            return $this->sendResetLinkResponse($request, \Illuminate\Support\Facades\Password::RESET_LINK_SENT);
+        }
+
+        return back()
+            ->withInput($request->only('email'))
+            ->withErrors(['email' => trans($response)]);
+    }
+
     public function showLinkRequestForm()
     {
         return \Inertia\Inertia::render('Auth/ForgotPassword', [

@@ -136,7 +136,7 @@ const deletingRate = ref(false);
 function destroyRate() {
     if (deletingRate.value) return;
     deletingRate.value = true;
-    router.get(deleteRateTarget.value.delete_url, {}, { onFinish: () => { deletingRate.value = false; deleteRateTarget.value = null; } });
+    router.delete(deleteRateTarget.value.delete_url, { onFinish: () => { deletingRate.value = false; deleteRateTarget.value = null; } });
 }
 
 /* ── Lending Information modal — links a customer's real contract to
@@ -206,7 +206,7 @@ const deletingLending = ref(false);
 function destroyLending() {
     if (deletingLending.value) return;
     deletingLending.value = true;
-    router.get(deleteLendingTarget.value.delete_url, {}, { onFinish: () => { deletingLending.value = false; deleteLendingTarget.value = null; } });
+    router.delete(deleteLendingTarget.value.delete_url, { onFinish: () => { deletingLending.value = false; deleteLendingTarget.value = null; } });
 }
 
 /* ── Facility Renewal — Phase 4 ───────────────────────────────────

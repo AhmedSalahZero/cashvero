@@ -26,6 +26,8 @@ use Tests\TestCase;
  */
 class InvoiceMoneyLinksTest extends TestCase
 {
+    use \Tests\Support\UsesFixtureDatabase;
+
     /** @var list<string> */
     private array $tables = [
         'settlements',

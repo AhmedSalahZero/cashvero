@@ -47,6 +47,21 @@ class AdjustedDueDateHistoriesController
     use GeneralFunctions;
 
 	/**
+	 * Security fix (SEC-13): the invoice used to be loaded with Model::find($id) using a class name
+	 * and an id taken straight from the address, so a user of company A could open (and change the
+	 * due dates of) an invoice of company B, or name any model class. Now only the two invoice
+	 * models are accepted and the row must belong to the current company.
+	 */
+	protected function findInvoice(Company $company, $invoiceModelName, $invoiceId)
+	{
+		abort_unless(in_array($invoiceModelName, ['CustomerInvoice', 'SupplierInvoice'], true), 404);
+
+		return ('App\\Models\\'.$invoiceModelName)::query()
+			->where('company_id', $company->id)
+			->findOrFail($invoiceId);
+	}
+
+	/**
 	 * Shared prop-builder for index()/edit() — both render the same
 	 * Vue page, this is the one place the due-date-history list gets
 	 * shaped for it. $editingHistory is null for index() (add mode).
@@ -105,7 +120,7 @@ class AdjustedDueDateHistoriesController
 	{
 		
 		$fullClassName = 'App\Models\\'.$invoiceModelName;
-		$invoice = ('App\Models\\'.$invoiceModelName)::find($invoiceId);
+		$invoice = $this->findInvoice($company, $invoiceModelName, $invoiceId);
 		$customerNameOrSupplierNameText  =(new $fullClassName) ->getClientNameText();
 		$dueDateHistories = $invoice->dueDateHistories;
 		
@@ -114,7 +129,7 @@ class AdjustedDueDateHistoriesController
 		));
     }
 	public function store(Request $request, Company $company, $invoiceId , $invoiceModelName){
-		$invoice = ('App\Models\\'.$invoiceModelName)::find($invoiceId);
+		$invoice = $this->findInvoice($company, $invoiceModelName, $invoiceId);
 		$date = $request->get('due_date') ;
 		$date = explode('/',$date);
 		$month = $date[0];
@@ -148,7 +163,7 @@ class AdjustedDueDateHistoriesController
 		return redirect()->route('adjust.due.dates',['company'=>$company->id,'modelType'=>$invoiceModelName,'modelId'=>$invoice->id]);
 	}
 	public function edit(Request $request , Company $company ,  $invoiceId , $invoiceModelName, DueDateHistory $dueDateHistory){
-		$invoice = ('App\Models\\'.$invoiceModelName)::find($invoiceId); 
+		$invoice = $this->findInvoice($company, $invoiceModelName, $invoiceId); 
 		$dueDateHistories = $invoice->dueDateHistories;
 		$fullClassName = 'App\Models\\'.$invoiceModelName;
 		$customerNameOrSupplierNameText  =(new $fullClassName) ->getClientNameText();
@@ -162,7 +177,7 @@ class AdjustedDueDateHistoriesController
 		$month = $date[0];
 		$day = $date[1];
 		$year = $date[2];
-		$customerInvoice = ('App\Models\\'.$invoiceModelName)::find($InvoiceId);
+		$customerInvoice = $this->findInvoice($company, $invoiceModelName, $InvoiceId);
 		$dueDate = $year.'-'.$month.'-'.$day ;
 		
 		$dueDateHistory->update([
@@ -177,7 +192,7 @@ class AdjustedDueDateHistoriesController
 	}
 	public function destroy(Request $request , Company $company ,  $invoiceId , string $invoiceModelName , DueDateHistory $dueDateHistory)
 	{
-		$invoice = ('App\Models\\'.$invoiceModelName)::find($invoiceId); 
+		$invoice = $this->findInvoice($company, $invoiceModelName, $invoiceId); 
 		$dueDateHistory->delete();
 		$lastHistory = $invoice->dueDateHistories->last();
 		

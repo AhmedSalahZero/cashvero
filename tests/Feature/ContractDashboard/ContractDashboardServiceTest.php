@@ -21,6 +21,8 @@ use Tests\TestCase;
  */
 class ContractDashboardServiceTest extends TestCase
 {
+    use \Tests\Support\UsesFixtureDatabase;
+
     private const COMPANY = 500;
 
     private const CUSTOMER_A = 10;   // two EGP contracts

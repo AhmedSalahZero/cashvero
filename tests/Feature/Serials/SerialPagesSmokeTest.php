@@ -80,15 +80,34 @@ class SerialPagesSmokeTest extends SerialTestCase
     public function test_the_multiple_cash_expense_index_accepts_a_serial_search(): void
     {
         // الشاشة مخفية للشركات اللي شغالة بأودو
-        $company = Company::all()->first(fn (Company $company) => ! $company->hasOdooCredentials());
+        // The company check now (rightly) refuses a company the user does not belong to, so use one the
+        // user is a member of; if the user belongs to none of the non-Odoo companies, add the membership
+        // for the length of this test only.
+        $companies = Company::all()->filter(fn (Company $company) => ! $company->hasOdooCredentials());
 
-        if (! $company) {
+        if ($companies->isEmpty()) {
             $this->markTestSkipped('Every company on file uses Odoo.');
         }
 
-        $response = $this->actingAs($this->actor)->get(route('multiple-cash-expenses.index', ['company' => $company->id]).'?search=MCE/');
+        $memberIds = $this->actor->companies()->pluck('companies.id')->all();
+        $company = $companies->first(fn (Company $c) => in_array($c->id, $memberIds, true));
+        $attached = false;
 
-        $this->assertSame(200, $response->getStatusCode());
+        if (! $company) {
+            $company = $companies->first();
+            $this->actor->companies()->attach($company->id);
+            $attached = true;
+        }
+
+        try {
+            $response = $this->actingAs($this->actor)->get(route('multiple-cash-expenses.index', ['company' => $company->id]).'?search=MCE/');
+
+            $this->assertSame(200, $response->getStatusCode());
+        } finally {
+            if ($attached) {
+                $this->actor->companies()->detach($company->id);
+            }
+        }
     }
 
     /**

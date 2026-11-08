@@ -98,6 +98,7 @@ class SidebarMenu
                 self::item(__('Company Cash Flow Report'), $user->hasPermissionKey('cash_flow_report.view'), route('view.cashflow.report', ['company' => $companyId]), icon: 'chart-line'),
                 self::item(__('Contract Cash Flow Report'), $user->hasPermissionKey('contract_cash_flow_report.view'), route('view.contract.cashflow.report', ['company' => $companyId]), icon: 'chart-column'),
                 self::item(__('Consolidated Cash Flow Report'), $user->hasPermissionKey('consolidated_cash_flow_report.view'), route('reports.consolidated-cash-flow.index', ['company' => $companyId]), icon: 'chart-pie'),
+                self::item(__('Bank Interest, Commissions & Charges Analysis'), $user->hasPermissionKey('report_bank_charges_analysis.view'), route('view.bank.charges.analysis.report', ['company' => $companyId]), inertia: true, icon: 'percent'),
             ]),
 
             'financial-institutions' => self::section(__('Financial Institutions & Cash Account'), 'landmark', [

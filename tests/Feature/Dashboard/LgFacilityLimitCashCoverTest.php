@@ -21,6 +21,8 @@ use Tests\TestCase;
  */
 class LgFacilityLimitCashCoverTest extends TestCase
 {
+    use \Tests\Support\UsesFixtureDatabase;
+
     private const COMPANY_ID = 9301;
 
     private const BANK_ID = 9302;

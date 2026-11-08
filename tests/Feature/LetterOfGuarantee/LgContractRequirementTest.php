@@ -28,6 +28,8 @@ use Tests\TestCase;
  */
 class LgContractRequirementTest extends TestCase
 {
+    use \Tests\Support\UsesFixtureDatabase;
+
     private const CUSTOMER_ONLY = 1;
 
     private const OTHER_ONLY = 2;

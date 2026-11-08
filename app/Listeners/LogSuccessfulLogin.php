@@ -3,29 +3,28 @@
 namespace App\Listeners;
 
 use App\Models\Log;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Queue\InteractsWithQueue;
+use App\Models\User;
+use Illuminate\Auth\Events\Login;
 
 class LogSuccessfulLogin
 {
     /**
-     * Create the event listener.
-     *
-     * @return void
+     * بيحدّث users.last_login_at وبيسجل سطر login في logs.
+     * التحديث بيتعمل على الـ query مباشرة عشان updated_at بتاع
+     * المستخدم ما يتغيرش. أي خطأ هنا ما يمنعش الدخول.
      */
-    public function __construct()
+    public function handle(Login $event): void
     {
-    }
+        $user = $event->user;
+        if (! $user instanceof User) {
+            return;
+        }
 
-    /**
-     * Handle the event.
-     *
-     * @param  object  $event
-     * @return void
-     */
-    public function handle($event)
-    {
-        Log::storeNewLogRecord('successLogin');
-		// (request()->all());
+        try {
+            User::whereKey($user->getKey())->toBase()->update(['last_login_at' => now()]);
+            Log::storeSessionEvent('successLogin', $user);
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 }

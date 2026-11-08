@@ -35,7 +35,13 @@ Route::group(
         'middleware' => ['localeSessionRedirect', 'localizationRedirect', 'localeViewPath'],
     ],
     function () {
-        Auth::routes();
+        // Security (SEC-19): no public sign-up. Accounts are created by an administrator from the Users screen.
+        Auth::routes(['register' => false]);
+
+        // Security (SEC-17): the two public e-mail/password forms get a rate limit (login has its own
+        // lock-out). Declared AFTER Auth::routes() so these replace the unthrottled versions.
+        Route::post('password/email', 'Auth\\ForgotPasswordController@sendResetLinkEmail')->middleware('throttle:6,1')->name('password.email');
+        Route::post('password/reset', 'Auth\\ResetPasswordController@reset')->middleware('throttle:6,1')->name('password.update');
 
         Route::middleware(['auth', 'checkIfAccountExpired'])->group(function () {
     
@@ -159,12 +165,12 @@ Route::group(
                 Route::get('salesGatheringImport/{model}/cached-row/{rowId}/edit', 'SalesGatheringTestController@editCachedRow')->name('salesGatheringTest.editCachedRow');
                 Route::put('salesGatheringImport/{model}/cached-row/{rowId}', 'SalesGatheringTestController@updateCachedRow')->name('salesGatheringTest.updateCachedRow');
                 Route::any('salesGatheringImport/{model}', 'SalesGatheringTestController@import')->name('salesGatheringImport');
-                Route::get('SalesGathering/insertToMainTable/{modelName}', 'SalesGatheringTestController@insertToMainTable')->name('salesGatheringTest.insertToMainTable');
+                Route::post('SalesGathering/insertToMainTable/{modelName}', 'SalesGatheringTestController@insertToMainTable')->name('salesGatheringTest.insertToMainTable');
                 /**
                  * * بيرجّع شاشة الرفع لحالتها الأولى لما الـ job يقف أو يفشل
                  * * عشان المستخدم يقدر يرفع الملف تاني
                  */
-                Route::get('SalesGathering/reset-import/{model}', 'SalesGatheringTestController@resetImport')->name('salesGatheringTest.resetImport');
+                Route::post('SalesGathering/reset-import/{model}', 'SalesGatheringTestController@resetImport')->name('salesGatheringTest.resetImport');
 
                 Route::get('salesGathering/export/{model}', 'SalesGatheringController@export')->name('salesGathering.export');
 
@@ -468,7 +474,7 @@ Route::group(
                 
                     Route::post('financial-institutions/{financialInstitution}/fully-secured-overdraft/apply-rate/{fullySecuredOverdraft}', 'FullySecuredOverdraftController@applyRate')->name('fully-secured-overdraft-apply.rates');
                     Route::post('financial-institutions/{financialInstitution}/fully-secured-overdraft/edit-rates/{rate}', 'FullySecuredOverdraftController@editRate')->name('fully-secured-overdraft-edit-rates');
-                    Route::get('financial-institutions/{financialInstitution}/fully-secured-overdraft/delete-rates/{rate}', 'FullySecuredOverdraftController@deleteRate')->name('fully-secured-overdraft-delete-rate');
+                    Route::delete('financial-institutions/{financialInstitution}/fully-secured-overdraft/delete-rates/{rate}', 'FullySecuredOverdraftController@deleteRate')->name('fully-secured-overdraft-delete-rate');
                  
                  
                  
@@ -483,7 +489,7 @@ Route::group(
                     Route::delete('financial-institutions/{financialInstitution}/clean-overdraft/renew/{cleanOverdraft}', 'CleanOverdraftController@deleteRenewal')->name('clean-overdraft.delete-renewal');
                     Route::post('financial-institutions/{financialInstitution}/clean-overdraft/apply-rate/{cleanOverdraft}', 'CleanOverdraftController@applyRate')->name('clean-overdraft-apply.rates');
                     Route::post('financial-institutions/{financialInstitution}/clean-overdraft/edit-rates/{rate}', 'CleanOverdraftController@editRate')->name('clean-overdraft-edit-rates');
-                    Route::get('financial-institutions/{financialInstitution}/clean-overdraft/delete-rates/{rate}', 'CleanOverdraftController@deleteRate')->name('clean-overdraft-delete-rate');
+                    Route::delete('financial-institutions/{financialInstitution}/clean-overdraft/delete-rates/{rate}', 'CleanOverdraftController@deleteRate')->name('clean-overdraft-delete-rate');
                  
 					Route::any('salesGatheringImport/last-upload-failed/{model}', 'SalesGatheringTestController@lastUploadFailed')->name('last.upload.failed');
 
@@ -530,7 +536,7 @@ Route::group(
                  
                     Route::post('financial-institutions/{financialInstitution}/overdraft-against-commercial-paper/apply-rate/{overdraftAgainstCommercialPaper}', 'OverdraftAgainstCommercialPaperController@applyRate')->name('overdraft-against-commercial-paper-apply.rates');
                     Route::post('financial-institutions/{financialInstitution}/overdraft-against-commercial-paper/edit-rates/{rate}', 'OverdraftAgainstCommercialPaperController@editRate')->name('overdraft-against-commercial-paper-edit-rates');
-                    Route::get('financial-institutions/{financialInstitution}/overdraft-against-commercial-paper/delete-rates/{rate}', 'OverdraftAgainstCommercialPaperController@deleteRate')->name('overdraft-against-commercial-paper-delete-rate');
+                    Route::delete('financial-institutions/{financialInstitution}/overdraft-against-commercial-paper/delete-rates/{rate}', 'OverdraftAgainstCommercialPaperController@deleteRate')->name('overdraft-against-commercial-paper-delete-rate');
                  
                  
                  
@@ -545,7 +551,7 @@ Route::group(
                  
                     Route::post('financial-institutions/{financialInstitution}/overdraft-against-assignment-of-contract/lending-information/{odAgainstAssignmentOfContract}', 'OverdraftAgainstAssignmentOfContractController@applyLendingInformation')->name('lending.information.apply.for.against.assignment.of.contract');
                     Route::post('financial-institutions/{financialInstitution}/overdraft-against-assignment-of-contract/edit-lending-information/{lendingInformation}', 'OverdraftAgainstAssignmentOfContractController@editLendingInformation')->name('lending.information.edit.for.against.assignment.of.contract');
-                    Route::get('financial-institutions/{financialInstitution}/overdraft-against-assignment-of-contract/delete-lending-information/{lendingInformation}', 'OverdraftAgainstAssignmentOfContractController@deleteLendingInformation')->name('lending.information.delete.for.against.assignment.of.contract');
+                    Route::delete('financial-institutions/{financialInstitution}/overdraft-against-assignment-of-contract/delete-lending-information/{lendingInformation}', 'OverdraftAgainstAssignmentOfContractController@deleteLendingInformation')->name('lending.information.delete.for.against.assignment.of.contract');
                     Route::get('financial-institutions/{financialInstitution}/overdraft-against-assignment-of-contract/apply-against-lending/{lendingInformation}', 'OverdraftAgainstAssignmentOfContractController@applyAgainstLending')->name('apply.against.lending');
                     Route::put('contract/{contract}/{type}/mark-as-finished', 'ContractsController@markAsFinished')->name('contract.mark.as.finished');
                     Route::put('contract/{contract}/{type}/mark-as-running', 'ContractsController@markAsRunning')->name('contract.mark.as.running');
@@ -554,7 +560,7 @@ Route::group(
                  
                     Route::post('financial-institutions/{financialInstitution}/overdraft-against-assignment-of-contract/apply-rate/{odAgainstAssignmentOfContract}', 'OverdraftAgainstAssignmentOfContractController@applyRate')->name('overdraft-against-assignment-of-contract-apply.rates');
                     Route::post('financial-institutions/{financialInstitution}/overdraft-against-assignment-of-contract/edit-rates/{rate}', 'OverdraftAgainstAssignmentOfContractController@editRate')->name('overdraft-against-assignment-of-contract-edit-rates');
-                    Route::get('financial-institutions/{financialInstitution}/overdraft-against-assignment-of-contract/delete-rates/{rate}', 'OverdraftAgainstAssignmentOfContractController@deleteRate')->name('overdraft-against-assignment-of-contract-delete-rate');
+                    Route::delete('financial-institutions/{financialInstitution}/overdraft-against-assignment-of-contract/delete-rates/{rate}', 'OverdraftAgainstAssignmentOfContractController@deleteRate')->name('overdraft-against-assignment-of-contract-delete-rate');
                  
                     /**
                      * * start certificates of deposit
@@ -638,7 +644,7 @@ Route::group(
                     Route::post('letter-of-guarantee-issuance/cancel/{letterOfGuaranteeIssuance}/{source}', 'LetterOfGuaranteeIssuanceController@cancel')->name('cancel.letter.of.guarantee.issuance');
                     Route::post('letter-of-guarantee-issuance/apply-amount-to-be-decreased/{letterOfGuaranteeIssuance}/{source}', 'LetterOfGuaranteeIssuanceController@applyAmountToBeDecreased')->name('advanced.lg.payment.apply.amount.to.be.decreased');
                     Route::post('letter-of-guarantee-issuance/edit-amount-to-be-decreased/{lgAdvancedPaymentHistory}/{source}', 'LetterOfGuaranteeIssuanceController@editAmountToBeDecreased')->name('advanced.lg.payment.edit.amount.to.be.decreased');
-                    Route::get('letter-of-guarantee-issuance/delete-advanced-payment/{lgAdvancedPaymentHistory}', 'LetterOfGuaranteeIssuanceController@deleteAdvancedPayment')->name('delete.lg.advanced.payment');
+                    Route::delete('letter-of-guarantee-issuance/delete-advanced-payment/{lgAdvancedPaymentHistory}', 'LetterOfGuaranteeIssuanceController@deleteAdvancedPayment')->name('delete.lg.advanced.payment');
                     Route::post('letter-of-guarantee-issuance/back-to-running/{letterOfGuaranteeIssuance}/{source}', 'LetterOfGuaranteeIssuanceController@backToRunningStatus')->name('back.to.running.letter.of.guarantee.issuance');
                     Route::get('letter-of-guarantee-issuance/template/{source}', 'LgIssuanceImportController@downloadTemplate')->name('download.letter.of.guarantee.issuance.template');
                     Route::post('letter-of-guarantee-issuance/import/{source}', 'LgIssuanceImportController@upload')->name('import.letter.of.guarantee.issuance');
@@ -673,7 +679,7 @@ Route::group(
 
                     Route::post('letter-of-credit-issuance/apply-expense/{letterOfCreditIssuance}', 'LetterOfCreditIssuanceController@applyExpense')->name('apply.lc.issuance.expense');
                     Route::post('letter-of-credit-issuance/update-expense/{expense}', 'LetterOfCreditIssuanceController@updateExpense')->name('update.lc.issuance.expense');
-                    Route::get('letter-of-credit-issuance/delete-expense/{expense}', 'LetterOfCreditIssuanceController@deleteExpense')->name('delete.lc.issuance.expense');
+                    Route::delete('letter-of-credit-issuance/delete-expense/{expense}', 'LetterOfCreditIssuanceController@deleteExpense')->name('delete.lc.issuance.expense');
                     Route::get('letter-of-credit-issuance-remaining-balance', 'LetterOfCreditIssuanceController@getRemainingBalance')->name('get.remaining.balance.lc.issuance');
                     
                     // end letter of credit issuance
@@ -773,6 +779,12 @@ Route::group(
                     Route::get('lg-by-bank-name-report', 'LgByBankNameReportController@result')->name('result.lg.by.bank.name.report');
                     Route::get('lg-by-bank-name-report/export', 'LgByBankNameReportController@exportExcel')->name('export.lg.by.bank.name.report');
                     Route::get('lg-by-bank-name-report/print', 'LgByBankNameReportController@print')->name('print.lg.by.bank.name.report');
+
+                    // Bank Interest, Commissions & Charges Analysis - what each bank cost, by facility.
+                    Route::get('bank-charges-analysis-report', 'BankChargesAnalysisReportController@index')->name('view.bank.charges.analysis.report');
+                    Route::get('bank-charges-analysis-report/result', 'BankChargesAnalysisReportController@result')->name('result.bank.charges.analysis.report');
+                    Route::get('bank-charges-analysis-report/export', 'BankChargesAnalysisReportController@exportExcel')->name('export.bank.charges.analysis.report');
+                    Route::get('bank-charges-analysis-report/print', 'BankChargesAnalysisReportController@print')->name('print.bank.charges.analysis.report');
 
                     // Expired LGs - every LG past its expiry as of today, never cancelled.
                     Route::get('show-expired-lgs-report', 'ExpiredLgsReportController@index')->name('view.expired.lgs.report');
@@ -914,13 +926,13 @@ Route::group(
                     Route::get('money-received/edit/{moneyReceived}', 'MoneyReceivedController@edit')->name('edit.money.receive');
                     Route::put('money-received/update/{moneyReceived}', 'MoneyReceivedController@update')->name('update.money.receive');
                     Route::delete('money-received/delete/{moneyReceived}', 'MoneyReceivedController@destroy')->name('delete.money.receive');
-                    Route::get('money-received/get-invoice-numbers/{customer_name}/{currency?}', 'MoneyReceivedController@getInvoiceNumber'); // ajax request
-                    Route::get('money-received/get-account-numbers-based-on-account-type/{accountType}/{currency}/{financialInstitutionId}', 'MoneyReceivedController@getAccountNumbersForAccountType'); // ajax request
-                    Route::get('money-received/get-account-ids-based-on-account-type/{accountType}/{currency}/{financialInstitutionId}', 'MoneyReceivedController@getAccountIdsForAccountType'); // ajax request
+                    Route::get('money-received/get-invoice-numbers/{customer_name}/{currency?}', 'MoneyReceivedController@getInvoiceNumber')->name('lookup.money.received.invoice.numbers'); // ajax request
+                    Route::get('money-received/get-account-numbers-based-on-account-type/{accountType}/{currency}/{financialInstitutionId}', 'MoneyReceivedController@getAccountNumbersForAccountType')->name('lookup.money.received.account.numbers'); // ajax request
+                    Route::get('money-received/get-account-ids-based-on-account-type/{accountType}/{currency}/{financialInstitutionId}', 'MoneyReceivedController@getAccountIdsForAccountType')->name('lookup.money.received.account.ids'); // ajax request
                     Route::get('money-received/get-net-balance-based-on-account-number', 'MoneyReceivedController@updateNetBalanceBasedOnAccountNumber')->name('update.balance.and.net.balance.based.on.account.number');
                     Route::get('money-received/get-net-balance-based-on-account-id-by-ajax/{accountType}/{accountId}/{financialInstitutionId}', 'MoneyReceivedController@updateNetBalanceBasedOnAccountIdByAjax')->name('update.balance.and.net.balance.based.on.account.id.ajax');
                     Route::get('money-received/get-account-amount-based-on-account-id/{accountType}/{accountId}/{financialInstitutionId}', 'MoneyReceivedController@getAccountAmountForAccountId')->name('get.account.amount.based.on.account.id'); // ajax request
-                    Route::get('get-customers-based-on-currency/{currencyName}', 'MoneyReceivedController@getCustomersBasedOnCurrency');
+                    Route::get('get-customers-based-on-currency/{currencyName}', 'MoneyReceivedController@getCustomersBasedOnCurrency')->name('lookup.customers.by.currency');
                     Route::get('get-partners-based-on-type/{currencyName}', 'MoneyReceivedController@getPartnersBasedOnCurrency');
                     Route::get('get-beneficiary-name-from-lg-issuance-based-on-currency', 'LetterOfGuaranteeIssuanceController@getBeneficiaryNameByCurrency')->name('get.beneficiary.name.by.currency');
                     Route::get('get-bank-name-from-lg-issuance-based-on-currency', 'LetterOfGuaranteeIssuanceController@getBankNameByCurrency')->name('get.bank.name.by.currency');
@@ -941,9 +953,9 @@ Route::group(
                     Route::post('factoring/without-recourse/{factoringTransaction}/mark-difference-received', 'FactoringWithoutRecourseController@markDifferenceReceived')->name('factoring.without-recourse.mark-difference-received');
                     Route::post('factoring/without-recourse/{factoringTransaction}/revert-difference-received', 'FactoringWithoutRecourseController@revertDifferenceReceived')->name('factoring.without-recourse.revert-difference-received');
                     Route::delete('factoring/without-recourse/{factoringTransaction}', 'FactoringWithoutRecourseController@destroy')->name('factoring.without-recourse.destroy');
-                    Route::get('factoring/without-recourse/contracts/{factoringCompany}', 'FactoringWithoutRecourseController@getContracts');
-                    Route::get('factoring/without-recourse/currencies/{customerId}', 'FactoringWithoutRecourseController@getInvoiceCurrencies');
-                    Route::get('factoring/without-recourse/invoices/{customerId}/{currency?}', 'FactoringWithoutRecourseController@getInvoices');
+                    Route::get('factoring/without-recourse/contracts/{factoringCompany}', 'FactoringWithoutRecourseController@getContracts')->name('lookup.factoring.without.recourse.contracts');
+                    Route::get('factoring/without-recourse/currencies/{customerId}', 'FactoringWithoutRecourseController@getInvoiceCurrencies')->name('lookup.factoring.without.recourse.currencies');
+                    Route::get('factoring/without-recourse/invoices/{customerId}/{currency?}', 'FactoringWithoutRecourseController@getInvoices')->name('lookup.factoring.without.recourse.invoices');
                     Route::post('factoring/without-recourse/calculate', 'FactoringWithoutRecourseController@calculate')->name('factoring.without-recourse.calculate');
                     Route::get('factoring/with-recourse', 'FactoringWithRecourseController@index')->name('factoring.with-recourse.index');
                     Route::get('factoring/with-recourse/create', 'FactoringWithRecourseController@create')->name('factoring.with-recourse.create');
@@ -955,9 +967,9 @@ Route::group(
                     Route::post('factoring/with-recourse/{factoringTransaction}/mark-rejected', 'FactoringWithRecourseController@markRejected')->name('factoring.with-recourse.mark-rejected');
                     Route::post('factoring/with-recourse/{factoringTransaction}/revert-rejected', 'FactoringWithRecourseController@revertRejected')->name('factoring.with-recourse.revert-rejected');
                     Route::delete('factoring/with-recourse/{factoringTransaction}', 'FactoringWithRecourseController@destroy')->name('factoring.with-recourse.destroy');
-                    Route::get('factoring/with-recourse/contracts/{factoringCompany}', 'FactoringWithRecourseController@getContracts');
-                    Route::get('factoring/with-recourse/currencies/{customerId}', 'FactoringWithRecourseController@getInvoiceCurrencies');
-                    Route::get('factoring/with-recourse/invoices/{customerId}/{currency?}', 'FactoringWithRecourseController@getInvoices');
+                    Route::get('factoring/with-recourse/contracts/{factoringCompany}', 'FactoringWithRecourseController@getContracts')->name('lookup.factoring.with.recourse.contracts');
+                    Route::get('factoring/with-recourse/currencies/{customerId}', 'FactoringWithRecourseController@getInvoiceCurrencies')->name('lookup.factoring.with.recourse.currencies');
+                    Route::get('factoring/with-recourse/invoices/{customerId}/{currency?}', 'FactoringWithRecourseController@getInvoices')->name('lookup.factoring.with.recourse.invoices');
                     Route::post('factoring/with-recourse/calculate', 'FactoringWithRecourseController@calculate')->name('factoring.with-recourse.calculate');
                     Route::get('money-payment/create/{model?}', 'MoneyPaymentController@create')->name('create.money.payment');
                     Route::get('money-payment/print/{moneyPayment}', 'MoneyPaymentController@print')->name('print.money.payment');
@@ -965,14 +977,14 @@ Route::group(
                     Route::get('money-payment/edit/{moneyPayment}', 'MoneyPaymentController@edit')->name('edit.money.payment');
                     Route::put('money-payment/update/{moneyPayment}', 'MoneyPaymentController@update')->name('update.money.payment');
                     Route::delete('money-payment/delete/{moneyPayment}', 'MoneyPaymentController@destroy')->name('delete.money.payment');
-                    Route::get('money-payment/get-invoice-numbers/{supplier_name}/{currency?}', 'MoneyPaymentController@getInvoiceNumber'); // ajax request
-                    Route::get('money-payment/get-account-numbers-based-on-account-type/{accountType}/{currency}/{financialInstitutionId}', 'MoneyPaymentController@getAccountNumbersForAccountType'); // ajax request
+                    Route::get('money-payment/get-invoice-numbers/{supplier_name}/{currency?}', 'MoneyPaymentController@getInvoiceNumber')->name('lookup.money.payment.invoice.numbers'); // ajax request
+                    Route::get('money-payment/get-account-numbers-based-on-account-type/{accountType}/{currency}/{financialInstitutionId}', 'MoneyPaymentController@getAccountNumbersForAccountType')->name('lookup.money.payment.account.numbers'); // ajax request
                     Route::post('mark-payable-cheques-as-paid', 'MoneyPaymentController@markChequesAsPaid')->name('payable.cheque.mark.as.paid');
                     Route::post('unmark-payable-cheques-as-paid', 'MoneyPaymentController@unmarkChequesAsPaid')->name('payable.cheque.unmark.as.paid');
                     Route::post('mark-outgoing-transfer-as-paid', 'MoneyPaymentController@markOutgoingTransfersAsPaid')->name('outgoing.transfer.mark.as.paid');
                     Route::get('get-supplier-invoices', 'SupplierInvoicesController@getSupplierInvoicesForSupplier')->name('get.supplier.invoices');
-                    Route::get('get-suppliers-based-on-currency/{currencyName}', 'MoneyPaymentController@getSuppliersBasedOnCurrency');
-                    Route::get('get-partners-based-on-type/{currencyName}', 'MoneyPaymentController@getPartnersBasedOnCurrency');
+                    Route::get('get-suppliers-based-on-currency/{currencyName}', 'MoneyPaymentController@getSuppliersBasedOnCurrency')->name('lookup.suppliers.by.currency');
+                    Route::get('get-partners-based-on-type/{currencyName}', 'MoneyPaymentController@getPartnersBasedOnCurrency')->name('lookup.partners.by.type.money.payment');
                     Route::get('get-current-end-balance-of-current-account', 'MoneyPaymentController@getCashInSafeStatementEndBalance')->name('get.current.end.balance.of.cash.in.safe.statement');
                     // cash expense
                     Route::get('get-exchange-rate-for-date-and-currencies', 'ForeignExchangeRateController@getExchangeRate')->name('get.exchange.rate.for.date.and.currencies');
@@ -993,7 +1005,7 @@ Route::group(
                    
                     Route::put('cash-expense/update/{cashExpense}', 'CashExpenseController@update')->name('update.cash.expense');
                     Route::delete('cash-expense/delete/{cashExpense}', 'CashExpenseController@destroy')->name('delete.cash.expense');
-                    Route::get('cash-expense/get-account-numbers-based-on-account-type/{accountType}/{currency}/{financialInstitutionId}', 'CashExpenseController@getAccountNumbersForAccountType'); // ajax request
+                    Route::get('cash-expense/get-account-numbers-based-on-account-type/{accountType}/{currency}/{financialInstitutionId}', 'CashExpenseController@getAccountNumbersForAccountType')->name('lookup.cash.expense.account.numbers'); // ajax request
                     Route::post('cash-expense-mark-payable-cheques-as-paid', 'CashExpenseController@markChequesAsPaid')->name('cash.expense.payable.cheque.mark.as.paid');
                     Route::post('cash-expense-unmark-payable-cheques-as-paid', 'CashExpenseController@unmarkChequesAsPaid')->name('cash.expense.payable.cheque.unmark.as.paid');
                     Route::post('cash-expense-mark-outgoing-transfer-as-paid', 'CashExpenseController@markOutgoingTransfersAsPaid')->name('cash.expense.outgoing.transfer.mark.as.paid');
@@ -1025,8 +1037,8 @@ Route::group(
                 // The "Through Leasing" card's second dropdown — contracts of the
                 // chosen leasing company, with the room available on the payment date.
                 Route::get('money-payment/get-leasing-contracts', 'MoneyPaymentController@getLeasingContractsForCompany')->name('get.leasing.contracts.for.company'); // ajax request
-                Route::get('down-payments/get-sales-orders-for-contract/{contract_id}/{currency?}', 'MoneyReceivedController@getSalesOrdersForContract'); // ajax request
-                Route::get('down-payments/get-purchases-orders-for-contract/{contract_id}/{currency?}', 'MoneyPaymentController@getSalesOrdersForContract'); // ajax request
+                Route::get('down-payments/get-sales-orders-for-contract/{contract_id}/{currency?}', 'MoneyReceivedController@getSalesOrdersForContract')->name('lookup.down.payments.sales.orders'); // ajax request
+                Route::get('down-payments/get-purchases-orders-for-contract/{contract_id}/{currency?}', 'MoneyPaymentController@getSalesOrdersForContract')->name('lookup.down.payments.purchase.orders'); // ajax request
                 Route::post('update-payable-cheques/{moneyPayment}/{payableCheque}', 'MoneyPaymentController@updateOpeningPayableCheque')->name('update.opening.payable.cheque');
                 Route::get('/create-item/{model}', 'SalesGatheringTestController@createModel')->name('create.sales.form');
                 Route::post('/create-item/{model}', 'SalesGatheringTestController@storeModel')->name('admin.store.analysis');
@@ -1046,17 +1058,22 @@ Route::group(
 });
 
 Route::delete('deleteMultiRowsFromCaching/{company}/{modelName}', [DeleteMultiRowsFromCaching::class, '__invoke'])->middleware('auth')->name('deleteMultiRowsFromCaching');
-Route::get('deleteAllRowsFromCaching/{company}/{modelType}', [DeleteAllRowsFromCaching::class, '__invoke'])->middleware('auth')->name('deleteAllCaches');
-Route::post('get-uploading-percentage/{companyId}/{modelName}', [getUploadPercentage::class, '__invoke'])->middleware('auth');
-Route::get('{lang}/remove-company-image/{company}', function ($lang, Company $company) {
+Route::delete('deleteAllRowsFromCaching/{company}/{modelType}', [DeleteAllRowsFromCaching::class, '__invoke'])->middleware('auth')->name('deleteAllCaches');
+Route::post('get-uploading-percentage/{companyId}/{modelName}', [getUploadPercentage::class, '__invoke'])->middleware('auth')->name('upload.percentage');
+Route::delete('{lang}/remove-company-image/{company}', function ($lang, Company $company) {
+    // Security (SEC-12): only the company's own users (or a Super Admin) may remove its logo, and the
+    // request is a DELETE so a plain link in an e-mail or on another website cannot trigger it.
+    $user = auth()->user();
+    abort_unless($user->isSuperAdmin() || $user->companies->contains('id', $company->id), 403);
+
     if ($company->getFirstMedia('default')) {
         $company->getFirstMedia('default')->delete();
     }
-    
+
     return redirect()->back()->with('success', __('Company Image Has Been Deleted Successfully'));
 })->middleware('auth')->name('remove.company.image');
 
-Route::get('getStartDateAndEndDateOfIncomeStatementForCompany', 'HomeController@getIncomeStatementStartDateAndEndDate')->middleware('auth');
+Route::get('getStartDateAndEndDateOfIncomeStatementForCompany', 'HomeController@getIncomeStatementStartDateAndEndDate')->middleware('auth')->name('income.statement.dates');
 Route::get('removeSessionForRedirect', function () {
     if (session()->has('redirectTo')) {
         $url = session()->get('redirectTo');
@@ -1067,7 +1084,7 @@ Route::get('removeSessionForRedirect', function () {
             'url' => $url
         ]);
     }
-})->middleware('auth');
+})->middleware('auth')->name('remove.session.for.redirect');
 
 
 

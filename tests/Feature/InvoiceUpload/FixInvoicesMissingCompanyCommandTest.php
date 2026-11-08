@@ -18,6 +18,8 @@ use Tests\TestCase;
  */
 class FixInvoicesMissingCompanyCommandTest extends TestCase
 {
+    use \Tests\Support\UsesFixtureDatabase;
+
     private const COMPANY = 920;
 
     private const OTHER_COMPANY = 921;

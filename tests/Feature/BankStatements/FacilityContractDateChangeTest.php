@@ -23,6 +23,8 @@ use Tests\TestCase;
  */
 class FacilityContractDateChangeTest extends TestCase
 {
+    use \Tests\Support\UsesFixtureDatabase;
+
     private const COMPANY = 92;
 
     private const FACILITY = 58;

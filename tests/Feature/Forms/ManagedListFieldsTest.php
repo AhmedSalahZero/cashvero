@@ -180,7 +180,7 @@ class ManagedListFieldsTest extends TestCase
             }
 
             $sorted = $options;
-            sort($sorted);
+            sort($sorted, SORT_STRING | SORT_FLAG_CASE);   // MySQL orders names ignoring capital letters
             $this->assertSame($sorted, $options, 'الاختيارات لازم تبقى مترتبة بالاسم');
         } finally {
             DB::rollBack();

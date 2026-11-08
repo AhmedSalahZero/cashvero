@@ -16,6 +16,23 @@ class SendToUnderCollectionChequeRequest extends FormRequest
      *
      * @return bool
      */
+    /** The company in the address (route model or number), so "exists" rules can be limited to it. */
+    private function routeCompanyId(): ?int
+    {
+        $company = $this->route('company');
+
+        return $company instanceof \App\Models\Company ? (int) $company->id : (is_numeric($company) ? (int) $company : null);
+    }
+
+    /** exists:table,id, but only among the company's own records. */
+    private function ownRecord(string $table, string $column = 'id')
+    {
+        $rule = \Illuminate\Validation\Rule::exists($table, $column);
+        $companyId = $this->routeCompanyId();
+
+        return $companyId ? $rule->where('company_id', $companyId) : $rule;
+    }
+
     public function authorize()
     {
         return true;
@@ -60,7 +77,7 @@ class SendToUnderCollectionChequeRequest extends FormRequest
 				},
 			],
 			'account_type'=>['bail','required'],
-			'drawl_bank_id'=>['bail','sometimes','required','exists:financial_institutions,id'],
+			'drawl_bank_id'=>['bail','sometimes','required',$this->ownRecord('financial_institutions')],
             'deposit_date'=> $depositRules,
         ];
     }

@@ -48,6 +48,12 @@ class UsersAndPermissionsController extends Controller
         );
 
         $actor = request()->user();
+
+        // Security (SEC-37b): only people the editor may manage (same company, never a Super Admin
+        // unless the editor is one). Without this any user manager could open and change the
+        // permissions of a user of ANOTHER company by changing the number in the address.
+        abort_unless($user->canBeManagedBy($actor), 403, __('You do not have permission to perform this action.'));
+
         $held = $user->permissions->pluck('name')->flip();
 
         $isSuperAdmin = PermissionResolver::isSuperAdmin($user);
@@ -121,6 +127,8 @@ class UsersAndPermissionsController extends Controller
             403,
             __('You do not have permission to perform this action.')
         );
+
+        abort_unless($user->canBeManagedBy($request->user()), 403, __('You do not have permission to perform this action.'));
 
         $submitted = $request->input('permissions', []);
 

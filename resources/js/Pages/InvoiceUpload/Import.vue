@@ -244,7 +244,7 @@ onBeforeUnmount(() => {
                 </p>
                 <p class="text-sm cvr-text-secondary mb-1">{{ stuckImport.message }}</p>
                 <p v-if="stuckImport.startedAt" class="text-xs cvr-text-muted mb-4">{{ $t('Started at') }}: {{ stuckImport.startedAt }}</p>
-                <Link :href="stuckImport.resetUrl" class="cvr-btn-primary px-3 py-1.5 rounded text-sm inline-block">
+                <Link :href="stuckImport.resetUrl" as="button" method="post" class="cvr-btn-primary px-3 py-1.5 rounded text-sm inline-block">
                     {{ $t('Clear and upload again') }}
                 </Link>
             </div>
@@ -284,8 +284,8 @@ onBeforeUnmount(() => {
                 <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
                     <p class="text-sm cvr-text-muted">{{ $t('Showing') }} {{ previewRows.length }} {{ $t('of') }} {{ totalCachedRows }} {{ $t('row(s) — review before saving') }}</p>
                     <div class="flex items-center gap-2">
-                        <Link :href="deleteAllUrl" class="cvr-btn-danger px-3 py-1.5 rounded border text-sm whitespace-nowrap" as="button" method="get">{{ $t('Delete All / Start Over') }}</Link>
-                        <Link :href="saveDataUrl" class="cvr-btn-primary px-4 py-1.5 rounded text-sm whitespace-nowrap">{{ $t('Save Data') }}</Link>
+                        <Link :href="deleteAllUrl" class="cvr-btn-danger px-3 py-1.5 rounded border text-sm whitespace-nowrap" as="button" method="delete">{{ $t('Delete All / Start Over') }}</Link>
+                        <Link :href="saveDataUrl" as="button" method="post" class="cvr-btn-primary px-4 py-1.5 rounded text-sm whitespace-nowrap">{{ $t('Save Data') }}</Link>
                     </div>
                 </div>
 

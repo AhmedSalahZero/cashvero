@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Traits\ImageSave;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rules\Password;
 use Spatie\Permission\Models\Permission;
 
 /**
@@ -98,7 +99,15 @@ class UserController extends Controller
          */
         $search = trim((string) $request->get('search', ''));
 
+        $viewer = $request->user();
+
+        // Security (SEC-20): a non-Super-Admin sees only people of their own companies, and may not
+        // ask for a company that is not theirs by putting its number in the address.
+        $viewerCompanyIds = $viewer->isSuperAdmin() ? null : $viewer->companies->pluck('id')->map(fn ($id) => (int) $id)->all();
+        abort_if($company && $viewerCompanyIds !== null && ! in_array((int) $company->id, $viewerCompanyIds, true), 403);
+
         $users = User::getUsersWithRolesQuery($company)
+            ->when($viewerCompanyIds !== null, fn ($q) => $q->whereHas('companies', fn ($c) => $c->whereIn('companies.id', $viewerCompanyIds)))
             ->when($search !== '', fn ($q) => $q->where('users.name', 'like', '%'.$search.'%'))
             ->paginate(self::ROWS_PER_PAGE)
             ->withQueryString()
@@ -386,17 +395,22 @@ class UserController extends Controller
         $request->validate([
             'email' => 'unique:users,email',
             'role' => 'required',
+            // Security (SEC-06b): no one-letter passwords.
+            'password' => ['required', 'confirmed', Password::min(10)->letters()->numbers()],
+            // Security (SEC-07): pictures only.
+            'avatar' => ['nullable', 'image', 'max:2048'],
+            'image' => ['nullable', 'image', 'max:2048'],
         ]);
         abort_unless($this->authUserCanAssignRole($user, $request->input('role'), null), 403);
         $companyIds = $this->resolveCompanyIdsForWrite($user, $request->input('companies'), null);
         abort_unless(count($companyIds) > 0, 422, __('Select at least one company.'));
-        $request['password'] = Hash::make($request->password);
-        $request['subscription'] = 'subscripted';
-
+        // Security (SEC-05): take only the fields the form really has, never the whole request.
+        // The paid-seat limit (max_users) may be set by a Super Admin only.
         $newUser = User::create(
             array_merge(
-                $request->except('avatar', 'companies'),
-                ['created_by' => auth()->user()->id]
+                $request->only(['name', 'email']),
+                $user->isSuperAdmin() ? $request->only(['max_users']) : [],
+                ['password' => Hash::make($request->password), 'created_by' => auth()->user()->id]
             ),
         );
         $newUser->companies()->attach($companyIds);
@@ -432,6 +446,8 @@ class UserController extends Controller
      */
     public function edit(User $user, ?Company $company = null)
     {
+        abort_unless($user->canBeManagedBy(auth()->user()), 403);
+
         return \Inertia\Inertia::render('SuperAdmin/Users/Form', $this->getCommonViewVars($user, $company));
     }
 
@@ -470,7 +486,12 @@ class UserController extends Controller
         $authUser = auth()->user();
         $request->validate([
             'role' => 'required',
+            // Security (SEC-07): pictures only.
+            'avatar' => ['nullable', 'image', 'max:2048'],
+            'image' => ['nullable', 'image', 'max:2048'],
         ]);
+        // Security (SEC-14): only users the editor is allowed to manage (own company, never a Super Admin).
+        abort_unless($user->canBeManagedBy($authUser), 403);
         abort_unless($this->authUserCanAssignRole($authUser, $request->input('role'), $user), 403);
 
         $companyIds = $this->resolveCompanyIdsForWrite($authUser, $request->input('companies'), $user);
@@ -478,7 +499,11 @@ class UserController extends Controller
 
         $previousRole = $user->getRoleName();
 
-        $user->update($request->except('avatar', 'companies', 'reset_permissions_to_role'));
+        // Security (SEC-05/06c): only name and e-mail; max_users for a Super Admin only; password never from here.
+        $user->update(array_merge(
+            $request->only(['name', 'email']),
+            $authUser->isSuperAdmin() ? $request->only(['max_users']) : []
+        ));
         $user->companies()->sync($companyIds);
         @count($user->roles) == 0 ?: $user->removeRole($user->roles[0]->name);
 
@@ -543,6 +568,8 @@ class UserController extends Controller
         if ($authUser->id === $user->id) {
             abort(403, __('You cannot delete your own account.'));
         }
+
+        abort_unless($user->canBeManagedBy($authUser), 403);
 
         $targetRole = $user->roles[0]->name ?? null;
         abort_unless($this->authUserCanAssignRole($authUser, $targetRole, $user), 403);

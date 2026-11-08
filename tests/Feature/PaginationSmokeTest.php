@@ -172,14 +172,14 @@ class PaginationSmokeTest extends TestCase
     {
         $tabUri = route('letter.of.guarantee.issuance.tab.data', ['company' => $this->company->id]);
 
-        $first = $this->actingAs($this->actor)->get($tabUri.'?type=lg-facility-lgs&page=1');
+        $first = $this->actingAs($this->actor)->get($tabUri.'?type=final-lgs&page=1');
         $firstBody = $first->json();
 
         if (($firstBody['last_page'] ?? 1) < 2) {
-            $this->markTestSkipped('Development data has only one page of LG facility LGs.');
+            $this->markTestSkipped('Development data has only one page of final LGs.');
         }
 
-        $second = $this->actingAs($this->actor)->get($tabUri.'?type=lg-facility-lgs&page=2')->json();
+        $second = $this->actingAs($this->actor)->get($tabUri.'?type=final-lgs&page=2')->json();
 
         $this->assertSame(2, $second['current_page']);
         $this->assertNotEquals(

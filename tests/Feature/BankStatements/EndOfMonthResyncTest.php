@@ -29,6 +29,8 @@ use Tests\TestCase;
  */
 class EndOfMonthResyncTest extends TestCase
 {
+    use \Tests\Support\UsesFixtureDatabase;
+
     private const COMPANY = 146;
 
     private const ACCOUNT = 77;

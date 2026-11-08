@@ -113,7 +113,7 @@ const deletingAdvancedPayment = ref(false);
 function destroyAdvancedPayment() {
     if (deletingAdvancedPayment.value) return;
     deletingAdvancedPayment.value = true;
-    router.get(deleteAdvancedPaymentTarget.value.delete_url, {}, { onFinish: () => { deletingAdvancedPayment.value = false; deleteAdvancedPaymentTarget.value = null; } });
+    router.delete(deleteAdvancedPaymentTarget.value.delete_url, { onFinish: () => { deletingAdvancedPayment.value = false; deleteAdvancedPaymentTarget.value = null; } });
 }
 
 /* ── Delete confirmation ──────────────────────────────────────── */

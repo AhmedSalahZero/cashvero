@@ -83,6 +83,10 @@ class ExportTable extends Controller
 	 */
 	public  function customizedTableField(Company $company, $model, $view)
 	{
+		// Security (SEC-09): only the models that really have an upload/export screen. Anything else
+		// (User, Company, ...) must never be described or saved through this picker.
+		abort_unless(in_array($model, ['CustomerInvoice', 'SupplierInvoice', 'LoanSchedule', 'ContractLoanSchedule'], true), 404);
+
 		$loanScheduleExportables = LoanSchedule::getExportableFields();
 		$contractLoanScheduleExportables = ContractLoanSchedule::getExportableFields();
 	
@@ -181,6 +185,10 @@ class ExportTable extends Controller
 	 */
 	public  function customizedTableFieldSave(Request $request, Company $company, $model, $modelName)
 	{
+		// Security (SEC-09): only the models that really have an upload/export screen. Anything else
+		// (User, Company, ...) must never be described or saved through this picker.
+		abort_unless(in_array($model, ['CustomerInvoice', 'SupplierInvoice', 'LoanSchedule', 'ContractLoanSchedule'], true), 404);
+
 
 		$this->validation($request);
 

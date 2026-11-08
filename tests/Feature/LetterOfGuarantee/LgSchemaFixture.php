@@ -18,6 +18,8 @@ use Illuminate\Support\Facades\Schema;
  */
 trait LgSchemaFixture
 {
+    use \Tests\Support\UsesFixtureDatabase;
+
     /** @var list<string> */
     private array $lgTables = [
         'record_activities',

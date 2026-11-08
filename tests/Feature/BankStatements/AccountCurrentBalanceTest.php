@@ -25,6 +25,8 @@ use Tests\TestCase;
  */
 class AccountCurrentBalanceTest extends TestCase
 {
+    use \Tests\Support\UsesFixtureDatabase;
+
     private const ACCOUNT = 314;
 
     private const OTHER_ACCOUNT = 315;

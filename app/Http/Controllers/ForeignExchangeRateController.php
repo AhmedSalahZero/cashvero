@@ -190,13 +190,13 @@ class ForeignExchangeRateController
     }
     public function edit(Request $request, Company $company, $foreignExchangeRateId)
     {
-        $foreignExchangeRate = ForeignExchangeRate::find($foreignExchangeRateId);
+        $foreignExchangeRate = ForeignExchangeRate::where('company_id', $company->id)->findOrFail($foreignExchangeRateId);
         return redirect()->route('view.foreign.exchange.rate', ['company' => $company->id, 'active' => $foreignExchangeRate->getFromCurrency(), 'edit' => $foreignExchangeRateId]);
     }
     public function update(Request $request, Company $company, $foreignExchangeRateId)
     {
         $date = $request->get('date') ;
-        $foreignExchangeRate = ForeignExchangeRate::find($foreignExchangeRateId);
+        $foreignExchangeRate = ForeignExchangeRate::where('company_id', $company->id)->findOrFail($foreignExchangeRateId);
         $data = [
             'exchange_rate'=>$request->get('exchange_rate'),
             'date'=>$request->get('date'),
@@ -210,7 +210,7 @@ class ForeignExchangeRateController
     }
     public function destroy(Request $request, Company $company, $foreignExchangeRateId)
     {
-        $foreignExchangeRate = ForeignExchangeRate::find($foreignExchangeRateId);
+        $foreignExchangeRate = ForeignExchangeRate::where('company_id', $company->id)->findOrFail($foreignExchangeRateId);
         $foreignExchangeRate->delete();
         
         /**

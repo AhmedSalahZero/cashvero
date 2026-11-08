@@ -17,6 +17,8 @@ use Tests\TestCase;
  */
 class ReferencedRecordGuardTest extends TestCase
 {
+    use \Tests\Support\UsesFixtureDatabase;
+
     /**
      * Deliberately all different. With bank 1 / account 1 a lookup that
      * skipped the bridge entirely still matched by accident, and the

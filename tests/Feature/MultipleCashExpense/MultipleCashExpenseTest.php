@@ -319,8 +319,14 @@ class MultipleCashExpenseTest extends TestCase
             $payload = $this->payload($branch, $names, [
                 ['cash_expense_category_name_id' => $names[0]->id, 'paid_amount' => 100],
             ]);
+            $contractId = \App\Models\Contract::value('id');
+
+            if (! $contractId) {
+                $this->markTestSkipped('This database has no contract to allocate to.');
+            }
+
             $payload['allocations'] = [
-                ['item_index' => 5, 'contract_id' => \App\Models\Contract::value('id'), 'amount' => 50],
+                ['item_index' => 5, 'contract_id' => $contractId, 'amount' => 50],
             ];
 
             $this->expectException(\Illuminate\Validation\ValidationException::class);

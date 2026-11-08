@@ -1131,16 +1131,6 @@ public static function formatMonths($numberOfMonths):array
     return $result;
 }
 
-public static function stringArrayToArray(string $str)
-{
-    if (!$str) {
-        return [];
-    }
-
-    return 	eval('return ' . $str . ';');
-}
-
-
 public static function replaceArr($mainIdsWithItsValues, $equation)
 {
     $number = preg_replace('/[0-9]+/', ',', $equation);

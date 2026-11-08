@@ -82,7 +82,7 @@ class CustomerInvoiceImportRedirectsToBalancesTest extends TestCase
     public function test_saving_customer_invoices_redirects_to_customer_balances_once_the_job_has_finished(): void
     {
         $this->actingAs($this->user)
-            ->get(route('salesGatheringTest.insertToMainTable', [
+            ->post(route('salesGatheringTest.insertToMainTable', [
                 'company' => $this->company->id,
                 'modelName' => 'CustomerInvoice',
             ]))

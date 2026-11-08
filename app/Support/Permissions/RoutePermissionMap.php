@@ -33,7 +33,7 @@ class RoutePermissionMap
      */
     private const PUBLIC_ROUTES = [
         // ── Authentication ──
-        'login', 'logout', 'register',
+        'login', 'logout',
         'password.request', 'password.email', 'password.reset',
         'password.update', 'password.confirm',
 
@@ -107,7 +107,8 @@ class RoutePermissionMap
         'record.activity',
 
         // ── Misc UI helpers with no data exposure ──
-        'remove.company.image',
+        // (company-gated by canViewCurrentCompany where the company number is in the address)
+        'upload.percentage', 'income.statement.dates', 'remove.session.for.redirect',
     ];
 
     /**
@@ -568,6 +569,10 @@ class RoutePermissionMap
         'result.lg.by.bank.name.report' => 'report_lg_by_bank.view',
         'export.lg.by.bank.name.report' => 'report_lg_by_bank.export',
         'print.lg.by.bank.name.report' => 'report_lg_by_bank.export',
+        'view.bank.charges.analysis.report' => 'report_bank_charges_analysis.view',
+        'result.bank.charges.analysis.report' => 'report_bank_charges_analysis.view',
+        'export.bank.charges.analysis.report' => 'report_bank_charges_analysis.export',
+        'print.bank.charges.analysis.report' => 'report_bank_charges_analysis.export',
         'view.expired.lgs.report' => 'report_lg_expired.view',
         'result.expired.lgs.report' => 'report_lg_expired.view',
         'export.expired.lgs.report' => 'report_lg_expired.export',
@@ -781,6 +786,25 @@ class RoutePermissionMap
         // controllers additionally whitelist the {model} segment.
         'truncate' => ['customer_invoice_data.bulk_delete', 'supplier_invoice_data.bulk_delete', 'loan_schedule_data.bulk_delete'],
         'multipleRowsDelete' => ['customer_invoice_data.bulk_delete', 'supplier_invoice_data.bulk_delete', 'loan_schedule_data.bulk_delete'],
+        // ── Ajax look-ups that feed drop-downs (Security SEC-11: they used to be unnamed, so unchecked) ──
+        'lookup.money.received.invoice.numbers' => ['money_received.view', 'money_received.create', 'money_received.update'],
+        'lookup.money.received.account.numbers' => ['money_received.view', 'money_received.create', 'money_received.update'],
+        'lookup.money.received.account.ids' => ['money_received.view', 'money_received.create', 'money_received.update'],
+        'lookup.customers.by.currency' => ['money_received.view', 'money_received.create', 'money_received.update', 'factoring_without_recourse.view', 'factoring_without_recourse.create', 'factoring_without_recourse.update', 'factoring_with_recourse.view', 'factoring_with_recourse.create', 'factoring_with_recourse.update', 'down_payment_contract.view'],
+        'lookup.factoring.without.recourse.contracts' => ['factoring_without_recourse.view', 'factoring_without_recourse.create', 'factoring_without_recourse.update', 'factoring_without_recourse.settle'],
+        'lookup.factoring.without.recourse.currencies' => ['factoring_without_recourse.view', 'factoring_without_recourse.create', 'factoring_without_recourse.update', 'factoring_without_recourse.settle'],
+        'lookup.factoring.without.recourse.invoices' => ['factoring_without_recourse.view', 'factoring_without_recourse.create', 'factoring_without_recourse.update', 'factoring_without_recourse.settle'],
+        'lookup.factoring.with.recourse.contracts' => ['factoring_with_recourse.view', 'factoring_with_recourse.create', 'factoring_with_recourse.update', 'factoring_with_recourse.approve', 'factoring_with_recourse.reject'],
+        'lookup.factoring.with.recourse.currencies' => ['factoring_with_recourse.view', 'factoring_with_recourse.create', 'factoring_with_recourse.update', 'factoring_with_recourse.approve', 'factoring_with_recourse.reject'],
+        'lookup.factoring.with.recourse.invoices' => ['factoring_with_recourse.view', 'factoring_with_recourse.create', 'factoring_with_recourse.update', 'factoring_with_recourse.approve', 'factoring_with_recourse.reject'],
+        'lookup.money.payment.invoice.numbers' => ['money_payment.view', 'money_payment.create', 'money_payment.update'],
+        'lookup.money.payment.account.numbers' => ['money_payment.view', 'money_payment.create', 'money_payment.update'],
+        'lookup.suppliers.by.currency' => ['money_payment.view', 'money_payment.create', 'money_payment.update', 'down_payment_contract.view'],
+        'lookup.partners.by.type.money.payment' => ['money_received.view', 'money_received.create', 'money_received.update', 'money_payment.view', 'money_payment.create', 'money_payment.update'],
+        'lookup.cash.expense.account.numbers' => ['cash_expense.view', 'cash_expense.create', 'cash_expense.update'],
+        'lookup.down.payments.sales.orders' => ['down_payment_contract.view', 'down_payment_contract.settle'],
+        'lookup.down.payments.purchase.orders' => ['down_payment_contract.view', 'down_payment_contract.settle'],
+        'remove.company.image' => 'company.update',
         'delete.model' => ['customer_invoice_data.delete', 'supplier_invoice_data.delete', 'loan_schedule_data.delete'],
 
         /* ──────────────────── Administration ────────────────────── */

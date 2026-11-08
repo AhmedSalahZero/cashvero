@@ -65,6 +65,7 @@ import {
     Circle,
     Shield,
     MessageCircle,
+    Percent,
 } from '@lucide/vue';
 
 const props = defineProps({
@@ -128,6 +129,7 @@ const ICONS = {
     circle: Circle,
     shield: Shield,
     'message-circle': MessageCircle,
+    percent: Percent,
 };
 
 const icon = computed(() => ICONS[props.name] ?? Circle);

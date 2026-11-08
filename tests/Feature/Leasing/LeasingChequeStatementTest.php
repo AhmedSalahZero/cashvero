@@ -312,6 +312,13 @@ class LeasingChequeStatementTest extends TestCase
         $due = now()->subDays(10)->format('Y-m-d');
         $schedule = $this->makeInstallment(100000, $due);
 
+        // Diagnostic: the account must carry the number it was created with. If this fails, the message shows why.
+        $this->assertNotNull(
+            $this->account->account_number,
+            'The test account has no account number. In memory: '.json_encode($this->account->getAttributes())
+            .' | stored: '.json_encode(DB::table('financial_institution_accounts')->where('id', $this->account->id)->first())
+        );
+
         // How a partial settlement used to be stored: its own bank row.
         $legacy = $schedule->settlements()->create([
             'current_account_number' => $this->account->account_number,

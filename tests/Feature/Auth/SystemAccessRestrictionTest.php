@@ -16,7 +16,11 @@ class SystemAccessRestrictionTest extends TestCase
     {
         parent::setUp();
 
-        config(['auth.allowed_email' => 'mahmoud.youssef@squadbcc.com']);
+        // The restriction is off by default (AUTH_RESTRICT_TO_ALLOWED_EMAIL); these tests are about it being ON.
+        config([
+            'auth.restrict_to_allowed_email' => true,
+            'auth.allowed_email' => 'mahmoud.youssef@squadbcc.com',
+        ]);
         $this->withoutMiddleware([
             LocaleSessionRedirect::class,
             LaravelLocalizationRedirectFilter::class,

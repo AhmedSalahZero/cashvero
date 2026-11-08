@@ -14,6 +14,23 @@ class StoreLetterOfCreditIssuanceRequest extends FormRequest
      *
      * @return bool
      */
+    /** The company in the address (route model or number), so "exists" rules can be limited to it. */
+    private function routeCompanyId(): ?int
+    {
+        $company = $this->route('company');
+
+        return $company instanceof \App\Models\Company ? (int) $company->id : (is_numeric($company) ? (int) $company : null);
+    }
+
+    /** exists:table,id, but only among the company's own records. */
+    private function ownRecord(string $table, string $column = 'id')
+    {
+        $rule = \Illuminate\Validation\Rule::exists($table, $column);
+        $companyId = $this->routeCompanyId();
+
+        return $companyId ? $rule->where('company_id', $companyId) : $rule;
+    }
+
     public function authorize()
     {
         return true;
@@ -41,8 +58,8 @@ class StoreLetterOfCreditIssuanceRequest extends FormRequest
              * * الاتنين دول بيتعمل عليهم find() في الكنترولر وبيتقرا منهم ->id
              * * على طول ، فلو مش موجودين كانت الصفحة بترمي 500
              */
-            'financial_institution_id' => ['required', 'exists:financial_institutions,id'],
-            'lc_fees_and_commission_account_id' => ['required', 'exists:financial_institution_accounts,id'],
+            'financial_institution_id' => ['required', $this->ownRecord('financial_institutions')],
+            'lc_fees_and_commission_account_id' => ['required', $this->ownRecord('financial_institution_accounts')],
             /**
              * * رقم الاعتماد من البنك — مينفعش يتكرر مع نفس البنك في نفس الشركة
              */

@@ -34,26 +34,57 @@ class Log extends Model
 		return $this->belongsTo(User::class, 'user_id', 'id');
 	}
 
-	public static function storeNewLogRecord(string $type , ?User $user = null , ?string $sectionName = null ):?Log
+	/**
+	 * لو آخر سجل للمستخدم في نفس الشركة هو نفس القسم ولسه ما عداش عليه
+	 * الوقت ده، مش بنكرر السطر. بعد الوقت ده بنسجل تاني عشان "آخر ظهور"
+	 * ما يفضلش واقف على أول مرة دخل القسم.
+	 */
+	public const DEDUPE_MINUTES = 30;
+
+	public static function storeNewLogRecord(string $type , ?User $user = null , ?string $sectionName = null , ?int $companyId = null ):?Log
 	{
 		$user = $user ?: Auth()->user();
-		$message = Log::generateLogMessage($type,$sectionName);
-		if(is_null(getCurrentCompanyId()) || !is_numeric(getCurrentCompanyId())){
+		$companyId = $companyId ?? getCurrentCompanyId();
+		if(is_null($user) || is_null($companyId) || !is_numeric($companyId)){
 			return null;
 		}
-		
-		$lastRecordFromTheSameActivity = Log::where('company_id',getCurrentCompanyId())->where('activity',$message)->where('user_id',$user->id)->latest()->first();
-		$lastRecordForAllActivities = Log::where('company_id',getCurrentCompanyId())->where('user_id',$user->id)->latest()->first();
-		if(!$lastRecordForAllActivities || !$lastRecordFromTheSameActivity || ($lastRecordFromTheSameActivity->id != $lastRecordForAllActivities->id )){
-			return Log::create([
-				'activity'=>$message,
-				'created_at'=>now(),
-				'user_id'=>$user->id,
-				'company_id' => getCurrentCompanyId() 
-			]);
+		$companyId = (int) $companyId;
+		$message = Log::generateLogMessage($type,$sectionName);
+
+		$lastRecord = Log::where('company_id',$companyId)->where('user_id',$user->id)->orderByDesc('id')->first();
+		if($lastRecord && $lastRecord->activity === $message && !$lastRecord->isOlderThanMinutes(self::DEDUPE_MINUTES)){
+			return null ;
 		}
-		return null ;
-		
+
+		return Log::create([
+			'activity'=>$message,
+			'created_at'=>now(),
+			'user_id'=>$user->id,
+			'company_id' => $companyId
+		]);
+	}
+
+	/**
+	 * الـ login والـ logout مالهمش شركة، فبيتسجلوا بـ company_id = null.
+	 */
+	public static function storeSessionEvent(string $type , User $user):Log
+	{
+		return Log::create([
+			'activity'=>Log::generateLogMessage($type),
+			'created_at'=>now(),
+			'user_id'=>$user->id,
+			'company_id' => null
+		]);
+	}
+
+	public function isOlderThanMinutes(int $minutes):bool
+	{
+		try {
+			$createdAt = $this->created_at;
+		} catch (\Throwable $e) {
+			return true;
+		}
+		return is_null($createdAt) || $createdAt->lt(now()->subMinutes($minutes));
 	}
 		
 	public function company():BelongsTo

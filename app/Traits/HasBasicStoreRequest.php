@@ -9,7 +9,18 @@ use Illuminate\Support\Str;
 trait HasBasicStoreRequest
 {
 	public function storeBasicForm(Request $request  , array $except = ['_token','save','_method'] , $connectionName = null ):self{
-		
+		/**
+		 * Security (SEC-34b): the company a record belongs to is the company in the ADDRESS, never a number typed into
+		 * the form, and a form can never choose the record's own id. Before this, any user could post company_id=<another
+		 * company> and have the record created (or moved) there.
+		 */
+		$routeCompany = $request->route('company');
+		$routeCompanyId = $routeCompany instanceof Company ? (int) $routeCompany->id : (is_numeric($routeCompany) ? (int) $routeCompany : null);
+		$except = array_merge($except, ['id']);
+		if (! is_null($routeCompanyId)) {
+			$except[] = 'company_id';
+		}
+
 		foreach($request->except($except) as $name => $value){
 			$columnExist = Schema::connection($connectionName)->hasColumn($this->getTable(),$name);
 			if(is_object($value)){
@@ -25,6 +36,9 @@ trait HasBasicStoreRequest
 				$this->{$name} = $val;
 			}
 		}
+		if (! is_null($routeCompanyId) && Schema::connection($connectionName)->hasColumn($this->getTable(), 'company_id')) {
+			$this->company_id = $routeCompanyId;
+		}
 		$this->save();
 		// store relations
 
@@ -35,7 +49,7 @@ trait HasBasicStoreRequest
 				foreach($request->get($name) as $index => $values){
 					if(key_exists('company_id',$values)){
 						
-						$values['company_id'] = $request->get('company_id');
+						$values['company_id'] = $routeCompanyId ?? $request->get('company_id');
 					}
 					$this->$name()->create($values);
 				}
