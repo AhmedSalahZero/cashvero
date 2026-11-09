@@ -84,7 +84,7 @@ class ContractCashFlowReportController
 		
 		$contractId = $request->get('contract_id')	 ;
 		$finalResult = [];
-		$contract = Contract::find($contractId);
+		$contract = Contract::where('company_id', $company->id)->find($contractId);
 		/**
 		 * @var Contract|null $contract 
 		 */

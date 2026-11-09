@@ -26,7 +26,7 @@ use Tests\TestCase;
  * * المفتوحة بتاكل المراحل من الأقدم للأحدث ، و الباقي بس هو اللي بيفضل
  * * في المراحل المتأخرة في مواعيدها .
  *
- * * كل الداتا هنا بتتعمل جوه transaction و بتترجع في tearDown
+ * * كل الداتا هنا بيعملها التست لشركة جديدة ، و بترجع بعده (TestCase بيلفّه في transaction)
  */
 class ForecastedProjectCollectionPhasesTest extends TestCase
 {
@@ -38,10 +38,6 @@ class ForecastedProjectCollectionPhasesTest extends TestCase
     private const REPORT_START = '2026-09-01';
 
     private const REPORT_END = '2027-03-22';
-
-    private ?string $originalDatabase = null;
-
-    private bool $inTransaction = false;
 
     private int $companyId = 0;
 
@@ -59,24 +55,7 @@ class ForecastedProjectCollectionPhasesTest extends TestCase
         // with the calendar. Freeze the clock to the date those scenarios were written for.
         $this->travelTo(\Carbon\Carbon::parse('2026-10-01 10:00:00'));
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-            DB::table('contracts')->limit(1)->get();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-
-        DB::beginTransaction();
-        $this->inTransaction = true;
-
-        $this->companyId = (int) DB::table('companies')->insertGetId([
-            'name' => json_encode(['en' => 'Phases Test Co', 'ar' => 'Phases Test Co']),
-            'main_functional_currency' => 'EGP',
-        ]);
+        $this->companyId = $this->makeCompany()->id;
 
         $this->customerPartnerId = (int) DB::table('partners')->insertGetId([
             'company_id' => $this->companyId,
@@ -88,13 +67,7 @@ class ForecastedProjectCollectionPhasesTest extends TestCase
 
     protected function tearDown(): void
     {
-        if ($this->inTransaction) {
-            DB::rollBack();
-            $this->inTransaction = false;
-        }
-
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
+        $this->travelBack();
 
         parent::tearDown();
     }

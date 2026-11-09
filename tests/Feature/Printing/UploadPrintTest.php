@@ -4,11 +4,15 @@ namespace Tests\Feature\Printing;
 
 use App\Http\Controllers\SalesGatheringController;
 use App\Models\Company;
+use App\Models\CustomizedFieldsExportation;
 use App\Models\User;
 use App\Traits\Reports\PrintsReport;
+use Database\Factories\CustomerInvoiceFactory;
+use Database\Factories\SupplierInvoiceFactory;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\MakesInvoices;
 use Tests\TestCase;
 
 /**
@@ -18,55 +22,77 @@ use Tests\TestCase;
  * * لأن الجداول دي فيها سنين من الصفوف و "اطبع كل حاجة" مش اللي حد
  * * بيقصده غالبا . و زي باقي التقارير ، اللي بيتطبع هو الفترة كلها مش
  * * الصفحة اللي على الشاشة .
+ *
+ * * الشركة و أعمدتها و الفواتير بيتعملوا في الاختبار نفسه .
  */
 class UploadPrintTest extends TestCase
 {
-    private const COMPANY = 148;
+    use MakesInvoices;
 
-    private ?string $originalDatabase = null;
+    /** صفحة الجدول على الشاشة بتعرض ٥٠ صف */
+    private const PAGE_LENGTH = 50;
+
+    private Company $company;
+
+    private User $user;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
+        $this->company = $this->makeCompany();
+        $this->user = $this->makeUser([
+            'view customer invoice analysis data',
+            'export customer invoice analysis data',
+            'view supplier invoice analysis data',
+            'export supplier invoice analysis data',
+        ], $this->company);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-
-        if (! Company::find(self::COMPANY)) {
-            $this->markTestSkipped('Company '.self::COMPANY.' is not on file.');
+        // الأعمدة اللي الشركة مختاراها للجدول و التصدير
+        foreach ([
+            'CustomerInvoice' => ['customer_name', 'invoice_number', 'invoice_date', 'invoice_due_date', 'currency', 'invoice_amount', 'vat_amount'],
+            'SupplierInvoice' => ['supplier_name', 'invoice_number', 'invoice_date', 'invoice_due_date', 'currency', 'invoice_amount', 'vat_amount'],
+        ] as $model => $fields) {
+            CustomizedFieldsExportation::create(['company_id' => $this->company->id, 'model_name' => $model, 'fields' => $fields]);
         }
     }
 
-    protected function tearDown(): void
+    /**
+     * * صفوف أكتر من صفحة واحدة : ٥٠ في ٢٠٢٣ و ٥ في ٢٠٢٢ — عشان الطباعة
+     * * يبان إنها بتطلع الجدول كله ، و الفترة يبان إنها بتضيّق فعلا
+     *
+     * @return int عدد الصفوف
+     */
+    private function rowsOnFile(string $model): int
     {
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
+        $sequence = fn ($s) => ['invoice_date' => $s->index < 5
+            ? sprintf('2022-%02d-15', $s->index + 1)
+            : sprintf('2023-%02d-%02d', ($s->index % 12) + 1, ($s->index % 28) + 1)];
 
-        parent::tearDown();
+        $model === 'CustomerInvoice'
+            ? CustomerInvoiceFactory::new()->forCustomer($this->customer($this->company))->count(self::PAGE_LENGTH + 5)->sequence($sequence)->create()
+            : SupplierInvoiceFactory::new()->forSupplier($this->supplier($this->company))->count(self::PAGE_LENGTH + 5)->sequence($sequence)->create();
+
+        // و صفوف شركة تانية ما تدخلش في الطباعة
+        CustomerInvoiceFactory::new()->forCustomer($this->customer($this->makeCompany()))->create(['invoice_date' => '2022-06-15']);
+        SupplierInvoiceFactory::new()->forSupplier($this->supplier($this->makeCompany()))->create(['invoice_date' => '2022-06-15']);
+
+        return self::PAGE_LENGTH + 5;
     }
 
     private function props(string $method, string $model, array $query = []): ?array
     {
-        $company = Company::findOrFail(self::COMPANY);
-
         /**
          * * سكوب الشركة بيتقرا من الريكوست ، فلازم يتبعت — من غيره
          * * الاستعلام بيرجع فاضي و الاختبار يعدّي على حاجة مش صح
          */
-        $request = Request::create('/x', 'GET', $query + ['company_id' => $company->id]);
+        $request = Request::create('/x', 'GET', $query + ['company_id' => $this->company->id]);
         $request->setLaravelSession(app('session.store'));
-        $request->setUserResolver(fn () => User::first());
+        $request->setUserResolver(fn () => $this->user);
         $this->app->instance('request', $request);
-        auth()->setUser(User::first());
+        auth()->setUser($this->user);
 
-        $response = app(SalesGatheringController::class)->{$method}($company, $request, $model);
+        $response = app(SalesGatheringController::class)->{$method}($this->company, $request, $model);
 
         if (! $response instanceof \Inertia\Response) {
             return null;
@@ -115,7 +141,7 @@ class UploadPrintTest extends TestCase
             'راوت الطباعة لازم يتسجّل قبل الراوت اللي فيه {loanId?}');
     }
 
-    /** @dataProvider models */
+    #[DataProvider('models')]
     public function test_the_page_is_given_a_print_url(string $model): void
     {
         $props = $this->props('index', $model);
@@ -127,19 +153,18 @@ class UploadPrintTest extends TestCase
 
     /**
      * * اللي بيتطبع هو كل صفوف الفترة ، مش الصفحة اللي على الشاشة
-     *
-     * @dataProvider models
      */
+    #[DataProvider('models')]
     public function test_print_covers_every_row_not_just_the_page(string $model): void
     {
+        $made = $this->rowsOnFile($model);
+
         $index = $this->props('index', $model);
         $print = $this->props('print', $model);
 
         $total = (int) $index['pagination']['total'];
 
-        if ($total === 0) {
-            $this->markTestSkipped("No {$model} rows on file.");
-        }
+        $this->assertSame($made, $total, 'الجدول على الشاشة بيعد صفوف الشركة دي بس');
 
         $this->assertLessThan($total + 1, count($index['rows']));
         $this->assertSame($total, count($print['rows']),
@@ -153,18 +178,19 @@ class UploadPrintTest extends TestCase
     }
 
     /** * الفترة بتضيّق فعلا ، و بتتكتب في ورقة الطباعة */
-    /** @dataProvider models */
+    #[DataProvider('models')]
     public function test_the_chosen_period_narrows_the_printout(string $model): void
     {
+        $this->rowsOnFile($model);
+
         $all = $this->props('print', $model);
 
-        if (count($all['rows']) === 0) {
-            $this->markTestSkipped("No {$model} rows on file.");
-        }
+        $this->assertNotSame([], $all['rows']);
 
         $window = $this->props('print', $model, ['from' => '2022-01-01', 'to' => '2022-12-31']);
 
         $this->assertLessThanOrEqual(count($all['rows']), count($window['rows']));
+        $this->assertCount(5, $window['rows'], 'الصفوف الخمسة بتاعة ٢٠٢٢ بس');
         $this->assertSame('2022-01-01 → 2022-12-31', $window['meta'][0]['value'],
             'الورقة لازم تقول الفترة اللي اتطبعت');
     }
@@ -175,16 +201,15 @@ class UploadPrintTest extends TestCase
      * * الاختبار ده هو اللي بيثبت إن الفلتر شغال أصلا : "أقل من أو
      * * يساوي" في الاختبار اللي فوق بيعدّي حتى لو الفلتر اتشال خالص ،
      * * لأن العدد بيفضل زي ما هو .
-     *
-     * @dataProvider models
      */
+    #[DataProvider('models')]
     public function test_a_period_with_no_rows_prints_nothing(string $model): void
     {
+        $this->rowsOnFile($model);
+
         $all = $this->props('print', $model);
 
-        if (count($all['rows']) === 0) {
-            $this->markTestSkipped("No {$model} rows on file.");
-        }
+        $this->assertNotSame([], $all['rows']);
 
         $empty = $this->props('print', $model, ['from' => '2099-01-01', 'to' => '2099-12-31']);
 
@@ -195,14 +220,17 @@ class UploadPrintTest extends TestCase
     /** * فترة مقلوبة بتتظبط بدل ما ترجّع فاضي */
     public function test_a_backwards_period_is_swapped(): void
     {
+        $this->rowsOnFile('CustomerInvoice');
+
         $forward = $this->props('print', 'CustomerInvoice', ['from' => '2022-01-01', 'to' => '2022-12-31']);
         $backward = $this->props('print', 'CustomerInvoice', ['from' => '2022-12-31', 'to' => '2022-01-01']);
 
+        $this->assertNotSame([], $forward['rows'], 'الفترة فيها صفوف، فلو المقلوبة رجّعت فاضي يبان');
         $this->assertSame(count($forward['rows']), count($backward['rows']));
     }
 
     /** * الأعمدة هي نفس اللي المستخدم مختارها للجدول و التصدير */
-    /** @dataProvider models */
+    #[DataProvider('models')]
     public function test_the_columns_match_the_screen(string $model): void
     {
         $index = $this->props('index', $model);

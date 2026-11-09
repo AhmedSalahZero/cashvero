@@ -212,7 +212,7 @@ class FactoringWithRecourseController
     public function store(Company $company, StoreFactoringWithRecourseRequest $request)
     {
         $invoice = CustomerInvoice::findOrFail($request->input('customer_invoice_id'));
-        $contract = FactoringContract::findOrFail($request->input('factoring_contract_id'));
+        $contract = FactoringContract::where('company_id', $company->id)->findOrFail($request->input('factoring_contract_id'));
         $accountType = AccountType::findOrFail($request->input('account_type_id'));
         $factoringDate = parseDatePickerValue($request->input('factoring_date')) ?? now()->format('Y-m-d');
         $otherCharges = (float) unformat_number($request->input('other_charges'));
@@ -282,7 +282,7 @@ class FactoringWithRecourseController
         abort_if(!$factoringTransaction->isPendingWithRecourse(), 422, __('Collected or rejected factoring transactions cannot be edited.'));
 
         $invoice = CustomerInvoice::findOrFail($request->input('customer_invoice_id'));
-        $contract = FactoringContract::findOrFail($request->input('factoring_contract_id'));
+        $contract = FactoringContract::where('company_id', $company->id)->findOrFail($request->input('factoring_contract_id'));
         $accountType = AccountType::findOrFail($request->input('account_type_id'));
         $factoringDate = parseDatePickerValue($request->input('factoring_date')) ?? now()->format('Y-m-d');
         $otherCharges = (float) unformat_number($request->input('other_charges'));

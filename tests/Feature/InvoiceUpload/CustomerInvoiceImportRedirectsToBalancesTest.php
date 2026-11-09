@@ -3,11 +3,8 @@
 namespace Tests\Feature\InvoiceUpload;
 
 use App\Models\Company;
-use App\Models\FinancialInstitution;
+use App\Models\CustomizedFieldsExportation;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
@@ -16,22 +13,14 @@ use Tests\TestCase;
 /**
  * After a customer-invoice upload is saved, the user should land on
  * Customer Balances — not the invoice upload table.
+ *
+ * The company, its chosen invoice columns and the user are made by the test.
  */
 class CustomerInvoiceImportRedirectsToBalancesTest extends TestCase
 {
-    use DatabaseTransactions;
-
     private Company $company;
 
     private User $user;
-
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
 
     protected function setUp(): void
     {
@@ -43,40 +32,19 @@ class CustomerInvoiceImportRedirectsToBalancesTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
-
-        if (! Schema::connection('mysql')->hasTable('financial_institutions')) {
-            $this->markTestSkipped(
-                'No development schema on '.DB::connection('mysql')->getDatabaseName().' — set SMOKE_DB to run this suite.'
-            );
-        }
-
-        $bank = FinancialInstitution::query()->whereNotNull('company_id')->first();
-        if (! $bank) {
-            $this->markTestSkipped('Development database has no financial institution to attach company context to.');
-        }
-
-        $this->company = Company::findOrFail($bank->company_id);
-
-        /** @var User $user */
-        $user = User::create([
-            'name' => 'Invoice Import Redirect Test '.uniqid(),
-            'email' => 'invoice-import-redirect-'.uniqid().'@example.test',
-            'password' => bcrypt('secret-for-tests'),
-            'company_id' => $this->company->id,
-        ]);
-        $user->givePermissionTo([
+        $this->company = $this->makeCompany();
+        $this->user = $this->makeUser([
             'customer_invoice_data.import',
             'customer_invoice_data.view',
             'customer_balance.view',
+        ], $this->company);
+
+        // The import page needs the company to have chosen its invoice columns first.
+        CustomizedFieldsExportation::create([
+            'company_id' => $this->company->id,
+            'model_name' => 'CustomerInvoice',
+            'fields' => ['customer_name', 'invoice_number', 'invoice_date', 'invoice_due_date', 'currency', 'invoice_amount', 'vat_amount'],
         ]);
-        $user->companies()->attach($this->company->id);
-        $user->load('companies');
-        $this->user = $user;
     }
 
     public function test_saving_customer_invoices_redirects_to_customer_balances_once_the_job_has_finished(): void

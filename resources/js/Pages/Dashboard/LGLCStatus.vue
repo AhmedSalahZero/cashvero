@@ -116,17 +116,23 @@ function openLimitDetails(sectionKey) {
     }), { limit: 0, outstanding: 0, reserved: 0, room: 0, cash_cover: 0 });
     // Only LGs can be reserved: an unactivated Advance Payment LG holds
     // its amount against the facility limit without any statement row.
-    limitDetailsModal.value = { rows, totals, showReserved: sectionKey === 'lg' };
+    // The column is shown only when at least one bank actually has such
+    // an LG — a column of zeros just looked like noise.
+    limitDetailsModal.value = {
+        rows,
+        totals,
+        showReserved: sectionKey === 'lg' && rows.some(r => Number(r.reserved) !== 0),
+    };
     facilityDetailsModal.value = null;
 }
 
-/* A bank row is the sum of its active facilities. When that bank has
-   more than one contract, this second modal lists each one with the
-   same figures, so a fully used contract (room 0) is visible beside
-   the contract that still has room. */
+/* A bank row is the sum of its active facilities. This second modal
+   lists each of that bank's contracts (one or more) with the same
+   figures, so a fully used contract (room 0) is visible beside the
+   contract that still has room. */
 function openFacilityDetails(row) {
     const facilities = row.facilities || [];
-    if (facilities.length < 2) {
+    if (!facilities.length) {
         return;
     }
     const totals = facilities.reduce((acc, facility) => ({
@@ -140,7 +146,7 @@ function openFacilityDetails(row) {
         bankName: row.financial_institution_name,
         facilities,
         totals,
-        showReserved: !!limitDetailsModal.value?.showReserved,
+        showReserved: !!limitDetailsModal.value?.showReserved && facilities.some(f => Number(f.reserved) !== 0),
     };
 }
 
@@ -294,7 +300,7 @@ function tableRows(section) {
 
             <!-- Limit card → per-bank Details modal -->
             <div v-if="limitDetailsModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                <div class="cvr-modal rounded-lg p-6 w-full max-w-4xl max-h-[85vh] overflow-auto">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-6xl max-h-[85vh] overflow-auto">
                     <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Details') }}</h2>
                     <table class="min-w-full text-sm mb-4">
                         <thead class="cvr-table-head">
@@ -302,7 +308,7 @@ function tableRows(section) {
                                 <th class="px-2 py-2 text-start">{{ $t('Financial Institution') }}</th>
                                 <th class="px-2 py-2 text-right">{{ $t('Limit') }}</th>
                                 <th class="px-2 py-2 text-right">{{ $t('Outstanding') }}</th>
-                                <th v-if="limitDetailsModal.showReserved" class="px-2 py-2 text-right" :title="$t('Unactivated Advance Payment LGs')">{{ $t('Reserved') }}</th>
+                                <th v-if="limitDetailsModal.showReserved" class="px-2 py-2 text-right max-w-[9rem]">{{ $t('Unactivated Advanced Payment LG') }}</th>
                                 <th class="px-2 py-2 text-right">{{ $t('Room') }}</th>
                                 <th class="px-2 py-2 text-right">{{ $t('Cash Cover') }}</th>
                             </tr>
@@ -313,7 +319,7 @@ function tableRows(section) {
                                     <div class="flex items-center gap-2">
                                         <span>{{ row.financial_institution_name }}</span>
                                         <button
-                                            v-if="(row.facilities || []).length > 1"
+                                            v-if="(row.facilities || []).length"
                                             type="button"
                                             class="cvr-btn-secondary px-2 py-0.5 rounded border text-xs whitespace-nowrap"
                                             @click="openFacilityDetails(row)"
@@ -343,9 +349,9 @@ function tableRows(section) {
                 </div>
             </div>
 
-            <!-- One bank, more than one facility contract -->
+            <!-- One bank's facility contracts (one or more) -->
             <div v-if="facilityDetailsModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
-                <div class="cvr-modal rounded-lg p-6 w-full max-w-6xl max-h-[85vh] overflow-auto">
+                <div class="cvr-modal rounded-lg p-6 w-full max-w-7xl max-h-[85vh] overflow-auto">
                     <h2 class="text-lg font-medium cvr-text-primary mb-1">{{ $t('Contracts') }}</h2>
                     <p class="text-sm cvr-text-muted mb-4">{{ facilityDetailsModal.bankName }}</p>
                     <table class="min-w-full text-sm mb-4">
@@ -356,7 +362,7 @@ function tableRows(section) {
                                 <th class="px-2 py-2 text-start">{{ $t('End Date') }}</th>
                                 <th class="px-2 py-2 text-right">{{ $t('Limit') }}</th>
                                 <th class="px-2 py-2 text-right">{{ $t('Outstanding') }}</th>
-                                <th v-if="facilityDetailsModal.showReserved" class="px-2 py-2 text-right" :title="$t('Unactivated Advance Payment LGs')">{{ $t('Reserved') }}</th>
+                                <th v-if="facilityDetailsModal.showReserved" class="px-2 py-2 text-right max-w-[9rem]">{{ $t('Unactivated Advanced Payment LG') }}</th>
                                 <th class="px-2 py-2 text-right">{{ $t('Room') }}</th>
                                 <th class="px-2 py-2 text-right">{{ $t('Cash Cover') }}</th>
                             </tr>

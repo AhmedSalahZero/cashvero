@@ -4,27 +4,24 @@ namespace Tests\Feature\ContractDashboard;
 
 use App\Models\Company;
 use App\Models\Contract;
-use App\Models\FinancialInstitution;
 use App\Models\Partner;
 use App\Models\User;
 use App\Services\ContractDashboardService;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
+use Tests\Concerns\MakesInvoices;
 use Tests\TestCase;
 
 /**
  * Contract Dashboard billing math and auth.
  *
- * Runs against SMOKE_DB (falls back to DB_DATABASE) inside a rolled-back
- * transaction, same pattern as the rest of the smoke suite.
+ * The company, its customers, contracts, invoices and collections are all made by the test
+ * (and rolled back by TestCase).
  */
 class ContractDashboardTest extends TestCase
 {
-    use DatabaseTransactions;
+    use MakesInvoices;
 
     private Company $company;
 
@@ -38,14 +35,6 @@ class ContractDashboardTest extends TestCase
 
     private string $suffix;
 
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
-
     protected function setUp(): void
     {
         parent::setUp();
@@ -56,44 +45,11 @@ class ContractDashboardTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
-
-        /**
-         * Reaching the server is not the same as finding the schema on
-         * it. Under phpunit.xml, DB_DATABASE points at the unit-test
-         * database, which connects fine and has none of these tables —
-         * so without this the whole class errored instead of skipping.
-         * Point SMOKE_DB at a real development schema to run it.
-         */
-        if (! Schema::connection('mysql')->hasTable('financial_institutions')) {
-            $this->markTestSkipped(
-                'No development schema on '.DB::connection('mysql')->getDatabaseName().' — set SMOKE_DB to run this suite.'
-            );
-        }
-
-        $bank = FinancialInstitution::query()->whereNotNull('company_id')->first();
-        if (! $bank) {
-            $this->markTestSkipped('Development database has no financial institution to attach company context to.');
-        }
-
-        $this->company = Company::findOrFail($bank->company_id);
+        $this->company = $this->makeCompany();
         $this->suffix = uniqid('cdash-');
 
-        $this->customerA = Partner::create([
-            'company_id' => $this->company->id,
-            'name' => 'Contract Dash Customer A '.$this->suffix,
-            'is_customer' => 1,
-        ]);
-
-        $this->customerB = Partner::create([
-            'company_id' => $this->company->id,
-            'name' => 'Contract Dash Customer B '.$this->suffix,
-            'is_customer' => 1,
-        ]);
+        $this->customerA = $this->customer($this->company, ['name' => 'Contract Dash Customer A '.$this->suffix]);
+        $this->customerB = $this->customer($this->company, ['name' => 'Contract Dash Customer B '.$this->suffix]);
 
         // Customer A: EGP 300, invoices 120 + 80 → invoiced 200, remaining 100
         $contractA = $this->makeContract($this->customerA, 'EGP', 300, Contract::RUNNING, 'A');
@@ -113,26 +69,13 @@ class ContractDashboardTest extends TestCase
         $usd = $this->makeContract($this->customerA, 'USD', 1000, Contract::RUNNING, 'USD');
         $this->makeInvoice($usd, 100, 0, 100);
 
-        $this->userWithPermission = $this->makeUser(true);
-        $this->userWithoutPermission = $this->makeUser(false);
+        $this->userWithPermission = $this->localUser(true);
+        $this->userWithoutPermission = $this->localUser(false);
     }
 
-    private function makeUser(bool $withPermission): User
+    private function localUser(bool $withPermission): User
     {
-        /** @var User $user */
-        $user = User::create([
-            'name' => 'Contract Dashboard Test '.uniqid(),
-            'email' => 'contract-dash-'.uniqid().'@example.test',
-            'password' => bcrypt('secret-for-tests'),
-            'company_id' => $this->company->id,
-        ]);
-
-        if ($withPermission) {
-            $user->givePermissionTo('dashboard_contracts.view');
-        }
-
-        $user->companies()->attach($this->company->id);
-        $user->load('companies');
+        $user = $this->makeUser($withPermission ? ['dashboard_contracts.view'] : [], $this->company);
 
         $this->assertFalse($user->isSuperAdmin(), 'The test user must not bypass permission checks.');
 
@@ -141,10 +84,7 @@ class ContractDashboardTest extends TestCase
 
     private function makeContract(Partner $customer, string $currency, float $amount, string $status, string $tag): Contract
     {
-        return Contract::create([
-            'company_id' => $this->company->id,
-            'partner_id' => $customer->id,
-            'model_type' => 'Customer',
+        return $this->contract($customer, [
             'name' => 'Contract '.$tag.' '.$this->suffix,
             'code' => 'CD-'.$tag.'-'.$this->suffix,
             'currency' => $currency,
@@ -156,26 +96,34 @@ class ContractDashboardTest extends TestCase
         ]);
     }
 
+    /**
+     * An invoice on the contract, part of it collected by money received from the customer.
+     * The triggers work out the balance; it must come out as the fixture says.
+     */
     private function makeInvoice(Contract $contract, float $invoiceAmount, float $collected, float $netBalance): void
     {
-        DB::table('customer_invoices')->insert([
-            'company_id' => $this->company->id,
-            'customer_id' => $contract->partner_id,
-            'customer_name' => $contract->client?->getName() ?? 'Customer',
+        $customer = $contract->client;
+
+        $invoice = $this->invoice($customer, [
             'invoice_number' => 'INV-'.uniqid(),
             'invoice_date' => now()->format('Y-m-d'),
-            'invoice_amount' => (string) $invoiceAmount,
-            'net_invoice_amount' => (string) $invoiceAmount,
+            'invoice_due_date' => now()->addMonth()->format('Y-m-d'),
+            'invoice_amount' => $invoiceAmount,
             'currency' => $contract->getCurrency(),
             'exchange_rate' => 1,
-            'contract_code' => $contract->getCode(),
-            'contract_name' => $contract->getName(),
-            'contract_amount' => $contract->getAmount(),
-            'total_collected_amount' => $collected,
-            'net_balance' => (string) $netBalance,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        ], $contract);
+
+        if ($collected > 0) {
+            $money = $this->received($customer, [
+                'received_amount' => $collected,
+                'currency' => $contract->getCurrency(),
+                'receiving_currency' => $contract->getCurrency(),
+                'receiving_date' => now()->format('Y-m-d'),
+            ]);
+            $this->settle($money, $invoice, $collected);
+        }
+
+        $this->assertEqualsWithDelta($netBalance, (float) $invoice->fresh()->net_balance, 0.001, 'The fixture invoice must carry the balance it was built for.');
     }
 
     /** Only the fixtures this test created (unique code suffix). */

@@ -90,7 +90,7 @@ trait IsMoney
          * * و مفيش فيها ولا صف من غير فاتورة . يبقى مفيش مسار شرعي بيبعت
          * * تسوية من غير فاتورة ، فالاستثناء هنا معناه باج مش حالة عادية
          */
-        $existingInvoiceIds = $this->existingInvoiceIdsForSettlements($settlements);
+        $existingInvoiceIds = $this->existingInvoiceIdsForSettlements($settlements, (int) $company->id);
 
         foreach ($settlements as $settlementArr) {
             $settlementArr['settlement_amount'] = isset($settlementArr['settlement_amount']) ?  unformat_number($settlementArr['settlement_amount']) :  0 ;
@@ -141,7 +141,7 @@ trait IsMoney
      * @param  array<int, array<string, mixed>>  $settlements
      * @return array<int|string, int>  المفاتيح هي الـ ids الموجودة
      */
-    protected function existingInvoiceIdsForSettlements(array $settlements): array
+    protected function existingInvoiceIdsForSettlements(array $settlements, int $companyId): array
     {
         $ids = array_values(array_unique(array_filter(array_column($settlements, 'invoice_id'))));
 
@@ -151,7 +151,9 @@ trait IsMoney
 
         $invoiceClass = $this instanceof MoneyReceived ? CustomerInvoice::class : SupplierInvoice::class;
 
-        return array_flip($invoiceClass::whereIn('id', $ids)->pluck('id')->all());
+        // Only the company's own invoices: an id of another company's invoice is refused exactly
+        // like an id that does not exist.
+        return array_flip($invoiceClass::where('company_id', $companyId)->whereIn('id', $ids)->pluck('id')->all());
     }
 
     public function getTotalSettlementAmount()

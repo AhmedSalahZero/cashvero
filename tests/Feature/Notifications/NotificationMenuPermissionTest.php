@@ -7,7 +7,6 @@ use App\Models\User;
 use App\Notification;
 use App\Support\Permissions\PermissionRegistry;
 use App\Support\Permissions\PermissionResolver;
-use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -27,16 +26,14 @@ use Tests\TestCase;
  * it must still stay EMPTY for someone who cannot. A fix that simply
  * showed everything to everyone would pass the first half alone.
  *
- * Runs against the development database, like AuthorizationEnforcementTest;
- * skips itself when that database is unreachable.
+ * The company and the user are made by the test itself and rolled back
+ * afterwards (Tests\TestCase), like AuthorizationEnforcementTest.
  */
 class NotificationMenuPermissionTest extends TestCase
 {
     private ?User $actor = null;
 
     private ?Company $company = null;
-
-    private array $createdPermissionIds = [];
 
     /** Screen permission → the bell section it must reveal. */
     private const SCREEN_TO_SECTION = [
@@ -50,48 +47,9 @@ class NotificationMenuPermissionTest extends TestCase
     {
         parent::setUp();
 
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
-
-        $this->company = Company::first();
-
-        if (! $this->company) {
-            $this->markTestSkipped('Development database has no company to exercise.');
-        }
-
-        $user = new User;
-        $user->name = 'Notification Bell Test Actor';
-        $user->email = 'notif-test-'.bin2hex(random_bytes(6)).'@example.test';
-        $user->password = bcrypt('secret-'.bin2hex(random_bytes(8)));
-        $user->save();
-        $user->companies()->attach($this->company->id);
-
-        $this->actor = $user->fresh();
+        $this->company = $this->makeCompany();
+        $this->actor = $this->makeUser([], $this->company, null, ['name' => 'Notification Bell Test Actor'])->fresh();
         $this->flush();
-    }
-
-    protected function tearDown(): void
-    {
-        if ($this->actor) {
-            DB::table('companies_users')->where('user_id', $this->actor->id)->delete();
-            DB::table('model_has_permissions')->where('model_id', $this->actor->id)->delete();
-            User::withoutEvents(fn () => User::where('id', $this->actor->id)->forceDelete());
-        }
-
-        if ($this->createdPermissionIds) {
-            Permission::whereIn('id', $this->createdPermissionIds)->delete();
-        }
-
-        auth()->logout();
-        $this->flush();
-
-        parent::tearDown();
     }
 
     private function flush(): void
@@ -106,13 +64,7 @@ class NotificationMenuPermissionTest extends TestCase
         $models = [];
 
         foreach ($names as $name) {
-            $permission = Permission::firstOrCreate(['name' => $name, 'guard_name' => 'web']);
-
-            if ($permission->wasRecentlyCreated) {
-                $this->createdPermissionIds[] = $permission->id;
-            }
-
-            $models[] = $permission;
+            $models[] = Permission::firstOrCreate(['name' => $name, 'guard_name' => 'web']);
         }
 
         $this->actor->syncPermissions($models);
@@ -141,9 +93,7 @@ class NotificationMenuPermissionTest extends TestCase
             'A user granted nothing must not be shown any notification section.');
     }
 
-    /**
-     * @dataProvider screenPermissionProvider
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('screenPermissionProvider')]
     public function test_screen_permission_alone_reveals_its_notification_section(string $screen, string $section): void
     {
         $this->grant([$screen]);
@@ -166,9 +116,7 @@ class NotificationMenuPermissionTest extends TestCase
 
     /* ── the half that proves the fix is not just permissive ───────── */
 
-    /**
-     * @dataProvider screenPermissionProvider
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('screenPermissionProvider')]
     public function test_one_screen_permission_reveals_only_its_own_section(string $screen, string $section): void
     {
         $this->grant([$screen]);

@@ -7,6 +7,7 @@ use App\Models\Contract;
 use App\Models\CustomerInvoice;
 use App\Models\SupplierInvoice;
 use App\Services\Api\OdooService;
+use Database\Factories\PartnerFactory;
 use Illuminate\Support\Facades\DB;
 use ReflectionMethod;
 use Tests\TestCase;
@@ -21,51 +22,28 @@ require_once __DIR__.'/../../../public/apis/ripcord_client.php';
  * * دي بتتأكد من النتيجة على الداتابيز نفسها: إن الاستيراد بيكتب نفس
  * * اللي كان بيكتبه ، و إن مفيش حاجة بتتمسح غلط.
  *
- * * كل الداتا بتتعمل جوه transaction و بتترجع في tearDown.
+ * * كل الداتا بتتعمل جوه transaction بتاعة TestCase و بتترجع بعد كل تست.
  */
 class OdooImportIntegrityTest extends TestCase
 {
-    private ?string $originalDatabase = null;
-
-    private bool $inTransaction = false;
-
     private int $companyId = 0;
 
+    private int $customerId = 0;
+
+    private int $supplierId = 0;
+
+    /**
+     * * شركة و عميل و مورد بتوع التست ده بس — TestCase بيلف كل تست في
+     * * transaction و بيرجّعها في الآخر ، فمفيش حاجة بتفضل بعده
+     */
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-            DB::table('contracts')->limit(1)->get();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-
-        DB::beginTransaction();
-        $this->inTransaction = true;
-
-        $this->companyId = (int) DB::table('companies')->insertGetId([
-            'name' => json_encode(['en' => 'Odoo Import Test Co', 'ar' => 'Odoo Import Test Co']),
-            'main_functional_currency' => 'EGP',
-        ]);
-    }
-
-    protected function tearDown(): void
-    {
-        if ($this->inTransaction) {
-            DB::rollBack();
-            $this->inTransaction = false;
-        }
-
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
-
-        parent::tearDown();
+        $company = $this->makeCompany(['name' => ['en' => 'Odoo Import Test Co', 'ar' => 'Odoo Import Test Co']]);
+        $this->companyId = $company->id;
+        $this->customerId = PartnerFactory::new()->forCompany($company)->customer()->create()->id;
+        $this->supplierId = PartnerFactory::new()->forCompany($company)->supplier()->create()->id;
     }
 
     /* ───────────────────── أدوات ───────────────────── */
@@ -125,7 +103,7 @@ class OdooImportIntegrityTest extends TestCase
 
         return (int) DB::table($table)->insertGetId([
             'company_id' => $this->companyId,
-            $partnerColumn => 1,
+            $partnerColumn => $class === CustomerInvoice::class ? $this->customerId : $this->supplierId,
             'currency' => 'EGP',
             'odoo_id' => $odooId,
             'invoice_number' => $number,
@@ -418,7 +396,7 @@ class OdooImportIntegrityTest extends TestCase
     public function test_an_odoo_id_stored_as_text_still_matches(): void
     {
         $this->invoice(CustomerInvoice::class, 501, '2026-01-10', 'INV/501');
-        DB::table('customer_invoices')->where('odoo_id', 501)->update(['odoo_id' => '501']);
+        DB::table('customer_invoices')->where('company_id', $this->companyId)->where('odoo_id', 501)->update(['odoo_id' => '501']);
 
         $this->runDeletedSync([501]);
 

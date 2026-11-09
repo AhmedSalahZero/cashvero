@@ -109,7 +109,7 @@ class TestConnectionCommand extends Command
 		$this->password = $user->getOdooDBPassword();
 		$this->company_id = $company->id;
 		$this->company = $company;
-		$common = ripcord::client("$this->url/xmlrpc/2/common");
+		$common = app(\App\Services\Api\OdooClientFactory::class)->client("$this->url/xmlrpc/2/common");
 		$uid = null ;
 		try{
 					$uid = $common->authenticate($this->db, $this->username, $this->password, array());

@@ -12,6 +12,7 @@ use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
+use Database\Factories\MoneyReceivedFactory;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
@@ -28,10 +29,9 @@ use Tests\TestCase;
  * grants directly to the user, and there are explicit tests that a
  * role's permissions do NOT leak through.
  *
- * Runs against the development database (read-mostly; the few writes are
- * to a scratch role/user that is removed in tearDown). Point it elsewhere
- * with SMOKE_DB=<name>; it skips itself when the database is unreachable,
- * matching the convention in PaginationSmokeTest.
+ * Everything it needs is made by the test itself — a fresh company, a
+ * throw-away user and role, the one receipt or expense a DELETE is aimed
+ * at — and rolled back afterwards (Tests\TestCase). No real data is read.
  */
 class AuthorizationEnforcementTest extends TestCase
 {
@@ -41,36 +41,21 @@ class AuthorizationEnforcementTest extends TestCase
 
     private ?Role $scratchRole = null;
 
-    private array $createdPermissionIds = [];
-
     protected function setUp(): void
     {
         parent::setUp();
 
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
-
-        // Same reason as PaginationSmokeTest: without this the locale
-        // middleware 302s every request before a controller runs, and the
-        // suite would pass while exercising nothing. Auth and the
-        // permission middleware stay on — they are the subject here.
+        // Without this the locale middleware 302s every request before a
+        // controller runs, and the suite would pass while exercising
+        // nothing. Auth and the permission middleware stay on — they are
+        // the subject here.
         $this->withoutMiddleware([
             LocaleSessionRedirect::class,
             LaravelLocalizationRedirectFilter::class,
             LaravelLocalizationViewPath::class,
         ]);
 
-        $this->company = Company::first();
-
-        if (! $this->company) {
-            $this->markTestSkipped('Development database has no company to exercise.');
-        }
+        $this->company = $this->makeCompany();
 
         $this->scratchRole = Role::firstOrCreate(
             ['name' => 'test-scratch-role', 'guard_name' => 'web']
@@ -78,45 +63,14 @@ class AuthorizationEnforcementTest extends TestCase
 
         $this->actor = $this->makeScratchUser();
 
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
-        PermissionResolver::flush();
-    }
-
-    protected function tearDown(): void
-    {
-        if ($this->actor) {
-            DB::table('companies_users')->where('user_id', $this->actor->id)->delete();
-            DB::table('model_has_roles')->where('model_id', $this->actor->id)->delete();
-            DB::table('model_has_permissions')->where('model_id', $this->actor->id)->delete();
-            User::withoutEvents(fn () => User::where('id', $this->actor->id)->forceDelete());
-        }
-
-        if ($this->scratchRole) {
-            DB::table('role_has_permissions')->where('role_id', $this->scratchRole->id)->delete();
-            $this->scratchRole->delete();
-        }
-
-        if ($this->createdPermissionIds) {
-            Permission::whereIn('id', $this->createdPermissionIds)->delete();
-        }
-
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
-        PermissionResolver::flush();
-
-        parent::tearDown();
+        $this->forgetPermissions();
     }
 
     /* ── helpers ───────────────────────────────────────────────────── */
 
     private function makeScratchUser(): User
     {
-        $user = new User;
-        $user->name = 'Permissions Test Actor';
-        $user->email = 'permissions-test-'.bin2hex(random_bytes(6)).'@example.test';
-        $user->password = bcrypt('secret-'.bin2hex(random_bytes(8)));
-        $user->save();
-
-        $user->companies()->attach($this->company->id);
+        $user = $this->makeUser([], $this->company, null, ['name' => 'Permissions Test Actor']);
         $user->assignRole($this->scratchRole);
 
         return $user->fresh();
@@ -163,13 +117,7 @@ class AuthorizationEnforcementTest extends TestCase
         $models = [];
 
         foreach ($keys as $key) {
-            $permission = Permission::firstOrCreate(['name' => $key, 'guard_name' => 'web']);
-
-            if ($permission->wasRecentlyCreated) {
-                $this->createdPermissionIds[] = $permission->id;
-            }
-
-            $models[] = $permission;
+            $models[] = Permission::firstOrCreate(['name' => $key, 'guard_name' => 'web']);
         }
 
         return $models;
@@ -181,7 +129,7 @@ class AuthorizationEnforcementTest extends TestCase
     }
 
     /**
-     * A real row id for this company, or skip.
+     * A row of this company the route can resolve.
      *
      * Route-model binding runs (SubstituteBindings, in the `web` group)
      * BEFORE EnforcePermission, so a request naming a row that does not
@@ -190,15 +138,21 @@ class AuthorizationEnforcementTest extends TestCase
      * either way, and 404 does not disclose whether the row exists), but
      * it means asserting 403 specifically requires a row that resolves.
      */
-    private function existingId(string $table): int
+    private function moneyReceivedId(): int
     {
-        $id = DB::table($table)->where('company_id', $this->company->id)->value('id');
+        return (int) MoneyReceivedFactory::new()->forCompany($this->company)->create()->id;
+    }
 
-        if (! $id) {
-            $this->markTestSkipped("No {$table} row for company {$this->company->id} to exercise.");
-        }
-
-        return (int) $id;
+    private function cashExpenseId(): int
+    {
+        return (int) DB::table('cash_expenses')->insertGetId([
+            'company_id' => $this->company->id,
+            'type' => \App\Models\CashExpense::CASH_PAYMENT,
+            'payment_date' => '2020-01-15',
+            'paid_amount' => 100,
+            'currency' => 'EGP',
+            'comment_en' => 'Permission test expense',
+        ]);
     }
 
     /* ── Denial ────────────────────────────────────────────────────── */
@@ -226,7 +180,7 @@ class AuthorizationEnforcementTest extends TestCase
             ->assertOk();
 
         $this->actingAs($this->actor)
-            ->delete($this->url('delete.money.receive', ['moneyReceived' => $this->existingId('money_received')]))
+            ->delete($this->url('delete.money.receive', ['moneyReceived' => $this->moneyReceivedId()]))
             ->assertForbidden();
     }
 
@@ -239,7 +193,7 @@ class AuthorizationEnforcementTest extends TestCase
             ->assertOk();
 
         $this->actingAs($this->actor)
-            ->delete($this->url('delete.cash.expense', ['cashExpense' => $this->existingId('cash_expenses')]))
+            ->delete($this->url('delete.cash.expense', ['cashExpense' => $this->cashExpenseId()]))
             ->assertForbidden();
     }
 
@@ -331,10 +285,6 @@ class AuthorizationEnforcementTest extends TestCase
 
         $legacy = Permission::firstOrCreate(['name' => $legacyName, 'guard_name' => 'web']);
 
-        if ($legacy->wasRecentlyCreated) {
-            $this->createdPermissionIds[] = $legacy->id;
-        }
-
         $this->grant([]);
         $this->scratchRole->syncPermissions([$legacy]);
         app(PermissionRegistrar::class)->forgetCachedPermissions();
@@ -408,10 +358,6 @@ class AuthorizationEnforcementTest extends TestCase
     public function test_a_legacy_permission_name_still_grants_the_canonical_key(): void
     {
         $legacy = Permission::firstOrCreate(['name' => 'view cash expenses', 'guard_name' => 'web']);
-
-        if ($legacy->wasRecentlyCreated) {
-            $this->createdPermissionIds[] = $legacy->id;
-        }
 
         $this->actor->syncPermissions([$legacy]);
         app(PermissionRegistrar::class)->forgetCachedPermissions();
@@ -642,29 +588,24 @@ class AuthorizationEnforcementTest extends TestCase
 
         $target = Role::firstOrCreate(['name' => 'test-escalation-target', 'guard_name' => 'web']);
 
-        try {
-            $this->actingAs($this->actor)->put(
-                $this->url('roles.update', ['role' => $target->id]),
-                [
-                    // `name` is required for a non-built-in role; omitting it
-                    // fails validation and nothing would be synced at all.
-                    'name' => 'test-escalation-target',
-                    'permissions' => ['money_received.view', 'money_received.delete', 'company.delete'],
-                ]
-            );
+        $this->actingAs($this->actor)->put(
+            $this->url('roles.update', ['role' => $target->id]),
+            [
+                // `name` is required for a non-built-in role; omitting it
+                // fails validation and nothing would be synced at all.
+                'name' => 'test-escalation-target',
+                'permissions' => ['money_received.view', 'money_received.delete', 'company.delete'],
+            ]
+        );
 
-            $granted = $target->fresh()->permissions->pluck('name')->all();
+        $granted = $target->fresh()->permissions->pluck('name')->all();
 
-            $this->assertContains('money_received.view', $granted,
-                'A permission the editor holds should be granted.');
-            $this->assertNotContains('money_received.delete', $granted,
-                'An editor must not grant a permission they do not hold.');
-            $this->assertNotContains('company.delete', $granted,
-                'An editor must not grant an administration permission they do not hold.');
-        } finally {
-            DB::table('role_has_permissions')->where('role_id', $target->id)->delete();
-            $target->delete();
-        }
+        $this->assertContains('money_received.view', $granted,
+            'A permission the editor holds should be granted.');
+        $this->assertNotContains('money_received.delete', $granted,
+            'An editor must not grant a permission they do not hold.');
+        $this->assertNotContains('company.delete', $granted,
+            'An editor must not grant an administration permission they do not hold.');
     }
 
     /* ── Shared props ──────────────────────────────────────────────── */

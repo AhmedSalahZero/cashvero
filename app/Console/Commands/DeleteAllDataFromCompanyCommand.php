@@ -9,7 +9,7 @@ use Schema;
 class DeleteAllDataFromCompanyCommand extends Command
 {
    
-    protected $signature = 'delete:all {company_id}';
+    protected $signature = 'delete:all {company_id} {--force : Do not ask for confirmation (used by the Remove Company screen, which confirms itself)}';
 
     protected $description = 'Delete All Data For Company';
 
@@ -37,6 +37,13 @@ class DeleteAllDataFromCompanyCommand extends Command
     public function handle()
     {
 		$companyId = $this->argument('company_id') ;
+		// Every record of the company is deleted and cannot be brought back: ask first, unless the
+		// caller (the Remove Company screen) has already asked.
+		if (! $this->option('force') && ! $this->confirm("Delete ALL data of company {$companyId}? This cannot be undone.", false)) {
+			$this->warn('Nothing was deleted.');
+
+			return self::FAILURE;
+		}
 		$tablesNamesToBeDeleted = getTableNames();
 		$attemptNumber = 1 ;
 		while($attemptNumber <= 10 && count($tablesNamesToBeDeleted)){

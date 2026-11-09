@@ -64,7 +64,7 @@ class AuditFixesTest extends TestCase
 
     /* ── H-2: a refused post must stop the caller ─────────────────── */
 
-    /** @dataProvider refusalProvider */
+    #[\PHPUnit\Framework\Attributes\DataProvider('refusalProvider')]
     public function test_a_refused_post_throws_instead_of_reporting_success($odooAnswer, string $why): void
     {
         $service = $this->fakeOdooPayment($odooAnswer);

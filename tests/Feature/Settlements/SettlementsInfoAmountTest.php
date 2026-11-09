@@ -4,7 +4,7 @@ namespace Tests\Feature\Settlements;
 
 use App\Models\MoneyPayment;
 use App\Models\MoneyReceived;
-use Illuminate\Support\Facades\DB;
+use Tests\Concerns\MakesInvoices;
 use Tests\TestCase;
 
 /**
@@ -26,46 +26,47 @@ use Tests\TestCase;
  */
 class SettlementsInfoAmountTest extends TestCase
 {
-    private ?string $originalDatabase = null;
+    use MakesInvoices;
 
-    protected function setUp(): void
+    /**
+     * A money row settling two invoices: one without VAT, then one carrying
+     * VAT and a discount — without VAT the pre-tax and post-tax numbers are
+     * equal and the assertion would pass either way.
+     */
+    private function moneyWithTaxedInvoice(string $class): MoneyReceived|MoneyPayment
     {
-        parent::setUp();
+        $company = $this->makeCompany();
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
+        if ($class === MoneyReceived::class) {
+            $partner = $this->customer($company);
+            $plain = $this->invoice($partner, ['invoice_amount' => 500, 'vat_amount' => 0]);
+            $taxed = $this->invoice($partner, ['invoice_amount' => 1000, 'vat_amount' => 140, 'discount_amount' => 40]);
+            $money = $this->received($partner, ['received_amount' => 900]);
+        } else {
+            $partner = $this->supplier($company);
+            $plain = $this->supplierInvoice($partner, ['invoice_amount' => 500, 'vat_amount' => 0]);
+            $taxed = $this->supplierInvoice($partner, ['invoice_amount' => 1000, 'vat_amount' => 140, 'discount_amount' => 40]);
+            $money = $this->payment($partner, ['paid_amount' => 900]);
         }
-    }
 
-    protected function tearDown(): void
-    {
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
+        $this->settle($money, $plain, 300);
+        $this->settle($money, $taxed, 600);
 
-        parent::tearDown();
+        return $class::findOrFail($money->id);
     }
 
     /**
-     * Finds a money row whose first settlement points at an invoice carrying
-     * VAT — without VAT the pre-tax and post-tax numbers are equal and the
-     * assertion would pass either way.
+     * Finds the first settlement of that money row whose invoice carries VAT.
      */
     private function findWithTaxedInvoice(string $class): ?array
     {
-        foreach ($class::has('settlements')->limit(400)->cursor() as $money) {
-            foreach ($money->settlements as $index => $settlement) {
-                $invoice = $settlement->invoice;
+        $money = $this->moneyWithTaxedInvoice($class);
 
-                if ($invoice && (float) $invoice->vat_amount > 0) {
-                    return [$money, $index, $invoice];
-                }
+        foreach ($money->settlements as $index => $settlement) {
+            $invoice = $settlement->invoice;
+
+            if ($invoice && (float) $invoice->vat_amount > 0) {
+                return [$money, $index, $invoice];
             }
         }
 
@@ -76,9 +77,7 @@ class SettlementsInfoAmountTest extends TestCase
     {
         $found = $this->findWithTaxedInvoice($class);
 
-        if (! $found) {
-            $this->markTestSkipped("No {$label} settlement whose invoice carries VAT.");
-        }
+        $this->assertNotNull($found, "The {$label} fixture must settle an invoice that carries VAT.");
 
         [$money, $index, $invoice] = $found;
 
@@ -89,6 +88,7 @@ class SettlementsInfoAmountTest extends TestCase
             $rows[$index]['invoice_amount'],
             "{$label}#{$money->id} must show the invoice amount after tax (net_invoice_amount)."
         );
+        $this->assertSame('1,100.00', $rows[$index]['invoice_amount'], '1,000 + 140 VAT − 40 discount.');
 
         $this->assertNotSame(
             number_format((float) $invoice->getInvoiceAmount(), 2),

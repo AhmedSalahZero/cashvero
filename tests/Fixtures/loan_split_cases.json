@@ -1,0 +1,14 @@
+{
+  "_about": "How money paid against one medium-term-loan installment is split. The rule (agreed with the business, see LoanScheduleSettlement): the interest of the installment is paid first, only what is left goes to the principle, and nothing beyond the installment is counted. Every line below was worked out by hand from that rule, not taken from the code.",
+  "cases": [
+    { "name": "nothing paid yet", "interest": 600, "principle": 400, "paid": 0, "expect": { "interest_paid": 0, "principle_paid": 0 } },
+    { "name": "less than the interest", "interest": 600, "principle": 400, "paid": 500, "expect": { "interest_paid": 500, "principle_paid": 0 } },
+    { "name": "exactly the interest", "interest": 600, "principle": 400, "paid": 600, "expect": { "interest_paid": 600, "principle_paid": 0 } },
+    { "name": "the interest and part of the principle", "interest": 600, "principle": 400, "paid": 800, "expect": { "interest_paid": 600, "principle_paid": 200 } },
+    { "name": "the whole installment", "interest": 600, "principle": 400, "paid": 1000, "expect": { "interest_paid": 600, "principle_paid": 400 } },
+    { "name": "more than the installment", "interest": 600, "principle": 400, "paid": 1250, "expect": { "interest_paid": 600, "principle_paid": 400 } },
+    { "name": "an installment with no interest", "interest": 0, "principle": 400, "paid": 150, "expect": { "interest_paid": 0, "principle_paid": 150 } },
+    { "name": "an interest-only installment", "interest": 300, "principle": 0, "paid": 300, "expect": { "interest_paid": 300, "principle_paid": 0 } },
+    { "name": "cents", "interest": 3083.33, "principle": 916.67, "paid": 3100, "expect": { "interest_paid": 3083.33, "principle_paid": 16.67 } }
+  ]
+}

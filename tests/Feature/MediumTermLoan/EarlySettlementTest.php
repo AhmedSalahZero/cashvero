@@ -11,11 +11,12 @@ use App\Models\LoanScheduleSettlement;
 use App\Models\MediumTermLoan;
 use App\Models\MediumTermLoanEarlySettlement;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
+use Tests\Concerns\MakesBanks;
+use Tests\Concerns\MakesFacilities;
 use Tests\TestCase;
 
 /**
@@ -27,13 +28,14 @@ use Tests\TestCase;
  * لحد السادس: الاصل المتبقي = 50 + 3×80 = 290 الف ، والفايدة اللي مش
  * هتتدفع = 3×20 = 60 الف.
  *
- * التستات دي بتشتغل على قاعدة بيانات التطوير زي باقي السويت (مافيش سكيما تست
- * متهاجرة هنا) ، جوه ترانزاكشن بيترجع فيها كل صف اتعمل ، وبتتسكب لوحدها لو
- * القاعدة مش شغالة.
+ * الشركة و البنك و الحساب الجاري و القرض و اقساطه و اليوزر كلهم معمولين في
+ * التست نفسه ، و كل صف بيترجع في الآخر (TestCase بيلف كل تست في ترانزاكشن).
+ * حالة كل قسط (paid / not_due_yet ...) بيحسبها تريجر loan_schedules.
  */
 class EarlySettlementTest extends TestCase
 {
-    use DatabaseTransactions;
+    use MakesBanks;
+    use MakesFacilities;
 
     private Company $company;
 
@@ -70,14 +72,6 @@ class EarlySettlementTest extends TestCase
         parent::tearDown();
     }
 
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
-
     protected function setUp(): void
     {
         parent::setUp();
@@ -88,29 +82,13 @@ class EarlySettlementTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
-
-        $bank = FinancialInstitution::query()->whereNotNull('company_id')->first();
-        if (! $bank) {
-            $this->markTestSkipped('Development database has no financial institution to attach accounts to.');
-        }
-        $this->bank = $bank;
-        $this->company = Company::findOrFail($bank->company_id);
+        $this->company = $this->makeCompany();
+        $this->bank = $this->bank($this->company);
         $this->currentAccountType = AccountType::onlyCurrentAccount()->firstOrFail();
 
-        $this->account = FinancialInstitutionAccount::create([
-            'company_id' => $this->company->id,
-            'financial_institution_id' => $this->bank->id,
+        $this->account = $this->currentAccount($this->bank, $this->currency, [
             'account_number' => 'TEST-MTL-ES-'.uniqid(),
-            'currency' => $this->currency,
-            'balance_amount' => 0,
             'balance_date' => now()->subYear()->format('Y-m-d'),
-            'exchange_rate' => 1,
-            'is_active' => 1,
         ]);
         DB::table('current_account_bank_statements')->insert([
             'financial_institution_account_id' => $this->account->id,
@@ -123,9 +101,7 @@ class EarlySettlementTest extends TestCase
             'end_balance' => 1000000,
         ]);
 
-        $this->loan = MediumTermLoan::create([
-            'company_id' => $this->company->id,
-            'financial_institution_id' => $this->bank->id,
+        $this->loan = $this->mediumTermLoan($this->bank, [
             'name' => 'Early Settlement Test '.uniqid(),
             'start_date' => now()->subMonths(4)->format('Y-m-d'),
             'end_date' => now()->addMonths(4)->format('Y-m-d'),
@@ -137,10 +113,7 @@ class EarlySettlementTest extends TestCase
         ]);
 
         foreach ([-3, -2, -1, 1, 2, 3] as $monthOffset) {
-            $this->schedules[] = LoanSchedule::create([
-                'company_id' => $this->company->id,
-                'medium_term_loan_id' => $this->loan->id,
-                'date' => now()->addMonths($monthOffset)->format('Y-m-d'),
+            $this->schedules[] = $this->loanSchedule($this->loan, now()->addMonths($monthOffset)->format('Y-m-d'), [
                 'schedule_payment' => 100000,
                 'interest_amount' => 20000,
                 'principle_amount' => 80000,
@@ -151,15 +124,7 @@ class EarlySettlementTest extends TestCase
         $this->paySettlement($this->schedules[1], 100000, now()->subMonths(2));
         $this->paySettlement($this->schedules[2], 50000, now()->subMonth());
 
-        $this->actor = User::create([
-            'name' => 'MTL Early Settlement Test '.uniqid(),
-            'email' => 'mtl-early-settlement-'.uniqid().'@example.test',
-            'password' => bcrypt('secret-for-tests'),
-            'company_id' => $this->company->id,
-        ]);
-        $this->actor->givePermissionTo(['medium_term_loan.view', 'medium_term_loan.manage_schedule']);
-        $this->actor->companies()->attach($this->company->id);
-        $this->actor->load('companies');
+        $this->actor = $this->makeUser(['medium_term_loan.view', 'medium_term_loan.manage_schedule'], $this->company);
         $this->assertFalse($this->actor->isSuperAdmin(), 'اليوزر لازم مايتخطاش فحص الصلاحيات.');
     }
 
@@ -334,15 +299,9 @@ class EarlySettlementTest extends TestCase
 
     public function test_an_account_at_another_bank_or_currency_is_rejected(): void
     {
-        $usdAccount = FinancialInstitutionAccount::create([
-            'company_id' => $this->company->id,
-            'financial_institution_id' => $this->bank->id,
+        $usdAccount = $this->currentAccount($this->bank, 'USD', [
             'account_number' => 'TEST-MTL-ES-USD-'.uniqid(),
-            'currency' => 'USD',
-            'balance_amount' => 0,
             'balance_date' => now()->subYear()->format('Y-m-d'),
-            'exchange_rate' => 1,
-            'is_active' => 1,
         ]);
 
         $response = $this->settleEarly(['account_number' => $usdAccount->account_number]);

@@ -4,40 +4,20 @@ namespace Tests\Feature\Company;
 
 use App\Services\CompanyData\CompanyImportService;
 use App\Services\CompanyData\DemoCompanyAnonymizer;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * A small company is cloned inside the test transaction, which is rolled
- * back. Company 148 is not copied.
+ * A small fake company is cloned inside the test transaction (TestCase),
+ * which is rolled back.
  */
 class CloneCompanyToNewOneTest extends TestCase
 {
-    use DatabaseTransactions;
-
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
 
     public function test_a_clone_matches_the_source_numbers_and_renames_only_the_copy(): void
     {
-        $template = DB::table('companies')->whereNull('deleted_at')->orderBy('id')->first();
-        if (! $template) {
-            $this->markTestSkipped('No company row to copy a column shape from.');
-        }
-
-        $payload = (array) $template;
-        unset($payload['id']);
         $sourceName = 'Clone Source '.uniqid();
-        $payload['name'] = json_encode(['en' => $sourceName, 'ar' => $sourceName], JSON_UNESCAPED_UNICODE);
-        $payload['is_caching_now'] = 0;
-        $payload['deleted_at'] = null;
-        $sourceId = (int) DB::table('companies')->insertGetId($payload);
+        $sourceId = $this->company($sourceName);
 
         $customerId = $this->partner($sourceId, 'Real Customer', customer: true);
         $bothId = $this->partner($sourceId, 'Real Both', customer: true, supplier: true);
@@ -125,17 +105,12 @@ class CloneCompanyToNewOneTest extends TestCase
 
     public function test_an_existing_company_with_the_same_name_is_replaced(): void
     {
-        $template = DB::table('companies')->whereNull('deleted_at')->orderBy('id')->first();
-        if (! $template) {
-            $this->markTestSkipped('No company row to copy a column shape from.');
-        }
-
         $sourceName = 'Clone Source '.uniqid();
-        $sourceId = $this->companyFromTemplate($template, $sourceName);
+        $sourceId = $this->company($sourceName);
         $this->partner($sourceId, 'Real Customer', customer: true);
 
         $demoName = 'Clone Demo '.uniqid();
-        $oldId = $this->companyFromTemplate($template, $demoName);
+        $oldId = $this->company($demoName);
         $oldPartnerId = $this->partner($oldId, 'Old Demo Partner', customer: true);
 
         $result = (new CompanyImportService())->cloneToNewCompany($sourceId, $demoName);
@@ -155,15 +130,9 @@ class CloneCompanyToNewOneTest extends TestCase
         $this->assertSame('Real Customer', DB::table('partners')->where('company_id', $sourceId)->value('name'));
     }
 
-    private function companyFromTemplate(object $template, string $name): int
+    private function company(string $name): int
     {
-        $payload = (array) $template;
-        unset($payload['id']);
-        $payload['name'] = json_encode(['en' => $name, 'ar' => $name], JSON_UNESCAPED_UNICODE);
-        $payload['is_caching_now'] = 0;
-        $payload['deleted_at'] = null;
-
-        return (int) DB::table('companies')->insertGetId($payload);
+        return $this->makeCompany(['name' => ['en' => $name, 'ar' => $name]])->id;
     }
 
     private function partner(int $companyId, string $name, bool $customer = false, bool $supplier = false, bool $employee = false): int

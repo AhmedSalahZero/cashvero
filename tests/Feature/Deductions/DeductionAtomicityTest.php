@@ -3,11 +3,9 @@
 namespace Tests\Feature\Deductions;
 
 use App\Http\Controllers\InvoiceDeductionsController;
-use App\Models\Company;
 use App\Models\CustomerInvoice;
-use App\Models\Deduction;
-use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Tests\Concerns\MakesInvoices;
 use Tests\TestCase;
 
 /**
@@ -23,30 +21,7 @@ use Tests\TestCase;
  */
 class DeductionAtomicityTest extends TestCase
 {
-    private ?string $originalDatabase = null;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        $this->originalDatabase = config('database.connections.mysql.database');
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-    }
-
-    protected function tearDown(): void
-    {
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
-
-        parent::tearDown();
-    }
+    use MakesInvoices;
 
     /** * الكود لازم يفضل ملفوف — لو حد شال اللفّة الاختبار يقع */
     public function test_the_update_is_wrapped_in_a_transaction(): void
@@ -84,67 +59,64 @@ class DeductionAtomicityTest extends TestCase
     public function test_a_failure_after_the_delete_leaves_the_invoice_untouched(): void
     {
         /* فاتورة الحارس بتاعها بيعدّي ، و إلا الاختبار بيقف قبل المسح */
-        $invoice = CustomerInvoice::whereHas('deductions')->get()
-            ->first(fn (CustomerInvoice $i) => ((float) $i->net_balance + (float) $i->deductions->sum('pivot.amount')) > 10);
+        $company = $this->makeCompany();
+        $user = $this->makeUser([], $company);
+        $customer = $this->customer($company);
+        $invoice = $this->invoice($customer, ['invoice_amount' => 10000, 'vat_amount' => 1400]);
+        $retention = $this->deductionType($company, ['name' => 'Retention']);
+        $this->deduct($invoice, 500, $retention, '2020-02-01');
+        $this->deduct($invoice, 250, $this->deductionType($company, ['name' => 'Penalty']), '2020-02-15');
+        $invoice = CustomerInvoice::with('deductions')->findOrFail($invoice->id);
 
-        if (! $invoice) {
-            $this->markTestSkipped('Needs an invoice with deductions and a usable balance.');
-        }
+        $this->assertGreaterThan(10, (float) $invoice->net_balance + (float) $invoice->deductions->sum('pivot.amount'),
+            'الحارس في أول الميثود لازم يعدّي ، و إلا الاختبار بيقف قبل المسح');
 
-        DB::beginTransaction();
+        $balanceBefore = (float) $invoice->net_balance;
+        $totalBefore = (float) $invoice->total_deductions;
+        $countBefore = DB::table('invoice_deductions')
+            ->where('invoice_type', 'CustomerInvoice')
+            ->where('invoice_id', $invoice->id)->count();
+
+        $this->assertGreaterThan(0, $countBefore, 'الفاتورة المفروض عليها خصومات');
+
+        $request = \App\Http\Requests\UpdateInvoiceDeductionRequest::create('/x', 'PATCH', [
+            'deductions' => [[
+                'deduction_id' => $invoice->deductions->first()->id,
+                // تاريخ ما ينفعش يتقرا — بيقع في تحويل العملة بعد المسح
+                'date' => 'not-a-date',
+                'amount' => 1,
+            ]],
+        ]);
+        $request->setLaravelSession(app('session.store'));
+        $request->setUserResolver(fn () => $user);
+        $this->app->instance('request', $request);
+        auth()->setUser($user);
+
+        $failedAfterTheDelete = false;
 
         try {
-            $company = Company::findOrFail($invoice->company_id);
-            $user = User::firstOrFail();
-
-            $balanceBefore = (float) $invoice->net_balance;
-            $totalBefore = (float) $invoice->total_deductions;
-            $countBefore = DB::table('invoice_deductions')
-                ->where('invoice_type', 'CustomerInvoice')
-                ->where('invoice_id', $invoice->id)->count();
-
-            $this->assertGreaterThan(0, $countBefore, 'الفاتورة المفروض عليها خصومات');
-
-            $request = \App\Http\Requests\UpdateInvoiceDeductionRequest::create('/x', 'PATCH', [
-                'deductions' => [[
-                    'deduction_id' => $invoice->deductions->first()->id,
-                    // تاريخ ما ينفعش يتقرا — بيقع في تحويل العملة بعد المسح
-                    'date' => 'not-a-date',
-                    'amount' => 1,
-                ]],
-            ]);
-            $request->setLaravelSession(app('session.store'));
-            $request->setUserResolver(fn () => $user);
-            $this->app->instance('request', $request);
-            auth()->setUser($user);
-
-            $failedAfterTheDelete = false;
-
-            try {
-                app(InvoiceDeductionsController::class)
-                    ->update($request, $company, $invoice->id, 'CustomerInvoice');
-            } catch (\Carbon\Exceptions\InvalidFormatException $e) {
-                $failedAfterTheDelete = true;
-            } catch (\Throwable $e) {
-                $this->fail('المفروض يقع في قراءة التاريخ بعد المسح، وقع في: '.get_class($e).' — '.$e->getMessage());
-            }
-
-            $this->assertTrue($failedAfterTheDelete,
-                'الكتابة المفروض تفشل بعد المسح — الاختبار مالوش معنى من غير كده');
-
-            $after = CustomerInvoice::find($invoice->id);
-            $countAfter = DB::table('invoice_deductions')
-                ->where('invoice_type', 'CustomerInvoice')
-                ->where('invoice_id', $invoice->id)->count();
-
-            $this->assertSame($countBefore, $countAfter,
-                'الخصومات اتمسحت و ما رجعتش — الترانزاكشن مش شغالة');
-            $this->assertEqualsWithDelta($balanceBefore, (float) $after->net_balance, 0.01,
-                'الرصيد اتغيّر رغم إن العملية فشلت — دي الفلوس اللي بتختفي من الذمم');
-            $this->assertEqualsWithDelta($totalBefore, (float) $after->total_deductions, 0.01,
-                'إجمالي الخصومات اتغيّر رغم إن العملية فشلت');
-        } finally {
-            DB::rollBack();
+            app(InvoiceDeductionsController::class)
+                ->update($request, $company, $invoice->id, 'CustomerInvoice');
+        } catch (\Carbon\Exceptions\InvalidFormatException $e) {
+            $failedAfterTheDelete = true;
+        } catch (\Throwable $e) {
+            $this->fail('المفروض يقع في قراءة التاريخ بعد المسح، وقع في: '.get_class($e).' — '.$e->getMessage());
         }
+
+        $this->assertTrue($failedAfterTheDelete,
+            'الكتابة المفروض تفشل بعد المسح — الاختبار مالوش معنى من غير كده');
+
+        $after = CustomerInvoice::find($invoice->id);
+        $countAfter = DB::table('invoice_deductions')
+            ->where('invoice_type', 'CustomerInvoice')
+            ->where('invoice_id', $invoice->id)->count();
+
+        $this->assertSame($countBefore, $countAfter,
+            'الخصومات اتمسحت و ما رجعتش — الترانزاكشن مش شغالة');
+        $this->assertEqualsWithDelta($balanceBefore, (float) $after->net_balance, 0.01,
+            'الرصيد اتغيّر رغم إن العملية فشلت — دي الفلوس اللي بتختفي من الذمم');
+        $this->assertEqualsWithDelta($totalBefore, (float) $after->total_deductions, 0.01,
+            'إجمالي الخصومات اتغيّر رغم إن العملية فشلت');
+        $this->assertEqualsWithDelta(10650.0, (float) $after->net_balance, 0.01, '11,400 − 500 − 250 : الرصيد اللي كان قبل المحاولة');
     }
 }

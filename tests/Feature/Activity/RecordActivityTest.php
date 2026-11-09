@@ -254,6 +254,13 @@ class RecordActivityTest extends TestCase
 
     public function test_the_mute_guard_releases_when_the_scope_throws(): void
     {
+        // Xdebug's "develop" mode keeps the local variables of every frame that threw until the
+        // process ends, so the guard is never destroyed and this cannot be observed. Production
+        // runs without Xdebug; run with XDEBUG_MODE=off (as CI does) to check it.
+        if (extension_loaded('xdebug') && str_contains((string) ini_get('xdebug.mode'), 'develop')) {
+            $this->markTestSkipped('Xdebug develop mode holds on to the guard; run with XDEBUG_MODE=off.');
+        }
+
         try {
             (function () {
                 $mute = ActivityLogger::mute();

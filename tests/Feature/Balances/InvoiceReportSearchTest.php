@@ -4,12 +4,11 @@ namespace Tests\Feature\Balances;
 
 use App\Http\Controllers\CustomerInvoiceDashboardController;
 use App\Models\Company;
-use App\Models\CustomerInvoice;
-use App\Models\Partner;
-use App\Models\SupplierInvoice;
 use App\Models\User;
+use Database\Factories\PartnerFactory;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\MakesInvoices;
 use Tests\TestCase;
 
 /**
@@ -24,60 +23,32 @@ use Tests\TestCase;
  */
 class InvoiceReportSearchTest extends TestCase
 {
-    private ?string $originalDatabase = null;
+    use MakesInvoices;
 
-    private const COMPANY = 148;
+    private Company $company;
+
+    private User $user;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-
-        if (! Company::find(self::COMPANY)) {
-            $this->markTestSkipped('Company '.self::COMPANY.' is not on file.');
-        }
-    }
-
-    protected function tearDown(): void
-    {
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
-
-        parent::tearDown();
+        $this->company = $this->makeCompany();
+        $this->user = $this->makeUser([], $this->company);
     }
 
     /**
-     * شريك بفاتورتين على الجهة المطلوبة ، جوه transaction بتترجع بعدين .
+     * شريك بفاتورتين على الجهة المطلوبة
      *
      * @return array{0: int, 1: string, 2: string}  رقم الشريك ، و رقمي الفاتورتين
      */
     private function partnerWithTwoInvoices(string $modelType): array
     {
-        $partner = new Partner;
-        $partner->forceFill([
-            'company_id' => self::COMPANY,
-            'name' => 'Search Test Partner',
-            'is_customer' => 1,
-            'is_supplier' => 1,
-        ])->save();
-
-        $class = 'App\\Models\\'.$modelType;
-        $column = $class::CLIENT_ID_COLUMN_NAME;
+        $partner = PartnerFactory::new()->forCompany($this->company)->customer()->supplier()
+            ->create(['name' => 'Search Test Partner']);
 
         foreach ([['SRCH-111', 100000, 14000], ['SRCH-222', 250000, 35000]] as [$number, $amount, $vat]) {
-            $invoice = new $class;
-            $invoice->forceFill([
-                'company_id' => self::COMPANY,
-                $column => $partner->id,
+            $attributes = [
                 'invoice_number' => $number,
                 'invoice_date' => '2025-01-15',
                 'invoice_due_date' => '2025-04-15',
@@ -85,7 +56,11 @@ class InvoiceReportSearchTest extends TestCase
                 'vat_amount' => $vat,
                 'currency' => 'EGP',
                 'exchange_rate' => 1,
-            ])->save();
+            ];
+
+            $modelType === 'CustomerInvoice'
+                ? $this->invoice($partner, $attributes)
+                : $this->supplierInvoice($partner, $attributes);
         }
 
         return [$partner->id, 'SRCH-111', 'SRCH-222'];
@@ -98,11 +73,11 @@ class InvoiceReportSearchTest extends TestCase
     {
         $request = Request::create('/x', 'GET', $search === '' ? [] : ['search' => $search]);
         $request->setLaravelSession(app('session.store'));
-        $request->setUserResolver(fn () => User::first());
+        $request->setUserResolver(fn () => $this->user);
         $this->app->instance('request', $request);
 
         $response = app(CustomerInvoiceDashboardController::class)
-            ->showInvoiceReport(Company::findOrFail(self::COMPANY), $request, $partnerId, 'EGP', $modelType);
+            ->showInvoiceReport($this->company, $request, $partnerId, 'EGP', $modelType);
 
         if (! $response instanceof \Inertia\Response) {
             return [-1, []];   // اترمى برّه الصفحة
@@ -121,125 +96,86 @@ class InvoiceReportSearchTest extends TestCase
         return ['customer' => ['CustomerInvoice'], 'supplier' => ['SupplierInvoice']];
     }
 
-    /** @dataProvider invoiceTypes */
+    #[DataProvider('invoiceTypes')]
     public function test_it_finds_an_invoice_by_its_number(string $modelType): void
     {
-        DB::beginTransaction();
+        [$partnerId, $first] = $this->partnerWithTwoInvoices($modelType);
 
-        try {
-            [$partnerId, $first] = $this->partnerWithTwoInvoices($modelType);
+        $this->assertSame(2, $this->report($partnerId, $modelType, '')[0], 'الفاتورتين لازم يبانوا من غير بحث');
 
-            $this->assertSame(2, $this->report($partnerId, $modelType, '')[0], 'الفاتورتين لازم يبانوا من غير بحث');
+        [$total, $numbers] = $this->report($partnerId, $modelType, $first);
 
-            [$total, $numbers] = $this->report($partnerId, $modelType, $first);
-
-            $this->assertSame(1, $total, 'البحث برقم فاتورة كامل لازم يرجّع واحدة بس');
-            $this->assertSame([$first], $numbers);
-        } finally {
-            DB::rollBack();
-        }
+        $this->assertSame(1, $total, 'البحث برقم فاتورة كامل لازم يرجّع واحدة بس');
+        $this->assertSame([$first], $numbers);
     }
 
     /** جزء من الرقم بيضيّق النتائج ، ما بيرجّعش صفر */
-    /** @dataProvider invoiceTypes */
+    #[DataProvider('invoiceTypes')]
     public function test_a_partial_number_narrows_instead_of_returning_nothing(string $modelType): void
     {
-        DB::beginTransaction();
+        [$partnerId] = $this->partnerWithTwoInvoices($modelType);
 
-        try {
-            [$partnerId] = $this->partnerWithTwoInvoices($modelType);
-
-            $this->assertSame(2, $this->report($partnerId, $modelType, 'SRCH-')[0]);
-            $this->assertSame(1, $this->report($partnerId, $modelType, '222')[0]);
-        } finally {
-            DB::rollBack();
-        }
+        $this->assertSame(2, $this->report($partnerId, $modelType, 'SRCH-')[0]);
+        $this->assertSame(1, $this->report($partnerId, $modelType, '222')[0]);
     }
 
     /**
      * البحث بالمبلغ : المبلغ نفسه ، و المبلغ بعد الضريبة ، و بالفاصلة
      * الألفية اللي المستخدم بيشوفها على الشاشة
-     *
-     * @dataProvider invoiceTypes
      */
+    #[DataProvider('invoiceTypes')]
     public function test_it_finds_an_invoice_by_its_amount(string $modelType): void
     {
-        DB::beginTransaction();
+        [$partnerId, , $second] = $this->partnerWithTwoInvoices($modelType);
 
-        try {
-            [$partnerId, , $second] = $this->partnerWithTwoInvoices($modelType);
+        foreach (['250000', '250,000', '285000', '285,000.00'] as $term) {
+            [$total, $numbers] = $this->report($partnerId, $modelType, $term);
 
-            foreach (['250000', '250,000', '285000', '285,000.00'] as $term) {
-                [$total, $numbers] = $this->report($partnerId, $modelType, $term);
-
-                $this->assertSame(1, $total, "البحث بـ \"{$term}\" لازم يوصل للفاتورة");
-                $this->assertSame([$second], $numbers);
-            }
-        } finally {
-            DB::rollBack();
+            $this->assertSame(1, $total, "البحث بـ \"{$term}\" لازم يوصل للفاتورة");
+            $this->assertSame([$second], $numbers);
         }
     }
 
     /**
      * بحث ما لقاش حاجة لازم يفضل في الصفحة بنتيجة فاضية ، مش يرجّع
      * المستخدم لبرّه و يضيّع اللي كتبه
-     *
-     * @dataProvider invoiceTypes
      */
+    #[DataProvider('invoiceTypes')]
     public function test_a_search_that_matches_nothing_stays_on_the_page(string $modelType): void
     {
-        DB::beginTransaction();
+        [$partnerId] = $this->partnerWithTwoInvoices($modelType);
 
-        try {
-            [$partnerId] = $this->partnerWithTwoInvoices($modelType);
+        [$total, $numbers] = $this->report($partnerId, $modelType, 'nothing-matches-this');
 
-            [$total, $numbers] = $this->report($partnerId, $modelType, 'nothing-matches-this');
-
-            $this->assertSame(0, $total, 'المفروض صفر نتيجة');
-            $this->assertSame([], $numbers);
-        } finally {
-            DB::rollBack();
-        }
+        $this->assertSame(0, $total, 'المفروض صفر نتيجة');
+        $this->assertSame([], $numbers);
     }
 
     /** و شريك مالوش فواتير أصلا لسه بيترجّع لبرّه زي ما كان */
     public function test_a_partner_with_no_invoices_at_all_is_still_sent_back(): void
     {
-        DB::beginTransaction();
+        $partner = $this->customer($this->company, ['name' => 'Empty']);
 
-        try {
-            $partner = new Partner;
-            $partner->forceFill(['company_id' => self::COMPANY, 'name' => 'Empty', 'is_customer' => 1])->save();
-
-            $this->assertSame(-1, $this->report($partner->id, 'CustomerInvoice', '')[0],
-                'التقرير الفاضي من غير بحث لازم يفضل يرجّع المستخدم زي ما كان بيعمل');
-        } finally {
-            DB::rollBack();
-        }
+        $this->assertSame(-1, $this->report($partner->id, 'CustomerInvoice', '')[0],
+            'التقرير الفاضي من غير بحث لازم يفضل يرجّع المستخدم زي ما كان بيعمل');
     }
 
     /** التصدير بينزّل اللي على الشاشة ، مش التقرير كله */
     public function test_the_export_link_carries_the_search(): void
     {
-        DB::beginTransaction();
+        [$partnerId] = $this->partnerWithTwoInvoices('CustomerInvoice');
 
-        try {
-            [$partnerId] = $this->partnerWithTwoInvoices('CustomerInvoice');
+        $request = Request::create('/x', 'GET', ['search' => 'SRCH-222']);
+        $request->setLaravelSession(app('session.store'));
+        $request->setUserResolver(fn () => $this->user);
+        $this->app->instance('request', $request);
 
-            $request = Request::create('/x', 'GET', ['search' => 'SRCH-222']);
-            $request->setLaravelSession(app('session.store'));
-            $request->setUserResolver(fn () => User::first());
-            $this->app->instance('request', $request);
+        $props = app(CustomerInvoiceDashboardController::class)
+            ->showInvoiceReport($this->company, $request, $partnerId, 'EGP', 'CustomerInvoice')
+            ->toResponse($request)->original->getData()['page']['props'];
 
-            $props = app(CustomerInvoiceDashboardController::class)
-                ->showInvoiceReport(Company::findOrFail(self::COMPANY), $request, $partnerId, 'EGP', 'CustomerInvoice')
-                ->toResponse($request)->original->getData()['page']['props'];
-
-            $this->assertStringContainsString('search=SRCH-222', urldecode($props['exportUrl']));
-            $this->assertSame('SRCH-222', $props['filters']['search'], 'اللي المستخدم كتبه لازم يرجع للصندوق');
-        } finally {
-            DB::rollBack();
-        }
+        $this->assertStringContainsString('search=SRCH-222', urldecode($props['exportUrl']));
+        $this->assertSame('SRCH-222', $props['filters']['search'], 'اللي المستخدم كتبه لازم يرجع للصندوق');
     }
 
     /** الصفحة بتستقبل البروبس الجديدة فعلا */

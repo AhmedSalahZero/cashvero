@@ -7,6 +7,7 @@ use App\Models\Contract;
 use App\Services\Reports\ConsolidatedCashFlowService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Tests\Concerns\MakesBanks;
 use Tests\TestCase;
 
 /**
@@ -27,9 +28,7 @@ use Tests\TestCase;
  */
 class ConsolidatedNetCashBanksDuplicationTest extends TestCase
 {
-    private ?string $originalDatabase = null;
-
-    private bool $inTransaction = false;
+    use MakesBanks;
 
     private int $companyId = 0;
 
@@ -39,35 +38,17 @@ class ConsolidatedNetCashBanksDuplicationTest extends TestCase
     {
         parent::setUp();
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
+        // The report refuses a window that does not include today, and the scenario below is
+        // dated September 2026 - January 2027. Freeze the clock inside that window so the test
+        // does not start failing once the calendar moves past it.
+        $this->travelTo(\Carbon\Carbon::parse('2026-09-17 10:00:00'));
 
-        try {
-            DB::connection('mysql')->getPdo();
-            DB::table('contracts')->limit(1)->get();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-
-        DB::beginTransaction();
-        $this->inTransaction = true;
-
-        $this->companyId = (int) DB::table('companies')->insertGetId([
-            'name' => json_encode(['en' => 'Net Cash Banks Test Co', 'ar' => 'Net Cash Banks Test Co']),
-            'main_functional_currency' => 'EGP',
-        ]);
+        $this->companyId = $this->makeCompany()->id;
     }
 
     protected function tearDown(): void
     {
-        if ($this->inTransaction) {
-            DB::rollBack();
-            $this->inTransaction = false;
-        }
-
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
+        $this->travelBack();
 
         parent::tearDown();
     }
@@ -81,30 +62,12 @@ class ConsolidatedNetCashBanksDuplicationTest extends TestCase
      */
     private function bankAccountWithOpeningBalance(): void
     {
-        $bankId = (int) DB::table('banks')->insertGetId([
-            'name_en' => 'Net Cash Test Bank',
-            'name_ar' => 'Net Cash Test Bank',
-        ]);
+        $company = Company::findOrFail($this->companyId);
 
-        $institutionId = (int) DB::table('financial_institutions')->insertGetId([
-            'company_id' => $this->companyId,
-            'bank_id' => $bankId,
-            'name' => 'Net Cash Test Institution',
-            'updated_by' => 0,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        $accountId = (int) DB::table('financial_institution_accounts')->insertGetId([
-            'company_id' => $this->companyId,
-            'financial_institution_id' => $institutionId,
-            'account_number' => 'NETCASH-'.uniqid(),
-            'currency' => 'EGP',
+        $accountId = $this->currentAccount($this->bank($company), 'EGP', [
             'balance_amount' => self::OPENING_BALANCE,
             'balance_date' => '2026-08-31',
-            'exchange_rate' => 1,
-            'is_active' => 1,
-        ]);
+        ])->id;
 
         DB::table('current_account_bank_statements')->insert([
             'company_id' => $this->companyId,
@@ -161,8 +124,8 @@ class ConsolidatedNetCashBanksDuplicationTest extends TestCase
         return Contract::find($contractId);
     }
 
-    /** @return array<string, mixed>|null */
-    private function buildReport(Contract $contract): ?array
+    /** @return array<string, mixed> */
+    private function buildReport(Contract $contract): array
     {
         $request = Request::create('/x', 'GET', [
             'start_date' => '09/01/2026',
@@ -173,11 +136,7 @@ class ConsolidatedNetCashBanksDuplicationTest extends TestCase
         ]);
         app()->instance('request', $request);
 
-        try {
-            return (new ConsolidatedCashFlowService)->build(Company::find($this->companyId), $request);
-        } catch (\RuntimeException $e) {
-            $this->markTestSkipped('Today is outside the report window this test builds: '.$e->getMessage());
-        }
+        return (new ConsolidatedCashFlowService)->build(Company::find($this->companyId), $request);
     }
 
     public function test_net_cash_does_not_count_the_bank_balance_twice(): void

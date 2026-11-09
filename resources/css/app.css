@@ -227,6 +227,10 @@
     --cvr-text-primary:    #0F2233;
     --cvr-text-secondary:  #3E5568;
     --cvr-text-muted:      #7995A8;
+    /* Same as --cvr-green / --cvr-blue below: the dark-mode sky blue and emerald are too pale to
+       read on a white card. */
+    --cvr-text-green:      #0F9D5C;
+    --cvr-text-blue:       #1487C4;
     --cvr-text-placeholder:#A9C0CE;
     --cvr-text-on-brand:   #FFFFFF;
 

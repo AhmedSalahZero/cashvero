@@ -3,10 +3,14 @@
 namespace Tests\Feature\Odoo;
 
 use App\Console\Commands\FixDownPaymentChequeOdooEntriesCommand;
+use App\Models\Company;
 use App\Models\MoneyPayment;
 use App\Models\MoneyReceived;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use ReflectionClass;
+use Tests\Concerns\MakesBanks;
+use Tests\Concerns\MakesOdooSettings;
 use Tests\TestCase;
 
 /**
@@ -20,33 +24,54 @@ use Tests\TestCase;
  */
 class FixDownPaymentChequeCommandTest extends TestCase
 {
-    private ?string $originalDatabase = null;
+    use MakesBanks;
+    use MakesMoneyCheques;
+    use MakesOdooSettings;
 
+    private Company $company;
+
+    private User $clerk;
+
+    /** The customer down-payment cheque that was posted to the cash account (it has the entry id). */
+    private MoneyReceived $wronglyPosted;
+
+    /** The supplier down-payment cheque that matches the bug but carries no Odoo entry id. */
+    private MoneyPayment $unidentified;
+
+    /**
+     * A company connected to a (fake) Odoo, with one record of every kind the command has to
+     * tell apart: the two bug cases, and the ordinary movements it must leave alone.
+     */
     protected function setUp(): void
     {
         parent::setUp();
 
-        // Pointed at the development database on purpose: these assertions are
-        // about the real records. Restored in tearDown so the rest of the suite
-        // is not left talking to it.
-        $this->originalDatabase = config('database.connections.mysql.database');
+        $this->company = $this->makeCompany([
+            'odoo_db_url' => 'https://odoo.invalid',
+            'odoo_db_name' => 'test',
+            'odoo_integration_start_date' => '2020-01-01',
+        ]);
+        $this->odooSetting($this->company);
+        $this->clerk = $this->makeUser([], $this->company);
 
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
+        $this->wronglyPosted = $this->receivedCheque($this->company, 'is_customer', [
+            'money_type' => MoneyReceived::DOWN_PAYMENT,
+            'journal_entry_id' => 55501,
+            'odoo_reference' => 'MISC/2026/0001',
+            'user_id' => $this->clerk->id,
+        ]);
+        $this->unidentified = $this->paidCheque($this->company, 'is_supplier', [
+            'money_type' => MoneyPayment::DOWN_PAYMENT,
+            'user_id' => $this->clerk->id,
+        ]);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-    }
-
-    protected function tearDown(): void
-    {
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
-
-        parent::tearDown();
+        // Everything below is fine as it is and must never be selected.
+        $this->receivedCheque($this->company, 'is_customer', ['journal_entry_id' => 55502]);                 // ordinary invoice cheque
+        $this->receivedCheque($this->company, 'is_employee', ['money_type' => MoneyReceived::DOWN_PAYMENT, 'transaction_type' => 'pay-loan', 'journal_entry_id' => 55503]);
+        $this->receivedMoney($this->company, MoneyReceived::CASH_IN_SAFE, 'is_customer', ['money_type' => MoneyReceived::DOWN_PAYMENT, 'journal_entry_id' => 55504]);
+        $this->receivedMoney($this->company, MoneyReceived::INCOMING_TRANSFER, 'is_customer', ['journal_entry_id' => 55505]);
+        $this->paidMoney($this->company, MoneyPayment::CASH_PAYMENT, 'is_supplier', ['money_type' => MoneyPayment::DOWN_PAYMENT, 'journal_entry_id' => 55506]);
+        $this->paidCheque($this->company, 'is_supplier');                                                     // ordinary bill cheque
     }
 
     /** Every column the command is capable of writing, across both tables. */
@@ -56,6 +81,7 @@ class FixDownPaymentChequeCommandTest extends TestCase
 
         foreach (['money_received', 'money_payments'] as $table) {
             $rows = DB::table($table)
+                ->where('company_id', $this->company->id)
                 ->orderBy('id')
                 ->get(['id', 'odoo_id', 'odoo_move_id', 'journal_entry_id',
                     'account_bank_statement_line_id', 'odoo_reference',
@@ -100,20 +126,18 @@ class FixDownPaymentChequeCommandTest extends TestCase
 
         [$repairable] = $this->call_($command, 'findAffected');
 
+        // The confirmation is only reached when there is something to repair.
+        $this->assertNotSame([], $repairable, 'The wrongly posted cheque must be offered for repair.');
+
         $before = $this->odooColumnFingerprint();
 
-        $run = $this->artisan('odoo:fix-down-payment-cheques --apply');
-
-        // The confirmation is only reached when there is something to repair;
-        // on a database with nothing affected the command stops earlier.
-        if ($repairable !== []) {
-            $run->expectsConfirmation('Proceed?', 'no');
-        }
-
-        $run->run();
+        $this->artisan('odoo:fix-down-payment-cheques --apply')
+            ->expectsConfirmation('Proceed?', 'no')
+            ->run();
 
         $this->assertSame($before, $this->odooColumnFingerprint(),
             'Nothing may be written unless the operator confirms.');
+        $this->odoo()->assertNothingCalled();
     }
 
     /* ── it must select exactly the affected rows ─────────────────── */
@@ -125,9 +149,10 @@ class FixDownPaymentChequeCommandTest extends TestCase
     public function test_it_selects_only_down_payment_cheques_of_customers_and_suppliers(): void
     {
         $command = $this->command();
+        $selected = [];
 
         foreach ([MoneyReceived::class, MoneyPayment::class] as $class) {
-            foreach ($class::cursor() as $model) {
+            foreach ($class::where('company_id', $this->company->id)->cursor() as $model) {
                 try {
                     $expected = $model->isChequeOrChequePayment()
                         && $model->isDownPayment()
@@ -141,15 +166,20 @@ class FixDownPaymentChequeCommandTest extends TestCase
                     $this->call_($command, 'tookTheWrongPath', [$model]),
                     class_basename($class).'#'.$model->id.' is selected wrongly.'
                 );
+
+                if ($expected) {
+                    $selected[] = $this->label($model);
+                }
             }
         }
+
+        $this->assertSame([$this->label($this->wronglyPosted), $this->label($this->unidentified)], $selected,
+            'Exactly the customer and the supplier down-payment cheques are the bug — nothing else on file.');
     }
 
     /**
-     * The live data happens to contain no down-payment cheque whose partner
-     * is neither a customer nor a supplier, so a selection widened to every
-     * cheque would look identical against it. This walks the whole truth
-     * table on stand-ins instead, so each condition is pinned on its own.
+     * The whole truth table on stand-ins, so each condition is pinned on its
+     * own — a selection widened to every cheque must fail here.
      */
     public function test_each_selection_condition_is_required(): void
     {
@@ -188,7 +218,7 @@ class FixDownPaymentChequeCommandTest extends TestCase
      * three predicates drags in observers and a database. That the real
      * models answer these three is covered by
      * test_it_selects_only_down_payment_cheques_of_customers_and_suppliers,
-     * which runs against every row on file.
+     * which runs against real rows of every kind.
      */
     private function stubMoney(bool $isCheque, bool $isDownPayment, ?string $partnerType): object
     {
@@ -219,15 +249,19 @@ class FixDownPaymentChequeCommandTest extends TestCase
         $command = $this->command();
         $checked = 0;
 
-        foreach (MoneyReceived::where('type', '!=', 'cheque')->limit(200)->cursor() as $model) {
+        foreach (MoneyReceived::where('company_id', $this->company->id)->where('type', '!=', 'cheque')->limit(200)->cursor() as $model) {
             $this->assertFalse($this->call_($command, 'tookTheWrongPath', [$model]),
                 'MoneyReceived#'.$model->id.' is not a cheque and must be left alone.');
             $checked++;
         }
 
-        if ($checked === 0) {
-            $this->markTestSkipped('No non-cheque money-received rows in this database, so there is nothing to check.');
+        foreach (MoneyReceived::where('company_id', $this->company->id)->where('type', 'cheque')->where('money_type', '!=', MoneyReceived::DOWN_PAYMENT)->cursor() as $model) {
+            $this->assertFalse($this->call_($command, 'tookTheWrongPath', [$model]),
+                'MoneyReceived#'.$model->id.' is not a down payment and must be left alone.');
+            $checked++;
         }
+
+        $this->assertSame(3, $checked, 'A cash down payment, a transfer and an ordinary cheque were checked.');
     }
 
     /* ── it must refuse what it cannot identify ───────────────────── */
@@ -243,6 +277,11 @@ class FixDownPaymentChequeCommandTest extends TestCase
         $this->bootCommandOptions($command);
 
         [$repairable, $needsReview] = $this->call_($command, 'findAffected');
+
+        $this->assertSame([$this->label($this->wronglyPosted)], array_map(fn ($e) => $this->label($e['model']), $repairable),
+            'The cheque that carries the wrong entry id is the one to repair.');
+        $this->assertSame([$this->label($this->unidentified)], array_map(fn ($m) => $this->label($m), $needsReview),
+            'The matching cheque without an entry id is only listed for review.');
 
         foreach ($repairable as $entry) {
             $this->assertNotEmpty($entry['journalEntryId'],
@@ -308,11 +347,7 @@ class FixDownPaymentChequeCommandTest extends TestCase
     {
         $command = $this->command();
 
-        $model = MoneyReceived::whereNotNull('user_id')->first();
-
-        if (! $model) {
-            $this->markTestSkipped('No record with a user_id on file.');
-        }
+        $model = $this->wronglyPosted;
 
         $this->bootCommandOptions($command);
 
@@ -320,6 +355,7 @@ class FixDownPaymentChequeCommandTest extends TestCase
 
         $this->assertNotNull($user, 'The person who entered the record is the default identity.');
         $this->assertSame((int) $model->user_id, (int) $user->id);
+        $this->assertSame($this->clerk->id, (int) $user->id);
     }
 
     /** With no user on the record and no --user, it must resolve to nobody. */

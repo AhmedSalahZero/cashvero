@@ -32,12 +32,6 @@ class PermissionGranularitySecurityTest extends TestCase
     /** Actions that only read. Anything else (create, update, delete, import, settle, renew, approve...) changes data. */
     private const READ_ACTIONS = ['view', 'export'];
 
-    protected function tearDown(): void
-    {
-        $this->cleanupScratch();
-        parent::tearDown();
-    }
-
     /* ────────────────────────────── SEC-35a ────────────────────────────── */
 
     public function test_every_permission_the_route_map_asks_for_exists(): void
@@ -69,15 +63,9 @@ class PermissionGranularitySecurityTest extends TestCase
 
     public function test_every_permission_key_exists_in_the_database(): void
     {
-        try {
-            $stored = Permission::where('guard_name', 'web')->pluck('name')->flip()->all();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('The permissions table could not be read: '.$e->getMessage());
-        }
+        $stored = Permission::where('guard_name', 'web')->pluck('name')->flip()->all();
 
-        if ($stored === []) {
-            $this->markTestSkipped('The permissions table is empty; run php artisan cashvero:prepare-test-db --from=cashvero');
-        }
+        $this->assertNotSame([], $stored, 'Test set-up problem: the permissions table of the test database is empty (TestReferenceSeeder fills it from PermissionRegistry).');
 
         $missing = [];
 
@@ -109,6 +97,9 @@ class PermissionGranularitySecurityTest extends TestCase
      * share one old name: the same name grants "customer_balance.view" AND "customer_balance.update". Users created
      * by the current screens hold only the new keys, so that overlap is harmless. It becomes a hole the moment a
      * user still holds such an old name, because holding it silently grants the change rights too.
+     *
+     * The users checked are the ones the application makes (one from every built-in role template); a user
+     * migrated with only an old name is planted as a control that the scan really finds such a person.
      */
     public function test_no_user_holds_an_old_permission_name_that_also_grants_change_rights(): void
     {
@@ -144,36 +135,27 @@ class PermissionGranularitySecurityTest extends TestCase
             return;
         }
 
-        // Every permission name each user holds directly (that is what the application checks).
-        $held = [];
+        $oldName = array_key_first($grants);
+        $this->bootScratch(false);
 
-        foreach (DB::table('model_has_permissions')
-            ->join('permissions', 'permissions.id', '=', 'model_has_permissions.permission_id')
-            ->join('users', 'users.id', '=', 'model_has_permissions.model_id')
-            ->where('model_has_permissions.model_type', \App\Models\User::class)
-            ->where('users.email', 'not like', 'sec-test-%')
-            ->get(['users.id as user_id', 'users.email', 'permissions.name as permission']) as $row) {
-            $held[$row->user_id]['email'] = $row->email;
-            $held[$row->user_id]['names'][$row->permission] = true;
+        // The people a test database holds are the ones the application itself makes: one from every
+        // built-in role template, the way the user screens create them.
+        foreach (\Spatie\Permission\Models\Role::where('guard_name', 'web')->get() as $role) {
+            \App\Support\Permissions\RoleTemplate::applyTo($this->scratchUser([$this->companyA->id]), $role);
         }
 
-        $lines = [];
+        // Controls, so a clean result means something: a user migrated with only the old name MUST be
+        // reported, and a full administrator who holds every change key anyway must NOT be.
+        $migrated = $this->scratchUser([$this->companyA->id], [$oldName]);
+        $administrator = $this->scratchUser([$this->companyA->id], array_merge([$oldName], $grants[$oldName]));
 
-        foreach ($held as $userId => $info) {
-            foreach ($grants as $oldName => $changeKeys) {
-                if (! isset($info['names'][$oldName])) {
-                    continue;
-                }
+        $lines = $this->usersGainingChangeRights($grants);
 
-                // Only a problem when the old name gives the user something they do not already hold properly:
-                // a full administrator who has every new key anyway gains nothing from it.
-                $extra = array_values(array_filter($changeKeys, fn ($key) => ! isset($info['names'][$key])));
+        $this->assertArrayHasKey($migrated->id, $lines, "Test set-up problem: a user holding only the old name \"{$oldName}\" was not reported, so the scan below proves nothing.");
+        $this->assertArrayNotHasKey($administrator->id, $lines, 'Test set-up problem: a user who holds every change key anyway was reported; the scan is too eager to be trusted.');
 
-                if ($extra !== []) {
-                    $lines[] = "user #{$userId} ({$info['email']}) holds the old name \"{$oldName}\", which also grants (and the user does not otherwise hold): ".implode(', ', array_slice($extra, 0, 6));
-                }
-            }
-        }
+        unset($lines[$migrated->id]);
+        $lines = array_merge(...array_values($lines ?: [[]]));
 
         $this->assertSame([], $lines, Finding::message(
             'SEC-35b', 'MEDIUM',
@@ -190,9 +172,7 @@ class PermissionGranularitySecurityTest extends TestCase
     {
         $this->bootAttack();
 
-        if (! config('permissions.enforce', true)) {
-            $this->markTestSkipped('Permission enforcement is switched off in this environment (PERMISSIONS_ENFORCE=false), so there is nothing to test.');
-        }
+        $this->assertTrue((bool) config('permissions.enforce', true), 'Permission enforcement is switched off in this environment (PERMISSIONS_ENFORCE=false): every screen is open to every signed-in user.');
 
         // Every stored permission name that stands for a "view" key, and nothing else.
         $names = [];
@@ -254,6 +234,47 @@ class PermissionGranularitySecurityTest extends TestCase
     }
 
     /* ───────────────────────────── helpers ───────────────────────────── */
+
+    /**
+     * Every user who holds (directly: that is what the application checks) an old name that also grants
+     * change rights they do not otherwise hold.
+     *
+     * @param  array<string, list<string>>  $grants  old name => change keys it grants
+     * @return array<int, list<string>>  user id => what is wrong
+     */
+    private function usersGainingChangeRights(array $grants): array
+    {
+        $held = [];
+
+        foreach (DB::table('model_has_permissions')
+            ->join('permissions', 'permissions.id', '=', 'model_has_permissions.permission_id')
+            ->join('users', 'users.id', '=', 'model_has_permissions.model_id')
+            ->where('model_has_permissions.model_type', \App\Models\User::class)
+            ->get(['users.id as user_id', 'users.email', 'permissions.name as permission']) as $row) {
+            $held[$row->user_id]['email'] = $row->email;
+            $held[$row->user_id]['names'][$row->permission] = true;
+        }
+
+        $lines = [];
+
+        foreach ($held as $userId => $info) {
+            foreach ($grants as $oldName => $changeKeys) {
+                if (! isset($info['names'][$oldName])) {
+                    continue;
+                }
+
+                // Only a problem when the old name gives the user something they do not already hold properly:
+                // a full administrator who has every new key anyway gains nothing from it.
+                $extra = array_values(array_filter($changeKeys, fn ($key) => ! isset($info['names'][$key])));
+
+                if ($extra !== []) {
+                    $lines[$userId][] = "user #{$userId} ({$info['email']}) holds the old name \"{$oldName}\", which also grants (and the user does not otherwise hold): ".implode(', ', array_slice($extra, 0, 6));
+                }
+            }
+        }
+
+        return $lines;
+    }
 
     /** 'invoice.update' → 'update' */
     private function actionOf(string $key): string

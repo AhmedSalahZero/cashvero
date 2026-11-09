@@ -4,7 +4,6 @@ namespace Tests\Feature\Imports;
 
 use App\Models\ActiveJob;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -14,34 +13,18 @@ use Tests\TestCase;
  * * خلصت ، انقطاع) الصف كان بيفضل موجود للأبد : الصفحة تقول "جاري
  * * المعالجة" على طول ، من غير سبب ، و من غير أي طريقة يرفع تاني
  *
- * * كل الكتابة هنا جوه ترانزاكشن بترجع
+ * * كل الكتابة هنا جوه ترانزاكشن TestCase اللي بترجع بعد كل تست
  */
 class StuckImportRecoveryTest extends TestCase
 {
-    private ?string $originalDatabase = null;
+    private int $companyId = 0;
 
+    /** A company of the test's own (TestCase rolls everything back after each test). */
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-    }
-
-    protected function tearDown(): void
-    {
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
-
-        parent::tearDown();
+        $this->companyId = $this->makeCompany()->id;
     }
 
     private function job(array $attributes = []): ActiveJob
@@ -49,7 +32,7 @@ class StuckImportRecoveryTest extends TestCase
         $job = new ActiveJob;
         $job->forceFill(array_merge([
             'id' => 999999,
-            'company_id' => 92,
+            'company_id' => $this->companyId,
             'status' => 'test_table',
             'model' => 'CustomerInvoice',
             'model_name' => 'SalesGatheringTest',
@@ -125,47 +108,35 @@ class StuckImportRecoveryTest extends TestCase
 
     public function test_marking_a_job_failed_stores_the_reason(): void
     {
-        DB::beginTransaction();
+        $job = ActiveJob::create([
+            'company_id' => $this->companyId,
+            'status' => 'test_table',
+            'model' => 'ZzTestModel',
+            'model_name' => 'SalesGatheringTest',
+        ]);
 
-        try {
-            $job = ActiveJob::create([
-                'company_id' => 92,
-                'status' => 'test_table',
-                'model' => 'ZzTestModel',
-                'model_name' => 'SalesGatheringTest',
-            ]);
+        $job->markFailed('Excel Import Failed — out of memory');
+        $job->refresh();
 
-            $job->markFailed('Excel Import Failed — out of memory');
-            $job->refresh();
-
-            $this->assertNotNull($job->failed_at);
-            $this->assertStringContainsString('out of memory', $job->failure_reason);
-            $this->assertTrue($job->needsAttention());
-        } finally {
-            DB::rollBack();
-        }
+        $this->assertNotNull($job->failed_at);
+        $this->assertStringContainsString('out of memory', $job->failure_reason);
+        $this->assertTrue($job->needsAttention());
     }
 
     /** * السبب الطويل ما يكسرش العمود */
     public function test_a_very_long_reason_is_truncated(): void
     {
-        DB::beginTransaction();
+        $job = ActiveJob::create([
+            'company_id' => $this->companyId,
+            'status' => 'test_table',
+            'model' => 'ZzTestModel',
+            'model_name' => 'SalesGatheringTest',
+        ]);
 
-        try {
-            $job = ActiveJob::create([
-                'company_id' => 92,
-                'status' => 'test_table',
-                'model' => 'ZzTestModel',
-                'model_name' => 'SalesGatheringTest',
-            ]);
+        $job->markFailed(str_repeat('x', 8000));
+        $job->refresh();
 
-            $job->markFailed(str_repeat('x', 8000));
-            $job->refresh();
-
-            $this->assertLessThanOrEqual(2000, mb_strlen((string) $job->failure_reason));
-        } finally {
-            DB::rollBack();
-        }
+        $this->assertLessThanOrEqual(2000, mb_strlen((string) $job->failure_reason));
     }
 
     /* ───────────── التوصيلات ───────────── */

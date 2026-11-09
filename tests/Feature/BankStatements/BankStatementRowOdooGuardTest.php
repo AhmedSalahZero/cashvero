@@ -4,15 +4,13 @@ namespace Tests\Feature\BankStatements;
 
 use App\Models\Company;
 use App\Models\CurrentAccountBankStatement;
-use App\Models\FinancialInstitution;
 use App\Models\FinancialInstitutionAccount;
 use App\Models\TimeOfDeposit;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Support\Facades\DB;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
+use Tests\Concerns\MakesBanks;
 use Tests\TestCase;
 
 /**
@@ -26,10 +24,13 @@ use Tests\TestCase;
  * و التعديل كان بيقع بـ 500 من غير ما يتنفّذ أصلا.
  *
  * التست ده بيتأكد إن المسار بيعدّي و الصف بيتحدّث فعلا.
+ *
+ * الشركة و البنك و الحساب و اليوزر معمولين في التست نفسه (شركة مشتركة في
+ * CashVero و من غير أودو) ، و كله بيترجع في الآخر.
  */
 class BankStatementRowOdooGuardTest extends TestCase
 {
-    use DatabaseTransactions;
+    use MakesBanks;
 
     private Company $company;
 
@@ -55,14 +56,6 @@ class BankStatementRowOdooGuardTest extends TestCase
         parent::tearDown();
     }
 
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
-
     protected function setUp(): void
     {
         parent::setUp();
@@ -73,65 +66,15 @@ class BankStatementRowOdooGuardTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        try {
-            DB::connection('mysql')->getPdo();
-            DB::table('companies')->limit(1)->get();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
+        // شركة مشتركة في CashVero (المسار محطوط خلف isCashManagement) و من غير أودو
+        $this->company = $this->makeCompany();
 
-        /*
-         * المسار محطوط خلف isCashManagement ، و ده بيقرا انظمة الشركة
-         * الاولانية بتاعة اليوزر (company_systems) — فالشركة لازم يكون
-         * عندها CASH_VERO و بنك نعلّق عليه الحساب في نفس الوقت
-         */
-        $companyIds = DB::table('company_systems')->where('system_name', CASH_VERO)->pluck('company_id');
-        $bank = FinancialInstitution::query()->whereIn('company_id', $companyIds)->first();
-
-        if (! $bank) {
-            $this->markTestSkipped('Development database has no cash-management company with a financial institution.');
-        }
-
-        $this->company = Company::findOrFail($bank->company_id);
-
-        $this->account = FinancialInstitutionAccount::create([
-            'company_id' => $this->company->id,
-            'financial_institution_id' => $bank->id,
+        $this->account = $this->currentAccount($this->bank($this->company), 'EGP', [
             'account_number' => 'TEST-ODOO-GUARD-'.uniqid(),
-            'currency' => 'EGP',
-            'balance_amount' => 0,
             'balance_date' => now()->subYears(2)->format('Y-m-d'),
-            'exchange_rate' => 1,
-            'is_active' => 1,
         ]);
 
-        /** @var User $user */
-        $user = User::create([
-            'name' => 'Bank Statement Odoo Guard '.uniqid(),
-            'email' => 'bank-statement-odoo-guard-'.uniqid().'@example.test',
-            'password' => bcrypt('secret-for-tests'),
-            'company_id' => $this->company->id,
-        ]);
-        $user->assignRole('company-admin');
-        /*
-         * cashvero عنده EnforcePermission بيخريطة كل راوت لصلاحية
-         * (و ده مش موجود في system.veroanalysisb.com) — فبناخد
-         * المطلوب من الخريطة نفسها لو موجودة ، عشان نفس الملف يشتغل
-         * في المشروعين من غير تفريع
-         */
-        $mapClass = '\App\Support\Permissions\RoutePermissionMap';
-        $required = class_exists($mapClass) ? ($mapClass::for('update.bank.statement.debit.or.credit') ?: []) : [];
-        foreach ($required as $permissionName) {
-            $permission = \Spatie\Permission\Models\Permission::firstOrCreate(
-                ['name' => $permissionName, 'guard_name' => 'web']
-            );
-            $user->givePermissionTo($permission);
-        }
-        $user->load('roles', 'permissions');
-        $user->companies()->attach($this->company->id);
-        $user->load('companies');
-
-        $this->actor = $user;
+        $this->actor = $this->makeUser(['report_bank_statement.update'], $this->company, 'company-admin');
     }
 
     /**
@@ -175,6 +118,7 @@ class BankStatementRowOdooGuardTest extends TestCase
         $deposit->deletePeriodInterest($statement);
 
         $this->assertNull(CurrentAccountBankStatement::find($statement->id));
+        $this->odoo()->assertNothingCalled();
     }
 
     public function test_a_row_carrying_an_odoo_interest_entry_updates_without_odoo_credentials(): void
@@ -209,5 +153,6 @@ class BankStatementRowOdooGuardTest extends TestCase
         $response->assertSessionMissing('fail');
 
         $this->assertSame(2000.0, (float) $statement->fresh()->debit);
+        $this->odoo()->assertNothingCalled();
     }
 }

@@ -4,16 +4,16 @@ namespace Tests\Feature\Reports;
 
 use App\Models\Bank;
 use App\Models\Company;
-use App\Models\FinancialInstitution;
 use App\Models\Partner;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Database\Factories\BankFactory;
+use Database\Factories\PartnerFactory;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Inertia\Testing\AssertableInertia as Assert;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
+use Tests\Concerns\MakesBanks;
 use Tests\TestCase;
 
 /**
@@ -21,12 +21,12 @@ use Tests\TestCase;
  * suppliers whose due date is on or after a chosen date, in the chosen
  * currencies, optionally narrowed to one bank.
  *
- * Every row is written inside a transaction that is rolled back, and every
- * date sits in 2099 so the company's real cheques never reach an assertion.
+ * Every record — the company, its bank, the two drawee banks, the partners and the cheques —
+ * is made by the test and rolled back afterwards. Dates sit in 2099.
  */
 class ChequesReportTest extends TestCase
 {
-    use DatabaseTransactions;
+    use MakesBanks;
 
     private Company $company;
 
@@ -40,14 +40,6 @@ class ChequesReportTest extends TestCase
 
     private int $deliveryBankId;
 
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
-
     protected function setUp(): void
     {
         parent::setUp();
@@ -58,43 +50,18 @@ class ChequesReportTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
+        $this->company = $this->makeCompany();
+        $this->deliveryBankId = $this->bank($this->company)->id;
+        $this->bankA = BankFactory::new()->create();
+        $this->bankB = BankFactory::new()->create();
 
-        if (! Schema::connection('mysql')->hasTable('payable_cheques')) {
-            $this->markTestSkipped('No development schema on '.DB::connection('mysql')->getDatabaseName().' - set SMOKE_DB to run this suite.');
-        }
-
-        $institution = FinancialInstitution::query()->whereNotNull('company_id')->whereNotNull('bank_id')->first();
-        $banks = Bank::query()->limit(2)->get();
-        if (! $institution || $banks->count() < 2) {
-            $this->markTestSkipped('Development database needs a bank-type financial institution and two banks.');
-        }
-
-        $this->company = Company::findOrFail($institution->company_id);
-        $this->deliveryBankId = $institution->id;
-        [$this->bankA, $this->bankB] = [$banks[0], $banks[1]];
-
-        $this->customer = Partner::create(['company_id' => $this->company->id, 'name' => 'Cheques Customer '.uniqid(), 'is_customer' => 1]);
-        $this->supplier = Partner::create(['company_id' => $this->company->id, 'name' => 'Cheques Supplier '.uniqid(), 'is_supplier' => 1]);
+        $this->customer = PartnerFactory::new()->forCompany($this->company)->customer()->create(['name' => 'Cheques Customer '.uniqid()]);
+        $this->supplier = PartnerFactory::new()->forCompany($this->company)->supplier()->create(['name' => 'Cheques Supplier '.uniqid()]);
     }
 
     private function userWith(array $permissions): User
     {
-        $user = User::create([
-            'name' => 'Cheques Report '.uniqid(),
-            'email' => 'cheques-report-'.uniqid().'@example.test',
-            'password' => bcrypt('secret-for-tests'),
-            'company_id' => $this->company->id,
-        ]);
-        $user->givePermissionTo($permissions);
-        $user->companies()->attach($this->company->id);
-        $user->load('companies');
-
-        return $user;
+        return $this->makeUser($permissions, $this->company);
     }
 
     private function receivedCheque(string $number, string $dueDate, string $currency, float $amount, Bank $bank, string $status = 'in-safe'): void

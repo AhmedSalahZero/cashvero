@@ -48,8 +48,13 @@ class SourceCodeSecurityTest extends StaticSecurityTestCase
      * the same is true, then raise the number here.
      */
     private const RAW_SQL_BASELINE = [
-        // Reviewed: runs the project's own fixed .sql trigger files, console-only, no user input.
-        'app/Console/Commands/PrepareTestDatabaseCommand.php' => 4,
+        // Reviewed: runs the project's own fixed .sql trigger files; every other name it puts in SQL is
+        // a class constant, a fixed table list, or a table read from information_schema of the test
+        // database it just built. Console-only, no user input.
+        'app/Console/Commands/PrepareTestDatabaseCommand.php' => 6,
+        // Reviewed: runs SELECTs written out in the command itself; the only outside value (the
+        // --company id) is cast to int and bound as a parameter. Console-only, read-only.
+        'app/Console/Commands/AuditDataCommand.php' => 1,
         'app/Console/Commands/RepairStatementBalancesCommand.php' => 2,
         'app/Console/Commands/RunSqlOnProduction.php' => 1,
         'app/Http/Controllers/BalancesController.php' => 3,

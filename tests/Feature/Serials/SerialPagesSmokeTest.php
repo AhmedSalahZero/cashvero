@@ -2,9 +2,9 @@
 
 namespace Tests\Feature\Serials;
 
-use App\Models\Company;
 use App\Models\MoneyReceived;
 use App\Models\User;
+use Database\Factories\MoneyReceivedFactory;
 use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
@@ -33,20 +33,14 @@ class SerialPagesSmokeTest extends SerialTestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        $this->actor = User::whereHas('roles', fn ($q) => $q->where('roles.id', 1))->first() ?? User::first();
+        $this->actor = $this->makeSuperAdmin($this->company);
     }
 
+    /** A cash-in-safe receipt saved like one entered on the screen, so it carries its serial. */
     private function cashInSafeRow(): MoneyReceived
     {
-        $row = MoneyReceived::where('type', MoneyReceived::CASH_IN_SAFE)
-            ->whereNull('opening_balance_id')
-            ->whereNull('advanced_opening_balance_id')
-            ->whereNotNull('serial')
-            ->first();
-
-        if (! $row) {
-            $this->markTestSkipped('No numbered Cash In Safe money received on file.');
-        }
+        $row = MoneyReceivedFactory::new()->forCompany($this->company)->cashInSafe()->create();
+        $this->assertNotNull($row->serial, 'The receipt was not given a serial number.');
 
         return $row;
     }
@@ -68,7 +62,7 @@ class SerialPagesSmokeTest extends SerialTestCase
         ];
     }
 
-    /** @dataProvider searches */
+    #[\PHPUnit\Framework\Attributes\DataProvider('searches')]
     public function test_the_index_accepts_a_serial_search(string $route, string $query): void
     {
         $company = $this->cashInSafeRow()->company_id;
@@ -79,41 +73,12 @@ class SerialPagesSmokeTest extends SerialTestCase
 
     public function test_the_multiple_cash_expense_index_accepts_a_serial_search(): void
     {
-        // الشاشة مخفية للشركات اللي شغالة بأودو
-        // The company check now (rightly) refuses a company the user does not belong to, so use one the
-        // user is a member of; if the user belongs to none of the non-Odoo companies, add the membership
-        // for the length of this test only.
-        $companies = Company::all()->filter(fn (Company $company) => ! $company->hasOdooCredentials());
+        // The screen exists only for companies that do not use Odoo — the test company does not.
+        $response = $this->actingAs($this->actor)->get(route('multiple-cash-expenses.index', ['company' => $this->company->id]).'?search=MCE/');
 
-        if ($companies->isEmpty()) {
-            $this->markTestSkipped('Every company on file uses Odoo.');
-        }
-
-        $memberIds = $this->actor->companies()->pluck('companies.id')->all();
-        $company = $companies->first(fn (Company $c) => in_array($c->id, $memberIds, true));
-        $attached = false;
-
-        if (! $company) {
-            $company = $companies->first();
-            $this->actor->companies()->attach($company->id);
-            $attached = true;
-        }
-
-        try {
-            $response = $this->actingAs($this->actor)->get(route('multiple-cash-expenses.index', ['company' => $company->id]).'?search=MCE/');
-
-            $this->assertSame(200, $response->getStatusCode());
-        } finally {
-            if ($attached) {
-                $this->actor->companies()->detach($company->id);
-            }
-        }
+        $this->assertSame(200, $response->getStatusCode());
     }
 
-    /**
-     * * البحث بالرقم بيلاقي الحركة حتى لو أقدم من نافذة الـ ١٨ شهر
-     * * الافتراضية
-     */
     public function test_a_serial_search_finds_rows_older_than_the_default_window(): void
     {
         $row = $this->cashInSafeRow();

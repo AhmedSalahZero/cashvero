@@ -31,7 +31,7 @@ class FacilityDeletionMovementTest extends TestCase
 {
     use \Tests\Support\UsesFixtureDatabase;
 
-    private const COMPANY = 148;
+    private const COMPANY = 9001;
 
     private const FACILITY = 7;
 
@@ -152,9 +152,8 @@ class FacilityDeletionMovementTest extends TestCase
      * production import: an opening balance of 3,212,979 and eleven
      * generated interest rows, five of them filled in by the trigger.
      * Zero real movement.
-     *
-     * @dataProvider facilityProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('facilityProvider')]
     public function test_an_imported_opening_balance_and_its_interest_is_not_a_transaction(
         string $model, string $facilityTable, string $statementsTable, string $foreignKey
     ): void {
@@ -179,9 +178,7 @@ class FacilityDeletionMovementTest extends TestCase
     // each kind of row on its own
     // ---------------------------------------------------------------
 
-    /**
-     * @dataProvider facilityProvider
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('facilityProvider')]
     public function test_an_empty_facility_has_no_transactions(
         string $model, string $facilityTable, string $statementsTable, string $foreignKey
     ): void {
@@ -190,9 +187,7 @@ class FacilityDeletionMovementTest extends TestCase
         $this->assertFalse($this->hasTransactions($model));
     }
 
-    /**
-     * @dataProvider facilityProvider
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('facilityProvider')]
     public function test_the_opening_balance_alone_is_not_a_transaction(
         string $model, string $facilityTable, string $statementsTable, string $foreignKey
     ): void {
@@ -207,9 +202,8 @@ class FacilityDeletionMovementTest extends TestCase
     /**
      * The trigger fills these in the moment the facility carries a
      * balance — which is what made the old guard start refusing.
-     *
-     * @dataProvider facilityProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('facilityProvider')]
     public function test_a_generated_interest_row_is_not_a_transaction_even_when_filled(
         string $model, string $facilityTable, string $statementsTable, string $foreignKey
     ): void {
@@ -224,9 +218,7 @@ class FacilityDeletionMovementTest extends TestCase
         $this->assertFalse($this->hasTransactions($model));
     }
 
-    /**
-     * @dataProvider facilityProvider
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('facilityProvider')]
     public function test_a_zero_amount_marker_is_not_a_transaction(
         string $model, string $facilityTable, string $statementsTable, string $foreignKey
     ): void {
@@ -243,9 +235,8 @@ class FacilityDeletionMovementTest extends TestCase
     /**
      * The whole point of the guard: once real money moves, deletion
      * stops.
-     *
-     * @dataProvider facilityProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('facilityProvider')]
     public function test_a_real_drawdown_still_blocks_deletion(
         string $model, string $facilityTable, string $statementsTable, string $foreignKey
     ): void {
@@ -261,9 +252,7 @@ class FacilityDeletionMovementTest extends TestCase
             'A drawdown is a transaction whatever else is on the statement.');
     }
 
-    /**
-     * @dataProvider facilityProvider
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('facilityProvider')]
     public function test_a_settlement_on_the_debit_side_also_blocks(
         string $model, string $facilityTable, string $statementsTable, string $foreignKey
     ): void {
@@ -280,9 +269,8 @@ class FacilityDeletionMovementTest extends TestCase
      * NULL is normal for an ordinary movement. `NOT IN (...)` is NULL
      * for a NULL column and MySQL drops the row — which would hide
      * every real transaction. The guard has to handle that explicitly.
-     *
-     * @dataProvider facilityProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('facilityProvider')]
     public function test_a_transaction_with_no_interest_type_is_not_swallowed_by_null(
         string $model, string $facilityTable, string $statementsTable, string $foreignKey
     ): void {
@@ -298,9 +286,8 @@ class FacilityDeletionMovementTest extends TestCase
     /**
      * Interest that is NOT one of the generated month-end kinds is a
      * posting like any other.
-     *
-     * @dataProvider facilityProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('facilityProvider')]
     public function test_interest_that_is_not_a_generated_month_end_row_still_blocks(
         string $model, string $facilityTable, string $statementsTable, string $foreignKey
     ): void {
@@ -315,9 +302,8 @@ class FacilityDeletionMovementTest extends TestCase
     /**
      * Another facility's drawdown on the same table must not block this
      * one.
-     *
-     * @dataProvider facilityProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('facilityProvider')]
     public function test_another_facilitys_transactions_do_not_block_this_one(
         string $model, string $facilityTable, string $statementsTable, string $foreignKey
     ): void {

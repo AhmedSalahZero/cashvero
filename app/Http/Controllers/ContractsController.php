@@ -737,7 +737,7 @@ class ContractsController
 		]);
 	}
 	public function updateSalesOrdersBasedOnContract(Request $request , Company $company ){
-		$contract = Contract::find($request->get('contractId'));
+		$contract = Contract::where('company_id', $company->id)->findOrFail($request->get('contractId'));
 		$purchaseOrders = $contract->salesOrders->pluck('so_number','id')->toArray();
 		return response()->json([
 			'purchase_orders'=>$purchaseOrders
@@ -758,7 +758,7 @@ class ContractsController
 				'purchase_orders'=>PurchaseOrder::where('company_id',$company->id)->where('po_number','!=',$currentPoNumber)->where('contract_id',null)->pluck('po_number','id')
 			]);
 		}
-		$contract = Contract::find($contractId);
+		$contract = Contract::where('company_id', $company->id)->findOrFail($contractId);
 		
 		$purchaseOrders = $contract->purchasesOrders->pluck('po_number','id')->toArray();
 		return response()->json([

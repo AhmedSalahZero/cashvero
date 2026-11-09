@@ -8,14 +8,12 @@ use App\Models\Partner;
 use App\Models\User;
 use App\Notification;
 use App\Support\Notifications\ExpiryNotifications;
-use App\Support\Permissions\PermissionResolver;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Database\Factories\PartnerFactory;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
-use Spatie\Permission\PermissionRegistrar;
+use Tests\Concerns\MakesBanks;
 use Tests\TestCase;
 
 /**
@@ -24,25 +22,18 @@ use Tests\TestCase;
  * and about those already past their expiry, which stay listed until they
  * are cancelled or renewed.
  *
- * Runs against the development database inside a rolled-back transaction.
+ * The company, its bank, the beneficiary, the LGs and the overdrafts are made
+ * by the test and rolled back afterwards.
  */
 class ExpiryNotificationsTest extends TestCase
 {
-    use DatabaseTransactions;
+    use MakesBanks;
 
     private Company $company;
 
     private FinancialInstitution $bank;
 
     private Partner $beneficiary;
-
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
 
     protected function setUp(): void
     {
@@ -54,29 +45,10 @@ class ExpiryNotificationsTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
-
-        if (! Schema::connection('mysql')->hasColumn('notification_settings', 'lg_expiry_notification_days')) {
-            $this->markTestSkipped('Run the migrations on '.DB::connection('mysql')->getDatabaseName().' first.');
-        }
-
-        $bank = FinancialInstitution::query()->whereNotNull('company_id')->whereNotNull('bank_id')->first();
-        if (! $bank) {
-            $this->markTestSkipped('Development database needs a bank-type financial institution.');
-        }
-
-        $this->bank = $bank;
-        $this->company = Company::findOrFail($bank->company_id);
-        $this->beneficiary = Partner::create(['company_id' => $this->company->id, 'name' => 'Expiry Beneficiary '.uniqid(), 'is_customer' => 1]);
-
-        // Start from a clean bell for this company — the transaction puts it back.
-        DB::table('notifications')->where('notifiable_id', $this->company->id)->delete();
-        DB::table('notification_settings')->where('company_id', $this->company->id)->delete();
-        $this->company->unsetRelation('notificationSetting');
+        // A new company: no notification settings (so the default windows apply) and an empty bell.
+        $this->company = $this->makeCompany();
+        $this->bank = $this->bank($this->company);
+        $this->beneficiary = PartnerFactory::new()->forCompany($this->company)->customer()->create(['name' => 'Expiry Beneficiary']);
     }
 
     private function lg(string $code, int $daysFromToday, array $overrides = []): void
@@ -130,18 +102,7 @@ class ExpiryNotificationsTest extends TestCase
 
     private function userWith(array $permissions): User
     {
-        $user = User::create([
-            'name' => 'Expiry Notifications '.uniqid(),
-            'email' => 'expiry-notifications-'.uniqid().'@example.test',
-            'password' => bcrypt('secret-for-tests'),
-            'company_id' => $this->company->id,
-        ]);
-        $user->givePermissionTo($permissions);
-        $user->companies()->attach($this->company->id);
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
-        PermissionResolver::flush();
-
-        return $user->fresh();
+        return $this->makeUser($permissions, $this->company);
     }
 
     public function test_an_lg_expiring_within_seven_days_or_already_expired_is_notified(): void

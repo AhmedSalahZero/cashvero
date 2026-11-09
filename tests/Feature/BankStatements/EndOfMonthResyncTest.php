@@ -421,9 +421,8 @@ class EndOfMonthResyncTest extends TestCase
      * A month-end row the trigger has filled in, or one posted to Odoo,
      * is real money — the repair must never treat its month as empty
      * and add a second one beside it.
-     *
-     * @dataProvider touchedRowProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('touchedRowProvider')]
     public function test_a_month_that_already_has_a_real_row_is_left_alone(array $overrides): void
     {
         $this->account('2026-06-30', ['2026']);

@@ -127,7 +127,12 @@ class BankChargesAnalysisService
      */
     public function availableCurrencies(Company $company): array
     {
-        $tables = ['financial_institution_accounts', 'medium_term_loans', 'letter_of_guarantee_facilities', 'letter_of_credit_facilities'];
+        // Every place a line of this report takes its currency from — including the charges that
+        // carry their own (a bank charge can be paid in a currency the company holds no account in).
+        $tables = [
+            'financial_institution_accounts', 'medium_term_loans', 'letter_of_guarantee_facilities', 'letter_of_credit_facilities',
+            'cash_expenses', 'lc_issuance_expenses', 'lc_settlement_internal_money_transfers',
+        ];
         foreach (self::OVERDRAFTS as [$facilityTable]) {
             $tables[] = $facilityTable;
         }

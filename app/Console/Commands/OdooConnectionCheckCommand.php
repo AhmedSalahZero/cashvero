@@ -124,7 +124,7 @@ class OdooConnectionCheckCommand extends Command
         $uid = null;
 
         try {
-            $common = \ripcord::client($company->getOdooDBUrl().'/xmlrpc/2/common');
+            $common = app(\App\Services\Api\OdooClientFactory::class)->client($company->getOdooDBUrl().'/xmlrpc/2/common');
             $uid = $common->authenticate($company->getOdooDBName(), $username, $password, []);
         } catch (Throwable $e) {
             $this->error('  ✗ authenticate رمى استثناء: '.get_class($e).' — '.$e->getMessage());
@@ -155,7 +155,7 @@ class OdooConnectionCheckCommand extends Command
 
         // --- step 5: prove the uid can actually read ------------------
         try {
-            $models = \ripcord::client($company->getOdooDBUrl().'/xmlrpc/2/object');
+            $models = app(\App\Services\Api\OdooClientFactory::class)->client($company->getOdooDBUrl().'/xmlrpc/2/object');
             $result = $models->execute_kw($company->getOdooDBName(), $uid, $password, 'res.users', 'read', [[(int) $uid]], ['fields' => ['login']]);
 
             if (is_array($result) && isset($result['faultCode'])) {

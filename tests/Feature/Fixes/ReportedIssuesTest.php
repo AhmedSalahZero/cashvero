@@ -2,7 +2,10 @@
 
 namespace Tests\Feature\Fixes;
 
-use App\Support\Instructions\PageInstructions;
+use App\Http\Controllers\SalesGatheringTestController;
+use App\Models\CustomizedFieldsExportation;
+use Database\Factories\PartnerFactory;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -75,31 +78,82 @@ class ReportedIssuesTest extends TestCase
     }
 
     /**
-     * The live data must not already contain a translated currency —
-     * if it does, those rows need correcting, not just the form.
+     * The stored data must not end up with a translated currency.
+     *
+     * The invoice is created the way a user under /ar creates one: the
+     * create form is rendered in Arabic, the user picks the Egyptian pound
+     * by its Arabic label, and the form posts the value of that option.
+     * Whatever lands in `currency` must be the code, on both invoice tables.
      */
     public function test_no_invoice_has_a_translated_currency_stored(): void
     {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
+        app()->setLocale('ar');
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
+        $company = $this->makeCompany();
+        $this->actingAs($this->makeUser([], $company));
+
+        $partners = [
+            'CustomerInvoice' => PartnerFactory::new()->forCompany($company)->customer()->create(),
+            'SupplierInvoice' => PartnerFactory::new()->forCompany($company)->supplier()->create(),
+        ];
+
+        foreach ($partners as $modelName => $partner) {
+            CustomizedFieldsExportation::create([
+                'company_id' => $company->id,
+                'model_name' => $modelName,
+                'fields' => [$modelName === 'CustomerInvoice' ? 'customer_name' : 'supplier_name', 'invoice_number', 'invoice_date', 'invoice_due_date', 'currency', 'invoice_amount'],
+            ]);
+
+            $currencyField = collect($this->invoiceFormFields($company, $modelName))->firstWhere('field', 'currency');
+            $this->assertNotNull($currencyField, "{$modelName}: the create form must offer the currency field.");
+
+            // The option the user sees as the Arabic name of the Egyptian pound.
+            $chosen = array_search(__('EGP'), (array) $currencyField['options'], true);
+            $this->assertMatchesRegularExpression('/[\x{0600}-\x{06FF}]/u', __('EGP'),
+                'The scenario only proves something if the label the user picks is in Arabic.');
+
+            $request = Request::create('/x', 'POST', [
+                ('App\\Models\\'.$modelName)::CLIENT_ID_COLUMN_NAME => $partner->id,
+                'invoice_number' => 'AR-'.$modelName,
+                'invoice_date' => '2020-01-15',
+                'invoice_due_date' => '2020-02-15',
+                'currency' => $chosen,
+                'invoice_amount' => 1000,
+            ]);
+            $request->setLaravelSession(app('session.store'));
+            $this->app->instance('request', $request);
+
+            app(SalesGatheringTestController::class)->storeModel($company, $request, $modelName);
         }
 
         $bad = [];
         foreach (['customer_invoices', 'supplier_invoices'] as $table) {
-            foreach (DB::connection('mysql')->table($table)->distinct()->pluck('currency') as $currency) {
+            $stored = DB::table($table)->where('company_id', $company->id)->distinct()->pluck('currency');
+            $this->assertCount(1, $stored, "{$table}: the invoice saved through the form must be there.");
+
+            foreach ($stored as $currency) {
                 if ($currency !== null && preg_match('/[\x{0600}-\x{06FF}]/u', (string) $currency)) {
                     $bad[] = "{$table}: {$currency}";
                 }
             }
+
+            $this->assertSame(['EGP'], $stored->all(), "{$table}: the currency code must be what is stored.");
         }
 
         $this->assertSame([], $bad,
             "These rows store a translated currency name instead of a code:\n  ".implode("\n  ", $bad));
+    }
+
+    /** The fields of the invoice create form, as the page receives them. */
+    private function invoiceFormFields(\App\Models\Company $company, string $modelName): array
+    {
+        $request = Request::create('/x', 'GET');
+        $request->setLaravelSession(app('session.store'));
+        $this->app->instance('request', $request);
+
+        return app(SalesGatheringTestController::class)
+            ->createModel($company, $request, $modelName)
+            ->toResponse($request)->original->getData()['page']['props']['fields'];
     }
 
     /* ── the smaller fixes ────────────────────────────────────────── */

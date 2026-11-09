@@ -8,17 +8,16 @@ use App\Models\ContractLoanScheduleSettlement;
 use App\Models\CurrentAccountBankStatement;
 use App\Models\FinancialInstitution;
 use App\Models\FinancialInstitutionAccount;
-use App\Models\LeasingCompany;
 use App\Models\LeasingContract;
 use App\Models\User;
-use App\Support\Permissions\PermissionResolver;
 use Carbon\Carbon;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Database\Factories\LeasingCompanyFactory;
+use Database\Factories\LeasingContractFactory;
 use Illuminate\Support\Facades\DB;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
-use Spatie\Permission\PermissionRegistrar;
+use Tests\Concerns\MakesBanks;
 use Tests\TestCase;
 
 /**
@@ -29,14 +28,14 @@ use Tests\TestCase;
  * statement itself — which row, which date, which amount — and that the
  * account's running balance still chains correctly.
  *
- * Runs against SMOKE_DB (default: cashvero) inside a rolled-back
- * transaction. Statement balances are computed by MySQL triggers, so the
- * class skips itself on a database where `php artisan run:sql` has never
- * installed them.
+ * The company, bank, accounts, leasing contract and user are made by the
+ * test itself and rolled back afterwards. Statement balances are computed
+ * by the MySQL triggers the test database carries — the test only inserts
+ * movements and reads back what the triggers worked out.
  */
 class LeasingChequeStatementTest extends TestCase
 {
-    use DatabaseTransactions;
+    use MakesBanks;
 
     private const FUNDING = 1000000.0;
 
@@ -50,14 +49,6 @@ class LeasingChequeStatementTest extends TestCase
 
     private FinancialInstitutionAccount $account;
 
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
-
     protected function setUp(): void
     {
         parent::setUp();
@@ -68,70 +59,27 @@ class LeasingChequeStatementTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
+        $this->company = $this->makeCompany();
 
-        $hasTriggers = DB::table('information_schema.triggers')
-            ->where('trigger_schema', DB::getDatabaseName())
-            ->where('event_object_table', 'current_account_bank_statements')
-            ->exists();
-        if (! $hasTriggers) {
-            $this->markTestSkipped('Statement balance triggers are not installed on '.DB::getDatabaseName().' (php artisan run:sql).');
-        }
-
-        $company = Company::first();
-        if (! $company) {
-            $this->markTestSkipped('Development database has no company.');
-        }
-        $this->company = $company;
-
-        $this->bank = FinancialInstitution::create([
-            'company_id' => $this->company->id,
-            'type' => 'bank',
-            'name' => 'TEST Cheque Bank '.uniqid(),
-            'branch_name' => 'TEST Branch',
-        ]);
+        $this->bank = $this->bank($this->company, ['branch_name' => 'TEST Branch']);
         $this->account = $this->makeAccount(now()->subYear()->format('Y-m-d'), self::FUNDING);
 
-        $leasingCompany = LeasingCompany::create([
-            'company_id' => $this->company->id,
-            'name' => 'TEST Leasing Co '.uniqid(),
-        ]);
-        $this->contract = LeasingContract::create([
-            'company_id' => $this->company->id,
-            'leasing_company_id' => $leasingCompany->id,
-            'status' => LeasingContract::RUNNING,
-            'name' => 'TEST-LC-'.uniqid(),
+        $leasingCompany = LeasingCompanyFactory::new()->forCompany($this->company)->create();
+        $this->contract = LeasingContractFactory::new()->of($leasingCompany)->create([
             'start_date' => now()->subMonths(6)->format('Y-m-d'),
             'end_date' => now()->addYears(3)->format('Y-m-d'),
             'currency' => 'egp',
             'limit' => 1000000,
-            'borrowing_rate' => 10,
-            'margin_rate' => 2,
             'duration' => 36,
-            'installment_payment_interval' => 'monthly',
         ]);
 
-        $this->user = User::create([
-            'name' => 'Leasing Cheque Test '.uniqid(),
-            'email' => 'leasing-cheque-'.uniqid().'@example.test',
-            'password' => bcrypt('secret-for-tests'),
-            'company_id' => $this->company->id,
-        ]);
-        $this->user->givePermissionTo([
+        $this->user = $this->makeUser([
             'contract_loan_schedule.view',
             'contract_loan_schedule.update',
             'contract_loan_schedule.delete',
             'leasing_contract.view',
             'loan_schedule_data.delete',
-        ]);
-        $this->user->companies()->attach($this->company->id);
-        $this->user->load('companies');
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
-        PermissionResolver::flush();
+        ], $this->company);
     }
 
     /* ── posting ───────────────────────────────────────────────────── */
@@ -369,15 +317,11 @@ class LeasingChequeStatementTest extends TestCase
 
     private function makeAccount(string $openingDate, float $funding, bool $asOpeningBalance = false): FinancialInstitutionAccount
     {
-        $account = FinancialInstitutionAccount::create([
-            'company_id' => $this->company->id,
-            'financial_institution_id' => $this->bank->id,
+        $account = $this->currentAccount($this->bank, 'EGP', [
             'account_number' => 'TEST-CHQ-'.uniqid(),
             'currency' => 'egp',
             'balance_amount' => $funding,
             'balance_date' => $openingDate,
-            'exchange_rate' => 1,
-            'is_active' => 1,
         ]);
 
         // On a current account debit is money IN.

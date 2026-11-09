@@ -23,8 +23,8 @@ use Tests\TestCase;
  *   SEC-36  A user who is NOT a Super Admin, even holding every permission, must be refused when they view,
  *           edit, delete or "remove" a company they do not belong to.
  *
- * The target is a throw-away copy of a company created inside a transaction that is rolled back,
- * so nothing real is touched. A Super Admin is used as the control, so "refused" can never just mean
+ * The target is a fresh fake company the attacker does not belong to, made by the test and rolled
+ * back with everything else, so nothing real is touched. A Super Admin is used as the control, so "refused" can never just mean
  * "the address was wrong".
  */
 #[Group('security')]
@@ -32,19 +32,11 @@ class CompanyAdministrationSecurityTest extends TestCase
 {
     use AttacksRoutes;
 
-    protected function tearDown(): void
-    {
-        $this->cleanupScratch();
-        parent::tearDown();
-    }
-
     public function test_a_user_who_is_not_a_super_admin_cannot_manage_a_company_that_is_not_theirs(): void
     {
-        $this->bootAttack();
+        $this->bootAttack(plantRecords: false);
 
-        if (! Role::where('name', \App\Models\User::SUPER_ADMIN)->where('guard_name', 'web')->exists()) {
-            $this->markTestSkipped('The database has no super-admin role, so the control user cannot be created.');
-        }
+        $this->assertTrue(Role::where('name', \App\Models\User::SUPER_ADMIN)->where('guard_name', 'web')->exists(), 'Test set-up problem: the test database has no super-admin role, so the control user cannot be created.');
 
         // Make sure the all-permissions attacker really holds the company permissions (and is not a super admin).
         $companyPermissions = Permission::where('guard_name', 'web')->where('name', 'like', 'company.%')->pluck('name')->all();
@@ -58,24 +50,17 @@ class CompanyAdministrationSecurityTest extends TestCase
 
         $superAdmin = $this->scratchUser([$this->companyA->id], [], \App\Models\User::SUPER_ADMIN);
 
-        // The outer transaction is rolled back at the end: the throw-away company never survives.
+        // A company neither the attacker nor the Super Admin belongs to (rolled back with the test).
+        $target = $this->makeCompany();
+
         $level = DB::transactionLevel();
         DB::beginTransaction();
 
         try {
-            try {
-                $target = $this->companyB->replicate();
-                $target->name = 'SEC scratch '.bin2hex(random_bytes(3));
-                $target->save();
-            } catch (\Throwable $e) {
-                $this->markTestSkipped('A throw-away company could not be created: '.$e->getMessage());
-            }
-
             $id = $target->id;
             $newPayload = ['name' => 'Changed by test', 'opening_balance_date' => '2020-01-01', 'systems' => [CASH_VERO]];
 
             $attacks = [
-                'view the company'   => ['GET', route('companySection.show', ['companySection' => $id], false), []],
                 'open its edit form' => ['GET', route('companySection.edit', ['companySection' => $id], false), []],
                 'edit the company'   => ['PUT', route('companySection.update', ['companySection' => $id], false), $newPayload],
                 'delete the company' => ['DELETE', route('companySection.destroy', ['companySection' => $id], false), []],

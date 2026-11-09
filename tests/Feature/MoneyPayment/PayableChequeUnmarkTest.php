@@ -8,25 +8,25 @@ use App\Models\Company;
 use App\Models\FinancialInstitution;
 use App\Models\FinancialInstitutionAccount;
 use App\Models\MoneyPayment;
-use App\Models\Partner;
 use App\Models\PayableCheque;
 use App\Models\User;
 use Carbon\Carbon;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Database\Factories\PartnerFactory;
 use Illuminate\Support\Facades\DB;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
+use Tests\Concerns\MakesBanks;
 use Tests\TestCase;
 
 /**
  * Returning a paid payable cheque to unpaid must restore the due-date
- * statement movement. Runs against SMOKE_DB / cash-vero inside a
- * rolled-back transaction.
+ * statement movement. The company, its bank, the current account and the
+ * user are made by the test; everything is rolled back afterwards.
  */
 class PayableChequeUnmarkTest extends TestCase
 {
-    use DatabaseTransactions;
+    use MakesBanks;
 
     private Company $company;
 
@@ -38,14 +38,6 @@ class PayableChequeUnmarkTest extends TestCase
 
     private string $currency = 'EGP';
 
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
-
     protected function setUp(): void
     {
         parent::setUp();
@@ -56,29 +48,12 @@ class PayableChequeUnmarkTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
+        $this->company = $this->makeCompany();
+        $this->bank = $this->bank($this->company);
 
-        $bank = FinancialInstitution::query()->whereNotNull('company_id')->first();
-        if (! $bank) {
-            $this->markTestSkipped('Development database has no financial institution.');
-        }
-
-        $this->bank = $bank;
-        $this->company = Company::findOrFail($bank->company_id);
-
-        $this->account = FinancialInstitutionAccount::create([
-            'company_id' => $this->company->id,
-            'financial_institution_id' => $this->bank->id,
+        $this->account = $this->currentAccount($this->bank, $this->currency, [
             'account_number' => 'TEST-UNMARK-'.uniqid(),
-            'currency' => $this->currency,
-            'balance_amount' => 0,
             'balance_date' => now()->subYear()->format('Y-m-d'),
-            'exchange_rate' => 1,
-            'is_active' => 1,
         ]);
 
         DB::table('current_account_bank_statements')->insert([
@@ -92,20 +67,12 @@ class PayableChequeUnmarkTest extends TestCase
             'end_balance' => 1000,
         ]);
 
-        $this->user = User::create([
-            'name' => 'Payable Cheque Unmark '.uniqid(),
-            'email' => 'payable-unmark-'.uniqid().'@example.test',
-            'password' => bcrypt('secret-for-tests'),
-            'company_id' => $this->company->id,
-        ]);
-        $this->user->givePermissionTo([
+        $this->user = $this->makeUser([
             'money_payment.view',
             'money_payment.mark_as_paid',
             'cash_expense.view',
             'cash_expense.mark_as_paid',
-        ]);
-        $this->user->companies()->attach($this->company->id);
-        $this->user->load('companies');
+        ], $this->company);
         $this->assertFalse($this->user->isSuperAdmin());
     }
 
@@ -206,11 +173,7 @@ class PayableChequeUnmarkTest extends TestCase
 
     private function makePendingMoneyPaymentCheque(string $dueDate, float $amount): MoneyPayment
     {
-        $supplier = Partner::create([
-            'company_id' => $this->company->id,
-            'name' => 'Unmark Supplier '.uniqid(),
-            'is_supplier' => 1,
-        ]);
+        $supplier = PartnerFactory::new()->forCompany($this->company)->supplier()->create(['name' => 'Unmark Supplier '.uniqid()]);
 
         $moneyPayment = MoneyPayment::create([
             'type' => MoneyPayment::PAYABLE_CHEQUE,
@@ -318,11 +281,6 @@ class PayableChequeUnmarkTest extends TestCase
 
     private function currentAccountTypeId(): int
     {
-        $id = AccountType::onlyCurrentAccount()->value('id');
-        if (! $id) {
-            $this->markTestSkipped('No current-account type in the development database.');
-        }
-
-        return (int) $id;
+        return $this->accountTypeId(AccountType::CURRENT_ACCOUNT);
     }
 }

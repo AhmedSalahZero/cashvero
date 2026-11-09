@@ -1,0 +1,21 @@
+{
+  "_about": "Which sidebar entries a person given each role's starting template sees (same agreement as permissions_by_role.json): everyone who works the business sees its statements, reports and money screens; only a company admin and above see Users and Roles & Permissions; only a super admin sees Home (the list of all companies). Titles are the English sidebar labels. Worked out from the agreement, not from the code.",
+  "roles": {
+    "user": {
+      "must_see": ["Bank Statement", "Bank Interest, Commissions & Charges Analysis", "Money Received"],
+      "never_see": ["Users", "Roles & Permissions", "Home"]
+    },
+    "manager": {
+      "must_see": ["Bank Statement", "Bank Interest, Commissions & Charges Analysis", "Money Received"],
+      "never_see": ["Users", "Roles & Permissions", "Home"]
+    },
+    "company-admin": {
+      "must_see": ["Bank Statement", "Money Received", "Users", "Roles & Permissions"],
+      "never_see": ["Home"]
+    },
+    "super-admin": {
+      "must_see": ["Bank Statement", "Money Received", "Users", "Roles & Permissions", "Home"],
+      "never_see": []
+    }
+  }
+}

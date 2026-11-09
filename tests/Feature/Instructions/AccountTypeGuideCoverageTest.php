@@ -18,7 +18,8 @@ use Tests\TestCase;
  * only by name, so the exemption itself has to be justified rather than
  * silently swallowing a type somebody forgot.
  *
- * Runs against the development schema; skips itself when unreachable.
+ * The rows come from the test database, which carries the account types
+ * the project itself ships (TestReferenceSeeder) — never a developer's data.
  */
 class AccountTypeGuideCoverageTest extends TestCase
 {
@@ -50,26 +51,14 @@ class AccountTypeGuideCoverageTest extends TestCase
         'discounting-cheques' => 'DiscountCheque',
     ];
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-            DB::connection('mysql')->table('account_types')->exists();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development schema not reachable: '.$e->getMessage());
-        }
-    }
-
     /** @return array<string, string> slug => English name */
     private function accountTypes(): array
     {
-        return DB::connection('mysql')->table('account_types')
-            ->orderBy('id')->pluck('name_en', 'slug')->all();
+        $types = DB::table('account_types')->orderBy('id')->pluck('name_en', 'slug')->all();
+
+        $this->assertNotEmpty($types, 'The test database has no account types — the reference data is missing.');
+
+        return $types;
     }
 
     public function test_every_account_type_in_the_database_is_either_documented_or_declared_unbuilt(): void
@@ -157,9 +146,8 @@ class AccountTypeGuideCoverageTest extends TestCase
      * the controller sends `instructionsUrl`, and the page declares the
      * prop — the second is the one `npm run build` will not catch, and
      * the one that has broken before.
-     *
-     * @dataProvider wiredScreenProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('wiredScreenProvider')]
     public function test_each_screen_sends_and_declares_the_guide_link(string $controller, string $page): void
     {
         $controllerSource = file_get_contents(app_path("Http/Controllers/{$controller}.php"));

@@ -6,8 +6,10 @@ use App\Models\Company;
 use App\Models\CustomerInvoice;
 use App\Models\MoneyPayment;
 use App\Models\MoneyReceived;
-use App\Models\SupplierInvoice;
+use App\Models\Partner;
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\MakesInvoices;
 use Tests\TestCase;
 
 /**
@@ -23,83 +25,39 @@ use Tests\TestCase;
  */
 class SettlementRequiresInvoiceTest extends TestCase
 {
-    private ?string $originalDatabase = null;
+    use MakesInvoices;
+
+    private Company $company;
+
+    private Partner $customer;
+
+    /** قبض من عميل ، معمول للاختبار — الحارس بيرفض قبل أي كتابة */
+    private MoneyReceived $money;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-    }
-
-    protected function tearDown(): void
-    {
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
-
-        parent::tearDown();
-    }
-
-    private function company(): Company
-    {
-        $company = Company::first();
-
-        if (! $company) {
-            $this->markTestSkipped('No company on file.');
-        }
-
-        return $company;
-    }
-
-    /**
-     * * بيستخدم حركة موجودة فعلا من غير حفظ أي حاجة : الاستثناء بيتظبط قبل
-     * * أي كتابة ، فالداتا ما بتتلمسش
-     */
-    private function existingMoneyReceived(): MoneyReceived
-    {
-        $money = MoneyReceived::first();
-
-        if (! $money) {
-            $this->markTestSkipped('No money received on file.');
-        }
-
-        return $money;
+        $this->company = $this->makeCompany();
+        $this->customer = $this->customer($this->company);
+        $this->money = $this->received($this->customer, ['received_amount' => 26150]);
     }
 
     /* ───────────── الرفض ───────────── */
 
     public function test_it_refuses_a_settlement_with_no_invoice_id(): void
     {
-        $money = $this->existingMoneyReceived();
         $before = DB::table('settlements')->count();
 
-        /**
-         * * الترانزاكشن هنا مش تجميل : لو الحارس اتشال (وقت اختبار الطفرات)
-         * * الاستدعاء ده بيكتب صف فعلا في قاعدة التطوير — الرول باك بيضمن
-         * * ان الاختبار ما يسيبش أثر مهما كان الكود تحته
-         */
-        DB::beginTransaction();
-
         try {
-            $money->storeNewSettlement(
+            $this->money->storeNewSettlement(
                 [['settlement_amount' => 26150, 'withhold_amount' => 0]],
-                (int) $money->partner_id,
-                $this->company()
+                (int) $this->money->partner_id,
+                $this->company
             );
             $this->fail('كان لازم يرفض التسوية من غير فاتورة');
         } catch (\RuntimeException $e) {
             $this->assertStringContainsString('does not exist', $e->getMessage());
-        } finally {
-            DB::rollBack();
         }
 
         $this->assertSame($before, DB::table('settlements')->count(),
@@ -108,23 +66,23 @@ class SettlementRequiresInvoiceTest extends TestCase
 
     public function test_it_refuses_a_settlement_whose_invoice_was_deleted(): void
     {
-        $money = $this->existingMoneyReceived();
-        $missingId = ((int) CustomerInvoice::max('id')) + 10_000;
+        // فاتورة اتعملت و اتمسحت : رقمها اتعرف إنه كان موجود و مبقاش
+        $deleted = $this->invoice($this->customer);
+        $missingId = $deleted->id;
+        $deleted->delete();
+        $this->assertFalse(CustomerInvoice::whereKey($missingId)->exists());
+
         $before = DB::table('settlements')->count();
 
-        DB::beginTransaction();
-
         try {
-            $money->storeNewSettlement(
+            $this->money->storeNewSettlement(
                 [['invoice_id' => $missingId, 'settlement_amount' => 500]],
-                (int) $money->partner_id,
-                $this->company()
+                (int) $this->money->partner_id,
+                $this->company
             );
             $this->fail('كان لازم يرفض فاتورة مش موجودة');
         } catch (\RuntimeException $e) {
             $this->assertStringContainsString('does not exist', $e->getMessage());
-        } finally {
-            DB::rollBack();
         }
 
         $this->assertSame($before, DB::table('settlements')->count());
@@ -136,31 +94,21 @@ class SettlementRequiresInvoiceTest extends TestCase
      */
     public function test_a_zero_amount_row_is_skipped_not_rejected(): void
     {
-        $money = $this->existingMoneyReceived();
         $before = DB::table('settlements')->count();
 
-        DB::beginTransaction();
+        $result = $this->money->storeNewSettlement(
+            [['settlement_amount' => 0, 'withhold_amount' => 0]],
+            (int) $this->money->partner_id,
+            $this->company
+        );
 
-        try {
-            $result = $money->storeNewSettlement(
-                [['settlement_amount' => 0, 'withhold_amount' => 0]],
-                (int) $money->partner_id,
-                $this->company()
-            );
-
-            $this->assertSame([], $result['settlements']);
-        } finally {
-            DB::rollBack();
-        }
-
+        $this->assertSame([], $result['settlements']);
         $this->assertSame($before, DB::table('settlements')->count());
     }
 
     public function test_an_empty_list_is_accepted(): void
     {
-        $money = $this->existingMoneyReceived();
-
-        $result = $money->storeNewSettlement([], (int) $money->partner_id, $this->company());
+        $result = $this->money->storeNewSettlement([], (int) $this->money->partner_id, $this->company);
 
         $this->assertSame([], $result['settlements']);
         $this->assertSame(0, $result['total_withhold_amount']);
@@ -175,36 +123,22 @@ class SettlementRequiresInvoiceTest extends TestCase
      */
     public function test_it_checks_the_invoice_on_the_right_side(): void
     {
-        $supplierInvoiceId = SupplierInvoice::max('id');
-        $customerInvoiceId = CustomerInvoice::max('id');
+        $supplierInvoiceId = $this->supplierInvoice($this->supplier($this->company))->id;
 
-        if (! $supplierInvoiceId || ! $customerInvoiceId) {
-            $this->markTestSkipped('Both invoice tables need at least one row.');
-        }
-
-        $moneyReceived = $this->existingMoneyReceived();
-
-        $onlySupplierSide = ! CustomerInvoice::whereKey($supplierInvoiceId)->exists();
-
-        if (! $onlySupplierSide) {
-            $this->markTestSkipped('That supplier invoice id also exists on the customer side.');
-        }
+        $this->assertFalse(CustomerInvoice::whereKey($supplierInvoiceId)->exists(),
+            'الاختبار ده معناه يضيع لو نفس الرقم موجود في جدول فواتير العملاء');
 
         $before = DB::table('settlements')->count();
 
-        DB::beginTransaction();
-
         try {
-            $moneyReceived->storeNewSettlement(
+            $this->money->storeNewSettlement(
                 [['invoice_id' => $supplierInvoiceId, 'settlement_amount' => 100]],
-                (int) $moneyReceived->partner_id,
-                $this->company()
+                (int) $this->money->partner_id,
+                $this->company
             );
             $this->fail('فاتورة مورد ما ينفعش تتقبل على ماني ريسيد');
         } catch (\RuntimeException $e) {
             $this->assertStringContainsString('does not exist', $e->getMessage());
-        } finally {
-            DB::rollBack();
         }
 
         $this->assertSame($before, DB::table('settlements')->count());
@@ -214,39 +148,28 @@ class SettlementRequiresInvoiceTest extends TestCase
      * * و الاتجاه التاني : فاتورة المورد لازم **تعدّي** على الماني بايمنت —
      * * من غير الاختبار ده لو الكود بص على جدول العملاء دايمًا الاختبار
      * * اللي فوق هيفضل ناجح (لأن الرقم مش موجود في الجدولين)
-     *
-     * * كل ده جوه ترانزاكشن بترجع ، فمفيش صف بيتكتب فعلا
      */
     public function test_a_supplier_invoice_is_accepted_on_a_money_payment(): void
     {
-        $supplierInvoiceId = SupplierInvoice::max('id');
-        $money = MoneyPayment::first();
-
-        if (! $supplierInvoiceId || ! $money) {
-            $this->markTestSkipped('Needs a supplier invoice and a money payment on file.');
-        }
+        $supplier = $this->supplier($this->company);
+        $supplierInvoiceId = $this->supplierInvoice($supplier)->id;
+        $money = $this->payment($supplier);
 
         $this->assertFalse(
             CustomerInvoice::whereKey($supplierInvoiceId)->exists(),
             'الاختبار ده معناه يضيع لو نفس الرقم موجود في جدول فواتير العملاء'
         );
 
-        DB::beginTransaction();
+        $result = $money->storeNewSettlement(
+            [['invoice_id' => $supplierInvoiceId, 'settlement_amount' => 1]],
+            (int) $money->partner_id,
+            $this->company,
+            false,
+            false
+        );
 
-        try {
-            $result = $money->storeNewSettlement(
-                [['invoice_id' => $supplierInvoiceId, 'settlement_amount' => 1]],
-                (int) $money->partner_id,
-                $this->company(),
-                false,
-                false
-            );
-
-            $this->assertCount(1, $result['settlements'],
-                'فاتورة المورد لازم تتقبل على الماني بايمنت');
-        } finally {
-            DB::rollBack();
-        }
+        $this->assertCount(1, $result['settlements'],
+            'فاتورة المورد لازم تتقبل على الماني بايمنت');
     }
 
     /* ───────────── كل المسارات بتبعت invoice_id ───────────── */
@@ -294,40 +217,49 @@ class SettlementRequiresInvoiceTest extends TestCase
 
     /* ───────────── العرض ───────────── */
 
+    public static function sides(): array
+    {
+        return [
+            'money received' => ['settlements', 'money_received_id', MoneyReceived::class],
+            'money payment' => ['payment_settlements', 'money_payment_id', MoneyPayment::class],
+        ];
+    }
+
     /**
      * * الصفوف القديمة اللي فاتورتها ناقصة لسه موجودة ، فالبوب اب لازم يقول
      * * السبب بدل ما يعرض فاتورة بصفر
+     *
+     * * الصف القديم ده ما بقاش ينفع يتعمل من الكود (الحارس فوق بيرفضه) ، فبيتكتب
+     * * هنا مباشرة في الجدول زي ما كان اتخزن زمان
      */
-    public function test_the_popup_names_the_reason_instead_of_showing_a_zero_invoice(): void
+    #[DataProvider('sides')]
+    public function test_the_popup_names_the_reason_instead_of_showing_a_zero_invoice(string $table, string $fk, string $model): void
     {
-        $orphanSettlement = DB::table('settlements')
+        $money = $model === MoneyReceived::class
+            ? $this->money
+            : $this->payment($this->supplier($this->company), ['paid_amount' => 26150]);
+
+        $row = [
+            $fk => $money->id,
+            'company_id' => $this->company->id,
+            'partner_id' => $money->partner_id,
+            'invoice_id' => null,
+            'settlement_amount' => '26150',
+            'withhold_amount' => '0',
+        ];
+        if ($table === 'payment_settlements') {
+            $row['letter_of_credit_issuance_id'] = 0;
+        }
+        DB::table($table)->insert($row);
+
+        $orphanSettlement = DB::table($table)
+            ->where($fk, $money->id)
             ->whereRaw('coalesce(settlement_amount, 0) <> 0')
             ->whereNull('invoice_id')
             ->first();
+        $this->assertNotNull($orphanSettlement);
 
-        $table = 'settlements';
-        $fk = 'money_received_id';
-        $model = MoneyReceived::class;
-
-        if (! $orphanSettlement) {
-            $orphanSettlement = DB::table('payment_settlements')
-                ->whereRaw('coalesce(settlement_amount, 0) <> 0')
-                ->whereNull('invoice_id')
-                ->first();
-            $table = 'payment_settlements';
-            $fk = 'money_payment_id';
-            $model = MoneyPayment::class;
-        }
-
-        if (! $orphanSettlement) {
-            $this->markTestSkipped('No invoice-less settlement on file to render.');
-        }
-
-        $money = $model::find($orphanSettlement->{$fk});
-
-        if (! $money) {
-            $this->markTestSkipped('The owning money row is gone.');
-        }
+        $money = $model::findOrFail($orphanSettlement->{$fk});
 
         $row = collect($money->getSettlementsInfo()['rows'])
             ->firstWhere('settlement_amount', number_format((float) $orphanSettlement->settlement_amount, 2));

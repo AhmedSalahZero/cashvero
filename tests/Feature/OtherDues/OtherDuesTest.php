@@ -8,7 +8,7 @@ use App\Models\OtherDue;
 use App\Models\Partner;
 use App\Support\OtherDues\OtherDueStatements;
 use App\Support\Permissions\PermissionRegistry;
-use Illuminate\Support\Facades\DB;
+use Database\Factories\PartnerFactory;
 use Tests\TestCase;
 
 /**
@@ -22,73 +22,27 @@ use Tests\TestCase;
  *     types that have one, and an injected row in the invoice statement
  *     for customers and suppliers, which have none. Never both.
  *
- * Runs inside a rolled-back transaction on the development schema.
+ * The company and every partner, due and statement row are made by the test,
+ * and TestCase rolls all of it back afterwards.
  */
 class OtherDuesTest extends TestCase
 {
-    private ?Company $company = null;
-
-    /** Ids at or above this were created by the test and are cleaned up after it. */
-    private int $firstNewDueId = 0;
+    private Company $company;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-            DB::connection('mysql')->table('other_dues')->exists();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development schema not reachable: '.$e->getMessage());
-        }
-
-        $this->company = Company::first();
-
-        if (! $this->company) {
-            $this->markTestSkipped('No company to exercise.');
-        }
-
-        /**
-         * The statement models cascade their running balances with raw SQL,
-         * which can end an enclosing transaction — so a rollback alone did
-         * not isolate these tests and rows leaked into the next one. The
-         * high-water mark makes cleanup explicit: anything created during
-         * the test is removed by id, and nothing that existed before it is
-         * touched.
-         */
-        $this->firstNewDueId = (int) (OtherDue::max('id') ?? 0) + 1;
-
-        DB::beginTransaction();
+        $this->company = $this->makeCompany();
     }
 
-    protected function tearDown(): void
-    {
-        try {
-            DB::rollBack();
-        } catch (\Throwable $e) {
-            // The transaction may already have been ended by the cascade.
-        }
-
-        foreach (OtherDue::where('id', '>=', $this->firstNewDueId)->get() as $due) {
-            \App\Support\OtherDues\OtherDueStatements::remove($due);
-            $due->delete();
-        }
-
-        parent::tearDown();
-    }
-
+    /** A partner of the company that carries exactly that type flag. */
     private function partnerOfType(string $type): Partner
     {
-        $partner = Partner::where('company_id', $this->company->id)->where($type, 1)->first();
-
-        if (! $partner) {
-            $this->markTestSkipped("No partner with {$type} to exercise.");
-        }
-
-        return $partner;
+        return PartnerFactory::new()->forCompany($this->company)->create([
+            'name' => 'Other Dues '.$type.' '.uniqid(),
+            $type => 1,
+        ]);
     }
 
     private function makeDue(Partner $partner, string $type, string $direction, float $amount, string $comment): OtherDue
@@ -250,7 +204,7 @@ class OtherDuesTest extends TestCase
         $this->assertSame(3, $this->duesCreatedHere(),
             'Three rows in, three dues saved — the two shareholder rows must not collapse into one.');
 
-        $this->assertSame(2, \App\Models\ShareholderStatement::whereNotNull('other_due_id')->count(),
+        $this->assertSame(2, $this->dueStatementRows()->count(),
             'Both shareholder dues get their own ledger row.');
     }
 
@@ -268,14 +222,14 @@ class OtherDuesTest extends TestCase
             ['direction' => OtherDue::DUE_FROM, 'partner_type' => 'is_shareholder', 'partner_id' => $shareholder->id,
              'amount' => 12000, 'currency' => 'EGP', 'comment' => 'Drop'],
         ]);
-        $this->assertSame(2, \App\Models\ShareholderStatement::whereNotNull('other_due_id')->count());
+        $this->assertSame(2, $this->dueStatementRows()->count());
 
         $this->store([
             ['direction' => OtherDue::DUE_FROM, 'partner_type' => 'is_shareholder', 'partner_id' => $shareholder->id,
              'amount' => 50000, 'currency' => 'EGP', 'comment' => 'Keep'],
         ]);
 
-        $rows = \App\Models\ShareholderStatement::whereNotNull('other_due_id')->get();
+        $rows = $this->dueStatementRows()->get();
         $this->assertCount(1, $rows, 'The dropped row must leave no movement behind.');
         $this->assertSame('Keep', $rows->first()->comment_en);
     }
@@ -286,12 +240,8 @@ class OtherDuesTest extends TestCase
      */
     public function test_a_partner_of_the_wrong_type_is_refused(): void
     {
-        $customer = Partner::where('company_id', $this->company->id)
-            ->where('is_customer', 1)->where('is_shareholder', 0)->first();
-
-        if (! $customer) {
-            $this->markTestSkipped('No customer that is not also a shareholder.');
-        }
+        $customer = $this->partnerOfType('is_customer');
+        $this->assertSame(0, (int) $customer->fresh()->is_shareholder, 'The scenario needs a customer that is not also a shareholder.');
 
         $response = $this->store([
             ['direction' => OtherDue::DUE_FROM, 'partner_type' => 'is_shareholder', 'partner_id' => $customer->id,
@@ -400,11 +350,15 @@ class OtherDuesTest extends TestCase
         $this->assertStringNotContainsString('appendOtherDues', $source);
     }
 
-    /** Only the dues this test created — never anything already on file. */
+    /** The dues of the test's own company — every one of them was created by this test. */
     private function duesCreatedHere(): int
     {
-        return OtherDue::where('company_id', $this->company->id)
-            ->where('id', '>=', $this->firstNewDueId)
-            ->count();
+        return OtherDue::where('company_id', $this->company->id)->count();
+    }
+
+    /** The ledger rows Other Dues wrote for the test's own company. */
+    private function dueStatementRows(): \Illuminate\Database\Eloquent\Builder
+    {
+        return \App\Models\ShareholderStatement::where('company_id', $this->company->id)->whereNotNull('other_due_id');
     }
 }

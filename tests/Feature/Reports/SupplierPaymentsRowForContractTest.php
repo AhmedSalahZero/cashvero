@@ -26,7 +26,7 @@ use Tests\TestCase;
  * * التقرير — بتخرج من صف الفواتير لأن net_balance بقى صفر ، و ما
  * * بتظهرش هنا .
  *
- * * كل الداتا هنا بتتعمل جوه transaction و بتترجع في tearDown
+ * * كل الداتا هنا بيعملها التست لشركة جديدة ، و بترجع بعده (TestCase بيلفّه في transaction)
  */
 class SupplierPaymentsRowForContractTest extends TestCase
 {
@@ -37,10 +37,6 @@ class SupplierPaymentsRowForContractTest extends TestCase
     /** * بُكِت واحد شهري يغطّي المدى كله عشان التأكيدات تبقى بسيطة */
     private const PERIODS = ['q-2026' => ['start_date' => self::PERIOD_START, 'end_date' => self::PERIOD_END]];
 
-    private ?string $originalDatabase = null;
-
-    private bool $inTransaction = false;
-
     private int $companyId = 0;
 
     private int $supplierPartnerId = 0;
@@ -49,37 +45,7 @@ class SupplierPaymentsRowForContractTest extends TestCase
     {
         parent::setUp();
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-            DB::table('contracts')->limit(1)->get();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-
-        DB::beginTransaction();
-        $this->inTransaction = true;
-
-        $this->companyId = (int) DB::table('companies')->insertGetId([
-            'name' => json_encode(['en' => 'Supplier Pay Co', 'ar' => 'Supplier Pay Co']),
-            'main_functional_currency' => 'EGP',
-        ]);
-    }
-
-    protected function tearDown(): void
-    {
-        if ($this->inTransaction) {
-            DB::rollBack();
-            $this->inTransaction = false;
-        }
-
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
-
-        parent::tearDown();
+        $this->companyId = $this->makeCompany()->id;
     }
 
     /* ───────────────────────── builders ───────────────────────── */

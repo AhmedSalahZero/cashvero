@@ -4,10 +4,12 @@ namespace Tests\Feature\Forms;
 
 use App\Http\Controllers\SalesGatheringTestController;
 use App\Models\Company;
-use App\Models\CustomerInvoice;
+use App\Models\CustomizedFieldsExportation;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\MakesInvoices;
 use Tests\TestCase;
 
 /**
@@ -17,38 +19,38 @@ use Tests\TestCase;
  * * و كل تقرير بيجمّع بالاسم المكتوب بالظبط — فـ "أحمد" و "احمد" و
  * * "Ahmed " بيبقوا تلات مناديب ، و تقرير المندوب بيتقسم من غير ما حد
  * * ياخد باله .
+ *
+ * * الشركة و أعمدتها المختارة و الفواتير و القوايم بيتعملوا في الاختبار نفسه .
  */
 class ManagedListFieldsTest extends TestCase
 {
-    private const COMPANY = 148;
+    use MakesInvoices;
 
-    private ?string $originalDatabase = null;
+    private Company $company;
+
+    private User $user;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
+        $this->company = $this->makeCompany();
+        $this->user = $this->makeUser([], $this->company);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
+        /**
+         * * الأعمدة اللي الشركة مختاراها لجدول الفواتير — الحقول التلاتة
+         * * المُدارة منهم ، زي شركة شغّالة بيهم فعلا
+         */
+        foreach ([
+            'CustomerInvoice' => ['customer_name', 'sales_person', 'business_sector', 'business_unit', 'invoice_number', 'invoice_date', 'invoice_due_date', 'currency', 'invoice_amount'],
+            'SupplierInvoice' => ['supplier_name', 'invoice_number', 'invoice_date', 'invoice_due_date', 'currency', 'invoice_amount'],
+        ] as $modelName => $fields) {
+            CustomizedFieldsExportation::create([
+                'company_id' => $this->company->id,
+                'model_name' => $modelName,
+                'fields' => $fields,
+            ]);
         }
-
-        if (! Company::find(self::COMPANY)) {
-            $this->markTestSkipped('Company '.self::COMPANY.' is not on file.');
-        }
-    }
-
-    protected function tearDown(): void
-    {
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
-
-        parent::tearDown();
     }
 
     /** @return array<int, array<string, mixed>> */
@@ -56,16 +58,15 @@ class ManagedListFieldsTest extends TestCase
     {
         $request = Request::create('/x', 'GET');
         $request->setLaravelSession(app('session.store'));
-        $request->setUserResolver(fn () => User::first());
+        $request->setUserResolver(fn () => $this->user);
         $this->app->instance('request', $request);
-        auth()->setUser(User::first());
+        auth()->setUser($this->user);
 
         $controller = app(SalesGatheringTestController::class);
-        $company = Company::findOrFail(self::COMPANY);
 
         $response = $modelId
-            ? $controller->editModel($company, $request, $modelName, $modelId)
-            : $controller->createModel($company, $request, $modelName);
+            ? $controller->editModel($this->company, $request, $modelName, $modelId)
+            : $controller->createModel($this->company, $request, $modelName);
 
         return $response->toResponse($request)->original->getData()['page']['props']['fields'];
     }
@@ -92,9 +93,8 @@ class ManagedListFieldsTest extends TestCase
 
     /**
      * * أي حقل من دول لو ظاهر في الفورمة لازم يكون select
-     *
-     * @dataProvider managedFields
      */
+    #[DataProvider('managedFields')]
     public function test_the_field_is_a_select_not_free_text(string $name): void
     {
         $shown = false;
@@ -114,9 +114,7 @@ class ManagedListFieldsTest extends TestCase
                 "{$modelName}.{$name} لازم يقول للمستخدم يملا القايمة منين");
         }
 
-        if (! $shown) {
-            $this->markTestSkipped("{$name} is not among this company's selected fields.");
-        }
+        $this->assertTrue($shown, "{$name} is among the company's selected fields, so the form must show it.");
     }
 
     /**
@@ -126,65 +124,54 @@ class ManagedListFieldsTest extends TestCase
      */
     public function test_a_value_outside_the_list_is_kept_as_an_option(): void
     {
-        $invoice = CustomerInvoice::where('company_id', self::COMPANY)->first();
+        $this->assertNotNull($this->field('CustomerInvoice', 'sales_person'), 'sales_person is a selected field here.');
 
-        if (! $invoice) {
-            $this->markTestSkipped('No invoice on file.');
-        }
+        // القيمة اتكتبت بإيد قبل ما الحقل يبقى قايمة — مش موجودة في cash_vero_sales_persons
+        $legacy = 'Legacy Typed Name '.uniqid();
+        $invoice = $this->invoice($this->customer($this->company), ['sales_person' => $legacy]);
 
-        if ($this->field('CustomerInvoice', 'sales_person') === null) {
-            $this->markTestSkipped('sales_person is not a selected field here.');
-        }
+        $field = $this->field('CustomerInvoice', 'sales_person', $invoice->id);
 
-        DB::beginTransaction();
-
-        try {
-            $legacy = 'Legacy Typed Name '.uniqid();
-            $invoice->forceFill(['sales_person' => $legacy])->save();
-
-            $field = $this->field('CustomerInvoice', 'sales_person', $invoice->id);
-
-            $this->assertSame($legacy, $field['value']);
-            $this->assertArrayHasKey($legacy, (array) $field['options'],
-                'القيمة القديمة لازم تفضل في الاختيارات، و إلا بتتمسح مع أول حفظ');
-        } finally {
-            DB::rollBack();
-        }
+        $this->assertSame($legacy, $field['value']);
+        $this->assertArrayHasKey($legacy, (array) $field['options'],
+            'القيمة القديمة لازم تفضل في الاختيارات، و إلا بتتمسح مع أول حفظ');
     }
 
     /** * القايمة بتيجي من جدولها ، مترتبة بالاسم */
     public function test_the_options_come_from_the_managed_list(): void
     {
-        DB::beginTransaction();
-
-        try {
-            foreach (['Zain', 'Adam', 'Mona'] as $name) {
-                DB::table('cash_vero_sales_persons')->insert([
-                    'company_id' => self::COMPANY,
-                    'name' => $name,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            }
-
-            $field = $this->field('CustomerInvoice', 'sales_person');
-
-            if ($field === null) {
-                $this->markTestSkipped('sales_person is not a selected field here.');
-            }
-
-            $options = array_keys((array) $field['options']);
-
-            foreach (['Zain', 'Adam', 'Mona'] as $name) {
-                $this->assertContains($name, $options);
-            }
-
-            $sorted = $options;
-            sort($sorted, SORT_STRING | SORT_FLAG_CASE);   // MySQL orders names ignoring capital letters
-            $this->assertSame($sorted, $options, 'الاختيارات لازم تبقى مترتبة بالاسم');
-        } finally {
-            DB::rollBack();
+        foreach (['Zain', 'Adam', 'Mona'] as $name) {
+            DB::table('cash_vero_sales_persons')->insert([
+                'company_id' => $this->company->id,
+                'name' => $name,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
         }
+
+        // مندوب شركة تانية ما يظهرش هنا
+        DB::table('cash_vero_sales_persons')->insert([
+            'company_id' => $this->makeCompany()->id,
+            'name' => 'Bob Of Another Company',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $field = $this->field('CustomerInvoice', 'sales_person');
+
+        $this->assertNotNull($field, 'sales_person is a selected field here.');
+
+        $options = array_keys((array) $field['options']);
+
+        $this->assertSame(['Adam', 'Mona', 'Zain'], $options, 'القايمة بتاعة الشركة دي بس، مترتبة بالاسم');
+
+        foreach (['Zain', 'Adam', 'Mona'] as $name) {
+            $this->assertContains($name, $options);
+        }
+
+        $sorted = $options;
+        sort($sorted, SORT_STRING | SORT_FLAG_CASE);   // MySQL orders names ignoring capital letters
+        $this->assertSame($sorted, $options, 'الاختيارات لازم تبقى مترتبة بالاسم');
     }
 
     /** * الواجهة بتعرض النوع ده و بتقول للمستخدم يملا القايمة منين */

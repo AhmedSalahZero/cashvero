@@ -3,7 +3,6 @@
 namespace Tests\Feature\Security;
 
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\Feature\Security\Support\Finding;
@@ -15,7 +14,8 @@ use Tests\TestCase;
  *
  * Plays the attacker at the login door: guessing passwords, probing which
  * e-mail addresses exist, abusing "forgot password", reusing a session after
- * logout. Uses only throw-away accounts (see UsesScratchAccounts).
+ * logout. Uses only throw-away accounts in a fake company, made by the test
+ * and rolled back afterwards (see UsesScratchAccounts).
  */
 #[Group('security')]
 class AuthenticationSecurityTest extends TestCase
@@ -26,13 +26,6 @@ class AuthenticationSecurityTest extends TestCase
     {
         parent::setUp();
         $this->bootScratch(false);
-    }
-
-    protected function tearDown(): void
-    {
-        DB::table('password_resets')->where('email', 'like', 'sec-test-%@example.test')->delete();
-        $this->cleanupScratch();
-        parent::tearDown();
     }
 
     public function test_a_visitor_who_is_not_signed_in_is_sent_to_the_login_page(): void
@@ -168,8 +161,6 @@ class AuthenticationSecurityTest extends TestCase
 
             return;
         }
-
-        $this->scratchUserIds[] = $created->id;
 
         $this->assertSame(
             [0, 0, 0],

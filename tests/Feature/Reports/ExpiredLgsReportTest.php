@@ -6,13 +6,13 @@ use App\Models\Company;
 use App\Models\FinancialInstitution;
 use App\Models\Partner;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Database\Factories\PartnerFactory;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Inertia\Testing\AssertableInertia as Assert;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
+use Tests\Concerns\MakesBanks;
 use Tests\TestCase;
 
 /**
@@ -20,31 +20,22 @@ use Tests\TestCase;
  * filtered by currencies / banks / LG types / LG sources, one group (tab)
  * per currency.
  *
- * Every row is written inside a transaction that is rolled back. The test
- * LGs use made-up currencies so the company's real LGs never reach an
- * assertion.
+ * The company, its bank, the beneficiary and every LG are made by the test
+ * and rolled back afterwards.
  */
 class ExpiredLgsReportTest extends TestCase
 {
-    use DatabaseTransactions;
+    use MakesBanks;
 
-    private const CUR_A = 'ZZA';
+    private const CUR_A = 'EGP';
 
-    private const CUR_B = 'ZZB';
+    private const CUR_B = 'USD';
 
     private Company $company;
 
     private FinancialInstitution $bank;
 
     private Partner $beneficiary;
-
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
 
     protected function setUp(): void
     {
@@ -56,39 +47,14 @@ class ExpiredLgsReportTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
-
-        if (! Schema::connection('mysql')->hasTable('letter_of_guarantee_issuances')) {
-            $this->markTestSkipped('No development schema on '.DB::connection('mysql')->getDatabaseName().' - set SMOKE_DB to run this suite.');
-        }
-
-        $bank = FinancialInstitution::query()->whereNotNull('company_id')->whereNotNull('bank_id')->first();
-        if (! $bank) {
-            $this->markTestSkipped('Development database needs a bank-type financial institution.');
-        }
-
-        $this->bank = $bank;
-        $this->company = Company::findOrFail($bank->company_id);
-        $this->beneficiary = Partner::create(['company_id' => $this->company->id, 'name' => 'Expired LG Beneficiary '.uniqid(), 'is_customer' => 1]);
+        $this->company = $this->makeCompany();
+        $this->bank = $this->bank($this->company);
+        $this->beneficiary = PartnerFactory::new()->forCompany($this->company)->customer()->create(['name' => 'Expired LG Beneficiary']);
     }
 
     private function user(): User
     {
-        $user = User::create([
-            'name' => 'Expired LGs '.uniqid(),
-            'email' => 'expired-lgs-'.uniqid().'@example.test',
-            'password' => bcrypt('secret-for-tests'),
-            'company_id' => $this->company->id,
-        ]);
-        $user->givePermissionTo(['view lg by bank name report']);
-        $user->companies()->attach($this->company->id);
-        $user->load('companies');
-
-        return $user;
+        return $this->makeUser(['view lg by bank name report'], $this->company);
     }
 
     private function lg(string $code, string $renewalDate, string $currency, array $overrides = []): void

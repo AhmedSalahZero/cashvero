@@ -19,8 +19,9 @@ use Illuminate\Support\Str;
  * Shared machinery for the security tests that ATTACK the running application as a throw-away user.
  *
  * It is the same set-up AllRoutesCrossCompanyTest uses (kept separate so that proven test stays untouched):
- *   - only runs in a database literally named cashvero_test (every request is rolled back);
- *   - company B = the company with the most invoices, company A = the next one;
+ *   - two fresh companies, A and B, each with one planted record in every company table
+ *     (PlantsCompanyRecords), all inside the test's transaction;
+ *   - every request is sent inside its own nested transaction, rolled back after the answer;
  *   - screen addresses start with the language prefix, like in production;
  *   - outgoing HTTP, queues, mail and notifications are faked.
  *
@@ -28,6 +29,7 @@ use Illuminate\Support\Str;
  */
 trait AttacksRoutes
 {
+    use PlantsCompanyRecords;
     use UsesScratchAccounts;
 
     protected const SAFE_STATUSES = [401, 403, 404, 419];
@@ -42,22 +44,10 @@ trait AttacksRoutes
 
     protected $attacker;
 
-    protected function bootAttack(): void
+    /** @param  bool  $plantRecords  false for tests that never aim at a company record (they only need the people) */
+    protected function bootAttack(bool $plantRecords = true): void
     {
         $this->bootScratch(true);
-
-        if (DB::connection('mysql')->getDatabaseName() !== 'cashvero_test') {
-            $this->markTestSkipped('This test sends write requests to the application, so it only runs in the database named cashvero_test.');
-        }
-
-        $busiest = DB::table('customer_invoices')->select('company_id', DB::raw('count(*) as n'))
-            ->groupBy('company_id')->orderByDesc('n')->limit(2)->pluck('company_id')->all();
-
-        if (count($busiest) === 2) {
-            $this->companyB = \App\Models\Company::find($busiest[0]);
-            $this->companyA = \App\Models\Company::find($busiest[1]);
-            $this->enableCashVeroForScratchDatabase();
-        }
 
         $this->useProductionAddresses();
         $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
@@ -70,6 +60,12 @@ trait AttacksRoutes
             [$this->companyA->id],
             \Spatie\Permission\Models\Permission::where('guard_name', 'web')->pluck('name')->all()
         );
+
+        if ($plantRecords) {
+            // Something to aim at in company B, and records of company A's own for the controls.
+            $this->plantRecordsFor($this->companyA, $this->attacker->id);
+            $this->plantRecordsFor($this->companyB, $this->scratchUser([$this->companyB->id])->id);
+        }
     }
 
     /** In production every address starts with the language ("/en/148/..."); a test route table does not. */
@@ -209,12 +205,32 @@ trait AttacksRoutes
 
     protected function urlFor(Route $route, array $values): string
     {
-        $uri = preg_replace_callback('/\{(\w+)(\?)?\}/', function ($m) use ($values) {
+        // An optional part left empty in front of one that is given would shift the given value into
+        // its place (/report-result/{asArray?}/{report?} → /report-result/14 reads 14 as "asArray"),
+        // so those get a harmless 0.
+        preg_match_all('/\{(\w+)\??\}/', $route->uri(), $all);
+        $lastGiven = -1;
+
+        foreach ($all[1] as $i => $name) {
+            if (array_key_exists($name, $values)) {
+                $lastGiven = $i;
+            }
+        }
+
+        $position = -1;
+
+        $uri = preg_replace_callback('/\{(\w+)(\?)?\}/', function ($m) use ($values, $lastGiven, &$position) {
+            $position++;
+
             if (array_key_exists($m[1], $values)) {
                 return (string) $values[$m[1]];
             }
 
-            return ($m[2] ?? '') === '?' ? '' : '1';
+            if (($m[2] ?? '') === '?') {
+                return $position < $lastGiven ? '0' : '';
+            }
+
+            return '1';   // harmless placeholder for a required parameter we cannot know
         }, $route->uri());
 
         return '/'.trim((string) preg_replace('#/+#', '/', $uri), '/');

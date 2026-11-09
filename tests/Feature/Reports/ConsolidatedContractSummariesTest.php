@@ -24,45 +24,23 @@ use Tests\TestCase;
  */
 class ConsolidatedContractSummariesTest extends TestCase
 {
-    private ?string $originalDatabase = null;
-
-    private bool $inTransaction = false;
-
     private int $companyId = 0;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
+        // The report refuses a window that does not include today, and the scenario below is
+        // dated September 2026 - January 2027. Freeze the clock inside that window so the test
+        // does not start failing once the calendar moves past it.
+        $this->travelTo(\Carbon\Carbon::parse('2026-09-17 10:00:00'));
 
-        try {
-            DB::connection('mysql')->getPdo();
-            DB::table('contracts')->limit(1)->get();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-
-        DB::beginTransaction();
-        $this->inTransaction = true;
-
-        $this->companyId = (int) DB::table('companies')->insertGetId([
-            'name' => json_encode(['en' => 'Consolidated Test Co', 'ar' => 'Consolidated Test Co']),
-            'main_functional_currency' => 'EGP',
-        ]);
+        $this->companyId = $this->makeCompany()->id;
     }
 
     protected function tearDown(): void
     {
-        if ($this->inTransaction) {
-            DB::rollBack();
-            $this->inTransaction = false;
-        }
-
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
+        $this->travelBack();
 
         parent::tearDown();
     }
@@ -122,9 +100,7 @@ class ConsolidatedContractSummariesTest extends TestCase
         app()->instance('request', $request);
 
         $sharedTimeline = $controller->buildSharedTimelineContext($company, $request);
-        if (! is_array($sharedTimeline)) {
-            $this->markTestSkipped('Today is outside the report window this test builds.');
-        }
+        $this->assertIsArray($sharedTimeline, 'The report refused the window — is today (pinned in setUp) inside it?');
 
         $summaries = app(ContractCashFlowBatchBuilder::class)->build(
             $company,

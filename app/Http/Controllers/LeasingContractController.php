@@ -201,6 +201,9 @@ class LeasingContractController
     {
         $contract = new LeasingContract;
         $contract->status = LeasingContract::RUNNING;
+        // Security (SEC-34b): the contract belongs to the leasing company in the ADDRESS (already checked
+        // against the company by EnsureRouteModelsBelongToCompany), never to a number sent in the form.
+        $request->merge(['leasing_company_id' => $leasingCompany->id]);
         $contract->storeBasicForm($request);
 
         return redirect()

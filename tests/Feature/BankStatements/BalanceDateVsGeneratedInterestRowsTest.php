@@ -236,9 +236,8 @@ class BalanceDateVsGeneratedInterestRowsTest extends TestCase
     /**
      * Each Odoo link is checked on its own so that dropping any one of
      * the three whereNull() clauses fails a test.
-     *
-     * @dataProvider odooLinkProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('odooLinkProvider')]
     public function test_a_month_end_row_posted_to_odoo_blocks_the_edit(string $column, $value): void
     {
         $this->placeholder('2026-07-31', [$column => $value]);
@@ -296,9 +295,8 @@ class BalanceDateVsGeneratedInterestRowsTest extends TestCase
     /**
      * A month-end row the trigger has filled in, or one already posted
      * to Odoo, is real money and must still block.
-     *
-     * @dataProvider touchedMonthEndRowProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('touchedMonthEndRowProvider')]
     public function test_a_touched_month_end_row_still_blocks_a_currency_change(array $overrides): void
     {
         $this->placeholder('2026-07-31', $overrides);

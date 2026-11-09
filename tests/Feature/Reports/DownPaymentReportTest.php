@@ -3,16 +3,14 @@
 namespace Tests\Feature\Reports;
 
 use App\Models\Company;
-use App\Models\FinancialInstitution;
 use App\Models\Partner;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Inertia\Testing\AssertableInertia as Assert;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
+use Tests\Concerns\MakesInvoices;
 use Tests\TestCase;
 
 /**
@@ -21,27 +19,18 @@ use Tests\TestCase;
  * the chosen currencies - each with the amount settled against invoices
  * and what is left, zero balances included.
  *
- * Every row is written inside a transaction that is rolled back, and every
- * date sits in 2099 so the company's real down payments never reach an
- * assertion.
+ * Every row is made by the test, for a company made by the test, and rolled
+ * back afterwards (TestCase). The dates sit in 2099, far from anything else.
  */
 class DownPaymentReportTest extends TestCase
 {
-    use DatabaseTransactions;
+    use MakesInvoices;
 
     private Company $company;
 
     private Partner $customer;
 
     private Partner $supplier;
-
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
 
     protected function setUp(): void
     {
@@ -53,39 +42,14 @@ class DownPaymentReportTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
-
-        if (! Schema::connection('mysql')->hasTable('payment_settlements')) {
-            $this->markTestSkipped('No development schema on '.DB::connection('mysql')->getDatabaseName().' - set SMOKE_DB to run this suite.');
-        }
-
-        $institution = FinancialInstitution::query()->whereNotNull('company_id')->first();
-        if (! $institution) {
-            $this->markTestSkipped('Development database has no financial institution to attach company context to.');
-        }
-
-        $this->company = Company::findOrFail($institution->company_id);
-        $this->customer = Partner::create(['company_id' => $this->company->id, 'name' => 'Down Payment Customer '.uniqid(), 'is_customer' => 1]);
-        $this->supplier = Partner::create(['company_id' => $this->company->id, 'name' => 'Down Payment Supplier '.uniqid(), 'is_supplier' => 1]);
+        $this->company = $this->makeCompany();
+        $this->customer = $this->customer($this->company, ['name' => 'Down Payment Customer']);
+        $this->supplier = $this->supplier($this->company, ['name' => 'Down Payment Supplier']);
     }
 
     private function userWith(array $permissions): User
     {
-        $user = User::create([
-            'name' => 'Down Payment Report '.uniqid(),
-            'email' => 'down-payment-report-'.uniqid().'@example.test',
-            'password' => bcrypt('secret-for-tests'),
-            'company_id' => $this->company->id,
-        ]);
-        $user->givePermissionTo($permissions);
-        $user->companies()->attach($this->company->id);
-        $user->load('companies');
-
-        return $user;
+        return $this->makeUser($permissions, $this->company);
     }
 
     /**

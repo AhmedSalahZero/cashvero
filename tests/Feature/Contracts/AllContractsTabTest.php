@@ -4,39 +4,30 @@ namespace Tests\Feature\Contracts;
 
 use App\Models\Company;
 use App\Models\Contract;
-use App\Models\FinancialInstitution;
 use App\Models\Partner;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
+use Tests\Concerns\MakesInvoices;
 use Tests\TestCase;
 
 /**
  * The Contracts list has a fourth tab, All: every contract whatever its
  * state, each row saying whether it is Running, Running And Against or
  * Finished. The three status tabs are unchanged.
+ *
+ * The company, its customer and every contract are made by the test.
  */
 class AllContractsTabTest extends TestCase
 {
-    use DatabaseTransactions;
+    use MakesInvoices;
 
     private Company $company;
 
     private Partner $customer;
 
     private User $user;
-
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
 
     protected function setUp(): void
     {
@@ -48,34 +39,9 @@ class AllContractsTabTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
-
-        if (! Schema::connection('mysql')->hasTable('contracts')) {
-            $this->markTestSkipped('No development schema on '.DB::connection('mysql')->getDatabaseName().' - set SMOKE_DB to run this suite.');
-        }
-
-        $institution = FinancialInstitution::query()->whereNotNull('company_id')->first();
-        if (! $institution) {
-            $this->markTestSkipped('Development database has no financial institution to attach company context to.');
-        }
-
-        $this->company = Company::findOrFail($institution->company_id);
-        $this->customer = Partner::create(['company_id' => $this->company->id, 'name' => 'All Tab Customer '.uniqid(), 'is_customer' => 1]);
-
-        $user = User::create([
-            'name' => 'All Contracts Tab '.uniqid(),
-            'email' => 'all-contracts-tab-'.uniqid().'@example.test',
-            'password' => bcrypt('secret-for-tests'),
-            'company_id' => $this->company->id,
-        ]);
-        $user->givePermissionTo(['customer_contract.view', 'supplier_contract.view']);
-        $user->companies()->attach($this->company->id);
-        $user->load('companies');
-        $this->user = $user;
+        $this->company = $this->makeCompany();
+        $this->customer = $this->customer($this->company, ['name' => 'All Tab Customer']);
+        $this->user = $this->makeUser(['customer_contract.view', 'supplier_contract.view'], $this->company);
     }
 
     private function makeContract(string $type, string $status): Contract

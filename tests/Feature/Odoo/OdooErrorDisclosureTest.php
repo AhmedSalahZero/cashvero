@@ -26,7 +26,7 @@ class OdooErrorDisclosureTest extends TestCase
         .'file_get_contents(https://squadbcc-itechs-may2025v2-stage1-36372560.dev.odoo.com/xmlrpc/2/object): '
         .'Failed to open stream: Connection refused';
 
-    /** @dataProvider transportFailureProvider */
+    #[\PHPUnit\Framework\Attributes\DataProvider('transportFailureProvider')]
     public function test_a_connection_failure_never_reaches_the_user_verbatim(string $raw): void
     {
         $shown = OdooSync::userFacingMessage(new \Exception($raw));

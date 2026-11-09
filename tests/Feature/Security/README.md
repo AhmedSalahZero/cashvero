@@ -12,10 +12,16 @@ php artisan test --group=security --filter=SEC-14  # one finding (matches by nam
 php artisan test tests/Feature/Security/RouteSecurityTest.php   # one file
 ```
 
-Tests that use the database (Authentication, AccessControl, InputHandling)
-use the development database (`SMOKE_DB`, default `cashvero`), create only
-throw-away users (`sec-test-…@example.test`) and delete them afterwards.
-They **skip** (not fail) if the database is unreachable.
+Nothing to prepare and nothing to point anywhere: like every test, these run
+on the separate test database (`cashvero_test`, see phpunit.xml) and never
+read or change your real data. Each test makes its own fake data — two
+companies subscribed to CashVero, throw-away users (`sec-test-…@example.test`)
+and, for the route attacks, one record of each company in every table that
+has a `company_id` (`Support/PlantsCompanyRecords.php`) — inside a transaction
+that is rolled back when the test ends. Uploads go to a fake disk, and
+outgoing HTTP, mail, queues and the Odoo connection are faked.
+A test of this suite never skips: if its set-up cannot be built it FAILS with
+"Test set-up problem: …".
 Set `SECURITY_HEADERS_AT_PROXY=true` if your web server (nginx/IIS) sets the
 browser security headers instead of the application.
 
@@ -30,14 +36,14 @@ browser security headers instead of the application.
 | AuthenticationSecurityTest | yes | login lock-out, uniform errors, reset-password leaks, logout, self-registration |
 | AccessControlSecurityTest | yes | cross-company and cross-rank editing/deleting, invoice leak, user-list leak |
 | InputHandlingSecurityTest | yes | SQL-injection strings, time-delay injection, disguised uploads, stored XSS |
-| AllRoutesCrossCompanyTest | yes (cashvero_test only) | EVERY route with a company in its address, attacked by a company-A user holding all permissions: company B's number (SEC-30), company B's records through bound models (SEC-31), generic model/id screens (SEC-32); SEC-33:  a user with no permissions against every route the permission map protects. |
+| AllRoutesCrossCompanyTest | yes (own fake data) | EVERY route with a company in its address, attacked by a company-A user holding all permissions: company B's number (SEC-30), company B's records through bound models (SEC-31), generic model/id screens (SEC-32); SEC-33:  a user with no permissions against every route the permission map protects. |
 | DependencyAuditTest | no (needs internet + composer) | known security advisories in installed packages (`composer audit`, SEC-40) |
-| ForeignRecordsInFormsSecurityTest | yes (cashvero_test only) | SEC-34a: every `exists:` / `Rule::exists` rule on a company table must be limited to the company; SEC-34b: write forms sent with company B's record numbers and `company_id`=B, nothing may be stored for B |
-| PermissionGranularitySecurityTest | yes (cashvero_test only) | SEC-35a: route map only asks for real permissions; SEC-35b: no view permission shares a name with a change permission; SEC-35c: a view-only user is refused on every write screen |
-| CompanyAdministrationSecurityTest | yes (cashvero_test only) | SEC-36: a user who is not a Super Admin cannot view/edit/delete/remove a company that is not theirs (throw-away company, rolled back) |
-| PlainRecordNumberSecurityTest | yes (cashvero_test only) | SEC-37a: screens with a bare `{id}` (model read from the controller source) asked for company B's record; SEC-37b: screens that load a User asked for a user of another company |
+| ForeignRecordsInFormsSecurityTest | yes (own fake data) | SEC-34a: every `exists:` / `Rule::exists` rule on a company table must be limited to the company; SEC-34b: write forms sent with company B's record numbers and `company_id`=B, nothing may be stored for B |
+| PermissionGranularitySecurityTest | yes (own fake data) | SEC-35a: route map only asks for real permissions; SEC-35b: no user made by the role templates holds an old name that also grants change rights (with a planted migrated user as control); SEC-35c: a view-only user is refused on every write screen |
+| CompanyAdministrationSecurityTest | yes (own fake data) | SEC-36: a user who is not a Super Admin cannot view/edit/delete/remove a company that is not theirs (fake company, rolled back) |
+| PlainRecordNumberSecurityTest | yes (own fake data) | SEC-37a: screens with a bare `{id}` (model read from the controller source) asked for company B's record; SEC-37b: screens that load a User asked for a user of another company |
 | SpreadsheetFormulaSecurityTest | app boot | SEC-38: text typed by a user (`=HYPERLINK(...)`, `=cmd\|...`) must stay plain text in Excel exports |
-| OdooAddressSecurityTest | yes (cashvero_test only) | SEC-39: the company form must refuse an Odoo address pointing at localhost / private networks / non-web protocols, and plain http (SSRF) |
+| OdooAddressSecurityTest | yes (own fake data) | SEC-39: the company form must refuse an Odoo address pointing at localhost / private networks / non-web protocols, and plain http (SSRF) |
 
 ## Findings the suite is expected to report on the current code
 
@@ -67,11 +73,9 @@ what a read-through of the project predicts.
 * These tests prove what they check — they are not a substitute for an
   external penetration test (network, server, TLS, cloud settings, social
   engineering).
-* Tests marked "app boot" or "yes" were written against the real code but
-  could not be executed in the authoring sandbox (no Laravel runtime / DB).
-  The first `php artisan test --group=security` run may need small
-  adjustments (e.g. a route name or role that differs in your database).
-  Lint, the static scanner tests and the configuration tests were executed.
+* Tests marked "yes" prove the code against the fake data they plant. A
+  data audit of the REAL database (for example, which real users still hold
+  an old permission name) is not part of this suite: it never reads it.
 
 ## Production checklist (not testable from code)
 

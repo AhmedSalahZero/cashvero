@@ -11,6 +11,8 @@ use App\Traits\Models\IsReviewable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Feature\Security\Support\PlantsCompanyRecords;
 use Tests\TestCase;
 
 /**
@@ -20,40 +22,23 @@ use Tests\TestCase;
  * * ينفعش تتعدل و لا تتحذف ، و ده اللي بيدّي للميزة معناها . فالاختبارات
  * * دي بتتأكد من القفل نفسه مش من العمود .
  *
- * * كل حالة بتتبني و بترجع جوه transaction ، فالاختبارات بتغطي الأنواع
- * * كلها حتى اللي لسه مفيهاش داتا على الجهاز .
+ * * الشركة و المستخدمين و صف من كل نوع حركة بيتبنوا جوه الاختبار نفسه
+ * * و بيرجعوا مع الـ rollback (Tests\TestCase) ، فالاختبارات بتغطي الأنواع
+ * * كلها من غير ما تعتمد على أي داتا موجودة .
  */
 class MovementReviewTest extends TestCase
 {
-    private const COMPANY = 148;
+    use PlantsCompanyRecords;
 
-    private ?string $originalDatabase = null;
+    private Company $company;
+
+    private ?User $actor = null;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-
-        if (! Company::find(self::COMPANY)) {
-            $this->markTestSkipped('Company '.self::COMPANY.' is not on file.');
-        }
-    }
-
-    protected function tearDown(): void
-    {
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
-
-        parent::tearDown();
+        $this->company = $this->makeCompany();
     }
 
     /** @return array<string, array{0:string,1:string,2:string}> النوع ، الموديل ، الموديول */
@@ -87,62 +72,54 @@ class MovementReviewTest extends TestCase
         return $request;
     }
 
+    /** * اللي بيراجع : سوبر أدمن ، فبيعدّي صلاحية المراجعة لكل الأنواع */
     private function actor(): User
     {
-        return User::firstOrFail();
+        return $this->actor ??= $this->makeSuperAdmin($this->company);
     }
 
     /**
-     * صف من النوع ده للاختبار عليه .
+     * صف من النوع ده للاختبار عليه ، في الشركة دي (أو شركة تانية) .
      *
-     * * لو مفيش داتا على الجهاز بنبني صف بأقل الأعمدة الإجبارية بدل ما
-     * * نتخطّى الاختبار — النوع اللي مفيهوش داتا النهاردة هو بالظبط
-     * * النوع اللي محدش هيلاحظ لو اتكسر . الصف بيترجع مع الـ rollback .
+     * * بنبني صف في كل جدول ليه company_id بأقل الأعمدة الإجبارية
+     * * (PlantsCompanyRecords) — مش بنحاول نعمل حركة واقعية ، إحنا
+     * * بنختبر المراجعة مش الحركة نفسها . كله بيرجع مع الـ rollback .
      */
-    private function anyRow(string $class)
+    private function anyRow(string $class, ?Company $company = null)
     {
-        $existing = $class::where('company_id', self::COMPANY)->first() ?? $class::first();
+        $company ??= $this->company;
 
-        if ($existing) {
-            return $existing;
+        if ($this->plantedFor($company) === []) {
+            $this->plantRecordsFor($company, $this->actor()->id);
         }
 
-        $seed = self::SEEDS[$class] ?? null;
+        $table = (new $class)->getTable();
+        $id = $this->plantedFor($company)[$table] ?? null;
 
-        if ($seed === null) {
-            return null;
+        $this->assertNotNull($id, "ما اتبناش صف {$class}: ".($this->plantFailuresFor($company)[$table] ?? 'unknown'));
+
+        if (isset(self::ALWAYS_SET[$class])) {
+            DB::table($table)->where('id', $id)->update(self::ALWAYS_SET[$class]);
         }
 
-        $model = new $class;
-        $model->forceFill($seed + ['company_id' => self::COMPANY])->save();
-
-        return $model->fresh();
+        return $class::findOrFail($id);
     }
 
     /**
-     * أقل ما يلزم لإنشاء صف من كل نوع مفيهوش داتا .
-     *
-     * * الأعمدة دي هي الـ NOT NULL اللي مالهاش default — مش بنحاول نعمل
-     * * حركة واقعية ، إحنا بنختبر المراجعة مش الحركة نفسها
+     * * أعمدة القاعدة بتسمح تكون فاضية بس أي حركة حقيقية بيبقى فيها قيمة ،
+     * * و وصف الحركة في السجل بيقرا منها (تاريخ التحويل مثلا)
      */
-    private const SEEDS = [
-        \App\Models\MultipleCashExpense::class => [
-            'payment_date' => '2026-01-01',
-            'currency' => 'EGP',
-        ],
-        \App\Models\LetterOfCreditIssuance::class => [
-            'issuance_date' => '2026-01-01',
-        ],
-        \App\Models\LcSettlementInternalMoneyTransfer::class => [
-            'transfer_days' => 0,
-            'transfer_date' => '2026-01-01',
-        ],
+    private const ALWAYS_SET = [
+        \App\Models\InternalMoneyTransfer::class => ['transfer_date' => '2026-01-01'],
+        \App\Models\LcSettlementInternalMoneyTransfer::class => ['transfer_date' => '2026-01-01'],
+        \App\Models\MultipleCashExpense::class => ['payment_date' => '2026-01-01', 'currency' => 'EGP'],
+        \App\Models\LetterOfCreditIssuance::class => ['issuance_date' => '2026-01-01'],
     ];
 
     /* ───────────── التوصيل ───────────── */
 
     /** * كل نوع في القايمة لازم يكون فعلا قابل للمراجعة */
-    /** @dataProvider movements */
+    #[DataProvider('movements')]
     public function test_the_movement_is_reviewable(string $key, string $class, string $module): void
     {
         $this->assertContains(IsReviewable::class, class_uses_recursive($class),
@@ -156,7 +133,7 @@ class MovementReviewTest extends TestCase
     }
 
     /** * و صلاحيته موجودة جنب الموديل بتاعه */
-    /** @dataProvider movements */
+    #[DataProvider('movements')]
     public function test_the_permission_sits_next_to_its_own_model(string $key, string $class, string $module): void
     {
         $keys = array_column(\App\Support\Permissions\PermissionRegistry::all(), 'key');
@@ -169,87 +146,68 @@ class MovementReviewTest extends TestCase
 
     /**
      * * مراجعة → قفل التعديل → قفل الحذف → فكّ → رجعت تتعدل
-     *
-     * @dataProvider movements
      */
+    #[DataProvider('movements')]
     public function test_the_full_review_cycle(string $key, string $class, string $module): void
     {
         $row = $this->anyRow($class);
 
-        if (! $row) {
-            $this->markTestSkipped("No {$key} rows on file.");
-        }
 
-        DB::beginTransaction();
+        $actor = $this->actor();
 
+        $this->assertTrue($row->markReviewed($actor, 'تمام'), 'المراجعة المفروض تتم');
+        $row->refresh();
+
+        $this->assertTrue($row->isReviewed());
+        $this->assertSame($actor->id, (int) $row->reviewed_by);
+        $this->assertNotNull($row->reviewed_at);
+        $this->assertSame('تمام', $row->getReviewComment());
+
+        // التعديل مقفول
         try {
-            $actor = $this->actor();
-
-            $this->assertTrue($row->markReviewed($actor, 'تمام'), 'المراجعة المفروض تتم');
-            $row->refresh();
-
-            $this->assertTrue($row->isReviewed());
-            $this->assertSame($actor->id, (int) $row->reviewed_by);
-            $this->assertNotNull($row->reviewed_at);
-            $this->assertSame('تمام', $row->getReviewComment());
-
-            // التعديل مقفول
-            try {
-                $row->forceFill(['updated_at' => now()])->setAttribute('company_id', $row->company_id);
-                $row->user_comment = 'محاولة تعديل';
-                $row->save();
-                $this->fail('المفروض التعديل يترفض على حركة مراجَعة');
-            } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
-                $this->assertSame(403, $e->getStatusCode());
-            }
-
-            // الحذف مقفول
-            try {
-                $class::find($row->id)->delete();
-                $this->fail('المفروض الحذف يترفض على حركة مراجَعة');
-            } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
-                $this->assertSame(403, $e->getStatusCode());
-            }
-
-            $this->assertNotNull($class::find($row->id), 'الحركة اتحذفت رغم المراجعة');
-
-            // فكّ المراجعة يرجّع كل حاجة
-            $this->assertTrue($class::find($row->id)->markUnreviewed($actor, null));
-
-            $fresh = $class::find($row->id);
-            $this->assertFalse($fresh->isReviewed());
-            $this->assertNull($fresh->reviewed_by);
-            $this->assertNull($fresh->reviewed_at);
-        } finally {
-            DB::rollBack();
+            $row->forceFill(['updated_at' => now()])->setAttribute('company_id', $row->company_id);
+            $row->user_comment = 'محاولة تعديل';
+            $row->save();
+            $this->fail('المفروض التعديل يترفض على حركة مراجَعة');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            $this->assertSame(403, $e->getStatusCode());
         }
+
+        // الحذف مقفول
+        try {
+            $class::find($row->id)->delete();
+            $this->fail('المفروض الحذف يترفض على حركة مراجَعة');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            $this->assertSame(403, $e->getStatusCode());
+        }
+
+        $this->assertNotNull($class::find($row->id), 'الحركة اتحذفت رغم المراجعة');
+
+        // فكّ المراجعة يرجّع كل حاجة
+        $this->assertTrue($class::find($row->id)->markUnreviewed($actor, null));
+
+        $fresh = $class::find($row->id);
+        $this->assertFalse($fresh->isReviewed());
+        $this->assertNull($fresh->reviewed_by);
+        $this->assertNull($fresh->reviewed_at);
     }
 
     /** * و بعد فكّ المراجعة التعديل بيعدّي تاني */
-    /** @dataProvider movements */
+    #[DataProvider('movements')]
     public function test_editing_works_again_after_the_review_is_removed(string $key, string $class, string $module): void
     {
         $row = $this->anyRow($class);
 
-        if (! $row) {
-            $this->markTestSkipped("No {$key} rows on file.");
-        }
 
-        DB::beginTransaction();
+        $actor = $this->actor();
+        $row->markReviewed($actor, null);
+        $class::find($row->id)->markUnreviewed($actor, null);
 
-        try {
-            $actor = $this->actor();
-            $row->markReviewed($actor, null);
-            $class::find($row->id)->markUnreviewed($actor, null);
+        $fresh = $class::find($row->id);
+        $fresh->updated_at = now();
+        $fresh->save();
 
-            $fresh = $class::find($row->id);
-            $fresh->updated_at = now();
-            $fresh->save();
-
-            $this->assertFalse($fresh->fresh()->isReviewed());
-        } finally {
-            DB::rollBack();
-        }
+        $this->assertFalse($fresh->fresh()->isReviewed());
     }
 
     /* ───────────── السجل ───────────── */
@@ -257,114 +215,90 @@ class MovementReviewTest extends TestCase
     /**
      * * الجملة لازم تميّز الحركة و تقول مين راجعها — اللي بيقرا السجل
      * * بعد سنة المفروض يعرف الصف ده كان إيه من غير ما يفتحه
-     *
-     * @dataProvider movements
      */
+    #[DataProvider('movements')]
     public function test_the_log_names_the_actor_and_describes_the_record(string $key, string $class, string $module): void
     {
         $row = $this->anyRow($class);
 
-        if (! $row) {
-            $this->markTestSkipped("No {$key} rows on file.");
-        }
 
-        DB::beginTransaction();
+        $actor = $this->actor();
+        $row->markReviewed($actor, 'التعليق بتاعي');
 
-        try {
-            $actor = $this->actor();
-            $row->markReviewed($actor, 'التعليق بتاعي');
+        $entry = RecordActivity::where('subject_type', $class)
+            ->where('subject_id', $row->id)
+            ->latest('id')->first();
 
-            $entry = RecordActivity::where('subject_type', $class)
-                ->where('subject_id', $row->id)
-                ->latest('id')->first();
+        $this->assertNotNull($entry, 'المراجعة المفروض تتسجّل');
+        $this->assertSame(RecordActivity::EVENT_CUSTOM, $entry->event);
+        $this->assertStringContainsString($actor->name, $entry->description, 'اسم اللي راجع لازم يكون في الجملة');
+        // الرقم المسلسل (MR/CIS/2026/10/00001) لو الحركة ليها رقم ، و إلا #id
+        $recordNumber = method_exists($row, 'getSerialOrId') ? $row->getSerialOrId() : '#'.$row->id;
+        $this->assertStringContainsString($recordNumber, $entry->description, 'الجملة لازم تميّز الصف');
+        $this->assertStringContainsString('التعليق بتاعي', $entry->description, 'التعليق لازم يتسجّل');
 
-            $this->assertNotNull($entry, 'المراجعة المفروض تتسجّل');
-            $this->assertSame(RecordActivity::EVENT_CUSTOM, $entry->event);
-            $this->assertStringContainsString($actor->name, $entry->description, 'اسم اللي راجع لازم يكون في الجملة');
-            // الرقم المسلسل (MR/CIS/2026/10/00001) لو الحركة ليها رقم ، و إلا #id
-            $recordNumber = method_exists($row, 'getSerialOrId') ? $row->getSerialOrId() : '#'.$row->id;
-            $this->assertStringContainsString($recordNumber, $entry->description, 'الجملة لازم تميّز الصف');
-            $this->assertStringContainsString('التعليق بتاعي', $entry->description, 'التعليق لازم يتسجّل');
+        // و فكّ المراجعة بيتسجّل هو كمان
+        $class::find($row->id)->markUnreviewed($actor, null);
 
-            // و فكّ المراجعة بيتسجّل هو كمان
-            $class::find($row->id)->markUnreviewed($actor, null);
+        $removal = RecordActivity::where('subject_type', $class)
+            ->where('subject_id', $row->id)
+            ->latest('id')->first();
 
-            $removal = RecordActivity::where('subject_type', $class)
-                ->where('subject_id', $row->id)
-                ->latest('id')->first();
-
-            $this->assertNotSame($entry->id, $removal->id, 'فكّ المراجعة المفروض يتسجّل لوحده');
-            $this->assertStringContainsString($actor->name, $removal->description);
-        } finally {
-            DB::rollBack();
-        }
+        $this->assertNotSame($entry->id, $removal->id, 'فكّ المراجعة المفروض يتسجّل لوحده');
+        $this->assertStringContainsString($actor->name, $removal->description);
     }
 
     /* ───────────── الفلتر ───────────── */
 
-    /** @dataProvider movements */
+    #[DataProvider('movements')]
     public function test_the_filter_separates_reviewed_from_not_reviewed(string $key, string $class, string $module): void
     {
         $row = $this->anyRow($class);
 
-        if (! $row) {
-            $this->markTestSkipped("No {$key} rows on file.");
-        }
 
-        DB::beginTransaction();
+        $base = $class::where('company_id', $row->company_id);
 
-        try {
-            $base = $class::where('company_id', $row->company_id);
+        /**
+         * * بنقيس الفرق مش الرقم المطلق : القاعدة ممكن يكون فيها
+         * * صفوف مراجَعة أصلا (مراجعات حقيقية ، أو فلاجز قديمة من
+         * * قبل الميزة) ، و اختبار بيفترض قاعدة نضيفة بيقع لأسباب
+         * * مالهاش علاقة باللي بيختبره
+         */
+        $all = (clone $base)->count();
+        $reviewedBefore = (clone $base)->reviewState('reviewed')->count();
 
-            /**
-             * * بنقيس الفرق مش الرقم المطلق : القاعدة ممكن يكون فيها
-             * * صفوف مراجَعة أصلا (مراجعات حقيقية ، أو فلاجز قديمة من
-             * * قبل الميزة) ، و اختبار بيفترض قاعدة نضيفة بيقع لأسباب
-             * * مالهاش علاقة باللي بيختبره
-             */
-            $all = (clone $base)->count();
-            $reviewedBefore = (clone $base)->reviewState('reviewed')->count();
+        $row->markReviewed($this->actor(), null);
 
-            $row->markReviewed($this->actor(), null);
+        $reviewed = (clone $base)->reviewState('reviewed')->count();
+        $notReviewed = (clone $base)->reviewState('not_reviewed')->count();
+        $unfiltered = (clone $base)->reviewState(null)->count();
 
-            $reviewed = (clone $base)->reviewState('reviewed')->count();
-            $notReviewed = (clone $base)->reviewState('not_reviewed')->count();
-            $unfiltered = (clone $base)->reviewState(null)->count();
-
-            $this->assertSame($reviewedBefore + 1, $reviewed, 'الصف اللي راجعناه لازم يزوّد المراجَع واحد');
-            $this->assertSame($all - $reviewed, $notReviewed);
-            $this->assertSame($all, $unfiltered, 'من غير فلتر لازم يرجّع الكل');
-            $this->assertSame($all, $reviewed + $notReviewed, 'الاتنين لازم يجمعوا الكل');
-        } finally {
-            DB::rollBack();
-        }
+        $this->assertSame($reviewedBefore + 1, $reviewed, 'الصف اللي راجعناه لازم يزوّد المراجَع واحد');
+        $this->assertSame($all - $reviewed, $notReviewed);
+        $this->assertSame($all, $unfiltered, 'من غير فلتر لازم يرجّع الكل');
+        $this->assertSame($all, $reviewed + $notReviewed, 'الاتنين لازم يجمعوا الكل');
     }
 
     /* ───────────── الصلاحية و العزل ───────────── */
 
     /** * اللي مالوش صلاحية النوع ده بيترفض */
-    /** @dataProvider movements */
+    #[DataProvider('movements')]
     public function test_a_user_without_the_permission_is_refused(string $key, string $class, string $module): void
     {
         $row = $this->anyRow($class);
 
-        if (! $row) {
-            $this->markTestSkipped("No {$key} rows on file.");
-        }
 
-        $blocked = User::doesntHave('roles')->get()
-            ->first(fn (User $u) => ! PermissionResolver::allows($u, $module.'.review'));
+        // * يوزر في نفس الشركة ، بيشوف النوع ده بس مالوش صلاحية المراجعة
+        $blocked = $this->makeUser([$module.'.view'], $this->company);
 
-        if (! $blocked) {
-            $this->markTestSkipped('Every user on file may review.');
-        }
+        $this->assertFalse(PermissionResolver::allows($blocked, $module.'.review'));
 
         $request = $this->requestAs($blocked, 'PATCH', ['reviewed' => true]);
 
         $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
 
         app(MovementReviewController::class)
-            ->update($request, Company::findOrFail(self::COMPANY), $key, $row->id);
+            ->update($request, $this->company, $key, $row->id);
     }
 
     /** * و نوع مش في القايمة بيرجّع ٤٠٤ مش بيحمّل كلاس عشوائي */
@@ -374,7 +308,7 @@ class MovementReviewTest extends TestCase
 
         try {
             app(MovementReviewController::class)
-                ->update($request, Company::findOrFail(self::COMPANY), 'App\\Models\\User', 1);
+                ->update($request, $this->company, 'App\\Models\\User', 1);
             $this->fail('النوع المجهول المفروض يترفض');
         } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
             $this->assertSame(404, $e->getStatusCode());
@@ -382,20 +316,16 @@ class MovementReviewTest extends TestCase
     }
 
     /** * و حركة في شركة تانية ما تتراجعش من هنا */
-    /** @dataProvider movements */
+    #[DataProvider('movements')]
     public function test_a_movement_from_another_company_is_not_reachable(string $key, string $class, string $module): void
     {
-        $other = $class::where('company_id', '<>', self::COMPANY)->whereNotNull('company_id')->first();
-
-        if (! $other) {
-            $this->markTestSkipped("No {$key} rows outside the company.");
-        }
+        $other = $this->anyRow($class, $this->makeCompany());
 
         $request = $this->requestAs($this->actor(), 'PATCH', ['reviewed' => true]);
 
         try {
             app(MovementReviewController::class)
-                ->update($request, Company::findOrFail(self::COMPANY), $key, $other->id);
+                ->update($request, $this->company, $key, $other->id);
             $this->fail('حركة شركة تانية المفروض ما تتشافش');
         } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
             $this->assertSame(404, $e->getStatusCode());
@@ -457,33 +387,24 @@ class MovementReviewTest extends TestCase
     {
         $row = $this->anyRow(\App\Models\MultipleCashExpense::class);
 
-        if (! $row) {
-            $this->markTestSkipped('No multiple cash expense on file.');
-        }
 
-        DB::beginTransaction();
+        $company = $this->company;
+        $controller = app(\App\Http\Controllers\MultipleCashExpenseController::class);
+
+        $this->requestAs($this->actor(), 'GET');
+
+        // قبل المراجعة الشاشة بتفتح عادي
+        $this->assertInstanceOf(\Inertia\Response::class,
+            $controller->edit($company, $row->fresh()),
+            'الحركة غير المراجَعة المفروض تتعدل عادي');
+
+        $row->markReviewed($this->actor(), null);
 
         try {
-            $company = Company::findOrFail(self::COMPANY);
-            $controller = app(\App\Http\Controllers\MultipleCashExpenseController::class);
-
-            $this->requestAs($this->actor(), 'GET');
-
-            // قبل المراجعة الشاشة بتفتح عادي
-            $this->assertInstanceOf(\Inertia\Response::class,
-                $controller->edit($company, $row->fresh()),
-                'الحركة غير المراجَعة المفروض تتعدل عادي');
-
-            $row->markReviewed($this->actor(), null);
-
-            try {
-                $controller->edit($company, $row->fresh());
-                $this->fail('شاشة التعديل المفروض تترفض على حركة مراجَعة');
-            } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
-                $this->assertSame(403, $e->getStatusCode());
-            }
-        } finally {
-            DB::rollBack();
+            $controller->edit($company, $row->fresh());
+            $this->fail('شاشة التعديل المفروض تترفض على حركة مراجَعة');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            $this->assertSame(403, $e->getStatusCode());
         }
     }
 

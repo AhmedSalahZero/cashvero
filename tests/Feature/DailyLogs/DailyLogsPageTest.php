@@ -13,6 +13,7 @@ use App\Support\Permissions\PermissionRegistry;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Database\Factories\MoneyReceivedFactory;
 use Tests\TestCase;
 
 /**
@@ -26,70 +27,42 @@ use Tests\TestCase;
  */
 class DailyLogsPageTest extends TestCase
 {
-    private ?string $originalDatabase = null;
+    private Company $company;
+
+    /** * اللي بيفتح الصفحة : سوبر أدمن ، فبيشوف كل التابات */
+    private User $actor;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-
         /**
-         * * الصفحة بتخفي حركات السيستم ، و الداتا اللي على الجهاز ممكن تكون
-         * * كلها من السيستم — فبنسجّل حركة باسم يوزر حقيقي عشان اختبارات
-         * * الفترة الواسعة تشتغل فعلا بدل ما تعدّي فاضية . كله بيترجع في
-         * * tearDown
+         * * شركة و يوزر جداد للاختبار بس ، و كله بيترجع في الآخر .
+         * * الصفحة بتخفي حركات السيستم ، فبنسجّل حركة باسم يوزر لكل نوع
+         * * سجل في يوم محدش بيوصله ، عشان اختبارات الفترة الواسعة تشوف كل
+         * * التابات فعلا بدل ما تعدّي فاضية
          */
-        DB::beginTransaction();
-        $this->logActivity($this->user(), '2031-05-04 10:00:00');
-    }
+        $this->company = $this->makeCompany();
+        $this->actor = $this->makeSuperAdmin($this->company);
 
-    protected function tearDown(): void
-    {
-        if (DB::transactionLevel() > 0) {
-            DB::rollBack();
+        foreach (ActivityRegistry::models() as $i => $class) {
+            $this->logActivity($this->user(), '2031-05-04 10:00:00', 900000 + $i, $class);
         }
-
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
-
-        parent::tearDown();
     }
 
     private function company(): Company
     {
-        $company = Company::find(92) ?: Company::first();
-
-        if (! $company) {
-            $this->markTestSkipped('No company on file.');
-        }
-
-        return $company;
+        return $this->company;
     }
 
     private function user(): User
     {
-        $user = User::first();
-
-        if (! $user) {
-            $this->markTestSkipped('No user on file.');
-        }
-
-        return $user;
+        return $this->actor;
     }
 
-    private function props(string $query = ''): array
+    private function props(string $query = '', ?User $as = null): array
     {
-        $user = $this->user();
+        $user = $as ?? $this->user();
         $request = Request::create('/daily-logs'.$query, 'GET');
         $request->setUserResolver(fn () => $user);
 
@@ -98,16 +71,16 @@ class DailyLogsPageTest extends TestCase
         return $response->toResponse($request)->getOriginalContent()->getData()['page']['props'];
     }
 
-    /** * حركة واحدة على أول موديل متسجّل — من غير يوزر يعني من السيستم */
-    private function logActivity(?User $user, string $at, int $subjectId = 900000): void
+    /** * حركة واحدة على موديل متسجّل (أول واحد لو ما اتحددش) — من غير يوزر يعني من السيستم */
+    private function logActivity(?User $user, string $at, int $subjectId = 900000, ?string $class = null, string $event = 'updated'): void
     {
         DB::table('record_activities')->insert([
-            'subject_type' => ActivityRegistry::models()[0],
+            'subject_type' => $class ?? ActivityRegistry::models()[0],
             'subject_id' => $subjectId,
             'company_id' => $this->company()->id,
             'user_id' => $user?->id,
             'user_name' => $user?->name,
-            'event' => 'updated',
+            'event' => $event,
             'description' => null,
             'created_at' => $at,
         ]);
@@ -116,8 +89,8 @@ class DailyLogsPageTest extends TestCase
     /* ───────────── الأقسام ───────────── */
 
     /**
-     * * فترة واسعة عشان نضمن إن فيه حركة — الصفحة بتفتح على النهاردة بس ،
-     * * و الداتا اللي على الجهاز ممكن ما يكونش فيها حاجة النهاردة
+     * * فترة واسعة بتغطي الحركات اللي الاختبار سجّلها — الصفحة بتفتح على
+     * * النهاردة بس
      */
     private const WIDE = '?from=2000-01-01&to=2099-12-31';
 
@@ -249,44 +222,37 @@ class DailyLogsPageTest extends TestCase
     {
         $cap = (new \ReflectionClass(DailyLogController::class))->getConstant('ROWS_PER_SECTION');
 
-        DB::beginTransaction();
+        /**
+         * * بنبني حركات أكتر من السقف عشان الاختبار يشتغل فعلا
+         */
+        $class = ActivityRegistry::models()[0];
+        $rows = [];
 
-        try {
-            /**
-             * * بنبني حركات أكتر من السقف عشان الاختبار يشتغل فعلا بدل ما
-             * * يتخطّى — الداتا اللي على الجهاز ممكن ما توصلش للسقف
-             */
-            $class = ActivityRegistry::models()[0];
-            $rows = [];
-
-            for ($i = 0; $i < $cap + 10; $i++) {
-                $rows[] = [
-                    'subject_type' => $class,
-                    'subject_id' => 900000 + $i,
-                    'company_id' => $this->company()->id,
-                    'user_id' => $this->user()->id,
-                    'user_name' => 'Cap Test',
-                    'event' => 'created',
-                    'description' => 'cap test',
-                    'created_at' => '2031-05-05 10:00:00',
-                ];
-            }
-
-            DB::table('record_activities')->insert($rows);
-
-            $props = $this->props('?from=2031-05-05&to=2031-05-05');
-
-            $this->assertCount(1, $props['sections'], 'المفروض قسم واحد بس في اليوم ده');
-
-            $section = $props['sections'][0];
-
-            $this->assertSame($cap + 10, $section['total'], 'الإجمالي بيتعدّ في القاعدة، مش من الصفوف المحمّلة');
-            $this->assertCount($cap, $section['entries'], 'المحمّل لازم يقف عند السقف');
-            $this->assertTrue($section['hasMore']);
-            $this->assertSame($cap, $section['shown']);
-        } finally {
-            DB::rollBack();
+        for ($i = 0; $i < $cap + 10; $i++) {
+            $rows[] = [
+                'subject_type' => $class,
+                'subject_id' => 900000 + $i,
+                'company_id' => $this->company()->id,
+                'user_id' => $this->user()->id,
+                'user_name' => 'Cap Test',
+                'event' => 'created',
+                'description' => 'cap test',
+                'created_at' => '2031-05-05 10:00:00',
+            ];
         }
+
+        DB::table('record_activities')->insert($rows);
+
+        $props = $this->props('?from=2031-05-05&to=2031-05-05');
+
+        $this->assertCount(1, $props['sections'], 'المفروض قسم واحد بس في اليوم ده');
+
+        $section = $props['sections'][0];
+
+        $this->assertSame($cap + 10, $section['total'], 'الإجمالي بيتعدّ في القاعدة، مش من الصفوف المحمّلة');
+        $this->assertCount($cap, $section['entries'], 'المحمّل لازم يقف عند السقف');
+        $this->assertTrue($section['hasMore']);
+        $this->assertSame($cap, $section['shown']);
     }
 
     /* ───────────── فلتر الشخص ───────────── */
@@ -296,9 +262,8 @@ class DailyLogsPageTest extends TestCase
     {
         $props = $this->props(self::WIDE);
 
-        if ($props['users'] === []) {
-            $this->markTestSkipped('No activity with a user on file.');
-        }
+        $this->assertContains(['id' => $this->user()->id, 'name' => $this->user()->name], $props['users'],
+            'اللي عمل الحركات لازم يكون في قايمة الفلتر');
 
         foreach ($props['users'] as $user) {
             $this->assertArrayHasKey('id', $user);
@@ -309,11 +274,13 @@ class DailyLogsPageTest extends TestCase
     /** * "وريني الشخص ده عمل إيه" — كل صف راجع لازم يكون بتاعه */
     public function test_filtering_by_a_person_returns_only_their_work(): void
     {
+        // * زميل عمل حركة هو كمان ، فالفلتر لازم يفصل بينهم
+        $colleague = $this->makeUser([], $this->company(), null, ['name' => 'Daily Log Colleague']);
+        $this->logActivity($colleague, '2031-05-04 11:00:00', 899999);
+
         $props = $this->props(self::WIDE);
 
-        if ($props['users'] === []) {
-            $this->markTestSkipped('No activity with a user on file.');
-        }
+        $this->assertCount(2, $props['users'], 'الاتنين اللي عملوا حركات لازم يظهروا في الفلتر');
 
         $all = array_sum(array_column($props['sections'], 'total'));
 
@@ -325,7 +292,7 @@ class DailyLogsPageTest extends TestCase
                 continue;
             }
 
-            $this->assertLessThanOrEqual($all, $theirs, 'الفلتر لازم يضيّق مش يوسّع');
+            $this->assertLessThan($all, $theirs, 'الفلتر لازم يضيّق مش يوسّع');
 
             foreach ($filtered['sections'] as $section) {
                 foreach ($section['entries'] as $entry) {
@@ -337,7 +304,7 @@ class DailyLogsPageTest extends TestCase
             return;
         }
 
-        $this->markTestSkipped('No user on file has activity in range.');
+        $this->fail('ولا واحد من اللي في الفلتر ليه حركة في الفترة');
     }
 
     /**
@@ -346,12 +313,10 @@ class DailyLogsPageTest extends TestCase
      */
     public function test_a_user_without_the_permission_is_refused(): void
     {
-        $blocked = User::doesntHave('roles')->get()
-            ->first(fn (User $candidate) => ! \App\Support\Permissions\PermissionResolver::allows($candidate, 'daily_log.view'));
+        // * بيشوف الموديلات من شاشاتها ، بس مش معاه صلاحية الصفحة
+        $blocked = $this->makeUser(['money_received.view', 'money_payment.view'], $this->company());
 
-        if (! $blocked) {
-            $this->markTestSkipped('Every user on file may open the page.');
-        }
+        $this->assertFalse(\App\Support\Permissions\PermissionResolver::allows($blocked, 'daily_log.view'));
 
         $request = Request::create('/daily-logs', 'GET');
         $request->setUserResolver(fn () => $blocked);
@@ -367,14 +332,14 @@ class DailyLogsPageTest extends TestCase
     {
         $total = fn (array $props) => array_sum(array_column($props['sections'], 'total'));
 
+        // * حدث "created" واحد جنب حركات الـ "updated" اللي اتسجّلت في setUp
+        $this->logActivity($this->user(), '2031-05-04 12:00:00', 899998, null, 'created');
+
         $all = $this->props(self::WIDE);
         $created = $this->props(self::WIDE.'&event=created');
 
-        if ($total($all) === 0) {
-            $this->markTestSkipped('No activity on file.');
-        }
-
-        $this->assertLessThanOrEqual($total($all), $total($created));
+        $this->assertSame(1, $total($created), 'الفلتر لازم يرجّع حدث الـ created بس');
+        $this->assertLessThan($total($all), $total($created));
 
         foreach ($created['sections'] as $section) {
             foreach ($section['entries'] as $entry) {
@@ -618,16 +583,15 @@ class DailyLogsPageTest extends TestCase
 
     /* ───────────── الرقم المسلسل ───────────── */
 
-    /** يوم مالوش داتا حقيقية ، فالأقسام فيها اللي الاختبار سجّله بس */
+    /** يوم مالوش داتا ، فالأقسام فيها اللي الاختبار سجّله بس */
     private const SERIAL_DAY = '?from=2031-06-01&to=2031-06-01';
 
+    /** * ماني ريسيد جديدة ، و بتاخد رقمها المسلسل زي اللي بتتعمل من الشاشة */
     private function numberedMoneyReceived(): MoneyReceived
     {
-        $row = MoneyReceived::where('company_id', $this->company()->id)->whereNotNull('serial')->first();
+        $row = MoneyReceivedFactory::new()->forCompany($this->company())->create()->fresh();
 
-        if (! $row) {
-            $this->markTestSkipped('No numbered money received on file for this company.');
-        }
+        $this->assertNotNull($row->serial, 'الماني ريسيد المفروض تاخد رقم مسلسل وهي بتتحفظ');
 
         return $row;
     }

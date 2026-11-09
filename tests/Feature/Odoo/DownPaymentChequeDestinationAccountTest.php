@@ -3,12 +3,11 @@
 namespace Tests\Feature\Odoo;
 
 use App\Models\Company;
-use App\Models\MoneyPayment;
-use App\Models\MoneyReceived;
+use App\OdooSetting;
 use App\Services\Api\OdooPayment;
-use Illuminate\Support\Facades\DB;
-use ReflectionClass;
 use ReflectionMethod;
+use Tests\Concerns\MakesBanks;
+use Tests\Concerns\MakesOdooSettings;
 use Tests\TestCase;
 
 /**
@@ -23,30 +22,25 @@ use Tests\TestCase;
  */
 class DownPaymentChequeDestinationAccountTest extends TestCase
 {
-    private ?string $originalDatabase = null;
+    use MakesBanks;
+    use MakesMoneyCheques;
+    use MakesOdooSettings;
 
+    private Company $company;
+
+    private OdooSetting $setting;
+
+    /** A company of the test's own, with every Odoo account mapped to a fake id. */
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-    }
-
-    protected function tearDown(): void
-    {
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
-
-        parent::tearDown();
+        $this->company = $this->makeCompany();
+        $this->setting = $this->odooSetting($this->company, [
+            'advances_from_customers_id' => 203400,
+            'advances_to_suppliers_id' => 203500,
+            'employee_loans_account_id' => 140100,
+        ]);
     }
 
     /** Builds the payment array createDownPayment() would send to Odoo, without any XML-RPC call. */
@@ -70,24 +64,15 @@ class DownPaymentChequeDestinationAccountTest extends TestCase
 
     public function test_a_customer_down_payment_cheque_targets_the_advances_from_customers_account(): void
     {
-        $cheque = MoneyReceived::where('type', 'cheque')
-            ->get()
-            ->first(fn ($m) => $m->getPartnerType() === 'is_customer' && $m->isDownPayment());
+        $cheque = $this->receivedCheque($this->company, 'is_customer', ['money_type' => 'down-payment']);
 
-        if (! $cheque) {
-            $this->markTestSkipped('No customer down-payment cheque on file.');
-        }
-
-        $setting = $cheque->company->odooSetting;
-
-        if (! $setting || ! $setting->advances_from_customers_id) {
-            $this->markTestSkipped('advances_from_customers_id is not configured for this company.');
-        }
+        $this->assertSame('is_customer', $cheque->getPartnerType());
+        $this->assertTrue($cheque->isDownPayment());
 
         $data = $this->buildPaymentData($cheque);
 
         $this->assertSame(
-            (int) $setting->advances_from_customers_id,
+            (int) $this->setting->advances_from_customers_id,
             $data['destination_account_id'] ?? null,
             'A customer down-payment cheque must credit the configured Customers Advance Payments account, not the partner default.'
         );
@@ -101,24 +86,15 @@ class DownPaymentChequeDestinationAccountTest extends TestCase
 
     public function test_a_supplier_down_payment_cheque_targets_the_advances_to_suppliers_account(): void
     {
-        $cheque = MoneyPayment::where('type', MoneyPayment::PAYABLE_CHEQUE)
-            ->get()
-            ->first(fn ($m) => $m->getPartnerType() === 'is_supplier' && $m->isDownPayment());
+        $cheque = $this->paidCheque($this->company, 'is_supplier', ['money_type' => 'down-payment']);
 
-        if (! $cheque) {
-            $this->markTestSkipped('No supplier down-payment cheque on file.');
-        }
-
-        $setting = $cheque->company->odooSetting;
-
-        if (! $setting || ! $setting->advances_to_suppliers_id) {
-            $this->markTestSkipped('advances_to_suppliers_id is not configured for this company.');
-        }
+        $this->assertSame('is_supplier', $cheque->getPartnerType());
+        $this->assertTrue($cheque->isDownPayment());
 
         $data = $this->buildPaymentData($cheque);
 
         $this->assertSame(
-            (int) $setting->advances_to_suppliers_id,
+            (int) $this->setting->advances_to_suppliers_id,
             $data['destination_account_id'] ?? null,
             'A supplier down-payment cheque must credit the configured supplier-advance account, not the partner default.'
         );
@@ -136,34 +112,21 @@ class DownPaymentChequeDestinationAccountTest extends TestCase
      * must keep getting BOTH the account override and the specific ref —
      * this change must be additive, not a replacement.
      *
-     * The live data has no down-payment cheque outside customer/supplier to
-     * exercise this against, so a real customer cheque is reused with its
-     * partner_type overridden in memory (unsaved) — everything else (journal,
-     * cheque relation, company config) stays the genuine, working setup.
+     * An employee repaying a loan by cheque: its own transaction account is
+     * the employee-loans account, and its ref is "Loan Received From".
      */
     public function test_non_customer_or_supplier_categories_keep_their_own_account_and_memo(): void
     {
-        $cheque = MoneyReceived::where('type', 'cheque')
-            ->get()
-            ->first(fn ($m) => $m->getPartnerType() === 'is_customer'
-                && $m->isDownPayment()
-                && $m->company?->odooSetting);
+        $cheque = $this->receivedCheque($this->company, 'is_employee', [
+            'money_type' => 'down-payment',
+            'transaction_type' => 'pay-loan',
+        ]);
 
-        if (! $cheque) {
-            $this->markTestSkipped('No customer down-payment cheque with Odoo settings configured to base the stand-in on.');
-        }
+        $odooIdWithRef = $cheque->getOdooIdWithRefOfTransaction();
 
-        $stub = $cheque->replicate();
-        $stub->id = $cheque->id;
-        $stub->partner_type = 'is_employee';
+        $this->assertSame(140100, $odooIdWithRef['id'], 'An employee loan repayment belongs on the employee-loans account.');
 
-        $odooIdWithRef = $stub->getOdooIdWithRefOfTransaction();
-
-        if (empty($odooIdWithRef['id'])) {
-            $this->markTestSkipped('No employee-category account configured for this company.');
-        }
-
-        $data = $this->buildPaymentData($stub);
+        $data = $this->buildPaymentData($cheque);
 
         $this->assertSame((int) $odooIdWithRef['id'], $data['destination_account_id'] ?? null,
             'A non-customer/supplier category must still use its own transaction account.');
@@ -178,20 +141,15 @@ class DownPaymentChequeDestinationAccountTest extends TestCase
      */
     public function test_cash_expenses_are_unaffected(): void
     {
-        $expense = \App\Models\CashExpense::where('type', \App\Models\CashExpense::PAYABLE_CHEQUE)
-            ->get()
-            ->first(fn ($m) => $m->isChequeOrChequePayment());
+        $expense = $this->cashExpenseCheque($this->company);
 
-        if (! $expense) {
-            $this->markTestSkipped('No cash expense cheque on file.');
-        }
-
+        $this->assertTrue($expense->isChequeOrChequePayment());
         $this->assertNull($expense->getPartnerType());
         $this->assertTrue($expense->isChequeAndNotCustomerOrSupplier(),
             'A cash expense has no partner type, so it must still take the original branch untouched.');
     }
 
-    /* ── the widening condition itself, independent of live data ─────── */
+    /* ── the widening condition itself ─────── */
 
     public function test_the_widened_condition_covers_exactly_customer_and_supplier_cheques(): void
     {
@@ -209,10 +167,8 @@ class DownPaymentChequeDestinationAccountTest extends TestCase
         );
 
         /**
-         * No live down-payment cheque outside customer/supplier exists to
-         * exercise this behaviourally (every current caller of
-         * createDownPayment() already guarantees isChequeOrChequePayment()),
-         * so this is pinned structurally: the new branch must require it
+         * Every caller of createDownPayment() already guarantees
+         * isChequeOrChequePayment(), so this is pinned structurally: the new branch must require it
          * explicitly, same as the pre-existing $isChequeAndNotCustomerOrSupplier
          * branch right above it — a customer/supplier down payment settled by
          * cash or bank transfer must NOT get destination_account_id from here.

@@ -109,7 +109,9 @@ class ReferencedRecordGuard
                 ['table' => 'down_payment_settlements', 'column' => 'sales_order_id', 'through' => ['sales_orders', 'contract_id'], 'label' => 'Down Payment Settlements'],
                 ['table' => 'down_payment_money_payment_settlements', 'column' => 'purchase_order_id', 'through' => ['purchase_orders', 'contract_id'], 'label' => 'Down Payment Settlements'],
                 ['table' => 'letter_of_guarantee_issuances', 'column' => 'purchase_order_id', 'through' => ['sales_orders', 'contract_id'], 'label' => 'Letters of Guarantee'],
-                ['table' => 'letter_of_credit_issuances', 'column' => 'purchase_order_id', 'through' => ['sales_orders', 'contract_id'], 'label' => 'Letters of Credit'],
+                // An LC's purchase_order_id holds a PURCHASE order (LetterOfCreditIssuance::purchaseOrder(),
+                // and the LC form lists PurchaseOrder rows) — unlike the LG's, whose foreign key is sales_orders.
+                ['table' => 'letter_of_credit_issuances', 'column' => 'purchase_order_id', 'through' => ['purchase_orders', 'contract_id'], 'label' => 'Letters of Credit'],
                 ['table' => 'po_allocations', 'column' => 'purchase_order_id', 'through' => ['purchase_orders', 'contract_id'], 'label' => 'Purchase Order Allocations'],
                 ['table' => 'money_received', 'column' => 'contract_id', 'label' => 'Money Received'],
                 ['table' => 'money_payments', 'column' => 'contract_id', 'label' => 'Money Payments'],

@@ -486,7 +486,7 @@ class OverdraftAgainstAssignmentOfContractController
 	{
 		$contractId = $request->get('contract_id_create') ;
 		$assignmentDate = Carbon::make($request->get('assignment_date_create'))->format('Y-m-d') ;
-		$contract = Contract::find($contractId);
+		$contract = Contract::where('company_id', $company->id)->find($contractId);
 		if ($contract && $contract->isFinished()) {
 			return redirect()->back()->withErrors([
 				'contract_id_create' => __('A finished contract cannot be assigned as collateral.'),
@@ -571,7 +571,7 @@ class OverdraftAgainstAssignmentOfContractController
 		$contractId = $request->get('contract_id_edit') ;
 		$assignmentDate = $request->get('assignment_date_edit') ;
 		$assignmentDate = Carbon::make($assignmentDate)->format('Y-m-d');
-		$contract = Contract::find($contractId);
+		$contract = Contract::where('company_id', $company->id)->find($contractId);
 		if ($contract && $contract->isFinished() && (int) $contractId !== (int) $lendingInformation->contract_id) {
 			return redirect()->back()->withErrors([
 				'contract_id_edit' => __('A finished contract cannot be assigned as collateral.'),

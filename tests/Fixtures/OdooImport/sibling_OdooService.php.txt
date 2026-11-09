@@ -1,0 +1,69 @@
+<?php
+/*
+ * FAKE FIXTURE — not the sibling system's real file.
+ *
+ * A trimmed stand-in for system.veroanalysisb.com's app/Services/Api/OdooService.php: only the
+ * lines OdooContractImportRulesTest::test_the_sibling_system_carries_the_same_two_rules() looks
+ * for, written the way this repository writes them. The test proves its own checks (including
+ * that commented-out dead code is ignored) against this file; comparing against the real
+ * sibling checkout is a separate, out-of-suite audit (see the test's docblock).
+ *
+ * Saved as .txt so nothing loads or autoloads it as PHP.
+ */
+
+namespace App\Services\Api;
+
+class OdooService
+{
+	protected array $currencyRateCache = [];
+
+	protected function getExchangeRateForCurrency(?int $currencyId): ?float
+	{
+		if (! $currencyId) {
+			return null;
+		}
+
+		if (array_key_exists($currencyId, $this->currencyRateCache)) {
+			return $this->currencyRateCache[$currencyId];
+		}
+
+		$records = $this->models->execute_kw($this->db, $this->uid, $this->password, 'res.currency', 'read', array(array($currencyId)), ['fields' => ['rate']]);
+		$odooRate = $records[0]['rate'] ?? null;
+		$rate = is_numeric($odooRate) && (float) $odooRate > 0 ? round(1 / (float) $odooRate, 5) : null;
+
+		return $this->currencyRateCache[$currencyId] = $rate;
+	}
+
+	public function getContracts(string $startDate, string $endDate, int $companyId)
+	{
+		foreach ($salesOrders as $salesOrderArr) {
+			$currentExchangeRate = $this->getExchangeRateForCurrency($salesOrderArr['currency_id'][0] ?? null);
+			if ($currentExchangeRate !== null) {
+				$projectFormatted['exchange_rate'] = $currentExchangeRate;
+			}
+			$oldSalesOrder = SalesOrder::where('odoo_id', $salesOrderArr['id'])->first();
+			$currentSalesOrderArr += $this->executionPlanKeysFromOdoo($oldSalesOrder, $currentProjectStartDate, $currentProjectEndDate);
+		}
+
+		// The old copy of the loop, kept commented out — dead code must not fail the check:
+		// $currentSalesOrderArr['execution_percentage_'.$currentOrderIndex=>100];
+		// $purchaseOrderFormatted = ['execution_percentage_1'=>100];
+	}
+
+	protected function executionPlanKeysFromOdoo($oldOrder, ?string $projectStartDate, ?string $projectEndDate): array
+	{
+		$lastFilledIndex = $oldOrder ? $oldOrder->lastFilledExecutionIndex() : null;
+
+		if ($lastFilledIndex !== null) {
+			return ['end_date_'.$lastFilledIndex => $projectEndDate];
+		}
+
+		$keys = ['start_date_1' => $projectStartDate, 'end_date_1' => $projectEndDate, 'collection_days_1' => 0];
+
+		if (! $oldOrder || $oldOrder->execution_percentage_1 === null) {
+			$keys['execution_percentage_1'] = 100;
+		}
+
+		return $keys;
+	}
+}

@@ -2,9 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\Company;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
@@ -23,9 +21,8 @@ use Tests\TestCase;
  * — it survived reloads, survived fixing the underlying cause, and rode
  * along with unrelated success messages afterwards.
  *
- * Runs against the development database like PaginationSmokeTest, for
- * the same reason: it needs a real user, company and route to exercise.
- * Every request here is a read-only GET.
+ * It needs a user, a company and a route to exercise: all three are made
+ * fresh for the test. Every request here is a read-only GET.
  */
 class FlashMessageTest extends TestCase
 {
@@ -37,15 +34,6 @@ class FlashMessageTest extends TestCase
     {
         parent::setUp();
 
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
-
         // See PaginationSmokeTest: without this every request 302s on the
         // missing /{lang} segment before reaching a controller.
         $this->withoutMiddleware([
@@ -54,12 +42,8 @@ class FlashMessageTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        $this->actor = User::whereHas('roles', fn ($q) => $q->where('roles.id', 1))->first() ?? User::first();
-        $company = Company::first();
-
-        if (! $this->actor || ! $company) {
-            $this->markTestSkipped('Development database has no user/company to exercise.');
-        }
+        $company = $this->makeCompany();
+        $this->actor = $this->makeSuperAdmin($company);
 
         $this->home = route('contracts.index', ['company' => $company->id, 'type' => 'Customer']);
 

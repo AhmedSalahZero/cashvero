@@ -25,7 +25,10 @@ class UpdateInvoiceDeductionRequest extends FormRequest
 	
 		$InvoiceId = Request()->route('modelId');
 		$invoiceModelName = Request()->route('modelType');
-		$invoice = ('App\Models\\'.$invoiceModelName)::find($InvoiceId);
+		$company = Request()->route('company');
+		$companyId = $company instanceof \App\Models\Company ? $company->id : (int) $company;
+		// Only an invoice of the company in the address — another company's id answers 404.
+		$invoice = ('App\Models\\'.$invoiceModelName)::where('company_id', $companyId)->findOrFail($InvoiceId);
 
 		/**
 		 * * الحفظ هنا بيستبدل كل خصومات الفاتورة (detach ثم إنشاء من جديد) ،

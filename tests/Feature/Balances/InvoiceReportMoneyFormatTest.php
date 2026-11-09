@@ -39,7 +39,7 @@ class InvoiceReportMoneyFormatTest extends TestCase
         ];
     }
 
-    /** @dataProvider invoiceTypes */
+    #[\PHPUnit\Framework\Attributes\DataProvider('invoiceTypes')]
     public function test_every_money_column_keeps_two_decimals(string $class, string $collectedColumn): void
     {
         $columns = self::MONEY_COLUMNS + [$collectedColumn => 'getTotalCollectedOrPaidFormatted'];
@@ -56,9 +56,8 @@ class InvoiceReportMoneyFormatTest extends TestCase
     /**
      * * التقريب لأقرب واحد صحيح كان بيخفي نص جنيه — ده الشكل اللي
      * * العميل شافه في الصفحة (4,350 بدل 4,349.50)
-     *
-     * @dataProvider invoiceTypes
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('invoiceTypes')]
     public function test_a_half_unit_is_no_longer_rounded_away(string $class, string $collectedColumn): void
     {
         $invoice = new $class;

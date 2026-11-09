@@ -3,9 +3,12 @@
 namespace Tests\Feature\Odoo;
 
 use App\Models\CashExpense;
+use App\Models\Company;
 use App\Models\MoneyPayment;
 use App\Models\MoneyReceived;
 use Illuminate\Support\Facades\DB;
+use Tests\Concerns\MakesBanks;
+use Tests\Concerns\MakesOdooSettings;
 use Tests\TestCase;
 
 /**
@@ -33,38 +36,45 @@ use Tests\TestCase;
  */
 class DownPaymentChequeRoutingTest extends TestCase
 {
-    private ?string $originalDatabase = null;
+    use MakesBanks;
+    use MakesMoneyCheques;
+    use MakesOdooSettings;
+
+    private Company $company;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        // Pointed at the development database on purpose: these assertions are
-        // about the real records. Restored in tearDown so the rest of the suite
-        // is not left talking to it.
-        $this->originalDatabase = config('database.connections.mysql.database');
-
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-    }
-
-    protected function tearDown(): void
-    {
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
-
-        parent::tearDown();
+        $this->company = $this->makeCompany();
+        $this->odooSetting($this->company);
     }
 
     private function traitSource(): string
     {
         return file_get_contents(app_path('Traits/Models/HasNonCustomerOrSupplier.php'));
+    }
+
+    /** A customer's down payment over a contract, received by cheque — the case the bug was about. */
+    private function customerDownPaymentChequeOverAContract(): MoneyReceived
+    {
+        $contractId = DB::table('contracts')->insertGetId([
+            'company_id' => $this->company->id,
+            'name' => 'Down Payment Contract',
+            'model_type' => 'Customer',
+            'currency' => 'EGP',
+            'exchange_rate' => 1,
+            'amount' => 1000000,
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
+        ]);
+
+        return $this->receivedCheque($this->company, 'is_customer', [
+            'money_type' => MoneyReceived::DOWN_PAYMENT,
+            'down_payment_type' => MoneyReceived::DOWN_PAYMENT_OVER_CONTRACT,
+            'contract_id' => $contractId,
+            'received_amount' => 1000000,
+        ]);
     }
 
     /* ── the fix itself ───────────────────────────────────────────── */
@@ -98,14 +108,10 @@ class DownPaymentChequeRoutingTest extends TestCase
      */
     public function test_a_customer_down_payment_cheque_now_takes_the_cheque_path(): void
     {
-        $cheque = MoneyReceived::where('type', 'cheque')
-            ->whereNotNull('contract_id')
-            ->get()
-            ->first(fn ($m) => $m->getPartnerType() === 'is_customer');
+        $cheque = $this->customerDownPaymentChequeOverAContract();
 
-        if (! $cheque) {
-            $this->markTestSkipped('No customer down-payment cheque on file.');
-        }
+        $this->assertSame('is_customer', $cheque->getPartnerType());
+        $this->assertNotNull($cheque->contract_id);
 
         $this->assertTrue($cheque->isChequeOrChequePayment(),
             'This is the predicate the fixed code branches on.');
@@ -120,13 +126,33 @@ class DownPaymentChequeRoutingTest extends TestCase
      * Only a cheque whose partner is a customer or supplier AND which
      * reaches this method at all changes behaviour. Everything else is
      * untouched — that is what makes the change safe to ship.
+     *
+     * A company with one of every kind of movement that can reach (or not
+     * reach) the method: only the two customer/supplier down-payment cheques
+     * may change path.
      */
     public function test_only_down_payment_cheques_change_behaviour(): void
     {
+        $customerDownPaymentCheque = $this->customerDownPaymentChequeOverAContract();
+        $supplierDownPaymentCheque = $this->paidCheque($this->company, 'is_supplier', ['money_type' => MoneyPayment::DOWN_PAYMENT]);
+
+        // Cheques that already took the cheque path, or never reach the method.
+        $this->receivedCheque($this->company, 'is_customer');                                              // ordinary invoice cheque
+        $this->receivedCheque($this->company, 'is_employee', ['money_type' => MoneyReceived::DOWN_PAYMENT, 'transaction_type' => 'pay-loan']);
+        $this->receivedCheque($this->company, 'is_shareholder', ['transaction_type' => 'funding-from']);
+        $this->paidCheque($this->company, 'is_supplier');                                                   // ordinary bill cheque
+        $this->paidCheque($this->company, 'is_employee', ['transaction_type' => 'loan']);
+
+        // Down payments that are not cheques at all.
+        $this->receivedMoney($this->company, MoneyReceived::CASH_IN_SAFE, 'is_customer', ['money_type' => MoneyReceived::DOWN_PAYMENT]);
+        $this->receivedMoney($this->company, MoneyReceived::INCOMING_TRANSFER, 'is_customer', ['money_type' => MoneyReceived::DOWN_PAYMENT]);
+        $this->paidMoney($this->company, MoneyPayment::CASH_PAYMENT, 'is_supplier', ['money_type' => MoneyPayment::DOWN_PAYMENT]);
+        $this->paidMoney($this->company, MoneyPayment::OUTGOING_TRANSFER, 'is_supplier', ['money_type' => MoneyPayment::DOWN_PAYMENT]);
+
         $changed = [];
 
         foreach ([MoneyReceived::class => 'is_customer', MoneyPayment::class => 'is_supplier'] as $class => $ownType) {
-            foreach ($class::cursor() as $model) {
+            foreach ($class::where('company_id', $this->company->id)->cursor() as $model) {
                 try {
                     $partnerType = $model->getPartnerType();
                     $isDownPayment = $model->isDownPayment();
@@ -157,14 +183,31 @@ class DownPaymentChequeRoutingTest extends TestCase
 
         $this->assertLessThanOrEqual(10, count($changed),
             "The change is meant to be surgical. It now affects:\n  ".implode("\n  ", $changed));
+
+        $this->assertSame([
+            'MoneyReceived#'.$customerDownPaymentCheque->id.' type=cheque partner=is_customer',
+            'MoneyPayment#'.$supplierDownPaymentCheque->id.' type=payable_cheque partner=is_supplier',
+        ], $changed, 'Exactly the customer and supplier down-payment cheques change path — nothing else.');
     }
 
     /** Cash expenses were already on the cheque path and must stay there. */
     public function test_cash_expenses_are_untouched(): void
     {
-        $differing = [];
+        $this->cashExpenseCheque($this->company);
+        DB::table('cash_expenses')->insert([
+            'company_id' => $this->company->id,
+            'type' => CashExpense::CASH_PAYMENT,
+            'payment_date' => '2026-02-01',
+            'paid_amount' => 250,
+            'currency' => 'EGP',
+            'exchange_rate' => 1,
+        ]);
 
-        foreach (CashExpense::cursor() as $expense) {
+        $differing = [];
+        $checked = 0;
+
+        foreach (CashExpense::where('company_id', $this->company->id)->cursor() as $expense) {
+            $checked++;
             $before = $expense->isChequeOrChequePayment()
                 && ! in_array($expense->getPartnerType(), ['is_customer', 'is_supplier'], true);
 
@@ -173,6 +216,7 @@ class DownPaymentChequeRoutingTest extends TestCase
             }
         }
 
+        $this->assertSame(2, $checked);
         $this->assertSame([], $differing,
             'A cash expense has no partner type, so both predicates already agreed — none may change.');
     }
@@ -183,14 +227,10 @@ class DownPaymentChequeRoutingTest extends TestCase
      */
     public function test_an_ordinary_invoice_cheque_never_reaches_this_method(): void
     {
-        $ordinary = MoneyReceived::where('type', 'cheque')
-            ->whereNull('contract_id')
-            ->get()
-            ->first(fn ($m) => $m->getPartnerType() === 'is_customer' && ! $m->isDownPayment());
+        $ordinary = $this->receivedCheque($this->company, 'is_customer', ['money_type' => 'invoice-settlement']);
 
-        if (! $ordinary) {
-            $this->markTestSkipped('No ordinary customer cheque on file.');
-        }
+        $this->assertNull($ordinary->contract_id);
+        $this->assertFalse($ordinary->isDownPayment());
 
         $reaches = ($ordinary->getPartnerType() && $ordinary->getPartnerType() !== 'is_customer')
             || $ordinary->isDownPayment();
@@ -214,12 +254,9 @@ class DownPaymentChequeRoutingTest extends TestCase
         $this->assertStringContainsString('getChequesReceivableId()', $src,
             'The collection must credit the configured cheques-receivable account.');
 
-        $company = \App\Models\Company::whereHas('odooSetting')->first();
+        $company = Company::whereHas('odooSetting')->findOrFail($this->company->id);
 
-        if (! $company || ! $company->odooSetting) {
-            $this->markTestSkipped('No company with Odoo settings to check.');
-        }
-
+        $this->assertNotNull($company->odooSetting);
         $this->assertNotEmpty($company->odooSetting->getChequesReceivableId(),
             'Without this account configured the collection has nothing to clear against.');
     }

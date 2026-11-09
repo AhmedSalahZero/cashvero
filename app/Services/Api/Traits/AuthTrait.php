@@ -51,7 +51,7 @@ trait AuthTrait
 		$this->company_id = $company->id;
 		$this->company = $company;
 		$currentOdooId = $user->getOdooId() ;
-		$common = ripcord::client("$this->url/xmlrpc/2/common");
+		$common = app(\App\Services\Api\OdooClientFactory::class)->client("$this->url/xmlrpc/2/common");
 		$uid = null ;
 		try{
 			if(is_null($currentOdooId)){
@@ -98,7 +98,7 @@ trait AuthTrait
 				'odoo_id'=>$uid 
 			]);
 		}
-		$models = ripcord::client("$this->url/xmlrpc/2/object");
+		$models = app(\App\Services\Api\OdooClientFactory::class)->client("$this->url/xmlrpc/2/object");
 		$this->models = $models;
 		$this->uid = $uid;
 	}

@@ -123,9 +123,8 @@ class ImportPositionalFallbackTest extends TestCase
     /**
      * The two columns that were mis-filled, named explicitly so a
      * failure says which one came back.
-     *
-     * @dataProvider misfilledColumnProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('misfilledColumnProvider')]
     public function test_a_column_the_file_lacks_is_not_taken_from_its_neighbour(string $field, string $wrongValue): void
     {
         $data = $this->map($this->headedRow());

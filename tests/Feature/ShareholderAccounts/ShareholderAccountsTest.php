@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\ShareholderAccounts;
 
+use App\Models\AccountType;
 use App\Models\Company;
 use App\Models\FinancialInstitution;
 use App\Models\FinancialInstitutionAccount;
@@ -10,26 +11,27 @@ use App\Models\Partner;
 use App\Models\User;
 use App\Support\CashDashboard\LatestStatementQuery;
 use App\Support\ShareholderAccounts\AccountOwnerFilter;
+use Database\Factories\FinancialInstitutionAccountFactory;
+use Database\Factories\PartnerFactory;
 use Illuminate\Http\Request;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
+use Tests\Concerns\MakesBanks;
 use Tests\TestCase;
 
 /**
  * Shareholder / owner personal accounts — the behaviour that actually
  * touches the database. See docs/shareholder-accounts.md.
  *
- * Runs against the development database like the rest of this suite
- * (there is no migrated test schema here), inside a transaction that is
- * rolled back — every row these tests create is temporary, and they skip
- * themselves when the database is unreachable.
+ * The company (subscribed to CashVero), its bank, the two shareholders,
+ * the accounts and the users are all made by the test, and every row is
+ * rolled back afterwards.
  */
 class ShareholderAccountsTest extends TestCase
 {
-    use DatabaseTransactions;
+    use MakesBanks;
 
     private Company $company;
 
@@ -50,20 +52,6 @@ class ShareholderAccountsTest extends TestCase
 
     private string $currency = 'EGP';
 
-    /**
-     * DatabaseTransactions opens its transaction from setUpTraits(), which
-     * runs before setUp()'s body — so the connection has to be repointed
-     * here, or the transaction is opened against the (non-existent) test
-     * schema named in phpunit.xml before anything else gets a say.
-     */
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
-
     protected function setUp(): void
     {
         parent::setUp();
@@ -79,52 +67,27 @@ class ShareholderAccountsTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
+        $this->company = $this->makeCompany();
+        $this->bank = $this->bank($this->company);
 
-        $bank = FinancialInstitution::query()->whereNotNull('company_id')->first();
+        $this->shareholder = PartnerFactory::new()->forCompany($this->company)->shareholder()
+            ->create(['name' => 'Test Shareholder A '.uniqid()]);
 
-        if (! $bank) {
-            $this->markTestSkipped('Development database has no financial institution to attach accounts to.');
-        }
-
-        $this->bank = $bank;
-        $this->company = Company::findOrFail($bank->company_id);
-
-        $this->shareholder = Partner::create([
-            'company_id' => $this->company->id,
-            'name' => 'Test Shareholder A '.uniqid(),
-            'is_shareholder' => 1,
-        ]);
-
-        $this->otherShareholder = Partner::create([
-            'company_id' => $this->company->id,
-            'name' => 'Test Shareholder B '.uniqid(),
-            'is_shareholder' => 1,
-        ]);
+        $this->otherShareholder = PartnerFactory::new()->forCompany($this->company)->shareholder()
+            ->create(['name' => 'Test Shareholder B '.uniqid()]);
 
         $this->companyAccount = $this->makeAccount('TEST-CO-'.uniqid());
         $this->shareholderAccount = $this->makeAccount('TEST-SH-'.uniqid(), $this->shareholder);
 
-        $this->userWithPermission = $this->makeUser(true);
-        $this->userWithoutPermission = $this->makeUser(false);
+        $this->userWithPermission = $this->localUser(true);
+        $this->userWithoutPermission = $this->localUser(false);
     }
 
     private function makeAccount(string $accountNumber, ?Partner $owner = null): FinancialInstitutionAccount
     {
-        /** @var FinancialInstitutionAccount $account */
-        $account = FinancialInstitutionAccount::create([
-            'company_id' => $this->company->id,
-            'financial_institution_id' => $this->bank->id,
+        $account = $this->currentAccount($this->bank, $this->currency, [
             'account_number' => $accountNumber,
-            'currency' => $this->currency,
-            'balance_amount' => 0,
             'balance_date' => now()->subYear()->format('Y-m-d'),
-            'exchange_rate' => 1,
-            'is_active' => 1,
             'is_shareholder_account' => (bool) $owner,
             'shareholder_partner_id' => $owner?->id,
         ]);
@@ -145,41 +108,25 @@ class ShareholderAccountsTest extends TestCase
         return $account;
     }
 
-    private function makeUser(bool $withPermission): User
+    private function localUser(bool $withPermission): User
     {
-        /** @var User $user */
-        $user = User::create([
-            'name' => 'Shareholder Accounts Test '.uniqid(),
-            'email' => 'shareholder-accounts-'.uniqid().'@example.test',
-            'password' => bcrypt('secret-for-tests'),
-            'company_id' => $this->company->id,
-        ]);
-
         /*
          * The page-level permissions both users need, so the only thing
          * that differs between them is the shareholder gate itself —
          * otherwise a 403 would "pass" the hiding assertions for the
          * wrong reason.
+         *
+         * Two gates sit in front of every company page besides the
+         * permission itself: canViewCurrentCompany (the user must be
+         * attached to this company — makeUser attaches it) and
+         * CashManagementMiddleware (that company must have the cash-vero
+         * system — makeCompany subscribes it).
          */
-        $user->givePermissionTo([
+        $user = $this->makeUser(array_merge([
             'dashboard_cash.view',
             'bank_account.view',
             'internal_money_transfer.create',
-        ]);
-
-        if ($withPermission) {
-            $user->givePermissionTo('shareholder_account.view');
-        }
-
-        /*
-         * Two gates sit in front of every company page besides the
-         * permission itself: canViewCurrentCompany (the user must be
-         * attached to this company) and CashManagementMiddleware (that
-         * company must have the cash-vero system). Attaching the company
-         * satisfies both.
-         */
-        $user->companies()->attach($this->company->id);
-        $user->load('companies');
+        ], $withPermission ? ['shareholder_account.view'] : []), $this->company);
 
         $this->assertFalse($user->isSuperAdmin(), 'The test user must not bypass permission checks.');
 
@@ -578,31 +525,17 @@ class ShareholderAccountsTest extends TestCase
 
     public function test_shareholder_mtl_500k_cycle_moves_cash_to_company_without_moving_the_loan_to_company_view(): void
     {
-        $companyAccount = FinancialInstitutionAccount::create([
-            'company_id' => $this->company->id,
-            'financial_institution_id' => $this->bank->id,
+        $companyAccount = $this->currentAccount($this->bank, $this->currency, [
             'account_number' => 'TEST-CYCLE-CO-'.uniqid(),
-            'currency' => $this->currency,
-            'balance_amount' => 0,
             'balance_date' => now()->subDay()->format('Y-m-d'),
-            'exchange_rate' => 1,
-            'is_active' => 1,
-            'is_shareholder_account' => false,
-            'shareholder_partner_id' => null,
         ]);
 
-        $shareholderAccount = FinancialInstitutionAccount::create([
-            'company_id' => $this->company->id,
-            'financial_institution_id' => $this->bank->id,
-            'account_number' => 'TEST-CYCLE-SH-'.uniqid(),
-            'currency' => $this->currency,
-            'balance_amount' => 0,
-            'balance_date' => now()->subDay()->format('Y-m-d'),
-            'exchange_rate' => 1,
-            'is_active' => 1,
-            'is_shareholder_account' => true,
-            'shareholder_partner_id' => $this->shareholder->id,
-        ]);
+        $shareholderAccount = FinancialInstitutionAccountFactory::new()->at($this->bank)->currency($this->currency)
+            ->ownedBy($this->shareholder->id)
+            ->create([
+                'account_number' => 'TEST-CYCLE-SH-'.uniqid(),
+                'balance_date' => now()->subDay()->format('Y-m-d'),
+            ]);
 
         DB::table('current_account_bank_statements')->insert([
             [
@@ -897,16 +830,10 @@ class ShareholderAccountsTest extends TestCase
     {
         $this->userWithPermission->givePermissionTo('report_safe_statement.view');
 
-        $branch = \App\Models\Branch::query()
-            ->where('company_id', $this->company->id)
-            ->first();
-
-        if (! $branch) {
-            $branch = \App\Models\Branch::create([
-                'company_id' => $this->company->id,
-                'name' => 'Safe Statement Test Branch '.uniqid(),
-            ]);
-        }
+        $branch = \App\Models\Branch::create([
+            'company_id' => $this->company->id,
+            'name' => 'Safe Statement Test Branch '.uniqid(),
+        ]);
 
         $rawComment = 'From '.$this->bank->getName().' Account No '.$this->shareholderAccount->account_number;
         $imtId = DB::table('internal_money_transfers')->insertGetId([
@@ -1052,6 +979,6 @@ class ShareholderAccountsTest extends TestCase
 
     private function currentAccountTypeId(): int
     {
-        return (int) \App\Models\AccountType::onlyCurrentAccount()->value('id');
+        return $this->accountTypeId(AccountType::CURRENT_ACCOUNT);
     }
 }

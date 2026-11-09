@@ -5,7 +5,9 @@ namespace Tests\Feature\Reports;
 use App\Models\Contract;
 use App\Models\LetterOfGuaranteeIssuance;
 use App\Services\Reports\LgCashCoverRefunds;
+use Database\Factories\PartnerFactory;
 use Illuminate\Support\Facades\DB;
+use Tests\Concerns\MakesBanks;
 use Tests\TestCase;
 
 /**
@@ -24,45 +26,29 @@ use Tests\TestCase;
  */
 class LgCashCoverRefundTest extends TestCase
 {
-    private ?string $originalDatabase = null;
-
-    private bool $inTransaction = false;
+    use MakesBanks;
 
     private int $companyId = 0;
+
+    private int $bankId = 0;
 
     private int $partnerId = 0;
 
     private int $contractId = 0;
 
+    /**
+     * * الشركة و البنك و العميل و العقد معمولين في التست نفسه ، و كل حاجة
+     * * بتترجع في الآخر (TestCase بيلف كل تست في ترانزاكشن)
+     */
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
+        $company = $this->makeCompany(['name' => ['en' => 'LG Refund Test Co', 'ar' => 'LG Refund Test Co']]);
+        $this->companyId = $company->id;
+        $this->bankId = $this->bank($company)->id;
 
-        try {
-            DB::connection('mysql')->getPdo();
-            DB::table('letter_of_guarantee_issuances')->limit(1)->get();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-
-        DB::beginTransaction();
-        $this->inTransaction = true;
-
-        $this->companyId = (int) DB::table('companies')->insertGetId([
-            'name' => json_encode(['en' => 'LG Refund Test Co', 'ar' => 'LG Refund Test Co']),
-            'main_functional_currency' => 'EGP',
-        ]);
-
-        $this->partnerId = (int) DB::table('partners')->insertGetId([
-            'company_id' => $this->companyId,
-            'name' => 'Guarantee Customer',
-            'is_customer' => 1,
-            'is_supplier' => 0,
-        ]);
+        $this->partnerId = PartnerFactory::new()->forCompany($company)->customer()->create(['name' => 'Guarantee Customer'])->id;
 
         $this->contractId = (int) DB::table('contracts')->insertGetId([
             'company_id' => $this->companyId,
@@ -79,25 +65,13 @@ class LgCashCoverRefundTest extends TestCase
         ]);
     }
 
-    protected function tearDown(): void
-    {
-        if ($this->inTransaction) {
-            DB::rollBack();
-            $this->inTransaction = false;
-        }
-
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
-
-        parent::tearDown();
-    }
-
     /* ───────────────────────── fixtures ───────────────────────── */
 
     private function lg(array $attributes = []): int
     {
         return (int) DB::table('letter_of_guarantee_issuances')->insertGetId(array_merge([
             'company_id' => $this->companyId,
+            'financial_institution_id' => $this->bankId,
             'partner_id' => $this->partnerId,
             'contract_id' => $this->contractId,
             'lg_code' => 'LG-'.uniqid(),
@@ -120,7 +94,7 @@ class LgCashCoverRefundTest extends TestCase
             'letter_of_guarantee_issuance_id' => $lgId,
             'type' => LetterOfGuaranteeIssuance::FOR_CANCELLATION,
             'source' => 'lg-facility',
-            'financial_institution_id' => 1,
+            'financial_institution_id' => $this->bankId,
             'lg_type' => 'final-lgs',
             'date' => $date,
             'debit' => 0,
@@ -374,11 +348,14 @@ class LgCashCoverRefundTest extends TestCase
     {
         $this->lg(['lg_code' => 'LG-US']);
 
-        $otherCompanyId = (int) DB::table('companies')->insertGetId([
-            'name' => json_encode(['en' => 'Other Co', 'ar' => 'Other Co']),
-            'main_functional_currency' => 'EGP',
+        $otherCompany = $this->makeCompany(['name' => ['en' => 'Other Co', 'ar' => 'Other Co']]);
+        $this->lg([
+            'lg_code' => 'LG-THEM',
+            'company_id' => $otherCompany->id,
+            'financial_institution_id' => $this->bank($otherCompany)->id,
+            'partner_id' => PartnerFactory::new()->forCompany($otherCompany)->customer()->create()->id,
+            'contract_id' => null,
         ]);
-        $this->lg(['lg_code' => 'LG-THEM', 'company_id' => $otherCompanyId, 'contract_id' => null]);
 
         $this->assertSame(['LG-US'], array_keys($this->refunds('2026-09-01', '2027-06-30', 0)));
     }
@@ -493,7 +470,7 @@ class LgCashCoverRefundTest extends TestCase
             'letter_of_guarantee_issuance_id' => $lgId,
             'type' => 'debit-lg-amount',
             'source' => 'lg-facility',
-            'financial_institution_id' => 1,
+            'financial_institution_id' => $this->bankId,
             'lg_type' => 'final-lgs',
             'date' => '2026-09-10',
             'debit' => 7500,
@@ -764,7 +741,7 @@ class LgCashCoverRefundTest extends TestCase
             'letter_of_guarantee_issuance_id' => $lgId,
             'type' => 'debit-lg-amount',
             'source' => 'lg-facility',
-            'financial_institution_id' => 1,
+            'financial_institution_id' => $this->bankId,
             'lg_type' => 'final-lgs',
             'date' => '2026-09-10',
             'debit' => 41117.70,
@@ -846,7 +823,7 @@ class LgCashCoverRefundTest extends TestCase
             'letter_of_guarantee_issuance_id' => $lgId,
             'type' => 'debit-lg-amount',
             'source' => 'lg-facility',
-            'financial_institution_id' => 1,
+            'financial_institution_id' => $this->bankId,
             'lg_type' => 'final-lgs',
             'date' => $date,
             'debit' => $amount,

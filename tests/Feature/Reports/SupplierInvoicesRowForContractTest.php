@@ -26,7 +26,7 @@ use Tests\TestCase;
  * * المطلوب : الفاتورة تظهر بقيمتها في ميعاد استحقاقها ، و الفرق بين
  * * قيمة العقد و الفاتورة يفضل في صف التوقّعات .
  *
- * * كل الداتا هنا بتتعمل جوه transaction و بتترجع في tearDown
+ * * كل الداتا هنا بيعملها التست لشركة جديدة ، و بترجع بعده (TestCase بيلفّه في transaction)
  */
 class SupplierInvoicesRowForContractTest extends TestCase
 {
@@ -37,10 +37,6 @@ class SupplierInvoicesRowForContractTest extends TestCase
     private const REPORT_START = '2026-09-17';
 
     private const REPORT_END = '2027-03-17';
-
-    private ?string $originalDatabase = null;
-
-    private bool $inTransaction = false;
 
     private int $companyId = 0;
 
@@ -56,35 +52,12 @@ class SupplierInvoicesRowForContractTest extends TestCase
         // with the calendar. Freeze the clock to the date those scenarios were written for.
         $this->travelTo(\Carbon\Carbon::parse('2026-10-01 10:00:00'));
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-            DB::table('contracts')->limit(1)->get();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-
-        DB::beginTransaction();
-        $this->inTransaction = true;
-
-        $this->companyId = (int) DB::table('companies')->insertGetId([
-            'name' => json_encode(['en' => 'Supplier Row Co', 'ar' => 'Supplier Row Co']),
-            'main_functional_currency' => 'EGP',
-        ]);
+        $this->companyId = $this->makeCompany()->id;
     }
 
     protected function tearDown(): void
     {
-        if ($this->inTransaction) {
-            DB::rollBack();
-            $this->inTransaction = false;
-        }
-
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
+        $this->travelBack();
 
         parent::tearDown();
     }

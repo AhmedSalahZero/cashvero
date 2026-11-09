@@ -12,13 +12,14 @@ use App\Models\LeasingContractBankStatement;
 use App\Models\MoneyPayment;
 use App\Models\Partner;
 use App\Models\User;
-use App\Support\Permissions\PermissionResolver;
+use Database\Factories\LeasingCompanyFactory;
+use Database\Factories\LeasingContractFactory;
+use Database\Factories\PartnerFactory;
 use Illuminate\Support\Facades\DB;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\PermissionRegistrar;
+use Tests\Concerns\MakesBanks;
 use Tests\TestCase;
 
 /**
@@ -32,12 +33,14 @@ use Tests\TestCase;
  * and the Money Payment screen itself still fatalled, so a test that
  * never loads or submits the form proves nothing.
  *
- * Runs against the development database; every row it creates is torn
- * down. Point it elsewhere with SMOKE_DB=<name>; it skips itself when
- * the database is unreachable, matching PaginationSmokeTest.
+ * Every record — the company, its leasing companies and contract, the
+ * partner, the bank account and the user — is made by the test itself
+ * and rolled back afterwards with everything the screens wrote.
  */
 class LeasingPaymentTest extends TestCase
 {
+    use MakesBanks;
+
     private const LIMIT = 1000000.0;
 
     private ?Company $company = null;
@@ -55,8 +58,6 @@ class LeasingPaymentTest extends TestCase
     private ?FinancialInstitution $bank = null;
 
     private ?FinancialInstitutionAccount $currentAccount = null;
-
-    private array $createdPermissionIds = [];
 
     /**
      * ⚠️ The whole application lives under a `/{locale}` prefix, and that
@@ -86,18 +87,17 @@ class LeasingPaymentTest extends TestCase
         return parent::createApplication();
     }
 
+    protected function tearDown(): void
+    {
+        putenv('ROUTING_LOCALE');
+        unset($_ENV['ROUTING_LOCALE'], $_SERVER['ROUTING_LOCALE']);
+
+        parent::tearDown();
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
-
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
 
         // Without this the locale middleware 302s every request before a
         // controller runs and the suite would pass while exercising
@@ -108,104 +108,29 @@ class LeasingPaymentTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        $this->company = Company::first();
+        $this->company = $this->makeCompany();
 
-        if (! $this->company) {
-            $this->markTestSkipped('Development database has no company to exercise.');
-        }
-
-        $this->leasingCompany = LeasingCompany::create([
-            'company_id' => $this->company->id,
+        $this->leasingCompany = LeasingCompanyFactory::new()->forCompany($this->company)->create([
             'name' => 'TEST Leasing Co '.bin2hex(random_bytes(4)),
         ]);
 
-        $this->otherLeasingCompany = LeasingCompany::create([
-            'company_id' => $this->company->id,
+        $this->otherLeasingCompany = LeasingCompanyFactory::new()->forCompany($this->company)->create([
             'name' => 'TEST Other Leasing Co '.bin2hex(random_bytes(4)),
         ]);
 
-        $this->contract = LeasingContract::create([
-            'company_id' => $this->company->id,
-            'leasing_company_id' => $this->leasingCompany->id,
-            'status' => LeasingContract::RUNNING,
-            'name' => 'TEST-LC-'.bin2hex(random_bytes(4)),
+        $this->contract = LeasingContractFactory::new()->of($this->leasingCompany)->create([
             'start_date' => now()->subMonths(2)->format('Y-m-d'),
             'end_date' => now()->addYears(3)->format('Y-m-d'),
             'currency' => 'egp',
             'limit' => self::LIMIT,
-            'borrowing_rate' => 10,
-            'margin_rate' => 2,
             'duration' => 36,
-            'installment_payment_interval' => 'monthly',
         ]);
 
-        $this->partner = Partner::create([
-            'company_id' => $this->company->id,
-            'name' => 'TEST Partner '.bin2hex(random_bytes(4)),
+        $this->partner = PartnerFactory::new()->forCompany($this->company)->create([
             'is_other_partner' => 1,
         ]);
 
         $this->actor = $this->makeActor();
-    }
-
-    protected function tearDown(): void
-    {
-        // Payments first: deleting one cascades its ledger row and its
-        // leasing_payments row through the model's own delete path.
-        if ($this->contract) {
-            $paymentIds = DB::table('leasing_payments')
-                ->where('leasing_contract_id', $this->contract->id)
-                ->pluck('money_payment_id');
-
-            foreach (MoneyPayment::whereIn('id', $paymentIds)->get() as $payment) {
-                $payment->deleteRelations();
-                $payment->delete();
-            }
-
-            DB::table('leasing_contract_bank_statements')->where('leasing_contract_id', $this->contract->id)->delete();
-            $scheduleIds = DB::table('contract_loan_schedules')->where('leasing_contract_id', $this->contract->id)->pluck('id');
-            DB::table('loan_statements')->whereIn('contract_loan_schedule_settlement_id', DB::table('contract_loan_schedule_settlements')->whereIn('contract_loan_schedule_id', $scheduleIds)->pluck('id'))->delete();
-            DB::table('contract_loan_schedule_settlements')->whereIn('contract_loan_schedule_id', $scheduleIds)->delete();
-            DB::table('contract_loan_schedules')->where('leasing_contract_id', $this->contract->id)->delete();
-            LeasingContract::where('id', $this->contract->id)->delete();
-        }
-
-        if ($this->currentAccount) {
-            DB::table('current_account_bank_statements')
-                ->where('financial_institution_account_id', $this->currentAccount->id)
-                ->delete();
-            FinancialInstitutionAccount::where('id', $this->currentAccount->id)->delete();
-        }
-
-        if ($this->bank) {
-            FinancialInstitution::where('id', $this->bank->id)->delete();
-        }
-
-        if ($this->partner) {
-            DB::table('other_partner_statements')->where('partner_id', $this->partner->id)->delete();
-            Partner::where('id', $this->partner->id)->delete();
-        }
-
-        foreach ([$this->leasingCompany, $this->otherLeasingCompany] as $leasingCompany) {
-            if ($leasingCompany) {
-                LeasingCompany::where('id', $leasingCompany->id)->delete();
-            }
-        }
-
-        if ($this->actor) {
-            DB::table('companies_users')->where('user_id', $this->actor->id)->delete();
-            DB::table('model_has_permissions')->where('model_id', $this->actor->id)->delete();
-            User::withoutEvents(fn () => User::where('id', $this->actor->id)->forceDelete());
-        }
-
-        if ($this->createdPermissionIds) {
-            Permission::whereIn('id', $this->createdPermissionIds)->delete();
-        }
-
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
-        PermissionResolver::flush();
-
-        parent::tearDown();
     }
 
     /* ── the screen ────────────────────────────────────────────────── */
@@ -688,41 +613,31 @@ class LeasingPaymentTest extends TestCase
      */
     public function test_the_statement_picker_also_lists_contracts_that_cannot_be_paid_from(): void
     {
-        $closed = LeasingContract::create([
-            'company_id' => $this->company->id,
-            'leasing_company_id' => $this->leasingCompany->id,
-            'status' => 'closed',
+        $closed = LeasingContractFactory::new()->of($this->leasingCompany)->closed()->create([
             'name' => 'TEST-CLOSED-'.bin2hex(random_bytes(4)),
             'start_date' => now()->subYears(3)->format('Y-m-d'),
             'end_date' => now()->subYear()->format('Y-m-d'),
             'currency' => 'egp',
             'limit' => 250000,
-            'borrowing_rate' => 10,
-            'margin_rate' => 2,
             'duration' => 24,
-            'installment_payment_interval' => 'monthly',
         ]);
 
-        try {
-            $listed = array_column(
-                $this->actingAs($this->actor)->getJson($this->url('leasing-contract-statement/contracts')
-                    .'?'.http_build_query([
-                        'leasing_company_id' => $this->leasingCompany->id,
-                        'currency' => 'egp',
-                    ]))->json('contracts'),
-                'id'
-            );
+        $listed = array_column(
+            $this->actingAs($this->actor)->getJson($this->url('leasing-contract-statement/contracts')
+                .'?'.http_build_query([
+                    'leasing_company_id' => $this->leasingCompany->id,
+                    'currency' => 'egp',
+                ]))->json('contracts'),
+            'id'
+        );
 
-            $this->assertContains($closed->id, $listed, 'A closed contract still has a statement to read.');
+        $this->assertContains($closed->id, $listed, 'A closed contract still has a statement to read.');
 
-            $payable = LeasingContract::payableFor($this->company->id, $this->leasingCompany->id, 'egp')
-                ->pluck('id')
-                ->all();
+        $payable = LeasingContract::payableFor($this->company->id, $this->leasingCompany->id, 'egp')
+            ->pluck('id')
+            ->all();
 
-            $this->assertNotContains($closed->id, $payable, '…but it can no longer be paid from.');
-        } finally {
-            LeasingContract::where('id', $closed->id)->delete();
-        }
+        $this->assertNotContains($closed->id, $payable, '…but it can no longer be paid from.');
     }
 
     /**
@@ -769,11 +684,7 @@ class LeasingPaymentTest extends TestCase
      */
     public function test_the_result_route_refuses_a_contract_under_another_companys_url(): void
     {
-        $otherCompanyId = Company::where('id', '!=', $this->company->id)->value('id');
-
-        if (! $otherCompanyId) {
-            $this->markTestSkipped('Development database has only one company.');
-        }
+        $otherCompanyId = $this->makeCompany()->id;
 
         $response = $this->actingAs($this->actor)->get(
             '/en/'.$otherCompanyId.'/leasing-contract-statement/result?'.http_build_query([
@@ -818,19 +729,11 @@ class LeasingPaymentTest extends TestCase
     private function makeInstallment(float $interest, float $principle, ?string $date = null): ContractLoanSchedule
     {
         if (! $this->bank) {
-            $this->bank = FinancialInstitution::create([
-                'company_id' => $this->company->id,
-                'type' => 'bank',
-                'name' => 'TEST Bank '.bin2hex(random_bytes(4)),
-                'branch_name' => 'TEST Branch',
-            ]);
+            $this->bank = $this->bank($this->company, ['branch_name' => 'TEST Branch']);
 
-            $this->currentAccount = FinancialInstitutionAccount::create([
-                'company_id' => $this->company->id,
-                'financial_institution_id' => $this->bank->id,
+            $this->currentAccount = $this->currentAccount($this->bank, 'EGP', [
                 'account_number' => 'TEST-'.bin2hex(random_bytes(4)),
                 'currency' => 'egp',
-                'is_active' => 1,
                 'balance_amount' => 0,
                 'balance_date' => now()->subYear()->format('Y-m-d'),
             ]);
@@ -920,17 +823,7 @@ class LeasingPaymentTest extends TestCase
 
     private function makeActor(): User
     {
-        $user = new User;
-        $user->name = 'Leasing Payment Test Actor';
-        $user->email = 'leasing-payment-test-'.bin2hex(random_bytes(6)).'@example.test';
-        $user->password = bcrypt('secret-'.bin2hex(random_bytes(8)));
-        $user->save();
-
-        $user->companies()->attach($this->company->id);
-
-        $permissions = [];
-
-        foreach ([
+        return $this->makeUser([
             'money_payment.view',
             'money_payment.create',
             'money_payment.update',
@@ -940,21 +833,6 @@ class LeasingPaymentTest extends TestCase
             'contract_loan_schedule.update',
             // The Statements sidebar route to the same statement.
             'report_leasing_contract_statement.view',
-        ] as $key) {
-            $permission = Permission::firstOrCreate(['name' => $key, 'guard_name' => 'web']);
-
-            if ($permission->wasRecentlyCreated) {
-                $this->createdPermissionIds[] = $permission->id;
-            }
-
-            $permissions[] = $permission;
-        }
-
-        $user->syncPermissions($permissions);
-
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
-        PermissionResolver::flush();
-
-        return $user->fresh();
+        ], $this->company);
     }
 }

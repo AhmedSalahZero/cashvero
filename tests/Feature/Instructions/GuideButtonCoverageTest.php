@@ -242,9 +242,8 @@ class GuideButtonCoverageTest extends TestCase
      * not the screen the reader is looking at. `npm run build` is happy
      * with that, every guide still returns 200, and only a person reading
      * the text notices. Hence this map.
-     *
-     * @dataProvider screenGuideProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('screenGuideProvider')]
     public function test_a_screen_points_at_the_guide_that_describes_it(string $controller, string $page, string $guideConst): void
     {
         $source = file_get_contents(app_path("Http/Controllers/{$controller}.php"));

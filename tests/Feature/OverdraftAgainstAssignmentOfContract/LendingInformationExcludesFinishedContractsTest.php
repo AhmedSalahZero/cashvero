@@ -5,25 +5,28 @@ namespace Tests\Feature\OverdraftAgainstAssignmentOfContract;
 use App\Models\Company;
 use App\Models\Contract;
 use App\Models\FinancialInstitution;
-use App\Models\OverdraftAgainstAssignmentOfContract;
 use App\Models\Partner;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
+use Database\Factories\PartnerFactory;
 use Inertia\Testing\AssertableInertia as Assert;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
+use Tests\Concerns\MakesBanks;
+use Tests\Concerns\MakesFacilities;
 use Tests\TestCase;
 
 /**
  * Lending Information may only offer open contracts of the chosen
  * customer as collateral — a finished contract is closed business.
+ *
+ * The company, bank, customer, contracts and facility are made by the test
+ * and rolled back afterwards.
  */
 class LendingInformationExcludesFinishedContractsTest extends TestCase
 {
-    use DatabaseTransactions;
+    use MakesBanks;
+    use MakesFacilities;
 
     private Company $company;
 
@@ -37,14 +40,6 @@ class LendingInformationExcludesFinishedContractsTest extends TestCase
 
     private Contract $finished;
 
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
-
     protected function setUp(): void
     {
         parent::setUp();
@@ -55,49 +50,20 @@ class LendingInformationExcludesFinishedContractsTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
+        $this->company = $this->makeCompany();
+        $this->bank = $this->bank($this->company);
 
-        if (! Schema::connection('mysql')->hasTable('financial_institutions')) {
-            $this->markTestSkipped(
-                'No development schema on '.DB::connection('mysql')->getDatabaseName().' — set SMOKE_DB to run this suite.'
-            );
-        }
-
-        $bank = FinancialInstitution::query()->whereNotNull('company_id')->first();
-        if (! $bank) {
-            $this->markTestSkipped('Development database has no financial institution to attach company context to.');
-        }
-
-        $this->bank = $bank;
-        $this->company = Company::findOrFail($bank->company_id);
-
-        $this->customer = Partner::create([
-            'company_id' => $this->company->id,
+        $this->customer = PartnerFactory::new()->forCompany($this->company)->customer()->create([
             'name' => 'Lending Finished Filter Customer '.uniqid(),
-            'is_customer' => 1,
         ]);
 
         $this->running = $this->makeContract(Contract::RUNNING, 'RUN');
         $this->finished = $this->makeContract(Contract::FINISHED, 'FIN');
 
-        /** @var User $user */
-        $user = User::create([
-            'name' => 'Lending Finished Filter Test '.uniqid(),
-            'email' => 'lending-finished-'.uniqid().'@example.test',
-            'password' => bcrypt('secret-for-tests'),
-            'company_id' => $this->company->id,
-        ]);
-        $user->givePermissionTo([
+        $this->user = $this->makeUser([
             'overdraft_assignment_contract.view',
             'overdraft_assignment_contract.update',
-        ]);
-        $user->companies()->attach($this->company->id);
-        $user->load('companies');
-        $this->user = $user;
+        ], $this->company);
     }
 
     public function test_the_lending_information_contract_list_omits_finished_contracts(): void
@@ -122,16 +88,11 @@ class LendingInformationExcludesFinishedContractsTest extends TestCase
 
     public function test_a_finished_contract_cannot_be_assigned_as_collateral(): void
     {
-        $facility = OverdraftAgainstAssignmentOfContract::withoutEvents(function () {
-            return OverdraftAgainstAssignmentOfContract::create([
-                'company_id' => $this->company->id,
-                'financial_institution_id' => $this->bank->id,
-                'account_number' => 'LFF-'.uniqid(),
-                'currency' => 'EGP',
-                'limit' => 1000,
-                'is_active' => 1,
-            ]);
-        });
+        $facility = $this->overdraftAgainstAssignmentOfContract($this->bank, [
+            'account_number' => 'LFF-'.uniqid(),
+            'currency' => 'EGP',
+            'limit' => 1000,
+        ]);
 
         $indexUrl = route('view.overdraft.against.assignment.of.contract', [
             'company' => $this->company->id,

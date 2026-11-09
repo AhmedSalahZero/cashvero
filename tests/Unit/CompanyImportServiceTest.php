@@ -12,21 +12,13 @@ use Tests\TestCase;
 /**
  * Registry / ordering / remap behaviour for CompanyImportService.
  *
- * Mapping assertions are pure (reflection). Ordering + preflight hit
- * mysql_source / cash-vero when available and skip otherwise.
+ * Mapping assertions are pure (reflection). Ordering + preflight read the
+ * schema of the test databases (cashvero_test as target, cashvero_test_source
+ * as mysql_source); the preflight test plants its own fake source company in
+ * cashvero_test_source, rolled back with the test (TestCase).
  */
 class CompanyImportServiceTest extends TestCase
 {
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        // Mirror PaginationSmokeTest: phpunit.xml points at a missing test DB.
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-        DB::reconnect('mysql');
-    }
-
     private function service(): CompanyImportService
     {
         return new CompanyImportService();
@@ -146,9 +138,7 @@ class CompanyImportServiceTest extends TestCase
 
     public function test_guess_referenced_table_uses_per_table_overrides(): void
     {
-        if (! $this->databasesReachable()) {
-            $this->markTestSkipped('mysql / mysql_source unreachable');
-        }
+        $this->assertTrue($this->databasesReachable(), 'mysql / mysql_source unreachable');
 
         $svc = $this->service();
         $this->invoke($svc, 'primeKnownTables', [
@@ -180,9 +170,7 @@ class CompanyImportServiceTest extends TestCase
 
     public function test_import_order_places_parent_before_child_despite_alphabet_and_bootstrap(): void
     {
-        if (! $this->databasesReachable()) {
-            $this->markTestSkipped('mysql / mysql_source unreachable');
-        }
+        $this->assertTrue($this->databasesReachable(), 'mysql / mysql_source unreachable');
 
         $svc = $this->service();
         $tables = [
@@ -275,26 +263,158 @@ class CompanyImportServiceTest extends TestCase
         $this->assertFalse($this->invoke($svc, 'isExternalIdColumn', 'lg_facility_id'));
     }
 
-    public function test_preflight_passes_for_company_92_when_source_available(): void
+    /**
+     * The planted source company passes preflight: parents order before
+     * children, and every local *_id it carries is one the importer maps.
+     *
+     * The source here has the target's full schema. The factoring module
+     * (factoring_* tables) is left out of the copy, as on a source that
+     * predates it: settlements.factoring_transaction_id and
+     * factoring_transactions.settlement_id point at each other, a cycle
+     * orderedTables() cannot break — reported as a bug, not covered here.
+     */
+    public function test_preflight_passes_for_a_planted_source_company(): void
     {
-        if (! $this->databasesReachable()) {
-            $this->markTestSkipped('mysql / mysql_source unreachable');
-        }
+        $this->assertTrue($this->databasesReachable(), 'mysql / mysql_source unreachable');
 
-        if (config('database.connections.mysql_source.database') === 'cashvero_test_source') {
-            $this->markTestSkipped('Needs the real Odoo-analysis source database (veroanalysis): a copy of the test database is not a real source.');
-        }
+        $companyId = $this->plantSourceCompany();
 
         $svc = $this->service();
-        $analysis = $svc->analyze(92);
-        if (! $analysis['source_company']) {
-            $this->markTestSkipped('company 92 missing on source');
-        }
+        $analysis = $svc->analyze($companyId);
+        $this->assertNotNull($analysis['source_company'], 'the planted company must be found on source');
+        $this->assertSame(1, $analysis['source_counts']['customer_invoices']);
+        $this->assertSame(3, $analysis['source_counts']['partners']);
 
-        $preflight = $svc->preflight(92, $analysis['intersection']);
+        $preflight = $svc->preflight($companyId, $this->withoutFactoring($analysis['intersection']));
         $this->assertTrue($preflight['ok'], implode('; ', $preflight['errors']));
         $this->assertSame([], $preflight['order_violations']);
         $this->assertSame([], $preflight['unmapped_local_ids']);
+    }
+
+    /**
+     * A source row carrying a local *_id the importer has no mapping for is
+     * exactly what preflight exists to stop — copied verbatim it would point
+     * at whatever owns that id on the target. Without this, the empty
+     * unmapped_local_ids above could just mean "never looked".
+     */
+    public function test_preflight_refuses_an_unmapped_local_id_column_with_data(): void
+    {
+        $companyId = $this->plantSourceCompany();
+
+        $svc = $this->service();
+        $analysis = $svc->analyze($companyId);
+        $tables = $this->withoutFactoring($analysis['intersection']);
+        $this->invoke($svc, 'primeKnownTables', $tables);
+
+        $this->assertArrayNotHasKey('terms_history_id', $this->invoke($svc, 'fkColumnsFor', 'lending_information'),
+            'lending_information.terms_history_id is mapped now — pick another unmapped local *_id column for this probe.');
+
+        DB::connection('mysql_source')->table('lending_information')->insert([
+            'company_id' => $companyId,
+            'terms_history_id' => 1,
+        ]);
+
+        $preflight = $svc->preflight($companyId, $tables);
+
+        $this->assertFalse($preflight['ok']);
+        $this->assertContains(
+            ['table' => 'lending_information', 'column' => 'terms_history_id', 'rows' => 1],
+            $preflight['unmapped_local_ids']
+        );
+    }
+
+    /** @param  array<int, string>  $tables */
+    private function withoutFactoring(array $tables): array
+    {
+        return array_values(array_filter($tables, fn (string $table) => ! str_starts_with($table, 'factoring_')));
+    }
+
+    /**
+     * A small fake company on the source side (cashvero_test_source), shaped like a real one:
+     * partners, a contract, an invoice of each kind, a receipt with its settlement. The global
+     * reference tables both databases must share by id (account_types, banks) are copied over
+     * from the target, as on a real source.
+     */
+    private function plantSourceCompany(): int
+    {
+        $source = DB::connection('mysql_source');
+
+        foreach (['account_types', 'banks'] as $global) {
+            foreach (DB::table($global)->orderBy('id')->get() as $row) {
+                $source->table($global)->insert((array) $row);
+            }
+        }
+
+        $name = 'Source Co '.uniqid();
+        $companyId = (int) $source->table('companies')->insertGetId([
+            'name' => json_encode(['en' => $name, 'ar' => $name]),
+            'sub_of' => '0',
+            'is_caching_now' => 0,
+            'main_functional_currency' => 'EGP',
+        ]);
+
+        $partner = fn (string $partnerName, array $flags) => (int) $source->table('partners')->insertGetId(array_merge([
+            'company_id' => $companyId,
+            'name' => $partnerName,
+        ], $flags));
+
+        $customerId = $partner('Source Customer', ['is_customer' => 1]);
+        $supplierId = $partner('Source Supplier', ['is_supplier' => 1]);
+        $partner('Source Employee', ['is_employee' => 1]);
+
+        $contractId = (int) $source->table('contracts')->insertGetId([
+            'company_id' => $companyId,
+            'partner_id' => $customerId,
+            'name' => 'Source Contract',
+            'model_type' => 'Customer',
+            'currency' => 'EGP',
+            'exchange_rate' => 1,
+            'amount' => 5000,
+        ]);
+
+        $invoiceId = (int) $source->table('customer_invoices')->insertGetId([
+            'company_id' => $companyId,
+            'customer_id' => $customerId,
+            'customer_name' => 'Source Customer',
+            'currency' => 'EGP',
+            'exchange_rate' => 1,
+            'invoice_amount' => 1000,
+            'invoice_number' => 'INV-SRC-1',
+            'invoice_date' => '2026-01-10',
+            'invoice_due_date' => '2026-02-10',
+        ]);
+        $source->table('supplier_invoices')->insert([
+            'company_id' => $companyId,
+            'supplier_id' => $supplierId,
+            'supplier_name' => 'Source Supplier',
+            'currency' => 'EGP',
+            'exchange_rate' => 1,
+            'invoice_amount' => 400,
+            'invoice_number' => 'BILL-SRC-1',
+            'invoice_date' => '2026-01-12',
+            'invoice_due_date' => '2026-02-12',
+        ]);
+
+        $receivedId = (int) $source->table('money_received')->insertGetId([
+            'company_id' => $companyId,
+            'partner_id' => $customerId,
+            'contract_id' => $contractId,
+            'type' => 'cash-in-safe',
+            'money_type' => 'invoice-settlement',
+            'receiving_date' => '2026-01-20',
+            'received_amount' => 600,
+            'currency' => 'EGP',
+            'receiving_currency' => 'EGP',
+        ]);
+        $source->table('settlements')->insert([
+            'company_id' => $companyId,
+            'invoice_id' => $invoiceId,
+            'money_received_id' => $receivedId,
+            'settlement_amount' => 600,
+            'withhold_amount' => 0,
+        ]);
+
+        return $companyId;
     }
 
     public function test_foreign_key_outside_the_copied_company_is_blanked_not_copied_verbatim(): void
@@ -390,9 +510,8 @@ class CompanyImportServiceTest extends TestCase
     /**
      * A raw company copy never runs the issuance model's saving hook.
      * Legacy rows have no activation_date column at all.
-     *
-     * @dataProvider importedLgIssuanceProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('importedLgIssuanceProvider')]
     public function test_an_imported_lg_issuance_gets_a_consistent_activation_state(array $row, ?string $activationDate, int $isActivated): void
     {
         $payload = $this->invoke($this->service(), 'normalizeImportedLgIssuance', $row);

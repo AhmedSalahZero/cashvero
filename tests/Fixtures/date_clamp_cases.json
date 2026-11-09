@@ -1,0 +1,12 @@
+{
+  "_about": "Money-movement dates may not be after today (resources/js/composables/today.js on screen, `before_or_equal:today` in the server's rules). 'Today' is fixed at 2026-11-08 in Cairo. Worked out by hand.",
+  "today": "2026-11-08",
+  "cases": [
+    { "name": "yesterday stays", "date": "2026-11-07", "expect": "2026-11-07" },
+    { "name": "today stays", "date": "2026-11-08", "expect": "2026-11-08" },
+    { "name": "tomorrow becomes today", "date": "2026-11-09", "expect": "2026-11-08" },
+    { "name": "next year becomes today", "date": "2027-01-01", "expect": "2026-11-08" },
+    { "name": "an old date stays", "date": "1999-01-31", "expect": "1999-01-31" },
+    { "name": "empty stays empty", "date": "", "expect": "" }
+  ]
+}

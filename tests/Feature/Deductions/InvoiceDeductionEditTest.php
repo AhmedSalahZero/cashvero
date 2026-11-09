@@ -2,12 +2,12 @@
 
 namespace Tests\Feature\Deductions;
 
+use App\Models\Company;
 use App\Models\CustomerInvoice;
-use App\Models\Deduction;
 use App\Models\InvoiceDeduction;
 use App\Models\SupplierInvoice;
 use App\Rules\DeductionAmountRule;
-use Illuminate\Support\Facades\DB;
+use Tests\Concerns\MakesInvoices;
 use Tests\TestCase;
 
 /**
@@ -24,30 +24,15 @@ use Tests\TestCase;
  */
 class InvoiceDeductionEditTest extends TestCase
 {
-    private ?string $originalDatabase = null;
+    use MakesInvoices;
+
+    private Company $company;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-    }
-
-    protected function tearDown(): void
-    {
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
-
-        parent::tearDown();
+        $this->company = $this->makeCompany();
     }
 
     /** * هل القاعدة بتسمح بمجموع الخصومات ده على السقف ده ؟ */
@@ -76,19 +61,36 @@ class InvoiceDeductionEditTest extends TestCase
      */
     private function invoiceWithDeductions(): CustomerInvoice
     {
-        $candidates = CustomerInvoice::has('deductions')->limit(300)->get()
-            ->filter(fn (CustomerInvoice $i) => (float) $i->deductions->sum('pivot.amount') > 0
-                && $i->getNetBalance() >= 0);
+        // 1,000 + 140 ضريبة ، اتحصّل منها 800 ، و عليها خصمين 150 + 90 → الباقي 100
+        $invoice = $this->invoiceWith(1000, 140, 800, [150, 90]);
 
-        $reproducing = $candidates->first(
-            fn (CustomerInvoice $i) => $i->getNetBalance() < (float) $i->deductions->sum('pivot.amount')
-        );
+        $this->assertSame(100.0, $invoice->getNetBalance());
+        $this->assertLessThan((float) $invoice->deductions->sum('pivot.amount'), $invoice->getNetBalance(),
+            'الحالة المبنية لازم تعيد إنتاج الباج : رصيدها الحالي أقل من خصوماتها المحفوظة');
 
-        if (! $reproducing) {
-            $this->markTestSkipped('No invoice whose saved deductions exceed its remaining balance.');
+        return $invoice;
+    }
+
+    /**
+     * * فاتورة عميل بالمبلغ و الضريبة دول ، اتحصّل منها المبلغ ده ، و عليها
+     * * الخصومات دي — و الـ triggers بيحسبوا الرصيد زي الإنتاج بالظبط
+     *
+     * @param  list<float>  $deductions
+     */
+    private function invoiceWith(float $amount, float $vat, float $collected, array $deductions): CustomerInvoice
+    {
+        $customer = $this->customer($this->company);
+        $invoice = $this->invoice($customer, ['invoice_amount' => $amount, 'vat_amount' => $vat]);
+
+        if ($collected > 0) {
+            $this->settle($this->received($customer, ['received_amount' => $collected]), $invoice, $collected);
         }
 
-        return $reproducing;
+        foreach ($deductions as $i => $deducted) {
+            $this->deduct($invoice, $deducted, $this->deductionType($this->company), '2020-02-0'.($i + 1));
+        }
+
+        return CustomerInvoice::with('deductions')->findOrFail($invoice->id);
     }
 
     /* ───────────── الباج المبلّغ عنه ───────────── */
@@ -113,10 +115,23 @@ class InvoiceDeductionEditTest extends TestCase
      */
     public function test_the_rule_agrees_with_the_controller_on_every_invoice(): void
     {
+        /*
+         * * كل شكل فاتورة بيوصل للبوب اب : رصيدها أقل من خصوماتها (الباج) ،
+         * * أكبر منها ، خصوماتها كلت الرصيد كله ، اتحصّلت زيادة فرصيدها
+         * * بالسالب ، و خصومات بكسور
+         */
+        $invoices = collect([
+            $this->invoiceWith(1000, 140, 800, [150, 90]),
+            $this->invoiceWith(1000, 0, 0, [100]),
+            $this->invoiceWith(1000, 0, 600, [400]),
+            $this->invoiceWith(1000, 0, 950, [100]),
+            $this->invoiceWith(2500.75, 350.1, 1200.33, [10.01, 0.99, 250.5]),
+        ]);
+
         $checked = 0;
         $disagreements = [];
 
-        foreach (CustomerInvoice::has('deductions')->limit(150)->get() as $invoice) {
+        foreach ($invoices as $invoice) {
             $saved = (float) $invoice->deductions->sum('pivot.amount');
 
             if ($saved <= 0) {
@@ -137,12 +152,19 @@ class InvoiceDeductionEditTest extends TestCase
             $checked++;
         }
 
-        if ($checked === 0) {
-            $this->markTestSkipped('No invoice with saved deductions in this database, so there is nothing to compare.');
-        }
-
+        $this->assertSame(5, $checked, 'كل الفواتير المبنية عليها خصومات و لازم تتقارن');
         $this->assertSame([], $disagreements,
             'القاعدة و الكونترولر مختلفين على: '.implode(', ', $disagreements));
+    }
+
+    /** The request only finds an invoice of the company in the address. */
+    public function test_the_request_does_not_load_another_companys_invoice(): void
+    {
+        $invoice = $this->invoice($this->customer($this->makeCompany()), ['invoice_amount' => 1000, 'net_invoice_amount' => 1000]);
+
+        $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+
+        $this->validateThroughRequest($invoice, [], 'CustomerInvoice', $this->makeCompany()->id);
     }
 
     /**
@@ -151,15 +173,16 @@ class InvoiceDeductionEditTest extends TestCase
      *
      * * ده بيشغّل قواعد الطلب الحقيقية زي ما بتشتغل في الويب
      */
-    private function validateThroughRequest($invoice, array $deductions, string $modelType = 'CustomerInvoice'): \Illuminate\Validation\Validator
+    private function validateThroughRequest($invoice, array $deductions, string $modelType = 'CustomerInvoice', ?int $companyId = null): \Illuminate\Validation\Validator
     {
         $request = \App\Http\Requests\UpdateInvoiceDeductionRequest::create('/x', 'PUT', [
             'deductions' => $deductions,
         ]);
 
-        // الطلب بيقرا الفاتورة من بارامترات الراوت
-        $route = new \Illuminate\Routing\Route(['PUT'], '/x/{modelId}/{modelType}', fn () => null);
+        // الطلب بيقرا الفاتورة من بارامترات الراوت — زي الراوت الحقيقي: {company}/.../{modelId}/{modelType}
+        $route = new \Illuminate\Routing\Route(['PUT'], '/{company}/x/{modelId}/{modelType}', fn () => null);
         $route->bind($request);
+        $route->setParameter('company', $companyId ?? $invoice->company_id);
         $route->setParameter('modelId', $invoice->id);
         $route->setParameter('modelType', $modelType);
         $request->setRouteResolver(fn () => $route);
@@ -244,65 +267,56 @@ class InvoiceDeductionEditTest extends TestCase
      * * الإصلاح في IsInvoice (تريت مشترك) و في طلب واحد بياخد نوع الفاتورة
      * * كبارامتر — فالمفروض يشتغل على فواتير الموردين زي العملاء بالظبط
      *
-     * * الاختبارات فوق بتشتغل على فواتير العملاء لأن دي اللي فيها بيانات ،
-     * * فالحالة هنا بتتبني و بترجع عشان الجهة التانية ما تفضلش من غير غطاء
+     * * الاختبارات فوق بتشتغل على فواتير العملاء ، فالحالة هنا بتتبني على
+     * * فاتورة مورد عشان الجهة التانية ما تفضلش من غير غطاء
      */
     public function test_a_supplier_invoice_behaves_the_same(): void
     {
-        $invoice = SupplierInvoice::whereRaw('net_balance > 0')->first();
-        $deduction = Deduction::first();
+        $invoice = $this->supplierInvoice($this->supplier($this->company), ['invoice_amount' => 10000]);
+        $deduction = $this->deductionType($this->company);
+        $this->assertGreaterThan(0, (float) $invoice->net_balance);
 
-        if (! $invoice || ! $deduction) {
-            $this->markTestSkipped('Needs a supplier invoice with a balance and a deduction type.');
-        }
+        // خصم يمشي دلوقتي ، بس بيسيب رصيد أقل من نفسه — دي الحالة اللي كانت بتفشل
+        $amount = round((float) $invoice->net_balance * 0.9, 2);
 
-        DB::beginTransaction();
+        InvoiceDeduction::create([
+            'invoice_type' => 'SupplierInvoice',
+            'invoice_id' => $invoice->id,
+            'deduction_id' => $deduction->id,
+            'date' => '2026-01-01',
+            'amount' => $amount,
+            'company_id' => $invoice->company_id,
+            'amount_in_main_currency' => $amount,
+            'amount_in_invoice_exchange_rate' => $amount,
+            'foreign_gain_or_loss' => 0,
+        ]);
 
-        try {
-            // خصم يمشي دلوقتي ، بس بيسيب رصيد أقل من نفسه — دي الحالة اللي كانت بتفشل
-            $amount = round((float) $invoice->net_balance * 0.9, 2);
+        $invoice->update(['net_balance' => (float) $invoice->net_balance - $amount]);
+        $invoice->refresh()->load('deductions');
 
-            InvoiceDeduction::create([
-                'invoice_type' => 'SupplierInvoice',
-                'invoice_id' => $invoice->id,
-                'deduction_id' => $deduction->id,
-                'date' => '2026-01-01',
-                'amount' => $amount,
-                'company_id' => $invoice->company_id,
-                'amount_in_main_currency' => $amount,
-                'amount_in_invoice_exchange_rate' => $amount,
-                'foreign_gain_or_loss' => 0,
-            ]);
+        $this->assertLessThan($amount, $invoice->getNetBalance(),
+            'الحالة المبنية لازم تعيد إنتاج الباج، و إلا الاختبار مش بيثبت حاجة');
 
-            $invoice->update(['net_balance' => (float) $invoice->net_balance - $amount]);
-            $invoice->refresh()->load('deductions');
+        $validator = $this->validateThroughRequest($invoice, [[
+            'deduction_id' => $deduction->id,
+            'date' => '2026-01-01',
+            'amount' => $amount,
+        ]], 'SupplierInvoice');
 
-            $this->assertLessThan($amount, $invoice->getNetBalance(),
-                'الحالة المبنية لازم تعيد إنتاج الباج، و إلا الاختبار مش بيثبت حاجة');
+        $amountErrors = collect($validator->errors()->keys())
+            ->filter(fn ($key) => str_contains($key, 'amount'))->values()->all();
 
-            $validator = $this->validateThroughRequest($invoice, [[
-                'deduction_id' => $deduction->id,
-                'date' => '2026-01-01',
-                'amount' => $amount,
-            ]], 'SupplierInvoice');
+        $this->assertSame([], $amountErrors,
+            'فاتورة المورد لازم تتصرف زي فاتورة العميل بالظبط');
 
-            $amountErrors = collect($validator->errors()->keys())
-                ->filter(fn ($key) => str_contains($key, 'amount'))->values()->all();
+        // و الزيادة لسه مرفوضة على جهة الموردين كمان
+        $tooMuch = $this->validateThroughRequest($invoice, [[
+            'deduction_id' => $deduction->id,
+            'date' => '2026-01-01',
+            'amount' => $amount + 100000,
+        ]], 'SupplierInvoice');
 
-            $this->assertSame([], $amountErrors,
-                'فاتورة المورد لازم تتصرف زي فاتورة العميل بالظبط');
-
-            // و الزيادة لسه مرفوضة على جهة الموردين كمان
-            $tooMuch = $this->validateThroughRequest($invoice, [[
-                'deduction_id' => $deduction->id,
-                'date' => '2026-01-01',
-                'amount' => $amount + 100000,
-            ]], 'SupplierInvoice');
-
-            $this->assertTrue($tooMuch->fails(), 'الخصم الزائد لازم يترفض للموردين كمان');
-        } finally {
-            DB::rollBack();
-        }
+        $this->assertTrue($tooMuch->fails(), 'الخصم الزائد لازم يترفض للموردين كمان');
     }
 
     /** * و التقريب شغال على الجهتين لأنه في التريت المشترك */
@@ -326,13 +340,11 @@ class InvoiceDeductionEditTest extends TestCase
      */
     public function test_the_net_balance_is_rounded_to_two_decimals(): void
     {
-        $drifting = CustomerInvoice::whereRaw('net_balance <> ROUND(net_balance, 2)')->first();
-
-        if (! $drifting) {
-            $this->markTestSkipped('No invoice with a drifting net balance on file.');
-        }
+        $drifting = $this->withRawNetBalance($this->invoice($this->customer($this->company)), '110579.89000000013');
 
         $raw = (float) $drifting->getRawOriginal('net_balance');
+        $this->assertNotSame(round($raw, 2), $raw, 'الرصيد المبني لازم يكون فيه الانحراف فعلا');
+
         $reported = $drifting->getNetBalance();
 
         $this->assertSame(round($raw, 2), $reported, 'الرصيد لازم يترجع مقرّب لخانتين');
@@ -345,29 +357,41 @@ class InvoiceDeductionEditTest extends TestCase
      */
     public function test_a_rounding_residue_does_not_read_as_an_outstanding_balance(): void
     {
-        $residue = CustomerInvoice::whereRaw('net_balance <> ROUND(net_balance, 2)')
-            ->whereRaw('ABS(net_balance) < 0.005')
-            ->first();
+        foreach (['0.0000001', '-0.00000000011641532182693481'] as $residue) {
+            $invoice = $this->withRawNetBalance($this->invoice($this->customer($this->company)), $residue);
 
-        if (! $residue) {
-            $this->markTestSkipped('No invoice with a sub-cent residue on file.');
+            $this->assertLessThan(0.005, abs((float) $invoice->getRawOriginal('net_balance')));
+            $this->assertNotSame(0.0, (float) $invoice->getRawOriginal('net_balance'));
+
+            $this->assertSame(0.0, abs($invoice->getNetBalance()),
+                'الكسر الضئيل ده لازم يبقى صفر، مش رصيد قائم');
         }
-
-        $this->assertSame(0.0, abs($residue->getNetBalance()),
-            'الكسر الضئيل ده لازم يبقى صفر، مش رصيد قائم');
     }
 
     /** * و العرض بخانتين عشرية عشان الكسر الحقيقي ما يختفيش */
     public function test_the_net_balance_is_displayed_with_two_decimals(): void
     {
-        $invoice = CustomerInvoice::whereRaw('net_balance <> ROUND(net_balance, 0)')
-            ->whereRaw('ABS(net_balance) > 1')->first();
+        // 1,000.50 + 0.25 ضريبة : رصيد بكسر حقيقي ، محفوظ و متقري من الداتابيز
+        $invoice = $this->invoice($this->customer($this->company), ['invoice_amount' => 1000.5, 'vat_amount' => 0.25]);
+        $invoice = CustomerInvoice::findOrFail($invoice->id);
 
-        if (! $invoice) {
-            $this->markTestSkipped('No invoice with a fractional net balance on file.');
-        }
+        $this->assertNotEquals(round((float) $invoice->net_balance), (float) $invoice->net_balance);
+        $this->assertGreaterThan(1, abs((float) $invoice->net_balance));
 
         $this->assertMatchesRegularExpression('/\.\d{2}$/', $invoice->getNetBalanceFormatted(),
             'الرصيد لازم يتعرض بخانتين، و إلا الكسور بتختفي');
+        $this->assertSame('1,000.75', $invoice->getNetBalanceFormatted());
+    }
+
+    /**
+     * * الـ triggers بتقرّب net_balance لخانتين في كل insert و update ، فالرصيد
+     * * المنحرف اللي اتراكم زمان في العمود الـ double ما ينفعش يتعمل في
+     * * الداتابيز النهارده — بنحطه على الفاتورة في الذاكرة زي ما كان بيتقري
+     */
+    private function withRawNetBalance(CustomerInvoice $invoice, string $netBalance): CustomerInvoice
+    {
+        $invoice->setRawAttributes(['net_balance' => $netBalance] + $invoice->getAttributes(), true);
+
+        return $invoice;
     }
 }

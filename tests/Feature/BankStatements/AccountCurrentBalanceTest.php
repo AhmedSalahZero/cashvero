@@ -31,7 +31,7 @@ class AccountCurrentBalanceTest extends TestCase
 
     private const OTHER_ACCOUNT = 315;
 
-    private const COMPANY = 92;
+    private const COMPANY = 9001;
 
     protected function setUp(): void
     {
@@ -194,9 +194,7 @@ class AccountCurrentBalanceTest extends TestCase
     // both forms use it
     // ---------------------------------------------------------------
 
-    /**
-     * @dataProvider issuanceControllerProvider
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('issuanceControllerProvider')]
     public function test_the_issuance_forms_read_the_balance_as_of_today(string $controller): void
     {
         $source = file_get_contents(app_path("Http/Controllers/{$controller}.php"));

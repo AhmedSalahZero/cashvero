@@ -3,11 +3,8 @@
 namespace Tests\Feature\Partners;
 
 use App\Models\Company;
-use App\Models\FinancialInstitution;
-use App\Models\Partner;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Support\Facades\DB;
+use Database\Factories\PartnerFactory;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
@@ -15,22 +12,14 @@ use Tests\TestCase;
 
 /**
  * Creating/updating a partner without any type flag must be rejected.
+ *
+ * The company, the user and the partner are made by the test.
  */
 class PartnerTypeRequiredTest extends TestCase
 {
-    use DatabaseTransactions;
-
     private Company $company;
 
     private User $user;
-
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
 
     protected function setUp(): void
     {
@@ -42,33 +31,8 @@ class PartnerTypeRequiredTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
-
-        $bank = FinancialInstitution::query()->whereNotNull('company_id')->first();
-        if (! $bank) {
-            $this->markTestSkipped('Development database has no financial institution.');
-        }
-
-        $this->company = Company::findOrFail($bank->company_id);
-
-        /** @var User $user */
-        $user = User::create([
-            'name' => 'Partner Type Test '.uniqid(),
-            'email' => 'partner-type-'.uniqid().'@example.test',
-            'password' => bcrypt('secret-for-tests'),
-            'company_id' => $this->company->id,
-        ]);
-        $user->givePermissionTo([
-            'customer.create',
-            'customer.update',
-        ]);
-        $user->companies()->attach($this->company->id);
-        $user->load('companies');
-        $this->user = $user;
+        $this->company = $this->makeCompany();
+        $this->user = $this->makeUser(['customer.create', 'customer.update'], $this->company);
     }
 
     public function test_store_rejects_a_partner_with_no_type_selected(): void
@@ -119,11 +83,7 @@ class PartnerTypeRequiredTest extends TestCase
 
     public function test_update_rejects_clearing_every_type(): void
     {
-        $partner = Partner::create([
-            'company_id' => $this->company->id,
-            'name' => 'Clear Types '.uniqid(),
-            'is_customer' => 1,
-        ]);
+        $partner = PartnerFactory::new()->forCompany($this->company)->customer()->create(['name' => 'Clear Types '.uniqid()]);
 
         $response = $this->actingAs($this->user)
             ->from(route('partners.edit', ['company' => $this->company->id, 'partner' => $partner->id]))

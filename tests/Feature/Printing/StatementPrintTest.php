@@ -3,9 +3,7 @@
 namespace Tests\Feature\Printing;
 
 use App\Traits\Reports\PrintsReport;
-use App\Models\Company;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
@@ -17,35 +15,12 @@ use Tests\TestCase;
  * * تقرير ، لكن إن الطباعة و التصدير بيقروا من نفس الميثود
  * * (reportPayload) — و التصدير أصلا بيشتغل على المدى كله من غير تقسيم
  * * صفحات . الاختبارات دي بتقفل على الترتيبة دي .
+ *
+ * * كل الفحوص هنا ساكنة (بتقرا الكود و الراوتس و ملفات الواجهة) ، فمفيش
+ * * أي بيانات مطلوبة من أي قاعدة.
  */
 class StatementPrintTest extends TestCase
 {
-    private const COMPANY = 148;
-
-    private ?string $originalDatabase = null;
-
-    /**
-     * * الاختبار اللي بينادي التقارير فعلا محتاج قاعدة فيها بيانات —
-     * * قاعدة الاختبارات فاضية ، فبنشاور على قاعدة التطوير و بنقرا منها
-     * * بس (مفيش أي كتابة هنا)
-     */
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        $this->originalDatabase = config('database.connections.mysql.database');
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-    }
-
-    protected function tearDown(): void
-    {
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
-
-        parent::tearDown();
-    }
-
     /**
      * كل تقرير : الكونترولر ، و اسم راوت الطباعة
      *
@@ -70,7 +45,7 @@ class StatementPrintTest extends TestCase
         ];
     }
 
-    /** @dataProvider reports */
+    #[DataProvider('reports')]
     public function test_the_report_offers_a_print_action(string $controller, string $routeName): void
     {
         $this->assertTrue(method_exists($controller, 'print'),
@@ -85,9 +60,8 @@ class StatementPrintTest extends TestCase
     /**
      * * الطباعة و التصدير لازم يقروا من نفس المصدر — لو اتفصلوا ، واحد
      * * فيهم هيفضل شغّال و التاني هيقع بهدوء من غير ما حد ياخد باله
-     *
-     * @dataProvider reports
      */
+    #[DataProvider('reports')]
     public function test_print_and_export_read_the_same_payload(string $controller): void
     {
         $source = file_get_contents((new \ReflectionClass($controller))->getFileName());
@@ -114,9 +88,8 @@ class StatementPrintTest extends TestCase
 
     /**
      * * و الصفوف بتتجاب من غير paginate — دي هي "كل الصفحات" نفسها
-     *
-     * @dataProvider reports
      */
+    #[DataProvider('reports')]
     public function test_the_payload_is_not_paginated(string $controller): void
     {
         /* التقرير اللي مالوش تصدير إكسل مالوش payload مشترك ، فالفحص
@@ -136,9 +109,8 @@ class StatementPrintTest extends TestCase
      *
      * * الاختبار اللي فوق بيحمي المصدر ، لكن `print()` نفسها ممكن تاخد
      * * أول ٢٥ صف و التقرير يفضل "غير مقسّم" على الورق و ناقص فعليا
-     *
-     * @dataProvider reports
      */
+    #[DataProvider('reports')]
     public function test_print_does_not_trim_the_rows(string $controller): void
     {
         $body = $this->methodBody($controller, 'print');
@@ -150,7 +122,7 @@ class StatementPrintTest extends TestCase
     }
 
     /** * و الصفحة بتبعت رابط الطباعة للواجهة */
-    /** @dataProvider reports */
+    #[DataProvider('reports')]
     public function test_the_result_page_is_given_a_print_url(string $controller): void
     {
         $source = file_get_contents((new \ReflectionClass($controller))->getFileName());
@@ -160,7 +132,7 @@ class StatementPrintTest extends TestCase
     }
 
     /** * الكونترولر بيستعمل التريت المشترك ، فالشكل واحد في كل التقارير */
-    /** @dataProvider reports */
+    #[DataProvider('reports')]
     public function test_the_controller_uses_the_shared_print_sheet(string $controller): void
     {
         $this->assertContains(PrintsReport::class, class_uses_recursive($controller),
@@ -291,9 +263,8 @@ class StatementPrintTest extends TestCase
      * * ($filters ، $endingBalanceTotal ...) . الكود كان بيعدّي الـ lint ،
      * * و كل الاختبارات الساكنة عدّت خضرا ، و التصدير كان بيقع وقت
      * * التشغيل بس — و ده اللي حصل فعلا .
-     *
-     * @dataProvider reports
      */
+    #[DataProvider('reports')]
     public function test_no_method_reads_a_variable_it_never_defines(string $controller): void
     {
         foreach (['print', 'exportExcel', 'reportPayload'] as $method) {

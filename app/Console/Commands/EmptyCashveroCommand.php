@@ -10,7 +10,7 @@ use Schema;
 class EmptyCashveroCommand extends Command
 {
    
-    protected $signature = 'empty:cashvero';
+    protected $signature = 'empty:cashvero {--force : Do not ask for confirmation}';
 
    
     protected $description = 'Empty CashVero';
@@ -27,6 +27,14 @@ class EmptyCashveroCommand extends Command
 
     public function handle()
     {
+		// Deletes the data of EVERY company except 41 — on a production server one typo away from
+		// losing everything. Never without an explicit yes.
+		if (! $this->option('force') && ! $this->confirm('Delete the data of EVERY company except company 41? This cannot be undone.', false)) {
+			$this->warn('Nothing was deleted.');
+
+			return self::FAILURE;
+		}
+
 		$cashVeroTables = getCashVeroTableNames();
 		
 		foreach($cashVeroTables as $tableName){

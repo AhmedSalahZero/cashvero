@@ -2,12 +2,13 @@
 
 namespace Tests\Feature\Copy;
 
+use App\Models\AccountType;
 use App\Models\BuyOrSellCurrency;
 use App\Models\Company;
 use App\Models\InternalMoneyTransfer;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use ReflectionMethod;
+use Tests\Concerns\MakesBanks;
 use Tests\TestCase;
 
 /**
@@ -17,44 +18,70 @@ use Tests\TestCase;
  * * الحاجة المهمة هنا : النسخة ما تحملش هوية الصف الأصلي و لا الأرقام
  * * اللي المفروض تتكتب من جديد — و إلا الحفظ هيبقى تعديل للأصل بدل
  * * إنشاء ، أو هيقع على رقم شيك مكرر
+ *
+ * * التحويلة و عملية الشراء/البيع معمولين في كل تست لشركة معمولة في التست ،
+ * * بكل الحقول اللي النسخ المفروض يفضّيها مليانة
  */
 class CopyActionsTest extends TestCase
 {
-    private ?string $originalDatabase = null;
+    use MakesBanks;
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        $this->originalDatabase = config('database.connections.mysql.database');
-
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-    }
-
-    protected function tearDown(): void
-    {
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
-
-        parent::tearDown();
-    }
+    private ?Company $company = null;
 
     private function company(): Company
     {
-        $company = Company::first();
+        return $this->company ??= $this->makeCompany();
+    }
 
-        if (! $company) {
-            $this->markTestSkipped('No company on file.');
-        }
+    /** * تحويلة بنك لبنك ، برقم شيك و تاريخ ، بين حسابين جاريين للشركة */
+    private function internalTransfer(): InternalMoneyTransfer
+    {
+        $company = $this->company();
+        $from = $this->currentAccount($this->bank($company), 'EGP');
+        $to = $this->currentAccount($this->bank($company), 'EGP');
+        $currentAccount = $this->accountTypeId(AccountType::CURRENT_ACCOUNT);
 
-        return $company;
+        return InternalMoneyTransfer::create([
+            'company_id' => $company->id,
+            'type' => InternalMoneyTransfer::BANK_TO_BANK,
+            'transfer_date' => '2026-03-15',
+            'transfer_days' => 1,
+            'amount' => 1500.50,
+            'currency' => 'EGP',
+            'cheque_number' => 'COPY-CHQ-'.uniqid(),
+            'from_bank_id' => $from->financial_institution_id,
+            'from_account_type_id' => $currentAccount,
+            'from_account_number' => $from->account_number,
+            'to_bank_id' => $to->financial_institution_id,
+            'to_account_type_id' => $currentAccount,
+            'to_account_number' => $to->account_number,
+        ])->fresh();
+    }
+
+    /** * بيع دولار و شراء جنيه بين حسابين للشركة ، بتاريخ و سعر صرف */
+    private function currencyExchange(): BuyOrSellCurrency
+    {
+        $company = $this->company();
+        $from = $this->currentAccount($this->bank($company), 'USD');
+        $to = $this->currentAccount($this->bank($company), 'EGP');
+        $currentAccount = $this->accountTypeId(AccountType::CURRENT_ACCOUNT);
+
+        return BuyOrSellCurrency::create([
+            'company_id' => $company->id,
+            'type' => BuyOrSellCurrency::BANK_TO_BANK,
+            'transaction_date' => '2026-03-16',
+            'currency_to_sell' => 'USD',
+            'currency_to_buy' => 'EGP',
+            'currency_to_sell_amount' => 100,
+            'exchange_rate' => 48.25,
+            'currency_to_buy_amount' => 4825,
+            'from_bank_id' => $from->financial_institution_id,
+            'from_account_type_id' => $currentAccount,
+            'from_account_number' => $from->account_number,
+            'to_bank_id' => $to->financial_institution_id,
+            'to_account_type_id' => $currentAccount,
+            'to_account_number' => $to->account_number,
+        ])->fresh();
     }
 
     private function props(string $controllerClass, array $args): array
@@ -70,13 +97,8 @@ class CopyActionsTest extends TestCase
 
     public function test_copying_an_internal_transfer_opens_a_create_form(): void
     {
-        $transfer = InternalMoneyTransfer::first();
-
-        if (! $transfer) {
-            $this->markTestSkipped('No internal money transfer on file.');
-        }
-
-        $company = Company::find($transfer->company_id) ?: $this->company();
+        $transfer = $this->internalTransfer();
+        $company = $this->company();
         $class = \App\Http\Controllers\InternalMoneyTransferController::class;
 
         $edit = $this->props($class, [$company, $transfer->getType(), $transfer, false]);
@@ -90,17 +112,13 @@ class CopyActionsTest extends TestCase
 
     public function test_a_copied_transfer_drops_its_identity_and_cheque_number(): void
     {
-        $transfer = InternalMoneyTransfer::first();
-
-        if (! $transfer) {
-            $this->markTestSkipped('No internal money transfer on file.');
-        }
-
-        $company = Company::find($transfer->company_id) ?: $this->company();
+        $transfer = $this->internalTransfer();
+        $company = $this->company();
         $copy = $this->props(\App\Http\Controllers\InternalMoneyTransferController::class,
             [$company, $transfer->getType(), $transfer, true]);
 
         foreach (['id', 'cheque_number', 'transfer_date'] as $field) {
+            $this->assertNotNull($transfer->{$field}, 'الأصل لازم يكون فيه '.$field.' عشان الفحص يبقى له معنى');
             $this->assertNull($copy['model'][$field], $field.' ما ينفعش يتنسخ');
         }
 
@@ -113,13 +131,8 @@ class CopyActionsTest extends TestCase
 
     public function test_copying_a_currency_exchange_opens_a_create_form(): void
     {
-        $row = BuyOrSellCurrency::first();
-
-        if (! $row) {
-            $this->markTestSkipped('No buy/sell currency row on file.');
-        }
-
-        $company = Company::find($row->company_id) ?: $this->company();
+        $row = $this->currencyExchange();
+        $company = $this->company();
         $class = \App\Http\Controllers\BuyOrSellCurrenciesController::class;
 
         $edit = $this->props($class, [$company, $row, false]);
@@ -132,13 +145,8 @@ class CopyActionsTest extends TestCase
 
     public function test_a_copied_currency_exchange_drops_its_identity_and_date(): void
     {
-        $row = BuyOrSellCurrency::first();
-
-        if (! $row) {
-            $this->markTestSkipped('No buy/sell currency row on file.');
-        }
-
-        $company = Company::find($row->company_id) ?: $this->company();
+        $row = $this->currencyExchange();
+        $company = $this->company();
         $copy = $this->props(\App\Http\Controllers\BuyOrSellCurrenciesController::class, [$company, $row, true]);
 
         $this->assertNull($copy['model']['id']);
@@ -151,13 +159,8 @@ class CopyActionsTest extends TestCase
     /** * فتح فورمة تعديل عادية ما تتأثرش بإضافة النسخ */
     public function test_editing_still_carries_everything(): void
     {
-        $transfer = InternalMoneyTransfer::first();
-
-        if (! $transfer) {
-            $this->markTestSkipped('No internal money transfer on file.');
-        }
-
-        $company = Company::find($transfer->company_id) ?: $this->company();
+        $transfer = $this->internalTransfer();
+        $company = $this->company();
         $edit = $this->props(\App\Http\Controllers\InternalMoneyTransferController::class,
             [$company, $transfer->getType(), $transfer, false]);
 
@@ -172,13 +175,8 @@ class CopyActionsTest extends TestCase
      */
     public function test_editing_a_currency_exchange_still_carries_everything(): void
     {
-        $row = BuyOrSellCurrency::first();
-
-        if (! $row) {
-            $this->markTestSkipped('No buy/sell currency row on file.');
-        }
-
-        $company = Company::find($row->company_id) ?: $this->company();
+        $row = $this->currencyExchange();
+        $company = $this->company();
         $edit = $this->props(\App\Http\Controllers\BuyOrSellCurrenciesController::class, [$company, $row, false]);
 
         $this->assertSame($row->id, $edit['model']['id'], 'التعديل لازم يعرف هوية الصف');

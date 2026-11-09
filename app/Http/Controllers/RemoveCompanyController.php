@@ -70,7 +70,8 @@ class RemoveCompanyController extends Controller
         $company_id = $request->get('company_id') ;
      
         $company = Company::where('id',$company_id)->firstOrFail();
-		Artisan::call('delete:all',['company_id'=>$company_id]);
+		// The screen has already asked the super admin to confirm.
+		Artisan::call('delete:all',['company_id'=>$company_id, '--force'=>true]);
         $company->delete();
 
         $redirect = redirect()->route('companySection.index')

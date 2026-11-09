@@ -6,7 +6,6 @@ use App\Models\Company;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -23,13 +22,11 @@ use Tests\TestCase;
  * *   ٢ - ما ينفعش تفتح دردشة مع حد في شركة تانية . قايمة جهات الاتصال
  * *       في index() كانت بتخفيهم بس ، و دي واجهة مش حماية .
  *
- * * كل حاجة بتتعمل جوه transaction بترجع في الآخر ، فالقاعدة بتفضل زي
- * * ما هي بالظبط .
+ * * الشركات و المستخدمين بتوع الاختبار نفسه ، و كل حاجة بتتعمل جوه
+ * * transaction بتاعة TestCase بترجع في الآخر .
  */
 class MessagingTest extends TestCase
 {
-    private ?string $originalDatabase = null;
-
     private Company $companyA;
     private Company $companyB;
     private User $alice;   // شركة أ
@@ -40,20 +37,6 @@ class MessagingTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-
-        $this->originalDatabase = config('database.connections.mysql.database');
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-
-        if (! \Illuminate\Support\Facades\Schema::hasTable('conversations')) {
-            $this->markTestSkipped('The messaging tables are not migrated on this database.');
-        }
 
         /**
          * * الميدلويرين دول بيتشالوا لإنهم مش موجودين في المسار الحقيقي
@@ -86,32 +69,18 @@ class MessagingTest extends TestCase
             \Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect::class,
         ]);
 
-        DB::beginTransaction();
+        $this->companyA = $this->localCompany('Messaging Co. A');
+        $this->companyB = $this->localCompany('Messaging Co. B');
 
-        $this->companyA = $this->makeCompany('Messaging Co. A');
-        $this->companyB = $this->makeCompany('Messaging Co. B');
-
-        $this->alice = $this->makeUser('alice', User::MANAGER, $this->companyA);
-        $this->bob   = $this->makeUser('bob',   User::USER,    $this->companyA);
-        $this->carol = $this->makeUser('carol', User::MANAGER, $this->companyB);
-        $this->super = $this->makeUser('super', User::SUPER_ADMIN, null);
-    }
-
-    protected function tearDown(): void
-    {
-        if (DB::transactionLevel() > 0) {
-            DB::rollBack();
-        }
-
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
-
-        parent::tearDown();
+        $this->alice = $this->localUser('alice', User::MANAGER, $this->companyA);
+        $this->bob   = $this->localUser('bob',   User::USER,    $this->companyA);
+        $this->carol = $this->localUser('carol', User::MANAGER, $this->companyB);
+        $this->super = $this->localUser('super', User::SUPER_ADMIN, null);
     }
 
     // ── بناء الحالة ───────────────────────────────────────────────
 
-    private function makeCompany(string $name): Company
+    private function localCompany(string $name): Company
     {
         return Company::create(['name' => $name.' '.bin2hex(random_bytes(3))]);
     }
@@ -121,7 +90,7 @@ class MessagingTest extends TestCase
      * * forgetCachedPermissions ضروري : من غيره أول اختبار بيسخّن الكاش
      * * و اللي بعده بيقرا أدوار مستخدم مختلف .
      */
-    private function makeUser(string $handle, string $role, ?Company $company): User
+    private function localUser(string $handle, string $role, ?Company $company): User
     {
         $user = User::create([
             'name'     => ucfirst($handle),
@@ -202,7 +171,7 @@ class MessagingTest extends TestCase
          * * لو الحارس اتكتب بـ diff (تطابق كامل) بدل intersect ، الحالة
          * * دي بتترفض غلط ، و ده اللي الاختبار بيمسكه .
          */
-        $companyC = $this->makeCompany('Messaging Co. C');
+        $companyC = $this->localCompany('Messaging Co. C');
 
         $this->alice->companies()->attach($companyC->id);
         $this->carol->companies()->attach($this->companyA->id);

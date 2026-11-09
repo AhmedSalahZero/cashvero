@@ -21,17 +21,16 @@ return [
     | What to do when a route carries a name that appears in neither
     | RoutePermissionMap::MAP nor its PUBLIC_ROUTES list.
     |
-    |   'allow'  → let it through (fail-open) and log it. Chosen for this
-    |              rollout so a route this map missed can never take a
-    |              working page offline.
-    |   'deny'   → 403 (fail-closed). Switch to this once the log has
-    |              been quiet for a full release cycle.
+    |   'deny'   → 403 (fail-closed). The default: a forgotten rule shows
+    |              "403" instead of quietly working for everyone.
+    |   'allow'  → let it through (fail-open) and log it. Only as a
+    |              temporary emergency switch (PERMISSIONS_UNMAPPED=allow).
     |
     | Either way tests/Feature/Permissions/RouteCoverageTest.php fails
     | the build when anything is unmapped, so this is a runtime safety
     | net rather than a licence to skip the map.
     */
-    'unmapped' => env('PERMISSIONS_UNMAPPED', 'allow'),
+    'unmapped' => env('PERMISSIONS_UNMAPPED', 'deny'),
 
     /*
     |--------------------------------------------------------------------------

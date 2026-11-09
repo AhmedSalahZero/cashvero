@@ -8,545 +8,311 @@ use Illuminate\Support\Facades\DB;
 /**
  * `php artisan cashvero:prepare-test-db`
  * ==================================================================
- * Builds the database that `php artisan test` runs against.
+ * Builds the databases `php artisan test` runs against, from nothing.
  *
- * WHY THIS EXISTS
- * The test suite is pointed at a database called `cashvero_test`
- * (phpunit.xml). Creating an EMPTY database in MySQL is not enough —
- * it also needs every table and the starting reference data, otherwise
- * hundreds of tests fail with "Table 'cashvero_test.companies' doesn't
- * exist". This command does that in one step: it builds the tables from
- * the migrations and fills in the starting data (companies, roles,
- * permissions, banks, currencies...) from the seeders.
+ * WHAT IT BUILDS
+ *   cashvero_test          every table (migrations) + every trigger, procedure and event
+ *                          (app/Triggers/Cashvero) + the fixed reference lists the app needs
+ *                          (TestReferenceSeeder: account types, currencies, sections, import
+ *                          fields, permissions/roles). NO company, user, bank or movement —
+ *                          every test makes the records it needs itself.
+ *   cashvero_test_source   the same tables, empty of business data, for the tests of the
+ *                          "import a company from another system" feature.
+ *   cashvero_test_scratch  an empty database for the few tests that build their own small
+ *                          tables (see tests/Support/UsesFixtureDatabase.php).
+ *   cashvero_tester        the MySQL user the tests connect as. It can read and write those
+ *                          three databases and NOTHING else, so no test can ever read or change
+ *                          your real database, even by mistake.
+ *
+ * NOTHING IS COPIED FROM ANY OTHER DATABASE. The build only reads files that are in the project.
  *
  * SAFETY
- * The database name is fixed in this file. The command can only ever
- * wipe and rebuild `cashvero_test`; it cannot be pointed at your real
- * `cashvero` database, whatever is written in your .env file.
+ *   - The database names are fixed in this file; it cannot be pointed at another database.
+ *   - It refuses to run in production, or against a MySQL server that is not on this machine.
+ *   - It connects with the account in your .env file (it needs to create databases, triggers
+ *     and the test user); the tests themselves never use that account.
  *
- * Safe to run as often as you like. Run it:
- *   • once, before the first `php artisan test`
- *   • again after you add a new migration (a new database change)
- *   • any time the test database looks broken
+ * WHEN TO RUN IT
+ *   You normally don't: tests/bootstrap.php runs it with --if-stale before every test run, which
+ *   rebuilds only when a migration, a trigger file or the reference data changed. Run it by hand
+ *   (without --if-stale) any time the test database looks broken.
  */
 class PrepareTestDatabaseCommand extends Command
 {
-    /** The only database this command is allowed to touch. */
-    private const TEST_DATABASE = 'cashvero_test';
+    /** The only databases this command is allowed to touch. */
+    public const TEST_DATABASE = 'cashvero_test';
 
-    protected $signature = 'cashvero:prepare-test-db {--from= : Name of your development database to copy the data from (for example --from=cashvero)}';
+    public const SOURCE_DATABASE = 'cashvero_test_source';
 
-    protected $description = 'Wipe and rebuild the cashvero_test database (tables + data + triggers) so php artisan test can run';
+    public const SCRATCH_DATABASE = 'cashvero_test_scratch';
+
+    /**
+     * The account the tests connect as (phpunit.xml). A local account that can only reach the
+     * three test databases, so its password protects nothing and lives in the project on purpose.
+     */
+    public const TEST_USER = 'cashvero_tester';
+
+    public const TEST_PASSWORD = 'cashvero_tester_local_only';
+
+    protected $signature = 'cashvero:prepare-test-db
+                            {--if-stale : Rebuild only when migrations, triggers or reference data changed since the last build}';
+
+    protected $description = 'Build the cashvero_test databases (tables, triggers, reference data) and the test-only MySQL user';
 
     public function handle(): int
     {
-        $db = self::TEST_DATABASE;
-
-        $this->info("Rebuilding the test database '{$db}' (your real database is not touched)...");
-
-        // 1. Drop and re-create the empty database. Dropping the whole database (not just the
-        //    tables) also removes the stored procedures the migrations create, which a plain
-        //    "migrate:fresh" would leave behind and then fail on the second run.
-        config(['database.connections.mysql.database' => null]);
-        DB::purge('mysql');
-
-        try {
-            // Written out in full (no variables) on purpose: the name is fixed, and the security
-            // scanner treats any SQL assembled from variables as something to review.
-            DB::statement('DROP DATABASE IF EXISTS `cashvero_test`');
-            DB::statement('CREATE DATABASE `cashvero_test` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
-        } catch (\Throwable $e) {
-            $this->error('Could not create the database: '.$e->getMessage());
-            $this->line('Check that MySQL is running and that DB_USERNAME / DB_PASSWORD in your .env file can create databases.');
-
+        if (! $this->safeToRun()) {
             return self::FAILURE;
         }
 
-        // 2. Point the connection at it. From here on, everything in this run uses cashvero_test.
-        config(['database.connections.mysql.database' => $db]);
+        $fingerprint = $this->fingerprint();
+
+        if ($this->option('if-stale') && $this->builtFingerprint() === $fingerprint) {
+            $leftovers = $this->leftovers();
+
+            if ($leftovers === []) {
+                $this->ensureTestUser();
+                $this->line('Test database is up to date.');
+
+                return self::SUCCESS;
+            }
+
+            // Every test runs in a rolled-back transaction, so a company or user still here was
+            // committed by a test that escaped it. Start from a clean database rather than let the
+            // next run see it.
+            $this->warn('The test database still holds records a previous run left behind ('.implode(', ', $leftovers).'); rebuilding it clean.');
+        }
+
+        $this->info("Building the test database '".self::TEST_DATABASE."' from the project files (no other database is read)...");
+
+        if (! $this->recreateDatabases()) {
+            return self::FAILURE;
+        }
+
+        config(['database.connections.mysql.database' => self::TEST_DATABASE]);
         DB::purge('mysql');
 
-        // 3. Build the tables, then fill in the starting data.
-        $status = $this->call('migrate', ['--database' => 'mysql', '--force' => true]);
-
-        if ($status !== self::SUCCESS) {
+        if ($this->call('migrate', ['--database' => 'mysql', '--force' => true]) !== self::SUCCESS) {
             $this->error('Building the tables failed — see the message above.');
 
             return self::FAILURE;
         }
 
-        $source = (string) $this->option('from');
-
-        if ($source !== '') {
-            // Copy the data of your development database, so the tests that look for real
-            // companies, banks and invoices find them (otherwise they are "skipped").
-            if (! $this->copyDataFrom($source)) {
-                return self::FAILURE;
-            }
-
-            // Permissions are added (never removed) so roles/permissions introduced after your
-            // development database was last updated exist here too.
-            $this->call('db:seed', ['--class' => 'PermissionSeeder', '--database' => 'mysql', '--force' => true]);
-        } else {
-            $status = $this->call('db:seed', ['--database' => 'mysql', '--force' => true]);
-
-            if ($status !== self::SUCCESS) {
-                $this->error('Filling in the starting data failed — see the message above.');
-
-                return self::FAILURE;
-            }
+        if (! $this->installTriggers()) {
+            return self::FAILURE;
         }
 
-        // 4. Production also has database triggers (they work out invoice balances, statuses,
-        //    statement running balances...). They are kept as .sql files and installed by hand,
-        //    not by migrations, so a rebuilt database does not have them until we load them here.
-        $this->installTriggers();
+        if ($this->call('db:seed', ['--class' => \Database\Seeders\Testing\TestReferenceSeeder::class, '--database' => 'mysql', '--force' => true]) !== self::SUCCESS) {
+            $this->error('Filling in the reference data failed — see the message above.');
 
-        // 5. Switch the CashVero system on for the seeded companies. Without this every page
-        //    answers 403, because a company must be subscribed to a system to open its screens.
-        $this->enableCashVeroForCompanies();
+            return self::FAILURE;
+        }
 
-        // 6. A few tests read from a second ("source") database, as the Odoo import does in production.
         $this->buildSourceTwin();
+        $this->ensureTestUser();
 
-        // 7. Some tests need records your data may not contain yet (a factoring transaction, a
-        //    down-payment cheque, a second company...). Without them those tests are "skipped".
-        $this->addSampleData();
+        DB::statement('CREATE TABLE `test_schema_fingerprint` (`fingerprint` char(64) NOT NULL, `built_at` datetime NOT NULL)');
+        DB::table('test_schema_fingerprint')->insert(['fingerprint' => $fingerprint, 'built_at' => now()]);
 
         $this->newLine();
-        $this->info("Done. '{$db}' is ready — now run: php artisan test");
+        $this->info('Done. The test databases are ready — now run: php artisan test');
 
         return self::SUCCESS;
     }
 
-    /**
-     * Load every app/Triggers/Cashvero/*.sql file. One statement that fails is reported and skipped,
-     * the rest of the file still loads (a few of the files have an old quirk in them).
-     */
-    private function installTriggers(): void
+    /* ───────────────────────── safety ───────────────────────── */
+
+    private function safeToRun(): bool
     {
-        $files = glob(app_path('Triggers/Cashvero/*.sql')) ?: [];
-        sort($files);
-
-        $loaded = 0;
-        $problems = [];
-
-        foreach ($files as $file) {
-            // Safe to run unprepared: these are the project's own fixed .sql files, never user input.
-            foreach ($this->statementsIn((string) file_get_contents($file)) as $statement) {
-                try {
-                    DB::unprepared($statement);
-                    $loaded++;
-                } catch (\Throwable $e) {
-                    $problems[basename($file)] = ($problems[basename($file)] ?? 0) + 1;
-                }
-            }
-        }
-
-        $this->info("Database triggers and procedures: {$loaded} statements loaded from ".count($files).' files.');
-
-        foreach ($problems as $name => $count) {
-            $this->warn("  {$name}: {$count} statement(s) could not be loaded (already like that in the file; not blocking)");
-        }
-    }
-
-    private function enableCashVeroForCompanies(): void
-    {
-        $now = now();
-
-        foreach (DB::table('companies')->pluck('id') as $companyId) {
-            DB::table('company_systems')->updateOrInsert(
-                ['company_id' => $companyId, 'system_name' => CASH_VERO],
-                ['created_at' => $now, 'updated_at' => $now]
-            );
-        }
-
-        $this->info('CashVero system switched on for '.DB::table('companies')->count().' companies.');
-    }
-
-    /**
-     * Copy every table's rows from the development database into cashvero_test. Only columns that exist
-     * on both sides are copied, so a small difference between the two databases cannot stop it.
-     * Done BEFORE the triggers are installed, so the stored numbers are copied exactly as they are.
-     */
-    private function copyDataFrom(string $source): bool
-    {
-        if (! preg_match('/^[A-Za-z0-9_]+$/', $source) || $source === self::TEST_DATABASE) {
-            $this->error("'{$source}' is not a valid development database name.");
+        if (app()->environment('production')) {
+            $this->error('Refusing to run in production.');
 
             return false;
         }
 
-        if (! DB::table('information_schema.SCHEMATA')->where('SCHEMA_NAME', $source)->exists()) {
-            $this->error("The database '{$source}' does not exist on this MySQL server.");
+        $host = (string) config('database.connections.mysql.host');
+
+        if (! in_array($host, ['127.0.0.1', 'localhost', '::1', ''], true)) {
+            $this->error("Refusing to run: your .env points at the MySQL server '{$host}', which is not this machine. The test databases are only ever built locally.");
 
             return false;
-        }
-
-        $this->info("Copying the data of '{$source}' into '".self::TEST_DATABASE."' (the source is only read)...");
-
-        DB::statement('SET SESSION foreign_key_checks = 0');
-        DB::statement("SET SESSION sql_mode = ''");
-
-        $tables = DB::table('information_schema.TABLES')
-            ->where('TABLE_SCHEMA', self::TEST_DATABASE)->where('TABLE_TYPE', 'BASE TABLE')
-            ->pluck('TABLE_NAME');
-
-        $copied = 0;
-        $problems = [];
-
-        foreach ($tables as $table) {
-            if ($table === 'migrations') {
-                continue;
-            }
-
-            $mine = $this->columnsOf(self::TEST_DATABASE, $table);
-            $theirs = $this->columnsOf($source, $table);
-            $common = array_values(array_intersect($mine, $theirs));
-
-            if ($common === []) {
-                continue;
-            }
-
-            $list = implode(', ', array_map(fn ($c) => '`'.$c.'`', $common));
-
-            try {
-                // Rows the migrations already put there would clash with the copied ones (same ids).
-                // Only cleared when the development table really has rows to give.
-                if (DB::table($source.'.'.$table)->exists()) {
-                    DB::table($table)->delete();
-                }
-
-                DB::statement('INSERT INTO `'.self::TEST_DATABASE.'`.`'.$table.'` ('.$list.') SELECT '.$list.' FROM `'.$source.'`.`'.$table.'`');
-                $copied++;
-            } catch (\Throwable $e) {
-                $problems[] = $table.': '.substr($e->getMessage(), 0, 160);
-            }
-        }
-
-        DB::statement('SET SESSION foreign_key_checks = 1');
-
-        $this->info("Copied {$copied} tables.");
-
-        foreach ($problems as $message) {
-            $this->warn('  could not copy '.$message);
         }
 
         return true;
     }
 
-    /** A full copy of cashvero_test under another name, used by the tests that read a "source" database. */
-    private function buildSourceTwin(): void
+    /* ───────────────────────── staleness ───────────────────────── */
+
+    /** One hash over every file the build reads. Any change to any of them means "rebuild". */
+    private function fingerprint(): string
+    {
+        $files = array_merge(
+            glob(database_path('migrations/*.php')) ?: [],
+            glob(app_path('Triggers/Cashvero/*.sql')) ?: [],
+            glob(database_path('seeders/Testing/*.php')) ?: [],
+            [
+                database_path('seeders/data/cash_vero_general.php'),
+                database_path('seeders/data/tables_fields.php'),
+                database_path('seeders/PermissionSeeder.php'),
+                app_path('Support/Permissions/PermissionRegistry.php'),
+                __FILE__,
+            ],
+        );
+        sort($files);
+
+        $context = hash_init('sha256');
+        foreach ($files as $file) {
+            hash_update($context, basename($file)."\0".hash_file('sha256', $file)."\0");
+        }
+
+        return hash_final($context);
+    }
+
+    private function builtFingerprint(): ?string
     {
         try {
-            DB::statement('DROP DATABASE IF EXISTS `cashvero_test_source`');
-            DB::statement('CREATE DATABASE `cashvero_test_source` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
-            DB::statement('SET SESSION foreign_key_checks = 0');
-            DB::statement("SET SESSION sql_mode = ''");
+            $row = DB::selectOne('SELECT `fingerprint` FROM `'.self::TEST_DATABASE.'`.`test_schema_fingerprint` LIMIT 1');
 
-            $count = 0;
-
-            foreach (DB::table('information_schema.TABLES')->where('TABLE_SCHEMA', self::TEST_DATABASE)->where('TABLE_TYPE', 'BASE TABLE')->pluck('TABLE_NAME') as $table) {
-                DB::statement('CREATE TABLE `cashvero_test_source`.`'.$table.'` LIKE `'.self::TEST_DATABASE.'`.`'.$table.'`');
-                $columns = $this->columnsOf(self::TEST_DATABASE, $table);
-                $list = implode(', ', array_map(fn ($c) => '`'.$c.'`', $columns));
-                DB::statement('INSERT INTO `cashvero_test_source`.`'.$table.'` ('.$list.') SELECT '.$list.' FROM `'.self::TEST_DATABASE.'`.`'.$table.'`');
-                $count++;
-            }
-
-            DB::statement('SET SESSION foreign_key_checks = 1');
-            $this->info("Source database 'cashvero_test_source' built ({$count} tables).");
-        } catch (\Throwable $e) {
-            $this->warn('Could not build the source database (3 import tests will be skipped): '.substr($e->getMessage(), 0, 160));
+            return $row->fingerprint ?? null;
+        } catch (\Throwable) {
+            return null;
         }
     }
 
     /**
-     * Adds the few records the tests look for and that a database may not contain. Every block is
-     * independent: if one cannot be added it says so and the others still run.
-     * Nothing here touches your real database.
+     * A freshly built test database has no company and no user (only reference lists), so any
+     * found here was left by a test.
+     *
+     * @return list<string>
      */
-    private function addSampleData(): void
+    private function leftovers(): array
     {
-        DB::statement('SET SESSION foreign_key_checks = 0');
-        DB::statement("SET SESSION sql_mode = ''");
+        $found = [];
 
-        $ids = DB::table('companies')->orderBy('id')->pluck('id')->all();
-        $main = in_array(148, $ids) ? 148 : ($ids[0] ?? null);
-        $other = null;
+        foreach (['companies', 'users'] as $table) {
+            $count = (int) DB::selectOne('SELECT COUNT(*) AS c FROM `'.self::TEST_DATABASE.'`.`'.$table.'`')->c;
 
-        foreach ($ids as $id) {
-            if ($id !== $main) {
-                $other = $id;
-                break;
+            if ($count > 0) {
+                $found[] = "{$count} {$table}";
             }
         }
 
-        if ($main === null) {
-            $this->warn('No company found — sample records not added.');
-
-            return;
-        }
-
-        $this->info("Adding sample records (main company {$main}, second company ".($other ?? 'none').')...');
-
-        $blocks = [
-            'invoice deductions' => fn () => $this->sampleDeduction($main),
-            'supplier down-payment cheque' => fn () => $this->sampleDownPaymentCheque($main),
-            'cash expense cheque' => fn () => $this->sampleCashExpenseCheque($main),
-            'LGs for a second page' => fn () => $this->sampleManyLgs($main).($other !== null ? ' / second company: '.$this->sampleManyLgs($other) : ''),
-            'factoring transactions' => fn () => $this->sampleFactoring($main, $other),
-            'fields shown on the invoice forms' => fn () => $this->sampleManagedFields($main),
-        ];
-
-        if ($other !== null) {
-            $blocks['records in the second company'] = fn () => $this->sampleOtherCompany($main, $other);
-        }
-
-        foreach ($blocks as $label => $run) {
-            try {
-                $this->line('  ✓ '.$label.': '.$run());
-            } catch (\Throwable $e) {
-                $this->warn('  ✗ '.$label.' not added: '.substr($e->getMessage(), 0, 200));
-            }
-        }
-
-        DB::statement('SET SESSION foreign_key_checks = 1');
+        return $found;
     }
 
-    /** Makes sure the company's invoice forms show the sales person / business sector / business unit fields. */
-    private function sampleManagedFields(int $company): string
+    /* ───────────────────────── build ───────────────────────── */
+
+    /**
+     * Dropping the whole databases (not just the tables) also removes the stored procedures the
+     * migrations create, which a plain "migrate:fresh" would leave behind and then fail on.
+     * Written out in full on purpose: the names are fixed.
+     */
+    private function recreateDatabases(): bool
     {
-        $names = ['sales_person' => 'Sales Person', 'business_sector' => 'Business Sector', 'business_unit' => 'Business Unit'];
+        config(['database.connections.mysql.database' => null]);
+        DB::purge('mysql');
 
-        foreach (['CustomerInvoice', 'SupplierInvoice'] as $model) {
-            foreach ($names as $field => $label) {
-                if (! DB::table('tables_fields')->where('model_name', $model)->where('field_name', $field)->exists()) {
-                    $this->insertRow('tables_fields', ['model_name' => $model, 'field_name' => $field, 'view_name' => $label]);
-                }
-            }
+        try {
+            DB::statement('DROP DATABASE IF EXISTS `cashvero_test`');
+            DB::statement('CREATE DATABASE `cashvero_test` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
+            DB::statement('DROP DATABASE IF EXISTS `cashvero_test_source`');
+            DB::statement('CREATE DATABASE `cashvero_test_source` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
+            DB::statement('DROP DATABASE IF EXISTS `cashvero_test_scratch`');
+            DB::statement('CREATE DATABASE `cashvero_test_scratch` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
+        } catch (\Throwable $e) {
+            $this->error('Could not create the test databases: '.$e->getMessage());
+            $this->line('Check that MySQL is running and that DB_USERNAME / DB_PASSWORD in your .env file can create databases.');
 
-            $row = \App\Models\CustomizedFieldsExportation::where('model_name', $model)->where('company_id', $company)->first();
-            $fields = array_values(array_unique(array_merge($row ? (array) $row->fields : [], array_keys($names))));
-
-            if ($row) {
-                $row->fields = $fields;
-                $row->save();
-            } else {
-                \App\Models\CustomizedFieldsExportation::create(['model_name' => $model, 'company_id' => $company, 'fields' => $fields]);
-            }
+            return false;
         }
 
-        return 'selected for both invoice types';
+        return true;
     }
 
-    private function sampleDeduction(int $company): string
+    /**
+     * Load every app/Triggers/Cashvero/*.sql file, then check that every trigger those files
+     * define really exists. A statement that fails is reported; a missing trigger stops the build,
+     * because the tests of statements, invoices and loans depend on them.
+     */
+    private function installTriggers(): bool
     {
-        $invoice = DB::table('customer_invoices')->where('company_id', $company)->where('net_balance', '>=', 20)
-            ->whereNotExists(fn ($q) => $q->select(DB::raw('1'))->from('invoice_deductions')->whereColumn('invoice_deductions.invoice_id', 'customer_invoices.id')->where('invoice_type', 'CustomerInvoice'))
-            ->orderByDesc('net_balance')->first();
+        $files = glob(app_path('Triggers/Cashvero/*.sql')) ?: [];
+        sort($files);
 
-        if (! $invoice) {
-            $id = $this->insertRow('customer_invoices', ['company_id' => $company, 'invoice_amount' => 1000, 'net_balance' => 1000, 'invoice_date' => now()->format('Y-m-d'), 'invoice_number' => 'SAMPLE-DED-1']);
-            $invoice = DB::table('customer_invoices')->find($id);
-        }
+        $loaded = 0;
+        $expected = [];
+        $problems = [];
 
-        $deduction = DB::table('deductions')->where('company_id', $company)->first();
-        $deductionId = $deduction->id ?? $this->insertRow('deductions', ['name' => 'Sample deduction', 'company_id' => $company]);
-        $amount = round((float) $invoice->net_balance * 0.75, 2);
-
-        $this->insertRow('invoice_deductions', ['invoice_id' => $invoice->id, 'invoice_type' => 'CustomerInvoice', 'deduction_id' => $deductionId, 'amount' => $amount, 'date' => now()->format('Y-m-d'), 'company_id' => $company]);
-
-        // If the trigger is not installed the stored balance must be brought in line by hand.
-        $fresh = DB::table('customer_invoices')->find($invoice->id);
-
-        if ((float) $fresh->total_deductions == 0.0) {
-            DB::table('customer_invoices')->where('id', $invoice->id)->update(['total_deductions' => $amount, 'net_balance' => round((float) $invoice->net_balance - $amount, 2)]);
-        }
-
-        return "invoice {$invoice->id} now carries a deduction of {$amount}";
-    }
-
-    private function sampleDownPaymentCheque(int $company): string
-    {
-        $table = (new \App\Models\MoneyPayment)->getTable();
-        $overrides = ['company_id' => $company, 'type' => \App\Models\MoneyPayment::PAYABLE_CHEQUE, 'money_type' => 'down-payment', 'partner_type' => 'is_supplier'];
-        $existing = DB::table($table)->where('company_id', $company)->first();
-
-        $id = $existing ? $this->cloneRow($table, $existing->id, $overrides) : $this->insertRow($table, $overrides);
-
-        return "payment {$id}";
-    }
-
-    private function sampleCashExpenseCheque(int $company): string
-    {
-        $table = (new \App\Models\CashExpense)->getTable();
-        $overrides = ['company_id' => $company, 'type' => \App\Models\CashExpense::PAYABLE_CHEQUE, 'partner_type' => null];
-        $existing = DB::table($table)->where('company_id', $company)->first();
-
-        $id = $existing ? $this->cloneRow($table, $existing->id, $overrides) : $this->insertRow($table, $overrides);
-
-        return "expense {$id}";
-    }
-
-    private function sampleManyLgs(int $company): string
-    {
-        $table = (new \App\Models\LetterOfGuaranteeIssuance)->getTable();
-        $have = DB::table($table)->where('company_id', $company)->where('lg_type', 'final-lgs')->count();
-        $template = DB::table($table)->where('company_id', $company)->first() ?? DB::table($table)->whereNotNull('company_id')->first();
-        $added = 0;
-        $lastProblem = '';
-
-        for ($i = $have; $i < 45; $i++) {
-            $overrides = ['company_id' => $company, 'lg_type' => 'final-lgs', 'renewal_date' => now()->addMonths(6)->format('Y-m-d')];
-            try {
-                $template ? $this->cloneRow($table, $template->id, $overrides) : $this->insertRow($table, $overrides);
-                $added++;
-            } catch (\Throwable $e) {
-                $lastProblem = substr($e->getMessage(), 0, 120);
-            }
-        }
-
-        return "{$added} added".($lastProblem !== '' ? " (some could not be copied: {$lastProblem})" : '');
-    }
-
-    private function sampleFactoring(int $company, ?int $other): string
-    {
-        $table = (new \App\Models\FactoringTransaction)->getTable();
-        $added = 0;
-
-        foreach ([$company, $other] as $target) {
-            if ($target === null) {
-                continue;
-            }
-
-            foreach ([\App\Models\FactoringTransaction::WITH_RECOURSE, \App\Models\FactoringTransaction::WITHOUT_RECOURSE] as $recourse) {
-                if (DB::table($table)->where('company_id', $target)->where('recourse_type', $recourse)->exists()) {
-                    continue;
+        foreach ($files as $file) {
+            // Safe to run unprepared: these are the project's own fixed .sql files, never user input.
+            foreach ($this->statementsIn((string) file_get_contents($file)) as $statement) {
+                if (preg_match('/^\s*create\s+(?:definer\s*=\s*\S+\s+)?trigger\s+(?:if\s+not\s+exists\s+)?`?(\w+)`?/i', $statement, $m)) {
+                    $expected[strtolower($m[1])] = basename($file);
                 }
 
-                $invoiceId = DB::table('customer_invoices')->where('company_id', $target)
-                    ->whereNotIn('id', DB::table($table)->select('customer_invoice_id'))->value('id')
-                    ?? (900000 + $target * 10 + $added);
-
-                $this->insertRow($table, [
-                    'company_id' => $target, 'recourse_type' => $recourse, 'factoring_date' => now()->format('Y-m-d'),
-                    'customer_invoice_id' => $invoiceId, 'invoice_currency' => 'EGP', 'invoice_amount' => 1000,
-                    'factoring_percentage' => 80, 'factoring_amount' => 800, 'received_amount' => 790,
-                    'account_number' => 'SAMPLE-1',
-                ]);
-                $added++;
+                try {
+                    DB::unprepared($statement);
+                    $loaded++;
+                } catch (\Throwable $e) {
+                    $problems[basename($file)][] = substr($e->getMessage(), 0, 160);
+                }
             }
         }
 
-        return "{$added} added";
-    }
+        $installed = array_map('strtolower', DB::table('information_schema.TRIGGERS')
+            ->where('TRIGGER_SCHEMA', self::TEST_DATABASE)->pluck('TRIGGER_NAME')->all());
+        $missing = array_diff(array_keys($expected), $installed);
 
-    /** Copies one record of each kind to the second company, so "another company's record" can be tested. */
-    private function sampleOtherCompany(int $main, int $other): string
-    {
-        $done = [];
+        $this->info("Database triggers and procedures: {$loaded} statements loaded from ".count($files).' files, '
+            .count($installed).' triggers installed.');
 
-        foreach ([\App\Models\LcSettlementInternalMoneyTransfer::class, \App\Models\MultipleCashExpense::class, \App\Models\LetterOfCreditIssuance::class] as $class) {
-            $table = (new $class)->getTable();
-
-            if (DB::table($table)->where('company_id', $other)->exists()) {
-                continue;
-            }
-
-            $template = DB::table($table)->whereNotNull('company_id')->first();
-
-            if (! $template) {
-                $this->insertRow($table, ['company_id' => $other]);
-            } else {
-                $this->cloneRow($table, $template->id, ['company_id' => $other]);
-            }
-
-            $done[] = class_basename($class);
+        foreach ($problems as $name => $messages) {
+            $this->warn("  {$name}: ".count($messages).' statement(s) could not be loaded — '.$messages[0]);
         }
 
-        return $done === [] ? 'already there' : implode(', ', $done);
-    }
+        if ($missing !== []) {
+            $this->error('These triggers are defined in app/Triggers/Cashvero but could not be installed: '.implode(', ', $missing));
 
-    /** Insert a row, filling any required column that is not given with a harmless placeholder. */
-    private function insertRow(string $table, array $values): int
-    {
-        $row = [];
-        $known = [];
-
-        foreach (DB::table('information_schema.COLUMNS')->where('TABLE_SCHEMA', self::TEST_DATABASE)->where('TABLE_NAME', $table)->orderBy('ORDINAL_POSITION')->get() as $c) {
-            $name = $c->COLUMN_NAME;
-            $known[] = $name;
-
-            if (array_key_exists($name, $values)) {
-                $row[$name] = $values[$name];
-            } elseif (str_contains($c->EXTRA, 'auto_increment') || str_contains($c->EXTRA, 'GENERATED')) {
-                continue;
-            } elseif (in_array($name, ['created_at', 'updated_at'], true)) {
-                $row[$name] = now();
-            } elseif ($c->IS_NULLABLE === 'NO' && $c->COLUMN_DEFAULT === null) {
-                $row[$name] = $this->placeholderFor($c);
-            }
+            return false;
         }
 
-        return (int) DB::table($table)->insertGetId($row);
+        // The test user may not read the trigger list (that needs the TRIGGER right, which would
+        // also let it drop them), so the names are written down here for the isolation test.
+        DB::statement('CREATE TABLE `test_schema_triggers` (`name` varchar(64) NOT NULL PRIMARY KEY)');
+        DB::table('test_schema_triggers')->insert(array_map(fn ($name) => ['name' => $name], $installed));
+
+        return true;
     }
 
-    private function placeholderFor(object $c)
+    /** The same tables under another name, for the tests that read a "source" database. */
+    private function buildSourceTwin(): void
     {
-        $type = strtolower($c->DATA_TYPE);
+        $count = 0;
 
-        return match (true) {
-            in_array($type, ['int', 'bigint', 'smallint', 'mediumint', 'tinyint', 'decimal', 'float', 'double'], true) => 0,
-            $type === 'date' => now()->format('Y-m-d'),
-            in_array($type, ['datetime', 'timestamp'], true) => now()->format('Y-m-d H:i:s'),
-            $type === 'time' => '00:00:00',
-            $type === 'year' => (int) now()->format('Y'),
-            $type === 'json' => '[]',
-            in_array($type, ['enum', 'set'], true) => (preg_match("/'([^']*)'/", $c->COLUMN_TYPE, $m) ? $m[1] : ''),
-            default => 'sample',
-        };
-    }
-
-    /** Copy an existing row (new id) with some values replaced. */
-    private function cloneRow(string $table, int $id, array $overrides): int
-    {
-        $row = (array) DB::table($table)->find($id);
-        $allowed = $this->columnsOf(self::TEST_DATABASE, $table);
-
-        $row = array_intersect_key($row, array_flip($allowed));
-        unset($row['id']);
-
-        // A copy must not repeat values that have to be unique (serial numbers, codes...).
-        static $counter = 0;
-        $counter++;
-
-        foreach (DB::table('information_schema.STATISTICS')->where('TABLE_SCHEMA', self::TEST_DATABASE)
-            ->where('TABLE_NAME', $table)->where('NON_UNIQUE', 0)->where('INDEX_NAME', '<>', 'PRIMARY')
-            ->pluck('COLUMN_NAME')->unique() as $column) {
-            if ($column !== 'company_id' && isset($row[$column]) && is_string($row[$column]) && ! array_key_exists($column, $overrides)) {
-                $row[$column] = $row[$column].'-'.$counter;
-            }
+        foreach (DB::table('information_schema.TABLES')->where('TABLE_SCHEMA', self::TEST_DATABASE)->where('TABLE_TYPE', 'BASE TABLE')->pluck('TABLE_NAME') as $table) {
+            // Table names come from information_schema of the database this command just built.
+            DB::statement('CREATE TABLE `cashvero_test_source`.`'.$table.'` LIKE `cashvero_test`.`'.$table.'`');
+            $count++;
         }
 
-        foreach ($overrides as $column => $value) {
-            if (in_array($column, $allowed, true)) {
-                $row[$column] = $value;
-            }
-        }
-
-        return (int) DB::table($table)->insertGetId($row);
+        $this->info("Source database '".self::SOURCE_DATABASE."' built ({$count} empty tables).");
     }
 
-    /** @return list<string> normal (not generated) column names of a table, in order */
-    private function columnsOf(string $schema, string $table): array
+    /**
+     * The account the tests connect as. Created once; its rights are re-applied every time so a
+     * rebuilt database is reachable again. It gets no right on any other database.
+     */
+    private function ensureTestUser(): void
     {
-        return DB::table('information_schema.COLUMNS')
-            ->where('TABLE_SCHEMA', $schema)->where('TABLE_NAME', $table)
-            ->where('EXTRA', 'not like', '%GENERATED%')
-            ->orderBy('ORDINAL_POSITION')
-            ->pluck('COLUMN_NAME')->all();
+        $user = "'".self::TEST_USER."'@'localhost'";
+
+        DB::statement("CREATE USER IF NOT EXISTS {$user} IDENTIFIED BY '".self::TEST_PASSWORD."'");
+        DB::statement("GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON `cashvero_test`.* TO {$user}");
+        DB::statement("GRANT SELECT, INSERT, UPDATE, DELETE ON `cashvero_test_source`.* TO {$user}");
+        DB::statement("GRANT ALL PRIVILEGES ON `cashvero_test_scratch`.* TO {$user}");
     }
+
+    /* ───────────────────────── .sql parsing ───────────────────────── */
 
     /**
      * Splits a mysql-client script into statements, honouring DELIMITER.

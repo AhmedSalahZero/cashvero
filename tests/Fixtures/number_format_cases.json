@@ -1,0 +1,15 @@
+{
+  "_about": "How a money amount is written on screen (resources/js/i18n.js formatNumber) and on the server (number_format($value, 2) in controllers and print sheets). Worked out by hand: two decimals, a comma every three digits, Western digits even in Arabic, rounding half away from zero, and nothing ever shown as -0.00. Both sides are checked against this one sheet.",
+  "cases": [
+    { "name": "zero", "value": 0, "expect": "0.00" },
+    { "name": "nothing at all", "value": null, "expect": "0.00" },
+    { "name": "a whole number", "value": 1000, "expect": "1,000.00" },
+    { "name": "millions", "value": 1234567.891, "expect": "1,234,567.89" },
+    { "name": "rounds half up", "value": 2.345, "expect": "2.35" },
+    { "name": "a cent", "value": 0.01, "expect": "0.01" },
+    { "name": "less than half a cent", "value": 0.004, "expect": "0.00" },
+    { "name": "a negative amount", "value": -1500.5, "expect": "-1,500.50" },
+    { "name": "a tiny negative is not -0.00", "value": -0.001, "expect": "0.00" },
+    { "name": "a number sent as text", "value": "3083.333", "expect": "3,083.33" }
+  ]
+}

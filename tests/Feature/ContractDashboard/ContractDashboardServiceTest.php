@@ -589,9 +589,8 @@ class ContractDashboardServiceTest extends TestCase
     /**
      * The bucket boundaries, one day either side of each edge. Off-by-one
      * here is the classic aging bug and it is invisible in a total.
-     *
-     * @dataProvider agingBoundaryProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('agingBoundaryProvider')]
     public function test_an_invoice_lands_in_the_right_aging_bucket(int $daysOverdue, string $expectedBucket): void
     {
         $this->contract(['code' => 'C-1', 'amount' => 100000]);

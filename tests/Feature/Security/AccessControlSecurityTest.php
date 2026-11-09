@@ -21,8 +21,8 @@ use Tests\TestCase;
  * legitimately must work). Without it a "denied" result could just mean the
  * test set-up was wrong.
  *
- * Only throw-away users are created, edited and deleted. Real data is never
- * touched; real invoices are only READ (never changed) by the one GET test.
+ * Both companies, every user and the one invoice are made by the test itself
+ * and rolled back afterwards (see UsesScratchAccounts): no real data is read.
  */
 #[Group('security')]
 class AccessControlSecurityTest extends TestCase
@@ -37,12 +37,6 @@ class AccessControlSecurityTest extends TestCase
         $this->bootScratch(true);
     }
 
-    protected function tearDown(): void
-    {
-        $this->cleanupScratch();
-        parent::tearDown();
-    }
-
     /** A user manager of company A, after proving the manager can reach the user screens at all. */
     private function userManager(): User
     {
@@ -50,21 +44,17 @@ class AccessControlSecurityTest extends TestCase
 
         $probe = $this->actingAs($actor)->get(route('user.index'));
 
-        if ($probe->getStatusCode() === 403) {
-            $this->markTestSkipped('Company '.$this->companyA->id.' does not have the CashVero system enabled, so its users cannot open the user screens; nothing to attack.');
-        }
+        $this->assertNotSame(403, $probe->getStatusCode(), 'Test set-up problem: a user manager of company '.$this->companyA->id.' (subscribed to CashVero) cannot open the user screens, so every refusal below would prove nothing.');
 
         return $actor;
     }
 
-    /** Skip a denial test when even the legitimate edit is refused: "refused" would then mean nothing. */
+    /** A denial test means nothing when even the legitimate edit is refused: stop it as a set-up failure. */
     private function requireWorkingEdit(User $actor): void
     {
         $colleague = $this->scratchUser([$this->companyA->id], [], 'user');
 
-        if (! $this->updateAs($actor, $colleague)->isRedirection()) {
-            $this->markTestSkipped('The legitimate edit of an ordinary colleague is refused in this database, so a refusal proves nothing. See the first test in this file for the reason.');
-        }
+        $this->assertTrue($this->updateAs($actor, $colleague)->isRedirection(), 'Test set-up problem: the legitimate edit of an ordinary colleague is refused, so a refusal proves nothing. See the first test in this file for the reason.');
     }
 
     private function updateAs(User $actor, User $target, array $extra = [])
@@ -93,7 +83,7 @@ class AccessControlSecurityTest extends TestCase
         $this->assertTrue(
             $response->isRedirection(),
             'Positive control failed: a user manager could not edit an ordinary colleague (HTTP '.$response->getStatusCode().': '
-            .($response->exception?->getMessage() ?: 'no message').'). The denial tests below are skipped because they would prove nothing.'
+            .($response->exception?->getMessage() ?: 'no message').'). The denial tests below would prove nothing.'
         );
 
         $this->assertSame('HACKED', $this->reload($colleague)->name, 'Positive control failed: the legitimate edit did not work, so the denial tests below prove nothing.');
@@ -175,10 +165,6 @@ class AccessControlSecurityTest extends TestCase
 
         $created = User::where('email', $email)->first();
 
-        if ($created) {
-            $this->scratchUserIds[] = $created->id;
-        }
-
         $this->assertNull($created, Finding::message(
             'SEC-06b', 'MEDIUM',
             'A new user can be created with a one-character password',
@@ -200,10 +186,6 @@ class AccessControlSecurityTest extends TestCase
 
         $created = User::where('email', $email)->first();
 
-        if ($created) {
-            $this->scratchUserIds[] = $created->id;
-        }
-
         $this->assertNull($created, 'A non-Super-Admin created a Super Admin (HTTP '.$response->getStatusCode().').');
     }
 
@@ -218,10 +200,6 @@ class AccessControlSecurityTest extends TestCase
         ]);
 
         $created = User::where('email', $email)->first();
-
-        if ($created) {
-            $this->scratchUserIds[] = $created->id;
-        }
 
         $this->assertFalse(
             $created && $created->companies()->where('companies.id', $this->companyB->id)->exists(),
@@ -300,25 +278,11 @@ class AccessControlSecurityTest extends TestCase
 
     public function test_a_company_a_user_cannot_read_a_company_b_invoice_through_the_due_date_page(): void
     {
-        $invoiceId = DB::table('customer_invoices')->where('company_id', $this->companyB->id)->value('id');
-
-        $scratchInvoiceId = null;
-
-        if (! $invoiceId && DB::connection('mysql')->getDatabaseName() === 'cashvero_test') {
-            // The empty test database has no receivable. Add one minimal throw-away row, removed below.
-            try {
-                $invoiceId = $scratchInvoiceId = DB::table('customer_invoices')->insertGetId([
-                    'company_id' => $this->companyB->id, 'customer_id' => 0,
-                    'customer_name' => 'Security Test Scratch', 'currency' => 'EGP',
-                ]);
-            } catch (\Throwable $e) {
-                $this->markTestSkipped('Could not create a scratch receivable: '.$e->getMessage());
-            }
-        }
-
-        if (! $invoiceId) {
-            $this->markTestSkipped('Company '.$this->companyB->id.' has no customer invoice (receivable) to test with.');
-        }
+        // A minimal receivable of company B: all the attack needs is its number.
+        $invoiceId = DB::table('customer_invoices')->insertGetId([
+            'company_id' => $this->companyB->id, 'customer_id' => 0,
+            'customer_name' => 'Security Test Receivable', 'currency' => 'EGP',
+        ]);
 
         $actor = $this->scratchUser([$this->companyA->id], ['adjusted_due_date.view'], 'user');
 
@@ -326,13 +290,8 @@ class AccessControlSecurityTest extends TestCase
             'company' => $this->companyA->id, 'modelId' => $invoiceId, 'modelType' => 'CustomerInvoice',
         ]));
 
-        if ($scratchInvoiceId) {
-            DB::table('customer_invoices')->where('id', $scratchInvoiceId)->delete();
-        }
-
-        if ($response->getStatusCode() >= 500) {
-            $this->markTestSkipped('Inconclusive: the page crashed (HTTP '.$response->getStatusCode().') before it could answer. A crash is itself a defect; run again with APP_DEBUG=true to see why.');
-        }
+        $this->assertLessThan(500, $response->getStatusCode(), 'The page crashed (HTTP '.$response->getStatusCode().') before it could answer, so the company check cannot be judged. A crash is itself a defect: '
+            .($response->exception?->getMessage() ?: 'no message'));
 
         $this->assertContains($response->getStatusCode(), [403, 404], Finding::message(
             'SEC-13', 'HIGH',

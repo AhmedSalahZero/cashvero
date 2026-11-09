@@ -38,30 +38,13 @@ class ForeignRecordsInFormsSecurityTest extends TestCase
     /** Form fields that must never decide the owner of a record or point at another company's data. */
     private const SKIP_KEYS = ['company_id', 'user_id', 'created_by', 'updated_by', 'deleted_by', 'reviewed_by'];
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->cleanupScratch();
-        parent::tearDown();
-    }
-
     /* ────────────────────────────── SEC-34a ────────────────────────────── */
 
     public function test_validation_rules_that_check_a_record_exists_are_limited_to_the_company(): void
     {
-        try {
-            $companyTables = $this->companyTables();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('The database could not be read: '.$e->getMessage());
-        }
+        $companyTables = $this->companyTables();
 
-        if ($companyTables === []) {
-            $this->markTestSkipped('No table with a company_id column was found; run php artisan cashvero:prepare-test-db --from=cashvero');
-        }
+        $this->assertNotSame([], $companyTables, 'Test set-up problem: no table with a company_id column was found in the test database.');
 
         $scanner = new SourceScanner(base_path());
         $findings = [];
@@ -179,7 +162,7 @@ class ForeignRecordsInFormsSecurityTest extends TestCase
             }
         }
 
-        $this->assertNotSame([], $foreign, 'Test set-up problem: company '.$b.' has no records to hide in the forms. Run: php artisan cashvero:prepare-test-db --from=cashvero');
+        $this->assertNotSame([], $foreign, 'Test set-up problem: no record of company '.$b.' could be planted to hide in the forms ('.json_encode($this->plantFailuresFor($b)).').');
 
         $payload = array_merge($foreign, ['company_id' => $b]);
 

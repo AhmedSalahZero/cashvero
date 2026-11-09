@@ -108,7 +108,7 @@ class RoutePermissionMap
 
         // ── Misc UI helpers with no data exposure ──
         // (company-gated by canViewCurrentCompany where the company number is in the address)
-        'upload.percentage', 'income.statement.dates', 'remove.session.for.redirect',
+        'upload.percentage', 'remove.session.for.redirect',
     ];
 
     /**
@@ -131,7 +131,6 @@ class RoutePermissionMap
 
         /* ────────────────────── Money Received ──────────────────── */
         'view.money.receive' => 'money_received.view',
-        'view.money.receive.json' => 'money_received.view',
         'print.money.receive' => 'money_received.view',
         'money.received.settlements.info' => 'money_received.view',
         'create.money.receive' => 'money_received.create',
@@ -163,7 +162,6 @@ class RoutePermissionMap
         'delete.money.payment' => 'money_payment.delete',
         'payable.cheque.mark.as.paid' => 'money_payment.mark_as_paid',
         'payable.cheque.unmark.as.paid' => 'money_payment.mark_as_paid',
-        'outgoing.transfer.mark.as.paid' => 'money_payment.mark_as_paid',
         'update.opening.payable.cheque' => 'money_payment.update',
         'get.contracts.for.supplier' => 'money_payment.view',
         'get.leasing.contracts.for.company' => 'money_payment.view',
@@ -621,29 +619,17 @@ class RoutePermissionMap
 
         /* ─────────────────── Opening balances ───────────────────── */
         'opening-balance.index' => 'opening_balance.view',
-        'opening-balance.show' => 'opening_balance.view',
         'opening-balance.manage' => 'opening_balance.view',
-        'opening-balance.create' => 'opening_balance.create',
         'opening-balance.store' => 'opening_balance.create',
-        'opening-balance.edit' => 'opening_balance.update',
         'opening-balance.update' => 'opening_balance.update',
-        'opening-balance.destroy' => 'opening_balance.delete',
         'customers-opening-balance.index' => 'customer_opening_balance.view',
-        'customers-opening-balance.show' => 'customer_opening_balance.view',
         'customers-opening-balance.manage' => 'customer_opening_balance.view',
-        'customers-opening-balance.create' => 'customer_opening_balance.create',
         'customers-opening-balance.store' => 'customer_opening_balance.create',
-        'customers-opening-balance.edit' => 'customer_opening_balance.update',
         'customers-opening-balance.update' => 'customer_opening_balance.update',
-        'customers-opening-balance.destroy' => 'customer_opening_balance.delete',
         'suppliers-opening-balance.index' => 'supplier_opening_balance.view',
-        'suppliers-opening-balance.show' => 'supplier_opening_balance.view',
         'suppliers-opening-balance.manage' => 'supplier_opening_balance.view',
-        'suppliers-opening-balance.create' => 'supplier_opening_balance.create',
         'suppliers-opening-balance.store' => 'supplier_opening_balance.create',
-        'suppliers-opening-balance.edit' => 'supplier_opening_balance.update',
         'suppliers-opening-balance.update' => 'supplier_opening_balance.update',
-        'suppliers-opening-balance.destroy' => 'supplier_opening_balance.delete',
 
         /* ───────────────── Partners & general settings ──────────── */
         // Partners/Index serves customers, suppliers, employees,
@@ -723,12 +709,7 @@ class RoutePermissionMap
         'other-dues.partners' => 'other_due.view',
         'other-dues.store' => 'other_due.update',
         'notifications-settings.index' => 'notification_setting.view',
-        'notifications-settings.show' => 'notification_setting.view',
-        'notifications-settings.create' => 'notification_setting.create',
         'notifications-settings.store' => 'notification_setting.create',
-        'notifications-settings.edit' => 'notification_setting.update',
-        'notifications-settings.update' => 'notification_setting.update',
-        'notifications-settings.destroy' => 'notification_setting.delete',
 
         /* ─────────────── Data upload / sales gathering ──────────── */
         // These screens are driven by a {model} segment; the controller
@@ -747,16 +728,11 @@ class RoutePermissionMap
         'uploading.destroy.all' => ['customer_invoice_data.bulk_delete', 'supplier_invoice_data.bulk_delete', 'loan_schedule_data.bulk_delete'],
         'salesGathering.index' => ['customer_invoice_data.view', 'supplier_invoice_data.view', 'loan_schedule_data.view'],
         'salesGathering.show' => ['customer_invoice_data.view', 'supplier_invoice_data.view', 'loan_schedule_data.view'],
-        'salesGathering.create' => ['customer_invoice_data.import', 'supplier_invoice_data.import', 'loan_schedule_data.import'],
         'salesGathering.store' => ['customer_invoice_data.import', 'supplier_invoice_data.import', 'loan_schedule_data.import'],
         'salesGathering.edit' => ['customer_invoice_data.import', 'supplier_invoice_data.import', 'loan_schedule_data.import'],
-        'salesGathering.update' => ['customer_invoice_data.import', 'supplier_invoice_data.import', 'loan_schedule_data.import'],
         'salesGathering.destroy' => ['customer_invoice_data.delete', 'supplier_invoice_data.delete', 'loan_schedule_data.delete'],
         'salesGathering.export' => ['customer_invoice_data.export', 'supplier_invoice_data.export', 'loan_schedule_data.export'],
         'salesGatheringImport' => ['customer_invoice_data.import', 'supplier_invoice_data.import', 'loan_schedule_data.import'],
-        'salesGatheringTest.edit' => ['customer_invoice_data.import', 'supplier_invoice_data.import', 'loan_schedule_data.import'],
-        'salesGatheringTest.update' => ['customer_invoice_data.import', 'supplier_invoice_data.import', 'loan_schedule_data.import'],
-        'salesGatheringTest.destroy' => ['customer_invoice_data.delete', 'supplier_invoice_data.delete', 'loan_schedule_data.delete'],
         'salesGatheringTest.editCachedRow' => ['customer_invoice_data.import', 'supplier_invoice_data.import', 'loan_schedule_data.import'],
         'salesGatheringTest.updateCachedRow' => ['customer_invoice_data.import', 'supplier_invoice_data.import', 'loan_schedule_data.import'],
         'salesGatheringTest.insertToMainTable' => ['customer_invoice_data.import', 'supplier_invoice_data.import', 'loan_schedule_data.import'],
@@ -824,7 +800,6 @@ class RoutePermissionMap
         'roles.update' => 'role.update',
         'roles.destroy' => 'role.delete',
         'companySection.index' => 'company.view',
-        'companySection.show' => 'company.view',
         'companySection.create' => 'company.create',
         'companySection.store' => 'company.create',
         'companySection.edit' => 'company.update',
@@ -834,12 +809,7 @@ class RoutePermissionMap
 
         /* ────────────────────── Integrations ────────────────────── */
         'odoo-settings.index' => 'odoo_integration.view',
-        'odoo-settings.show' => 'odoo_integration.view',
-        'odoo-settings.create' => 'odoo_integration.update',
         'odoo-settings.store' => 'odoo_integration.update',
-        'odoo-settings.edit' => 'odoo_integration.update',
-        'odoo-settings.update' => 'odoo_integration.update',
-        'odoo-settings.destroy' => 'odoo_integration.delete',
         'read-odoo-contracts' => 'odoo_integration.sync',
         'read-odoo-invoices' => 'odoo_integration.sync',
         'read-odoo-partners' => 'odoo_integration.sync',

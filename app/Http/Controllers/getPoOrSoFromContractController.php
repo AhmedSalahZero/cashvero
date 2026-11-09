@@ -11,7 +11,7 @@ class getPoOrSoFromContractController extends Controller
 	public function handle(Request $request , Company $company)
 	{
 		$contractId = $request->get('contractId');
-		$contract = Contract::find($contractId);
+		$contract = Contract::where('company_id', $company->id)->find($contractId);
 		
 		return response()->json([
 			'sales_orders'=>$contract ? $contract->salesOrders : [],

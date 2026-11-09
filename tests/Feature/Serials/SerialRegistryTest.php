@@ -79,7 +79,7 @@ class SerialRegistryTest extends SerialTestCase
         }
     }
 
-    /** @dataProvider models */
+    #[\PHPUnit\Framework\Attributes\DataProvider('models')]
     public function test_the_model_is_wired(string $class): void
     {
         $traits = class_uses_recursive($class);

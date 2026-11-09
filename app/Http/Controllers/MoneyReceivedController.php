@@ -842,7 +842,7 @@ class MoneyReceivedController
                 'selectedCurrency'=>[]
             ]);
         }
-        $downPaymentContract = Contract::find($request->get('downPaymentContractId'));
+        $downPaymentContract = Contract::where('company_id', $company->id)->find($request->get('downPaymentContractId'));
         $partnerId = $partner->id;
         $invoices = CustomerInvoice::where('customer_id', $partnerId)
         ->where('company_id', $company->id)

@@ -55,10 +55,10 @@ class LgContractRequirementTest extends TestCase
         });
 
         DB::table('partners')->insert([
-            ['id' => self::CUSTOMER_ONLY, 'company_id' => 148, 'name' => 'Itida', 'is_customer' => 1, 'is_other_partner' => 0],
-            ['id' => self::OTHER_ONLY, 'company_id' => 148, 'name' => 'Tax Authority', 'is_customer' => 0, 'is_other_partner' => 1],
-            ['id' => self::BOTH, 'company_id' => 148, 'name' => 'Both Ways', 'is_customer' => 1, 'is_other_partner' => 1],
-            ['id' => self::NEITHER, 'company_id' => 148, 'name' => 'Supplier Only', 'is_customer' => 0, 'is_other_partner' => 0],
+            ['id' => self::CUSTOMER_ONLY, 'company_id' => 9001, 'name' => 'Itida', 'is_customer' => 1, 'is_other_partner' => 0],
+            ['id' => self::OTHER_ONLY, 'company_id' => 9001, 'name' => 'Tax Authority', 'is_customer' => 0, 'is_other_partner' => 1],
+            ['id' => self::BOTH, 'company_id' => 9001, 'name' => 'Both Ways', 'is_customer' => 1, 'is_other_partner' => 1],
+            ['id' => self::NEITHER, 'company_id' => 9001, 'name' => 'Supplier Only', 'is_customer' => 0, 'is_other_partner' => 0],
         ]);
     }
 
@@ -72,9 +72,8 @@ class LgContractRequirementTest extends TestCase
     /**
      * The three types the report named, plus the one that was already
      * excused, against every kind of beneficiary.
-     *
-     * @dataProvider requirementProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('requirementProvider')]
     public function test_whether_a_contract_is_required(string $lgType, ?int $partnerId, bool $expected, string $why): void
     {
         $this->assertSame($expected, LgContractRequirement::isRequired($lgType, $partnerId), $why);
@@ -156,9 +155,8 @@ class LgContractRequirementTest extends TestCase
      * The form posts the literal string "null" for an empty select —
      * see HasBasicStoreRequest::storeBasicForm. A plain 'required' rule
      * would happily accept that string.
-     *
-     * @dataProvider emptyContractProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('emptyContractProvider')]
     public function test_an_empty_contract_is_rejected_for_a_plain_customer($emptyValue): void
     {
         $this->assertTrue($this->contractRuleFails([
@@ -177,9 +175,7 @@ class LgContractRequirementTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider emptyContractProvider
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('emptyContractProvider')]
     public function test_an_empty_contract_is_accepted_for_an_other_partner($emptyValue): void
     {
         $this->assertFalse($this->contractRuleFails([
@@ -189,9 +185,7 @@ class LgContractRequirementTest extends TestCase
         ]), 'An "other partner" beneficiary must be able to save without one.');
     }
 
-    /**
-     * @dataProvider emptyContractProvider
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('emptyContractProvider')]
     public function test_an_empty_contract_is_accepted_for_a_customer_who_is_also_other($emptyValue): void
     {
         $this->assertFalse($this->contractRuleFails([
@@ -324,9 +318,8 @@ class LgContractRequirementTest extends TestCase
      * server applies the same rule to all four. A form left behind
      * would keep demanding a contract the backend no longer wants —
      * the user would see a required field they cannot satisfy.
-     *
-     * @dataProvider issuanceFormProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('issuanceFormProvider')]
     public function test_every_issuance_form_drops_the_asterisk_from_the_same_list(string $form): void
     {
         $page = file_get_contents(resource_path("js/Pages/LetterOfGuaranteeIssuance/{$form}.vue"));
@@ -342,9 +335,8 @@ class LgContractRequirementTest extends TestCase
      * The SO field hangs off the contract, so its asterisk has to move
      * with it — otherwise the form still looks like it is demanding
      * something.
-     *
-     * @dataProvider issuanceFormProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('issuanceFormProvider')]
     public function test_the_sales_order_asterisk_follows_the_contract(string $form): void
     {
         $page = file_get_contents(resource_path("js/Pages/LetterOfGuaranteeIssuance/{$form}.vue"));
@@ -356,9 +348,8 @@ class LgContractRequirementTest extends TestCase
      * A disabled placeholder means a contract picked by mistake can
      * never be cleared again. When it is optional, the empty option has
      * to be selectable.
-     *
-     * @dataProvider issuanceFormProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('issuanceFormProvider')]
     public function test_the_contract_can_be_cleared_again_when_it_is_optional(string $form): void
     {
         $select = $this->contractSelectOf($form);
@@ -391,9 +382,8 @@ class LgContractRequirementTest extends TestCase
     /**
      * And it says so, rather than leaving the user to infer it from a
      * missing asterisk.
-     *
-     * @dataProvider issuanceFormProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('issuanceFormProvider')]
     public function test_the_form_explains_why_the_contract_is_optional(string $form): void
     {
         $page = file_get_contents(resource_path("js/Pages/LetterOfGuaranteeIssuance/{$form}.vue"));

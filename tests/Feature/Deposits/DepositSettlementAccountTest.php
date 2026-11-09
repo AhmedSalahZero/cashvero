@@ -8,11 +8,13 @@ use App\Models\FinancialInstitution;
 use App\Models\FinancialInstitutionAccount;
 use App\Models\TimeOfDeposit;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Support\Facades\DB;
+use Database\Factories\CertificatesOfDepositFactory;
+use Database\Factories\TimeOfDepositFactory;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\MakesBanks;
 use Tests\TestCase;
 
 /**
@@ -33,20 +35,19 @@ use Tests\TestCase;
  * ). دلوقتي البوب اب نفسه بيسأل عن الحساب ، وقيمته الافتراضية هي حساب الخصم
  * الاصلي لو كان موجود.
  *
- * التستات دي بتشتغل على قاعدة بيانات التطوير زي باقي السويت (مافيش سكيما تست
- * متهاجرة هنا) ، جوه ترانزاكشن بيترجع فيها كل صف اتعمل ، وبتتسكب لوحدها لو
- * القاعدة مش شغالة.
+ * كل حاجة هنا (الشركة ، البنكين ، الحسابات ، الودايع ، اليوزر) معمولة في
+ * التست نفسه على قاعدة الاختبارات ، و بترجع كلها في الآخر.
  */
 class DepositSettlementAccountTest extends TestCase
 {
-    use DatabaseTransactions;
+    use MakesBanks;
 
     private Company $company;
 
     private FinancialInstitution $bank;
 
     /** بنك تاني علشان نتأكد ان حساباته مابتتقبلش كحساب تسوية */
-    private ?FinancialInstitution $otherBank = null;
+    private FinancialInstitution $otherBank;
 
     private FinancialInstitutionAccount $fundingAccount;
 
@@ -64,11 +65,6 @@ class DepositSettlementAccountTest extends TestCase
 
     private string $otherCurrency = 'USD';
 
-    /**
-     * DatabaseTransactions بيفتح الترانزاكشن من setUpTraits اللي بتشتغل قبل
-     * جسم setUp ، فا لازم نوجّه الكونكشن هنا وإلا الترانزاكشن هتتفتح على
-     * السكيما بتاعة التست (اللي مش موجودة) قبل ما حد ياخد باله.
-     */
     /**
      * الراوتس كلها متسجلة تحت
      * Route::group(['prefix' => LaravelLocalization::setLocale()])
@@ -103,14 +99,6 @@ class DepositSettlementAccountTest extends TestCase
         parent::tearDown();
     }
 
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
-
     protected function setUp(): void
     {
         parent::setUp();
@@ -126,24 +114,9 @@ class DepositSettlementAccountTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
-
-        $bank = FinancialInstitution::query()->whereNotNull('company_id')->first();
-
-        if (! $bank) {
-            $this->markTestSkipped('Development database has no financial institution to attach accounts to.');
-        }
-
-        $this->bank = $bank;
-        $this->company = Company::findOrFail($bank->company_id);
-        $this->otherBank = FinancialInstitution::query()
-            ->where('company_id', $this->company->id)
-            ->where('id', '!=', $this->bank->id)
-            ->first();
+        $this->company = $this->makeCompany();
+        $this->bank = $this->bank($this->company);
+        $this->otherBank = $this->bank($this->company);
 
         $this->fundingAccount = $this->makeAccount('TEST-FUND-'.uniqid());
         $this->alternativeAccount = $this->makeAccount('TEST-ALT-'.uniqid());
@@ -151,47 +124,31 @@ class DepositSettlementAccountTest extends TestCase
         $this->otherCurrencyAccount = $this->makeAccount('TEST-USD-'.uniqid(), $this->otherCurrency);
         $this->closedAccount = $this->makeAccount('TEST-CLOSED-'.uniqid(), $this->currency, false);
 
-        $this->actor = $this->makeUser();
+        $this->actor = $this->localUser();
     }
 
     private function makeAccount(string $accountNumber, ?string $currency = null, bool $isActive = true): FinancialInstitutionAccount
     {
-        return FinancialInstitutionAccount::create([
-            'company_id' => $this->company->id,
-            'financial_institution_id' => $this->bank->id,
+        return $this->currentAccount($this->bank, $currency ?: $this->currency, [
             'account_number' => $accountNumber,
-            'currency' => $currency ?: $this->currency,
-            'balance_amount' => 0,
             'balance_date' => now()->subYears(3)->format('Y-m-d'),
-            'exchange_rate' => 1,
             'is_active' => $isActive ? 1 : 0,
         ]);
     }
 
-    private function makeUser(): User
+    private function localUser(): User
     {
-        /** @var User $user */
-        $user = User::create([
-            'name' => 'Deposit Settlement Test '.uniqid(),
-            'email' => 'deposit-settlement-'.uniqid().'@example.test',
-            'password' => bcrypt('secret-for-tests'),
-            'company_id' => $this->company->id,
-        ]);
-
         /*
          * EnforcePermission بيقف قدام الراوتس دي بصلاحية الـ settle ، فا
          * بندي اليوزر الصلاحيات اللي التستات محتاجاها بالظبط — من غير ما
          * يبقى super admin علشان الجيتات تشتغل فعلا.
          */
-        $user->givePermissionTo([
+        $user = $this->makeUser([
             'time_of_deposit.view',
             'time_of_deposit.settle',
             'certificate_of_deposit.view',
             'certificate_of_deposit.settle',
-        ]);
-
-        $user->companies()->attach($this->company->id);
-        $user->load('companies');
+        ], $this->company);
 
         $this->assertFalse($user->isSuperAdmin(), 'اليوزر لازم مايتخطاش فحص الصلاحيات.');
 
@@ -210,23 +167,14 @@ class DepositSettlementAccountTest extends TestCase
      */
     private function makeDeposit(string $kind, ?int $deductedFromAccountId)
     {
-        $class = $kind === 'td' ? TimeOfDeposit::class : CertificatesOfDeposit::class;
+        $factory = $kind === 'td' ? TimeOfDepositFactory::new() : CertificatesOfDepositFactory::new();
 
-        return $class::create([
-            'company_id' => $this->company->id,
-            'financial_institution_id' => $this->bank->id,
+        return $factory->at($this->bank)->currency($this->currency)->maturingInto($this->maturityAccount)->create([
             'account_number' => strtoupper($kind).'-TEST-'.uniqid(),
-            'amount' => 100000,
-            'currency' => $this->currency,
-            'interest_rate' => 10,
             'interest_amount' => 1000,
             'start_date' => now()->subYear()->format('Y-m-d'),
             'end_date' => now()->subDay()->format('Y-m-d'),
-            'status' => $class::RUNNING,
-            'maturity_amount_added_to_account_id' => $this->maturityAccount->id,
             'deducted_from_account_id' => $deductedFromAccountId,
-            'is_at_maturity' => 1,
-            'is_active' => 1,
         ]);
     }
 
@@ -272,7 +220,7 @@ class DepositSettlementAccountTest extends TestCase
 
     /* ─────────────── القيمة الافتراضية في البوب اب ─────────────── */
 
-    /** @dataProvider kinds */
+    #[DataProvider('kinds')]
     public function test_the_popup_defaults_to_the_deducted_from_account(string $kind): void
     {
         $deposit = $this->makeDeposit($kind, $this->fundingAccount->id);
@@ -280,7 +228,7 @@ class DepositSettlementAccountTest extends TestCase
         $this->assertSame($this->fundingAccount->id, $deposit->getSettlementOrDeductedFromAccountId());
     }
 
-    /** @dataProvider kinds */
+    #[DataProvider('kinds')]
     public function test_an_opening_balance_deposit_has_no_default_account(string $kind): void
     {
         $deposit = $this->makeDeposit($kind, null);
@@ -289,7 +237,7 @@ class DepositSettlementAccountTest extends TestCase
         $this->assertNull($deposit->getSettlementOrDeductedFromAccountId());
     }
 
-    /** @dataProvider kinds */
+    #[DataProvider('kinds')]
     public function test_a_chosen_settlement_account_wins_over_the_deducted_from_account(string $kind): void
     {
         $deposit = $this->makeDeposit($kind, $this->fundingAccount->id);
@@ -300,7 +248,7 @@ class DepositSettlementAccountTest extends TestCase
 
     /* ─────────────────── الحسابات المعروضة ─────────────────── */
 
-    /** @dataProvider kinds */
+    #[DataProvider('kinds')]
     public function test_only_active_same_bank_same_currency_accounts_are_offered(string $kind): void
     {
         $deposit = $this->makeDeposit($kind, $this->fundingAccount->id);
@@ -314,7 +262,7 @@ class DepositSettlementAccountTest extends TestCase
         $this->assertNotContains($this->closedAccount->id, $offered, 'الحساب المقفول مايتعرضش');
     }
 
-    /** @dataProvider kinds */
+    #[DataProvider('kinds')]
     public function test_a_closed_account_still_shows_when_it_is_the_current_one(string $kind): void
     {
         $deposit = $this->makeDeposit($kind, $this->closedAccount->id);
@@ -324,7 +272,7 @@ class DepositSettlementAccountTest extends TestCase
 
     /* ─────────────────── Apply Deposit ─────────────────── */
 
-    /** @dataProvider kinds */
+    #[DataProvider('kinds')]
     public function test_applying_deposit_stores_the_chosen_settlement_account(string $kind): void
     {
         $deposit = $this->makeDeposit($kind, null);
@@ -348,7 +296,7 @@ class DepositSettlementAccountTest extends TestCase
         $this->assertSame($stored::MATURED, $stored->getStatus());
     }
 
-    /** @dataProvider kinds */
+    #[DataProvider('kinds')]
     public function test_applying_deposit_without_a_settlement_account_changes_nothing(string $kind): void
     {
         $deposit = $this->makeDeposit($kind, null);
@@ -366,7 +314,7 @@ class DepositSettlementAccountTest extends TestCase
         $this->assertNull($stored->getDepositDate());
     }
 
-    /** @dataProvider kinds */
+    #[DataProvider('kinds')]
     public function test_a_settlement_account_from_another_currency_is_refused(string $kind): void
     {
         $deposit = $this->makeDeposit($kind, null);
@@ -383,24 +331,13 @@ class DepositSettlementAccountTest extends TestCase
 
     /**
      * حساب تابع لبنك تاني مايتقبلش ، حتى لو نفس الشركة ونفس العملة.
-     *
-     * @dataProvider kinds
      */
+    #[DataProvider('kinds')]
     public function test_a_settlement_account_from_another_bank_is_refused(string $kind): void
     {
-        if (! $this->otherBank) {
-            $this->markTestSkipped('Development database has only one financial institution for this company.');
-        }
-
-        $otherBankAccount = FinancialInstitutionAccount::create([
-            'company_id' => $this->company->id,
-            'financial_institution_id' => $this->otherBank->id,
+        $otherBankAccount = $this->currentAccount($this->otherBank, $this->currency, [
             'account_number' => 'TEST-OTHER-BANK-'.uniqid(),
-            'currency' => $this->currency,
-            'balance_amount' => 0,
             'balance_date' => now()->subYears(3)->format('Y-m-d'),
-            'exchange_rate' => 1,
-            'is_active' => 1,
         ]);
 
         $deposit = $this->makeDeposit($kind, null);
@@ -418,7 +355,7 @@ class DepositSettlementAccountTest extends TestCase
         $this->assertSame($stored::RUNNING, $stored->getStatus());
     }
 
-    /** @dataProvider kinds */
+    #[DataProvider('kinds')]
     public function test_reversing_the_deposit_clears_the_settlement_account(string $kind): void
     {
         $deposit = $this->makeDeposit($kind, null);
@@ -440,7 +377,7 @@ class DepositSettlementAccountTest extends TestCase
 
     /* ─────────────────────── Break ─────────────────────── */
 
-    /** @dataProvider kinds */
+    #[DataProvider('kinds')]
     public function test_breaking_stores_the_chosen_settlement_account(string $kind): void
     {
         $deposit = $this->makeDeposit($kind, null);
@@ -465,7 +402,7 @@ class DepositSettlementAccountTest extends TestCase
         $this->assertSame($stored::BROKEN, $stored->getStatus());
     }
 
-    /** @dataProvider kinds */
+    #[DataProvider('kinds')]
     public function test_breaking_without_a_settlement_account_changes_nothing(string $kind): void
     {
         $deposit = $this->makeDeposit($kind, null);
@@ -484,7 +421,7 @@ class DepositSettlementAccountTest extends TestCase
         $this->assertNull($stored->getBreakDate());
     }
 
-    /** @dataProvider kinds */
+    #[DataProvider('kinds')]
     public function test_reversing_the_break_clears_the_settlement_account(string $kind): void
     {
         $deposit = $this->makeDeposit($kind, null);
@@ -510,9 +447,8 @@ class DepositSettlementAccountTest extends TestCase
     /**
      * صفحة الليست بتبعت لكل صف الحساب الافتراضي وقايمة الحسابات المسموح
      * بيها ، وده اللي بوب اب الاستحقاق والكسر في الفيو بيتعبوا منه.
-     *
-     * @dataProvider kinds
      */
+    #[DataProvider('kinds')]
     public function test_the_index_page_sends_the_settlement_account_props(string $kind): void
     {
         $deposit = $this->makeDeposit($kind, $this->fundingAccount->id);
@@ -538,7 +474,7 @@ class DepositSettlementAccountTest extends TestCase
 
     /* ───────── الحساب اللي البوب اب هيفتح عليه بعد العكس ───────── */
 
-    /** @dataProvider kinds */
+    #[DataProvider('kinds')]
     public function test_after_a_reverse_the_popup_goes_back_to_the_deducted_from_default(string $kind): void
     {
         $deposit = $this->makeDeposit($kind, $this->fundingAccount->id);

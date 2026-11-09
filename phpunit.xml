@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+    The tests run on their OWN databases, built from the project files by
+    `php artisan cashvero:prepare-test-db` (tests/bootstrap.php runs it for you when
+    anything changed). They connect as `cashvero_tester`, a MySQL account that can
+    reach the three cashvero_test* databases and nothing else, so no test can ever
+    read or change your real database. See docs/testing.md.
+-->
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="./vendor/phpunit/phpunit/phpunit.xsd"
-         bootstrap="vendor/autoload.php"
+         bootstrap="tests/bootstrap.php"
          colors="true">
     <testsuites>
         <testsuite name="Unit">
@@ -12,23 +19,29 @@
             <directory suffix="Test.php">./tests/Feature</directory>
         </testsuite>
     </testsuites>
-    <filter>
-        <whitelist processUncoveredFilesFromWhitelist="true">
+    <source>
+        <include>
             <directory suffix=".php">./app</directory>
-        </whitelist>
-    </filter>
+        </include>
+    </source>
     <php>
         <server name="APP_ENV" value="testing"/>
         <server name="BCRYPT_ROUNDS" value="4"/>
         <server name="CACHE_DRIVER" value="array"/>
-        <server name="DB_CONNECTION" value="mysql"/>
-        <server name="DB_DATABASE" value="cashvero_test"/>
-        <server name="SMOKE_DB" value="cashvero_test"/>
-        <server name="DB_DATABASE_SOURCE" value="cashvero_test_source"/>
-        <server name="DB_USERNAME" value="root"/>
-        <server name="DB_PASSWORD" value="root123"/>
-        <server name="MAIL_MAILER" value="array"/>
-        <server name="QUEUE_CONNECTION" value="sync"/>
         <server name="SESSION_DRIVER" value="array"/>
+        <server name="QUEUE_CONNECTION" value="sync"/>
+        <server name="MAIL_MAILER" value="array"/>
+        <server name="BROADCAST_DRIVER" value="null"/>
+        <server name="SENTRY_LARAVEL_DSN" value=""/>
+        <server name="SENTRY_DSN" value=""/>
+        <server name="DB_CONNECTION" value="mysql"/>
+        <server name="DB_HOST" value="127.0.0.1"/>
+        <server name="DB_DATABASE" value="cashvero_test"/>
+        <server name="DB_USERNAME" value="cashvero_tester"/>
+        <server name="DB_PASSWORD" value="cashvero_tester_local_only"/>
+        <server name="DB_HOST_SOURCE" value="127.0.0.1"/>
+        <server name="DB_DATABASE_SOURCE" value="cashvero_test_source"/>
+        <server name="DB_USERNAME_SOURCE" value="cashvero_tester"/>
+        <server name="DB_PASSWORD_SOURCE" value="cashvero_tester_local_only"/>
     </php>
 </phpunit>

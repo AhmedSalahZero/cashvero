@@ -82,7 +82,9 @@ class CheckDueAndPastedInvoicesJob implements ShouldQueue
 				
 				
 			//	$customerInvoicePastDueDays = $company->getCustomerComingDuesInvoicesNotificationsDays()  ;
-                $customerInvoiceComingDueDays = $company->getCustomerPastDuesInvoicesNotificationsDays() ;
+                // The "coming due" window is the company's coming-dues setting (it used to read the
+                // past-dues one, so changing "notify me N days before" had no effect).
+                $customerInvoiceComingDueDays = $company->getCustomerComingDuesInvoicesNotificationsDays() ;
 				
 				// $chequesPastDueDays = $company->getChequesInSafeNotificationDays() ;
 				$comingReceivableChequesDays = $company->getComingReceivableChequesNotificationDays() ;
@@ -411,8 +413,9 @@ class CheckDueAndPastedInvoicesJob implements ShouldQueue
 				
 				
 			
-                $supplierInvoicePastDueDays = $company->getSupplierComingDuesInvoicesNotificationsDays()  ;
-                $supplierInvoiceComingDueDays = $company->getSupplierPastDuesInvoicesNotificationsDays() ;
+                // Each window reads its own setting (the two were swapped).
+                $supplierInvoicePastDueDays = $company->getSupplierPastDuesInvoicesNotificationsDays()  ;
+                $supplierInvoiceComingDueDays = $company->getSupplierComingDuesInvoicesNotificationsDays() ;
 				
 				$comingPayableChequeNotificationDays = $company->getComingPayableChequeNotificationDays() ;
 				

@@ -6,9 +6,9 @@ use App\Http\Controllers\BalancesController;
 use App\Models\Company;
 use App\Models\InternalSettlement;
 use Carbon\Carbon;
+use Database\Factories\PartnerFactory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /**
@@ -20,276 +20,57 @@ use Tests\TestCase;
  * moment.
  *
  * These tests run against the app's REAL invoice and settlement
- * triggers (loaded from app/Triggers/Cashvero) rather than a stand-in,
- * because the whole design rests on them: the controller never writes
- * a balance, it writes a settlement row and the trigger recomputes
- * net_balance. A test without the triggers would prove nothing about
- * the number that ends up on screen.
+ * triggers — the full schema of the test database (cashvero_test),
+ * where every table and trigger the migrations build already exists —
+ * rather than a stand-in, because the whole design rests on them: the
+ * controller never writes a balance, it writes a settlement row and the
+ * trigger recomputes net_balance. A test without the triggers would
+ * prove nothing about the number that ends up on screen.
+ *
+ * The company, its partners and invoices are made fresh for each test
+ * and rolled back with it (TestCase).
  *
  * @see \App\Models\InternalSettlement
  * @see \App\Http\Controllers\BalancesController::storeInternalSettlement()
  */
 class InternalSettlementTest extends TestCase
 {
-    use \Tests\Support\UsesFixtureDatabase;
+    private Company $company;
 
-    private const COMPANY = 700;
+    /** A partner who is a customer AND a supplier. */
+    private int $dual;
 
-    private const DUAL = 70;           // customer AND supplier
-
-    private const CUSTOMER_ONLY = 71;
-
-    /** @var list<string> */
-    private array $tables = [
-        'settlements', 'payment_settlements', 'internal_settlements',
-        'customer_invoices', 'supplier_invoices', 'down_payment_settlements',
-        'invoice_deductions', 'money_received', 'money_payments',
-        'down_payment_money_payment_settlements',
-        'factoring_transactions', 'letter_of_credit_issuances',
-        'partners', 'companies',
-    ];
+    private int $customerOnly;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $database = DB::connection()->getDatabaseName();
-        $this->assertStringContainsString('test', $database, "Refusing to run against '{$database}'.");
+        $this->company = $this->makeCompany(['main_functional_currency' => 'EGP']);
+        $this->dual = PartnerFactory::new()->forCompany($this->company)->customer()->supplier()->create(['name' => 'Ahmed'])->id;
+        $this->customerOnly = PartnerFactory::new()->forCompany($this->company)->customer()->create(['name' => 'Mona'])->id;
 
-        $this->dropTables();
-        $this->createSchema();
-        $this->loadRealTriggers();
-
-        DB::table('companies')->insert(['id' => self::COMPANY, 'main_functional_currency' => 'EGP']);
-        DB::table('partners')->insert([
-            ['id' => self::DUAL, 'company_id' => self::COMPANY, 'name' => 'Ahmed', 'is_customer' => 1, 'is_supplier' => 1],
-            ['id' => self::CUSTOMER_ONLY, 'company_id' => self::COMPANY, 'name' => 'Mona', 'is_customer' => 1, 'is_supplier' => 0],
-        ]);
-
-        $this->app->instance('request', Request::create('/en/'.self::COMPANY.'/customer-balances/CustomerInvoice', 'GET'));
-    }
-
-    protected function tearDown(): void
-    {
-        $this->dropTables();
-
-        parent::tearDown();
-    }
-
-    private function dropTables(): void
-    {
-        foreach ($this->tables as $table) {
-            Schema::dropIfExists($table);
-        }
-    }
-
-    private function createSchema(): void
-    {
-        Schema::create('companies', function ($table) {
-            $table->unsignedBigInteger('id')->primary();
-            $table->string('main_functional_currency')->nullable();
-        });
-        Schema::create('partners', function ($table) {
-            $table->unsignedBigInteger('id')->primary();
-            $table->unsignedBigInteger('company_id')->nullable();
-            $table->string('name')->nullable();
-            $table->boolean('is_customer')->default(0);
-            $table->boolean('is_supplier')->default(0);
-        });
-
-        // Both invoice tables carry every column their trigger touches.
-        foreach (['customer_invoices' => 'customer', 'supplier_invoices' => 'supplier'] as $tableName => $side) {
-            $money = $side === 'customer' ? 'collected' : 'paid';
-            Schema::create($tableName, function ($table) use ($side, $money) {
-                $table->bigIncrements('id');
-                $table->unsignedBigInteger('company_id')->nullable();
-                $table->unsignedBigInteger($side.'_id')->nullable();
-                $table->string($side.'_name')->nullable();
-                $table->string('invoice_number')->nullable();
-                $table->date('invoice_date')->nullable();
-                $table->date('invoice_due_date')->nullable();
-                $table->string('currency')->nullable();
-                $table->string('invoice_status')->nullable();
-                $table->string('invoice_month')->nullable();
-                $table->string('invoice_year')->nullable();
-                $table->decimal('exchange_rate', 18, 6)->default(1);
-                foreach ([
-                    'invoice_amount', 'vat_amount', 'discount_amount', 'net_invoice_amount',
-                    'withhold_amount', 'odoo_withhold_amount', 'total_withhold_amount',
-                    'total_deductions', 'net_balance',
-                    $money.'_amount', 'odoo_'.$money.'_amount', 'excel_'.$money.'_amount', 'total_'.$money.'_amount',
-                ] as $column) {
-                    $table->decimal($column, 18, 2)->default(0);
-                    $table->decimal($column.'_in_main_currency', 18, 2)->default(0);
-                }
-            });
-        }
-
-        foreach (['settlements' => 'money_received_id', 'payment_settlements' => 'money_payment_id'] as $tableName => $moneyColumn) {
-            Schema::create($tableName, function ($table) use ($tableName, $moneyColumn) {
-                $table->increments('id');
-                $table->unsignedBigInteger('invoice_id')->nullable();
-                $table->unsignedBigInteger('partner_id')->default(0);
-                $table->string('withhold_amount')->nullable();
-                $table->string('settlement_amount')->nullable();
-                $table->integer($moneyColumn)->nullable();
-                $table->unsignedBigInteger('company_id')->nullable();
-                $table->unsignedBigInteger('internal_settlement_id')->nullable();
-                if ($tableName === 'payment_settlements') {
-                    $table->unsignedBigInteger('letter_of_credit_issuance_id')->default(0);
-                    $table->unsignedBigInteger('cash_expense_id')->nullable();
-                }
-                $table->timestamps();
-            });
-        }
-
-        /**
-         * The supplier-side settlement trigger keeps its own down-payment
-         * table in step; the customer side uses down_payment_settlements.
-         * Both stay empty here — they exist so the triggers can run.
-         */
-        Schema::create('down_payment_money_payment_settlements', function ($table) {
-            $table->bigIncrements('id');
-            $table->unsignedBigInteger('money_payment_id')->nullable();
-            $table->unsignedBigInteger('supplier_id')->nullable();
-            $table->string('currency')->nullable();
-            $table->decimal('down_payment_amount', 18, 2)->default(0);
-            $table->decimal('total_down_payment_settlement', 18, 2)->default(0);
-            $table->decimal('down_payment_balance', 18, 2)->default(0);
-        });
-        // Referenced by the settlement triggers; empty is fine.
-        Schema::create('down_payment_settlements', function ($table) {
-            $table->bigIncrements('id');
-            $table->unsignedBigInteger('money_received_id')->nullable();
-            $table->unsignedBigInteger('money_payment_id')->nullable();
-            $table->unsignedBigInteger('customer_id')->nullable();
-            $table->unsignedBigInteger('supplier_id')->nullable();
-            $table->unsignedBigInteger('company_id')->nullable();
-            $table->string('currency')->nullable();
-            $table->decimal('down_payment_balance', 18, 2)->default(0);
-        });
-        foreach (['money_received' => 'receiving_date', 'money_payments' => 'delivery_date'] as $tableName => $dateColumn) {
-            Schema::create($tableName, function ($table) use ($dateColumn) {
-                $table->bigIncrements('id');
-                $table->unsignedBigInteger('company_id')->nullable();
-                $table->unsignedBigInteger('partner_id')->nullable();
-                $table->string('partner_type')->nullable();
-                $table->date($dateColumn)->nullable();
-                $table->decimal('amount_in_invoice_currency', 18, 2)->default(0);
-            });
-        }
-        Schema::create('invoice_deductions', function ($table) {
-            $table->bigIncrements('id');
-            $table->unsignedBigInteger('invoice_id')->nullable();
-            $table->string('invoice_type')->nullable();
-            $table->date('date')->nullable();
-        });
-        Schema::create('factoring_transactions', function ($table) {
-            $table->bigIncrements('id');
-            $table->unsignedBigInteger('company_id')->nullable();
-            $table->unsignedBigInteger('customer_id')->nullable();
-            $table->string('recourse_type')->nullable();
-            $table->date('factoring_date')->nullable();
-        });
-        Schema::create('letter_of_credit_issuances', function ($table) {
-            $table->bigIncrements('id');
-            $table->unsignedBigInteger('company_id')->nullable();
-            $table->unsignedBigInteger('partner_id')->nullable();
-            $table->date('payment_date')->nullable();
-        });
-
-        require_once database_path('migrations/2026_08_25_100000_create_internal_settlements_table.php');
-        (require database_path('migrations/2026_08_25_100000_create_internal_settlements_table.php'))->up();
-    }
-
-    /**
-     * Loads the app's own trigger definitions into the test schema.
-     *
-     * The .sql files are written for the mysql client, so they use
-     * DELIMITER to let a trigger body contain semicolons. PDO has no
-     * idea what DELIMITER means and takes one statement at a time, so
-     * the directive is honoured here instead: track the current
-     * delimiter and cut the file on it.
-     *
-     * If these files stop matching production the tests below start
-     * failing — which is the point of loading the real ones.
-     */
-    private function loadRealTriggers(): void
-    {
-        foreach ([
-            'customer_invoices_triggers.sql',
-            'supplier_invoices_triggers.sql',
-            'settlements.sql',
-            'payment_settlements.sql',
-        ] as $file) {
-            foreach ($this->statementsIn(file_get_contents(app_path('Triggers/Cashvero/'.$file))) as $statement) {
-                DB::unprepared($statement);
-            }
-        }
-
-        $loaded = DB::table('information_schema.TRIGGERS')
-            ->where('TRIGGER_SCHEMA', DB::connection()->getDatabaseName())
-            ->count();
-
-        $this->assertGreaterThanOrEqual(8, $loaded,
-            'The invoice and settlement triggers did not load — every balance assertion below would be meaningless.');
-    }
-
-    /**
-     * Splits a mysql-client script into statements, honouring DELIMITER.
-     *
-     * @return list<string>
-     */
-    private function statementsIn(string $sql): array
-    {
-        $delimiter = ';';
-        $buffer = '';
-        $statements = [];
-
-        foreach (preg_split('/\R/u', $sql) as $line) {
-            if (preg_match('/^\s*delimiter\s+(\S+)\s*$/i', $line, $m)) {
-                $delimiter = $m[1];
-
-                continue;
-            }
-
-            $buffer .= $line."\n";
-
-            while (($at = strpos($buffer, $delimiter)) !== false) {
-                $statement = trim(substr($buffer, 0, $at));
-                $buffer = substr($buffer, $at + strlen($delimiter));
-
-                if ($statement !== '') {
-                    $statements[] = $statement;
-                }
-            }
-        }
-
-        if (trim($buffer) !== '') {
-            $statements[] = trim($buffer);
-        }
-
-        return $statements;
+        $this->app->instance('request', Request::create('/en/'.$this->company->id.'/customer-balances/CustomerInvoice', 'GET'));
     }
 
     // ---------------------------------------------------------------
     // fixtures
     // ---------------------------------------------------------------
 
-    private function customerInvoice(string $number, float $amount, int $partnerId = self::DUAL): int
+    private function customerInvoice(string $number, float $amount, ?int $partnerId = null): int
     {
-        return $this->invoice('customer_invoices', 'customer_id', $number, $amount, $partnerId);
+        return $this->invoice('customer_invoices', 'customer_id', $number, $amount, $partnerId ?? $this->dual);
     }
 
-    private function supplierInvoice(string $number, float $amount, int $partnerId = self::DUAL): int
+    private function supplierInvoice(string $number, float $amount, ?int $partnerId = null): int
     {
-        return $this->invoice('supplier_invoices', 'supplier_id', $number, $amount, $partnerId);
+        return $this->invoice('supplier_invoices', 'supplier_id', $number, $amount, $partnerId ?? $this->dual);
     }
 
     private function invoice(string $table, string $partnerColumn, string $number, float $amount, int $partnerId): int
     {
         return (int) DB::table($table)->insertGetId([
-            'company_id' => self::COMPANY,
+            'company_id' => $this->company->id,
             $partnerColumn => $partnerId,
             'invoice_number' => $number,
             'invoice_date' => Carbon::today()->subMonth()->format('Y-m-d'),
@@ -300,19 +81,25 @@ class InternalSettlementTest extends TestCase
         ]);
     }
 
-    private function openBalance(string $table, string $partnerColumn, int $partnerId = self::DUAL): float
+    private function openBalance(string $table, string $partnerColumn, int $partnerId): float
     {
         return round((float) DB::table($table)->where($partnerColumn, $partnerId)->sum('net_balance'), 2);
     }
 
-    private function customerOpen(int $partnerId = self::DUAL): float
+    private function customerOpen(?int $partnerId = null): float
     {
-        return $this->openBalance('customer_invoices', 'customer_id', $partnerId);
+        return $this->openBalance('customer_invoices', 'customer_id', $partnerId ?? $this->dual);
     }
 
-    private function supplierOpen(int $partnerId = self::DUAL): float
+    private function supplierOpen(?int $partnerId = null): float
     {
-        return $this->openBalance('supplier_invoices', 'supplier_id', $partnerId);
+        return $this->openBalance('supplier_invoices', 'supplier_id', $partnerId ?? $this->dual);
+    }
+
+    /** This company's internal settlements (the only ones a test can see — see TestCase). */
+    private function settlements(): \Illuminate\Database\Eloquent\Builder
+    {
+        return InternalSettlement::query()->where('company_id', $this->company->id);
     }
 
     private function controller(): BalancesController
@@ -322,15 +109,15 @@ class InternalSettlementTest extends TestCase
 
     private function submit(array $payload, ?InternalSettlement $editing = null)
     {
-        $request = Request::create('/en/'.self::COMPANY.'/customer-balances/internal-settlement', $editing ? 'PUT' : 'POST', $payload + [
-            'partner_id' => self::DUAL,
+        $request = Request::create('/en/'.$this->company->id.'/customer-balances/internal-settlement', $editing ? 'PUT' : 'POST', $payload + [
+            'partner_id' => $this->dual,
             'currency' => 'EGP',
             'settlement_date' => Carbon::today()->format('Y-m-d'),
         ]);
         $request->setLaravelSession(app('session.store'));
         $this->app->instance('request', $request);
 
-        $company = Company::findOrFail(self::COMPANY);
+        $company = Company::findOrFail($this->company->id);
 
         return $editing
             ? $this->controller()->updateInternalSettlement($request, $company, $editing)
@@ -362,7 +149,7 @@ class InternalSettlementTest extends TestCase
 
         $this->assertSame(700.0, $this->customerOpen(), '1,000 − 300 settled.');
         $this->assertSame(500.0, $this->supplierOpen(), '800 − 300 settled.');
-        $this->assertSame(300.0, InternalSettlement::firstOrFail()->getAmount());
+        $this->assertSame(300.0, $this->settlements()->firstOrFail()->getAmount());
     }
 
     /** One settlement can be spread over several invoices per side. */
@@ -406,7 +193,7 @@ class InternalSettlementTest extends TestCase
 
         $this->assertSame(0.0, $this->customerOpen(), 'القروش لازم تتصفّى، مش تسيب باقي');
         $this->assertSame(0.0, $this->supplierOpen());
-        $this->assertSame(70880.01, InternalSettlement::firstOrFail()->getAmount());
+        $this->assertSame(70880.01, $this->settlements()->firstOrFail()->getAmount());
     }
 
     /** ... and a cent of mismatch is still refused, not rounded away. */
@@ -447,7 +234,7 @@ class InternalSettlementTest extends TestCase
             'supplier_allocations' => [$supplier => 1000],
         ]);
 
-        $settlement = InternalSettlement::firstOrFail();
+        $settlement = $this->settlements()->firstOrFail();
 
         // The row now reads zero, so can_settle would be false ...
         $this->assertSame(0.0, $this->customerOpen(), 'المفروض الرصيد اتصفّى بالكامل');
@@ -462,11 +249,11 @@ class InternalSettlementTest extends TestCase
         $this->assertSame(600.0, $settlement->fresh()->getAmount());
 
         $this->controller()->destroyInternalSettlement(
-            Company::findOrFail(self::COMPANY), $settlement->fresh()
+            Company::findOrFail($this->company->id), $settlement->fresh()
         );
 
         $this->assertSame(1000.0, $this->customerOpen(), 'الحذف لازم يرجّع الرصيد كامل');
-        $this->assertSame(0, InternalSettlement::count());
+        $this->assertSame(0, $this->settlements()->count());
     }
 
     /** The button that reaches them must not be gated on can_settle alone. */
@@ -550,7 +337,7 @@ class InternalSettlementTest extends TestCase
         $this->assertStringContainsString('S-1', (string) $this->failure($response));
         $this->assertSame(1000.0, $this->customerOpen(), 'Nothing may move when the allocation is refused.');
         $this->assertSame(800.0, $this->supplierOpen());
-        $this->assertSame(0, InternalSettlement::query()->count());
+        $this->assertSame(0, $this->settlements()->count());
     }
 
     /** Two sides that do not agree are two adjustments, not an offset. */
@@ -571,18 +358,18 @@ class InternalSettlementTest extends TestCase
 
     public function test_it_refuses_a_partner_who_is_not_also_a_supplier(): void
     {
-        $customer = $this->customerInvoice('C-1', 1000, self::CUSTOMER_ONLY);
+        $customer = $this->customerInvoice('C-1', 1000, $this->customerOnly);
 
         $request = Request::create('/x', 'POST', [
-            'partner_id' => self::CUSTOMER_ONLY, 'currency' => 'EGP',
+            'partner_id' => $this->customerOnly, 'currency' => 'EGP',
             'settlement_date' => Carbon::today()->format('Y-m-d'),
             'customer_allocations' => [$customer => 100], 'supplier_allocations' => [],
         ]);
         $request->setLaravelSession(app('session.store'));
-        $response = $this->controller()->storeInternalSettlement($request, Company::findOrFail(self::COMPANY));
+        $response = $this->controller()->storeInternalSettlement($request, Company::findOrFail($this->company->id));
 
         $this->assertStringContainsString('both a customer and a supplier', (string) $this->failure($response));
-        $this->assertSame(1000.0, $this->customerOpen(self::CUSTOMER_ONLY));
+        $this->assertSame(1000.0, $this->customerOpen($this->customerOnly));
     }
 
     public function test_it_refuses_the_main_currency_roll_up(): void
@@ -597,7 +384,7 @@ class InternalSettlementTest extends TestCase
         ]);
 
         $this->assertNotNull($this->failure($response));
-        $this->assertSame(0, InternalSettlement::query()->count());
+        $this->assertSame(0, $this->settlements()->count());
     }
 
     /** A settlement with nothing allocated is not a settlement. */
@@ -630,7 +417,7 @@ class InternalSettlementTest extends TestCase
             'customer_allocations' => [$customer => 300],
             'supplier_allocations' => [$supplier => 300],
         ]);
-        $settlement = InternalSettlement::firstOrFail();
+        $settlement = $this->settlements()->firstOrFail();
         $this->assertSame(700.0, $this->customerOpen());
 
         $response = $this->submit([
@@ -654,7 +441,7 @@ class InternalSettlementTest extends TestCase
             'customer_allocations' => [$customer => 800],
             'supplier_allocations' => [$supplier => 800],
         ]);
-        $settlement = InternalSettlement::firstOrFail();
+        $settlement = $this->settlements()->firstOrFail();
 
         $this->submit([
             'customer_allocations' => [$customer => 250],
@@ -677,7 +464,7 @@ class InternalSettlementTest extends TestCase
             'customer_allocations' => [$c1 => 200],
             'supplier_allocations' => [$s1 => 200],
         ]);
-        $settlement = InternalSettlement::firstOrFail();
+        $settlement = $this->settlements()->firstOrFail();
 
         $this->submit([
             'customer_allocations' => [$c2 => 200],
@@ -701,7 +488,7 @@ class InternalSettlementTest extends TestCase
             'customer_allocations' => [$customer => 400],
             'supplier_allocations' => [$supplier => 400],
         ]);
-        $settlement = InternalSettlement::firstOrFail();
+        $settlement = $this->settlements()->firstOrFail();
 
         $response = $this->submit([
             'customer_allocations' => [$customer => 500],
@@ -727,15 +514,18 @@ class InternalSettlementTest extends TestCase
             'customer_allocations' => [$customer => 275.55],
             'supplier_allocations' => [$supplier => 275.55],
         ]);
-        $settlement = InternalSettlement::firstOrFail();
+        $settlement = $this->settlements()->firstOrFail();
 
-        $this->controller()->destroyInternalSettlement(Company::findOrFail(self::COMPANY), $settlement);
+        $this->assertSame(1, DB::table('settlements')->where('company_id', $this->company->id)->count(), 'One allocation row per side before the delete.');
+        $this->assertSame(1, DB::table('payment_settlements')->where('company_id', $this->company->id)->count());
+
+        $this->controller()->destroyInternalSettlement(Company::findOrFail($this->company->id), $settlement);
 
         $this->assertSame(1000.0, $this->customerOpen());
         $this->assertSame(800.0, $this->supplierOpen());
-        $this->assertSame(0, InternalSettlement::query()->count());
-        $this->assertSame(0, DB::table('settlements')->count(), 'Its allocation rows go with it.');
-        $this->assertSame(0, DB::table('payment_settlements')->count());
+        $this->assertSame(0, $this->settlements()->count());
+        $this->assertSame(0, DB::table('settlements')->where('company_id', $this->company->id)->count(), 'Its allocation rows go with it.');
+        $this->assertSame(0, DB::table('payment_settlements')->where('company_id', $this->company->id)->count());
     }
 
     /** Deleting one settlement must not disturb another. */
@@ -745,12 +535,12 @@ class InternalSettlementTest extends TestCase
         $supplier = $this->supplierInvoice('S-1', 1000);
 
         $this->submit(['customer_allocations' => [$customer => 100], 'supplier_allocations' => [$supplier => 100]]);
-        $first = InternalSettlement::orderBy('id')->firstOrFail();
+        $first = $this->settlements()->orderBy('id')->firstOrFail();
         $this->submit(['customer_allocations' => [$customer => 250], 'supplier_allocations' => [$supplier => 250]]);
 
         $this->assertSame(650.0, $this->customerOpen(), '1,000 − 100 − 250.');
 
-        $this->controller()->destroyInternalSettlement(Company::findOrFail(self::COMPANY), $first);
+        $this->controller()->destroyInternalSettlement(Company::findOrFail($this->company->id), $first);
 
         $this->assertSame(750.0, $this->customerOpen(), 'Only the deleted 100 comes back.');
         $this->assertSame(750.0, $this->supplierOpen());
@@ -815,7 +605,7 @@ class InternalSettlementTest extends TestCase
     public function test_the_invoice_endpoint_is_not_captured_by_the_balances_wildcard(): void
     {
         $matched = app('router')->getRoutes()->match(
-            Request::create('/'.self::COMPANY.'/customer-balances/internal-settlement-invoices', 'GET')
+            Request::create('/'.$this->company->id.'/customer-balances/internal-settlement-invoices', 'GET')
         );
 
         $this->assertSame('internal.settlement.invoices', $matched->getName());
@@ -826,14 +616,14 @@ class InternalSettlementTest extends TestCase
     {
         foreach (['CustomerInvoice', 'SupplierInvoice'] as $modelType) {
             $matched = app('router')->getRoutes()->match(
-                Request::create('/'.self::COMPANY.'/customer-balances/'.$modelType, 'GET')
+                Request::create('/'.$this->company->id.'/customer-balances/'.$modelType, 'GET')
             );
             $this->assertSame('view.balances', $matched->getName());
         }
 
         $this->expectException(\Symfony\Component\HttpKernel\Exception\NotFoundHttpException::class);
         app('router')->getRoutes()->match(
-            Request::create('/'.self::COMPANY.'/customer-balances/NotAModel', 'GET')
+            Request::create('/'.$this->company->id.'/customer-balances/NotAModel', 'GET')
         );
     }
 
@@ -867,7 +657,7 @@ class InternalSettlementTest extends TestCase
         $index = 0;
 
         \App\Http\Controllers\CustomerInvoiceDashboardController::appendBalances(
-            false, 'EGP', collect(), $index, $rows, self::DUAL,
+            false, 'EGP', collect(), $index, $rows, $this->dual,
             Carbon::today()->subYear()->format('Y-m-d'), Carbon::today()->format('Y-m-d'),
             [], $modelType, true
         );

@@ -5,16 +5,13 @@ namespace Tests\Feature\Balances;
 use App\Http\Controllers\MoneyPaymentController;
 use App\Http\Controllers\MoneyReceivedController;
 use App\Models\Company;
-use App\Models\FinancialInstitution;
-use App\Models\Partner;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
+use Tests\Concerns\MakesBanks;
+use Tests\Concerns\MakesInvoices;
 use Tests\TestCase;
 
 /**
@@ -26,19 +23,12 @@ use Tests\TestCase;
  */
 class ReceiveCurrencyFromInvoiceRowTest extends TestCase
 {
-    use DatabaseTransactions;
+    use MakesBanks;
+    use MakesInvoices;
 
     private Company $company;
 
     private User $user;
-
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
 
     protected function setUp(): void
     {
@@ -50,33 +40,13 @@ class ReceiveCurrencyFromInvoiceRowTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
+        // A company with a bank holding an EGP and a USD account: the currencies money can move in.
+        $this->company = $this->makeCompany();
+        $bank = $this->bank($this->company);
+        $this->currentAccount($bank, 'EGP');
+        $this->currentAccount($bank, 'USD');
 
-        if (! Schema::connection('mysql')->hasTable('customer_invoices')) {
-            $this->markTestSkipped('No development schema on '.DB::connection('mysql')->getDatabaseName().' - set SMOKE_DB to run this suite.');
-        }
-
-        $institution = FinancialInstitution::query()->whereNotNull('company_id')->first();
-        if (! $institution) {
-            $this->markTestSkipped('Development database has no financial institution to attach company context to.');
-        }
-
-        $this->company = Company::findOrFail($institution->company_id);
-
-        $user = User::create([
-            'name' => 'Invoice Row Currency '.uniqid(),
-            'email' => 'invoice-row-currency-'.uniqid().'@example.test',
-            'password' => bcrypt('secret-for-tests'),
-            'company_id' => $this->company->id,
-        ]);
-        $user->givePermissionTo(['create money received', 'create supplier payment']);
-        $user->companies()->attach($this->company->id);
-        $user->load('companies');
-        $this->user = $user;
+        $this->user = $this->makeUser(['create money received', 'create supplier payment'], $this->company);
     }
 
     /**
@@ -103,9 +73,9 @@ class ReceiveCurrencyFromInvoiceRowTest extends TestCase
 
     public function test_money_received_from_a_usd_invoice_row_can_still_receive_in_another_currency(): void
     {
-        $customer = Partner::create(['company_id' => $this->company->id, 'name' => 'Row Customer '.uniqid(), 'is_customer' => 1]);
-        $usdInvoice = DB::table('customer_invoices')->insertGetId(['company_id' => $this->company->id, 'customer_id' => $customer->id, 'currency' => 'USD']);
-        DB::table('customer_invoices')->insert(['company_id' => $this->company->id, 'customer_id' => $customer->id, 'currency' => 'EGP']);
+        $customer = $this->customer($this->company);
+        $usdInvoice = $this->invoice($customer, ['currency' => 'USD'])->id;
+        $this->invoice($customer, ['currency' => 'EGP']);
 
         $this->actingAs($this->user);
         $props = $this->createFormProps(MoneyReceivedController::class, 'money-received/create', $usdInvoice);
@@ -117,8 +87,8 @@ class ReceiveCurrencyFromInvoiceRowTest extends TestCase
 
     public function test_the_standard_money_received_form_offers_the_same_receive_currencies(): void
     {
-        $customer = Partner::create(['company_id' => $this->company->id, 'name' => 'Row Customer '.uniqid(), 'is_customer' => 1]);
-        $usdInvoice = DB::table('customer_invoices')->insertGetId(['company_id' => $this->company->id, 'customer_id' => $customer->id, 'currency' => 'USD']);
+        $customer = $this->customer($this->company);
+        $usdInvoice = $this->invoice($customer, ['currency' => 'USD'])->id;
 
         $this->actingAs($this->user);
         $fromRow = $this->createFormProps(MoneyReceivedController::class, 'money-received/create', $usdInvoice);
@@ -133,8 +103,8 @@ class ReceiveCurrencyFromInvoiceRowTest extends TestCase
 
     public function test_money_payment_from_a_usd_invoice_row_can_still_pay_in_another_currency(): void
     {
-        $supplier = Partner::create(['company_id' => $this->company->id, 'name' => 'Row Supplier '.uniqid(), 'is_supplier' => 1]);
-        $usdInvoice = DB::table('supplier_invoices')->insertGetId(['company_id' => $this->company->id, 'supplier_id' => $supplier->id, 'currency' => 'USD']);
+        $supplier = $this->supplier($this->company);
+        $usdInvoice = $this->supplierInvoice($supplier, ['currency' => 'USD'])->id;
 
         $this->actingAs($this->user);
         $props = $this->createFormProps(MoneyPaymentController::class, 'money-payment/create', $usdInvoice);

@@ -165,7 +165,7 @@ class SalesGatheringController extends Controller
     public function index(Company $company, Request $request, string $uploadType='SalesGathering',?string $loanId = null )
     {
 		$loan = MediumTermLoan::find($loanId);
-		$leasingContract = LeasingContract::find($loanId);
+		$leasingContract = LeasingContract::where('company_id', $company->id)->find($loanId);
         $modelName = $uploadType;
 		if ($modelName == 'LoanSchedule' && $loanId) {
 			session(['loan_schedule_import_loan_id_' . $company->id => $loanId]);

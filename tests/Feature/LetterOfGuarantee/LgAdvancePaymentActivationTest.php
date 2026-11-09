@@ -306,7 +306,7 @@ class LgAdvancePaymentActivationTest extends TestCase
      */
     public function test_nothing_is_sent_to_odoo_until_the_lg_is_activated(): void
     {
-        DB::table('companies')->where('id', self::COMPANY)->update(['odoo_db_url' => 'https://odoo.invalid', 'odoo_db_name' => 'cashvero']);
+        DB::table('companies')->where('id', self::COMPANY)->update(['odoo_db_url' => 'https://odoo.invalid', 'odoo_db_name' => 'test']);
         $this->actingAs((new User)->forceFill(['id' => 7, 'name' => 'Tester', 'odoo_username' => 'tester', 'odoo_db_password' => 'secret']));
 
         $this->assertFalse($this->odooCallsQueuedBy(fn () => $this->issue()));
@@ -487,9 +487,7 @@ class LgAdvancePaymentActivationTest extends TestCase
     // the model's own rules
     // ---------------------------------------------------------------
 
-    /**
-     * @dataProvider activationDateInputProvider
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('activationDateInputProvider')]
     public function test_the_activation_date_accepts_what_the_forms_and_imports_send(?string $input, ?string $stored): void
     {
         $letterOfGuaranteeIssuance = new LetterOfGuaranteeIssuance;
@@ -512,9 +510,8 @@ class LgAdvancePaymentActivationTest extends TestCase
     /**
      * Same numbers the issuance forms show as LG Duration (Months), so
      * the commission the server posts matches what the user saw.
-     *
-     * @dataProvider monthsBetweenProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('monthsBetweenProvider')]
     public function test_months_between_rounds_up_like_the_form(string $start, string $end, int $months): void
     {
         $this->assertSame($months, LetterOfGuaranteeIssuance::monthsBetweenCeil($start, $end));
@@ -567,9 +564,8 @@ class LgAdvancePaymentActivationTest extends TestCase
      * or a TD, the deposit itself is the cover, so no cash-cover row
      * is posted — fees, commission and the LG balance still are, and
      * still on the Activation Date.
-     *
-     * @dataProvider fundingSourceProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('fundingSourceProvider')]
     public function test_every_funding_source_posts_on_the_activation_date(string $source, bool $movesCashCover, array $extra): void
     {
         $letterOfGuaranteeIssuance = $this->issue($extra + [
@@ -621,9 +617,7 @@ class LgAdvancePaymentActivationTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider otherLgTypeProvider
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('otherLgTypeProvider')]
     public function test_every_other_lg_type_posts_on_its_issuance_date(string $lgType): void
     {
         $letterOfGuaranteeIssuance = $this->issue([

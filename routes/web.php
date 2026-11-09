@@ -48,7 +48,7 @@ Route::group(
             Route::post('remove-user', [RemoveUsercontroller::class, '__invoke'])->name('remove.user');
             Route::post('remove-company', [RemoveCompanyController::class, '__invoke'])->name('remove.company');
 
-            Route::resource('companySection', 'CompanyController');
+            Route::resource('companySection', 'CompanyController')->except(['show']);
             Route::get('user/create/{company?}', 'UserController@create')->middleware('isCashManagement')->name('user.create');
             Route::get('user/all/{company?}', 'UserController@index')->middleware('isCashManagement')->name('user.index');
             Route::post('user/{company?}', 'UserController@store')->middleware('isCashManagement')->name('user.store');
@@ -174,10 +174,8 @@ Route::group(
 
                 Route::get('salesGathering/export/{model}', 'SalesGatheringController@export')->name('salesGathering.export');
 
-                Route::resource('salesGatheringTest', 'SalesGatheringTestController')
-                    ->only(['edit', 'update', 'destroy']);
 
-                Route::resource('salesGathering', 'SalesGatheringController');
+                Route::resource('salesGathering', 'SalesGatheringController')->except(['create', 'update']);
 
                 // ⚠️ لازم تفضل فوق الراوت اللي تحتها : {loanId?} بيبلع أي
                 // سيجمنت ، فـ /print كان هيتقرا كـ loanId
@@ -268,11 +266,11 @@ Route::group(
                     Route::post('add-new-partner', 'AddNewCustomerController@addNew')->name('add.new.partner');
                     Route::post('add-new-partner/{type}', 'AddNewCustomerController@addNew2')->name('add.new.partner.type');
                     Route::get('opening-balance/manage', 'OpeningBalancesController@manage')->name('opening-balance.manage');
-                    Route::resource('opening-balance', 'OpeningBalancesController');
+                    Route::resource('opening-balance', 'OpeningBalancesController')->only(['index', 'store', 'update']);
                     Route::get('customers-opening-balance/manage', 'CustomerOpeningBalancesController@manage')->name('customers-opening-balance.manage');
-                    Route::resource('customers-opening-balance', 'CustomerOpeningBalancesController');
+                    Route::resource('customers-opening-balance', 'CustomerOpeningBalancesController')->only(['index', 'store', 'update']);
                     Route::get('suppliers-opening-balance/manage', 'SupplierOpeningBalancesController@manage')->name('suppliers-opening-balance.manage');
-                    Route::resource('suppliers-opening-balance', 'SupplierOpeningBalancesController');
+                    Route::resource('suppliers-opening-balance', 'SupplierOpeningBalancesController')->only(['index', 'store', 'update']);
 
                     /**
                      * Other Dues — non-invoice amounts owed either way with
@@ -434,8 +432,8 @@ Route::group(
                     //
                     Route::get('notifications/{type}', 'NotificationsController@index')->name('view.notifications');
                     Route::get('notifications-detail/{type}', 'NotificationsController@detail')->name('notifications.detail');
-                    Route::resource('notifications-settings', 'NotificationSettingsController');
-                    Route::resource('odoo-settings', 'OdooSettingController');
+                    Route::resource('notifications-settings', 'NotificationSettingsController')->only(['index', 'store']);
+                    Route::resource('odoo-settings', 'OdooSettingController')->only(['index', 'store']);
                     Route::get('mark-notifications-as-read', 'NotificationSettingsController@markAsRead')->name('mark.notifications.as.read');
 
                     Route::get('adjust-due-dates/{modelId}/{modelType}', 'AdjustedDueDateHistoriesController@index')->name('adjust.due.dates');
@@ -913,7 +911,6 @@ Route::group(
                     Route::get('instructions/{page}', 'InstructionsController@show')->name('view.instructions');
 
                     Route::get('money-received', 'MoneyReceivedController@index')->name('view.money.receive');
-                    Route::get('money-received/json', 'MoneyReceivedController@indexJson')->name('view.money.receive.json');
                     Route::post('resend-odoo-money/{moneyReceived}', 'MoneyReceivedController@resendToOdoo')->name('resend.with.odoo');
                     /**
                      * * تفاصيل الفواتير المسوّاة — بوب اب للقراءة فقط في صفحة الـ index
@@ -981,7 +978,6 @@ Route::group(
                     Route::get('money-payment/get-account-numbers-based-on-account-type/{accountType}/{currency}/{financialInstitutionId}', 'MoneyPaymentController@getAccountNumbersForAccountType')->name('lookup.money.payment.account.numbers'); // ajax request
                     Route::post('mark-payable-cheques-as-paid', 'MoneyPaymentController@markChequesAsPaid')->name('payable.cheque.mark.as.paid');
                     Route::post('unmark-payable-cheques-as-paid', 'MoneyPaymentController@unmarkChequesAsPaid')->name('payable.cheque.unmark.as.paid');
-                    Route::post('mark-outgoing-transfer-as-paid', 'MoneyPaymentController@markOutgoingTransfersAsPaid')->name('outgoing.transfer.mark.as.paid');
                     Route::get('get-supplier-invoices', 'SupplierInvoicesController@getSupplierInvoicesForSupplier')->name('get.supplier.invoices');
                     Route::get('get-suppliers-based-on-currency/{currencyName}', 'MoneyPaymentController@getSuppliersBasedOnCurrency')->name('lookup.suppliers.by.currency');
                     Route::get('get-partners-based-on-type/{currencyName}', 'MoneyPaymentController@getPartnersBasedOnCurrency')->name('lookup.partners.by.type.money.payment');
@@ -1073,7 +1069,6 @@ Route::delete('{lang}/remove-company-image/{company}', function ($lang, Company 
     return redirect()->back()->with('success', __('Company Image Has Been Deleted Successfully'));
 })->middleware('auth')->name('remove.company.image');
 
-Route::get('getStartDateAndEndDateOfIncomeStatementForCompany', 'HomeController@getIncomeStatementStartDateAndEndDate')->middleware('auth')->name('income.statement.dates');
 Route::get('removeSessionForRedirect', function () {
     if (session()->has('redirectTo')) {
         $url = session()->get('redirectTo');

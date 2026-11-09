@@ -4,6 +4,7 @@ namespace Tests\Feature\Security;
 
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\Feature\Security\Support\Finding;
 use Tests\Feature\Security\Support\UsesScratchAccounts;
@@ -14,7 +15,8 @@ use Tests\TestCase;
  *
  * Sends the kind of strings a scanner or an attacker types into search boxes
  * and upload buttons, and checks the application neither breaks, leaks, nor
- * stores a dangerous file. Throw-away users only.
+ * stores a dangerous file. Throw-away users in a fake company only, rolled
+ * back afterwards; uploads go to a fake disk, so no file is left behind.
  */
 #[Group('security')]
 class InputHandlingSecurityTest extends TestCase
@@ -25,29 +27,17 @@ class InputHandlingSecurityTest extends TestCase
     {
         parent::setUp();
         $this->bootScratch(false);
-    }
 
-    protected function tearDown(): void
-    {
-        foreach ($this->scratchUserIds as $id) {
-            try {
-                User::find($id)?->clearMediaCollection();
-            } catch (\Throwable) {
-                // media library not configured for this model: nothing to clear
-            }
-        }
-
-        $this->cleanupScratch();
-        parent::tearDown();
+        // Pictures that ARE accepted must not land in the real storage folder.
+        Storage::fake(config('media-library.disk_name', 'public'));
     }
 
     private function viewer(): User
     {
         $actor = $this->scratchUser([$this->companyA->id], ['user.view'], 'user');
 
-        if ($this->actingAs($actor)->get(route('user.index'))->getStatusCode() === 403) {
-            $this->markTestSkipped('Company '.$this->companyA->id.' cannot open the Users screen (CashVero system not enabled).');
-        }
+        $this->assertNotSame(403, $this->actingAs($actor)->get(route('user.index'))->getStatusCode(),
+            'Test set-up problem: a user of company '.$this->companyA->id.' holding user.view cannot open the Users screen, so the attacks below would prove nothing.');
 
         return $actor;
     }
@@ -92,9 +82,14 @@ class InputHandlingSecurityTest extends TestCase
         $normal = $this->actingAs($actor)->get(route('user.index', ['search' => $unique]));
         $attack = $this->actingAs($actor)->get(route('user.index', ['search' => $unique."' OR '1'='1"]));
 
+        $normalTotal = $this->inertiaProps($normal)['paginator']['total'] ?? null;
+        $attackTotal = $this->inertiaProps($attack)['paginator']['total'] ?? null;
+
+        $this->assertIsInt($normalTotal, 'Test set-up problem: the Users page did not send its list (paginator.total), so the comparison below would prove nothing.');
+
         $this->assertSame(
-            $this->inertiaProps($normal)['users']['total'] ?? null,
-            $this->inertiaProps($attack)['users']['total'] ?? null,
+            $normalTotal,
+            $attackTotal,
             'The tautology string returned a different number of users than a plain no-match search: the SQL was altered.'
         );
     }

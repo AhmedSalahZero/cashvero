@@ -42,9 +42,7 @@ class LgIssuanceDateTest extends TestCase
     // Opening Balance
     // ---------------------------------------------------------------
 
-    /**
-     * @dataProvider openingBalanceProvider
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('openingBalanceProvider')]
     public function test_an_opening_balance_lg_must_predate_the_opening_balance_date(string $date, bool $expected, string $why): void
     {
         $this->assertSame($expected, $this->passes(LetterOfGuaranteeIssuance::OPENING_BALANCE, $date), $why);
@@ -65,9 +63,7 @@ class LgIssuanceDateTest extends TestCase
     // New Issuance
     // ---------------------------------------------------------------
 
-    /**
-     * @dataProvider newIssuanceProvider
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('newIssuanceProvider')]
     public function test_a_new_issuance_lg_must_not_predate_the_opening_balance_date(string $date, bool $expected, string $why): void
     {
         $this->assertSame($expected, $this->passes(LetterOfGuaranteeIssuance::NEW_ISSUANCE, $date), $why);
@@ -90,9 +86,8 @@ class LgIssuanceDateTest extends TestCase
     /**
      * Whatever the date, exactly one of the two types accepts it —
      * there is no date both allow, and none both refuse.
-     *
-     * @dataProvider everyDateProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('everyDateProvider')]
     public function test_exactly_one_issuance_type_accepts_any_given_date(string $date): void
     {
         $opening = $this->passes(LetterOfGuaranteeIssuance::OPENING_BALANCE, $date);
@@ -115,9 +110,8 @@ class LgIssuanceDateTest extends TestCase
 
     /**
      * The form posts d/m/Y from the date picker; imports post Y-m-d.
-     *
-     * @dataProvider dateFormatProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('dateFormatProvider')]
     public function test_both_date_formats_are_understood(string $date, bool $expected): void
     {
         $this->assertSame($expected, $this->passes(LetterOfGuaranteeIssuance::OPENING_BALANCE, $date));
@@ -149,9 +143,8 @@ class LgIssuanceDateTest extends TestCase
     /**
      * An empty date is `required`'s business, not this rule's — it must
      * not add a second, confusing message about it.
-     *
-     * @dataProvider emptyDateProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('emptyDateProvider')]
     public function test_an_empty_date_is_left_to_the_required_rule($date): void
     {
         $this->assertTrue($this->passes(LetterOfGuaranteeIssuance::OPENING_BALANCE, $date));

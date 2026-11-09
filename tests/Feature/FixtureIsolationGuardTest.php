@@ -15,9 +15,7 @@ use PHPUnit\Framework\TestCase;
 class FixtureIsolationGuardTest extends TestCase
 {
     /** Files that touch only a private probe table and may stay as they are. */
-    private const ALLOWED = [
-        'OdooImport/OdooContractImportRulesTest.php',
-    ];
+    private const ALLOWED = [];
 
     public function test_tests_that_create_or_drop_tables_run_on_the_scratch_database(): void
     {

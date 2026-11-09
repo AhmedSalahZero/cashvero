@@ -25,7 +25,7 @@ class FacilityContractDateChangeTest extends TestCase
 {
     use \Tests\Support\UsesFixtureDatabase;
 
-    private const COMPANY = 92;
+    private const COMPANY = 9001;
 
     private const FACILITY = 58;
 
@@ -198,9 +198,8 @@ class FacilityContractDateChangeTest extends TestCase
      * The reported case: a contract starting in January, moved to
      * August. February through July had been generated and nothing
      * removed them.
-     *
-     * @dataProvider facilityProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('facilityProvider')]
     public function test_moving_the_start_date_forwards_drops_the_months_before_it(
         string $model, string $facilityTable, string $statementsTable, string $foreignKey
     ): void {
@@ -223,9 +222,8 @@ class FacilityContractDateChangeTest extends TestCase
      * A month-end row the trigger has already filled with real interest
      * is money, not a placeholder — it must survive even when it falls
      * before the new start date, so the amount is not silently erased.
-     *
-     * @dataProvider facilityProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('facilityProvider')]
     public function test_a_month_carrying_real_interest_is_never_dropped(
         string $model, string $facilityTable, string $statementsTable, string $foreignKey
     ): void {
@@ -248,9 +246,7 @@ class FacilityContractDateChangeTest extends TestCase
     // the half that already worked must keep working
     // ---------------------------------------------------------------
 
-    /**
-     * @dataProvider facilityProvider
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('facilityProvider')]
     public function test_moving_the_end_date_backwards_still_drops_the_months_after_it(
         string $model, string $facilityTable, string $statementsTable, string $foreignKey
     ): void {
@@ -267,9 +263,8 @@ class FacilityContractDateChangeTest extends TestCase
     /**
      * Narrowing from both ends at once — the two deletes must not
      * interfere with each other.
-     *
-     * @dataProvider facilityProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('facilityProvider')]
     public function test_narrowing_the_contract_from_both_ends(
         string $model, string $facilityTable, string $statementsTable, string $foreignKey
     ): void {
@@ -287,9 +282,8 @@ class FacilityContractDateChangeTest extends TestCase
      * Widening it again must bring the months back rather than leaving
      * a hole — the existence check inside the generator is what does
      * that, and it has always been active here.
-     *
-     * @dataProvider facilityProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('facilityProvider')]
     public function test_widening_the_contract_again_restores_the_months(
         string $model, string $facilityTable, string $statementsTable, string $foreignKey
     ): void {
@@ -306,9 +300,8 @@ class FacilityContractDateChangeTest extends TestCase
 
     /**
      * Re-running with the same dates must change nothing.
-     *
-     * @dataProvider facilityProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('facilityProvider')]
     public function test_regenerating_with_unchanged_dates_is_a_no_op(
         string $model, string $facilityTable, string $statementsTable, string $foreignKey
     ): void {
@@ -326,9 +319,8 @@ class FacilityContractDateChangeTest extends TestCase
     /**
      * Rows belonging to another facility on the same table must not be
      * touched — the deletes are scoped by the foreign key.
-     *
-     * @dataProvider facilityProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('facilityProvider')]
     public function test_another_facilitys_rows_are_left_alone(
         string $model, string $facilityTable, string $statementsTable, string $foreignKey
     ): void {

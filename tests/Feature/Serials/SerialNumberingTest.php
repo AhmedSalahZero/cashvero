@@ -21,7 +21,7 @@ class SerialNumberingTest extends SerialTestCase
     {
         $expense = new MultipleCashExpense;
         $expense->forceFill([
-            'company_id' => self::COMPANY,
+            'company_id' => $this->company->id,
             'type' => $type,
             'payment_date' => $date,
             'currency' => 'EGP',
@@ -35,19 +35,19 @@ class SerialNumberingTest extends SerialTestCase
     public function test_the_counter_is_per_company_prefix_and_year(): void
     {
         $this->inRolledBackTransaction(function () {
-            $this->assertSame(1, SerialAssigner::next(self::COMPANY, 'TST/A', self::YEAR));
-            $this->assertSame(2, SerialAssigner::next(self::COMPANY, 'TST/A', self::YEAR));
-            $this->assertSame(1, SerialAssigner::next(self::COMPANY, 'TST/B', self::YEAR), 'another type starts from 1');
-            $this->assertSame(1, SerialAssigner::next(self::COMPANY, 'TST/A', self::YEAR - 1), 'another year starts from 1');
-            $this->assertSame(1, SerialAssigner::next(self::COMPANY + 1, 'TST/A', self::YEAR), 'another company starts from 1');
-            $this->assertSame(3, SerialAssigner::next(self::COMPANY, 'TST/A', self::YEAR));
+            $this->assertSame(1, SerialAssigner::next($this->company->id, 'TST/A', self::YEAR));
+            $this->assertSame(2, SerialAssigner::next($this->company->id, 'TST/A', self::YEAR));
+            $this->assertSame(1, SerialAssigner::next($this->company->id, 'TST/B', self::YEAR), 'another type starts from 1');
+            $this->assertSame(1, SerialAssigner::next($this->company->id, 'TST/A', self::YEAR - 1), 'another year starts from 1');
+            $this->assertSame(1, SerialAssigner::next($this->otherCompany->id, 'TST/A', self::YEAR), 'another company starts from 1');
+            $this->assertSame(3, SerialAssigner::next($this->company->id, 'TST/A', self::YEAR));
         });
     }
 
     public function test_a_rolled_back_save_gives_its_number_back(): void
     {
-        $this->inRolledBackTransaction(fn () => $this->assertSame(1, SerialAssigner::next(self::COMPANY, 'TST/A', self::YEAR)));
-        $this->inRolledBackTransaction(fn () => $this->assertSame(1, SerialAssigner::next(self::COMPANY, 'TST/A', self::YEAR)));
+        $this->inRolledBackTransaction(fn () => $this->assertSame(1, SerialAssigner::next($this->company->id, 'TST/A', self::YEAR)));
+        $this->inRolledBackTransaction(fn () => $this->assertSame(1, SerialAssigner::next($this->company->id, 'TST/A', self::YEAR)));
     }
 
     /* ───────────── الإنشاء ───────────── */
@@ -70,7 +70,7 @@ class SerialNumberingTest extends SerialTestCase
         $this->inRolledBackTransaction(function () {
             $expense = new MultipleCashExpense;
             $expense->forceFill([
-                'company_id' => self::COMPANY,
+                'company_id' => $this->company->id,
                 'type' => MultipleCashExpense::CASH_PAYMENT,
                 'payment_date' => self::YEAR.'-01-01',
                 'serial' => 'HACKED',
@@ -180,7 +180,7 @@ class SerialNumberingTest extends SerialTestCase
     {
         $this->inRolledBackTransaction(function () {
             $insert = fn (string $date) => DB::table('multiple_cash_expenses')->insertGetId([
-                'company_id' => self::COMPANY,
+                'company_id' => $this->company->id,
                 'type' => MultipleCashExpense::CASH_PAYMENT,
                 'payment_date' => $date,
                 'currency' => 'EGP',
@@ -192,7 +192,7 @@ class SerialNumberingTest extends SerialTestCase
             $januaryFirst = $insert(self::YEAR.'-01-15');
             $januarySecond = $insert(self::YEAR.'-01-15');
 
-            $report = app(SerialBackfiller::class)->run(self::COMPANY, MultipleCashExpense::class);
+            $report = app(SerialBackfiller::class)->run($this->company->id, MultipleCashExpense::class);
             $this->assertSame(3, $report[MultipleCashExpense::class]['assigned']);
 
             $serials = DB::table('multiple_cash_expenses')->whereIn('id', [$march, $januaryFirst, $januarySecond])->pluck('serial', 'id');
@@ -201,7 +201,7 @@ class SerialNumberingTest extends SerialTestCase
             $this->assertSame('MCE/CP/2099/03/00003', $serials[$march]);
 
             // تشغيله تاني ما بيغيّرش حاجة ، و الحركة الجديدة بتكمّل بعدهم
-            $again = app(SerialBackfiller::class)->run(self::COMPANY, MultipleCashExpense::class);
+            $again = app(SerialBackfiller::class)->run($this->company->id, MultipleCashExpense::class);
             $this->assertSame(0, $again[MultipleCashExpense::class]['assigned']);
             $this->assertSame($serials->all(), DB::table('multiple_cash_expenses')->whereIn('id', [$march, $januaryFirst, $januarySecond])->pluck('serial', 'id')->all());
             $this->assertSame('MCE/CP/2099/04/00004', $this->makeExpense(MultipleCashExpense::CASH_PAYMENT, self::YEAR.'-04-01')->serial);

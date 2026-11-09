@@ -42,7 +42,7 @@ class IndexMoneyDecimalsTest extends TestCase
         ];
     }
 
-    /** @dataProvider moneyColumns */
+    #[\PHPUnit\Framework\Attributes\DataProvider('moneyColumns')]
     public function test_the_column_keeps_two_decimals(string $class, string $column, string $method): void
     {
         $model = new $class;
@@ -53,7 +53,7 @@ class IndexMoneyDecimalsTest extends TestCase
     }
 
     /** * نص جنيه كان بيتقرّب و يختفي — ده الشكل اللي العميل شافه */
-    /** @dataProvider moneyColumns */
+    #[\PHPUnit\Framework\Attributes\DataProvider('moneyColumns')]
     public function test_a_half_unit_is_not_rounded_away(string $class, string $column, string $method): void
     {
         $model = new $class;
@@ -64,7 +64,7 @@ class IndexMoneyDecimalsTest extends TestCase
     }
 
     /** * و الأرقام الصحيحة بتكتب أصفارها */
-    /** @dataProvider moneyColumns */
+    #[\PHPUnit\Framework\Attributes\DataProvider('moneyColumns')]
     public function test_whole_numbers_still_show_both_decimals(string $class, string $column, string $method): void
     {
         $model = new $class;

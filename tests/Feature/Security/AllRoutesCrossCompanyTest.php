@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Reflector;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\Feature\Security\Support\Finding;
+use Tests\Feature\Security\Support\PlantsCompanyRecords;
 use Tests\Feature\Security\Support\UsesScratchAccounts;
 use Tests\TestCase;
 
@@ -38,7 +39,8 @@ use Tests\TestCase;
  * reported with the exact address.
  *
  * SAFETY
- *   - Runs only in a database literally named cashvero_test (otherwise it stops).
+ *   - Both companies, the users and one record of each company in every company table are made by the
+ *     test itself (PlantsCompanyRecords), inside the transaction every test runs in.
  *   - Every request runs inside a transaction that is rolled back.
  *   - Outgoing HTTP (Odoo), queued jobs, mail and notifications are faked: nothing leaves the machine.
  *   - Routes that log the user out are skipped.
@@ -46,6 +48,7 @@ use Tests\TestCase;
 #[Group('security')]
 class AllRoutesCrossCompanyTest extends TestCase
 {
+    use PlantsCompanyRecords;
     use UsesScratchAccounts;
 
     /** Route names reviewed by a human and accepted as open to any company. Keep this EMPTY unless you must. */
@@ -75,21 +78,6 @@ class AllRoutesCrossCompanyTest extends TestCase
         parent::setUp();
         $this->bootScratch(true);
 
-        if (DB::connection('mysql')->getDatabaseName() !== 'cashvero_test') {
-            $this->markTestSkipped('This test sends write requests to every route, so it only runs in the database named cashvero_test.');
-        }
-
-        // The attack needs a company B that really owns records, so take the two companies with the
-        // most invoices (B = the fullest one, A = the next) instead of simply the first two ids.
-        $busiest = DB::table('customer_invoices')->select('company_id', DB::raw('count(*) as n'))
-            ->groupBy('company_id')->orderByDesc('n')->limit(2)->pluck('company_id')->all();
-
-        if (count($busiest) === 2) {
-            $this->companyB = \App\Models\Company::find($busiest[0]);
-            $this->companyA = \App\Models\Company::find($busiest[1]);
-            $this->enableCashVeroForScratchDatabase();
-        }
-
         $this->useProductionAddresses();
 
         $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
@@ -102,12 +90,11 @@ class AllRoutesCrossCompanyTest extends TestCase
             [$this->companyA->id],
             \Spatie\Permission\Models\Permission::where('guard_name', 'web')->pluck('name')->all()
         );
-    }
 
-    protected function tearDown(): void
-    {
-        $this->cleanupScratch();
-        parent::tearDown();
+        // The attack needs a company B that really owns records (one in every company table), and
+        // company A needs records of its own for SEC-33.
+        $this->plantRecordsFor($this->companyA, $this->attacker->id);
+        $this->plantRecordsFor($this->companyB, $this->scratchUser([$this->companyB->id])->id);
     }
 
     /**
@@ -188,7 +175,7 @@ class AllRoutesCrossCompanyTest extends TestCase
         }
 
         $this->assertGreaterThan(0, $opened,
-            "Test set-up problem: not one of {$tried} pages of company {$this->companyA->id} opened for the all-permissions test user, so the refusals in SEC-30 prove nothing. Run: php artisan cashvero:prepare-test-db --from=cashvero");
+            "Test set-up problem: not one of {$tried} pages of company {$this->companyA->id} opened for the all-permissions test user, so the refusals in SEC-30 prove nothing.");
     }
 
     /* ────────────────────────────── SEC-31 ────────────────────────────── */
@@ -236,7 +223,7 @@ class AllRoutesCrossCompanyTest extends TestCase
             }
         }
 
-        $this->assertGreaterThan(0, $checked, 'No route could be attacked: company '.$this->companyB->id.' has no records to plant. Run: php artisan cashvero:prepare-test-db --from=cashvero');
+        $this->assertGreaterThan(0, $checked, 'No route could be attacked: no record of company '.$this->companyB->id.' could be planted for the bound models ('.json_encode($this->plantFailuresFor($this->companyB)).').');
 
         $this->assertSame([], $leaks, $this->report(
             'SEC-31', 'HIGH',
@@ -284,7 +271,7 @@ class AllRoutesCrossCompanyTest extends TestCase
             }
         }
 
-        $this->assertGreaterThan(0, $checked, 'No generic {modelType}/{modelId} route could be attacked (no company B invoices on file).');
+        $this->assertGreaterThan(0, $checked, 'No generic {modelType}/{modelId} route could be attacked (no company B invoice could be planted).');
 
         $this->assertSame([], $leaks, $this->report(
             'SEC-32', 'HIGH',
@@ -461,12 +448,32 @@ class AllRoutesCrossCompanyTest extends TestCase
 
     private function urlFor(Route $route, array $values): string
     {
-        $uri = preg_replace_callback('/\{(\w+)(\?)?\}/', function ($m) use ($values) {
+        // An optional part left empty in front of one that is given would shift the given value into
+        // its place (/report-result/{asArray?}/{report?} → /report-result/14 reads 14 as "asArray"),
+        // so those get a harmless 0.
+        preg_match_all('/\{(\w+)\??\}/', $route->uri(), $all);
+        $lastGiven = -1;
+
+        foreach ($all[1] as $i => $name) {
+            if (array_key_exists($name, $values)) {
+                $lastGiven = $i;
+            }
+        }
+
+        $position = -1;
+
+        $uri = preg_replace_callback('/\{(\w+)(\?)?\}/', function ($m) use ($values, $lastGiven, &$position) {
+            $position++;
+
             if (array_key_exists($m[1], $values)) {
                 return (string) $values[$m[1]];
             }
 
-            return ($m[2] ?? '') === '?' ? '' : '1';   // 1 = harmless placeholder for a parameter we cannot know
+            if (($m[2] ?? '') === '?') {
+                return $position < $lastGiven ? '0' : '';
+            }
+
+            return '1';   // harmless placeholder for a required parameter we cannot know
         }, $route->uri());
 
         return '/'.trim((string) preg_replace('#/+#', '/', $uri), '/');

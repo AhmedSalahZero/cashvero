@@ -27,17 +27,13 @@ use Tests\TestCase;
  * * computeForecastedProjectCollection() المشتركة بـ contract_scope =
  * * supplier_children ، و الدالة دي أصلا بتكتب total الصف الأب
  *
- * * كل الداتا هنا بتتعمل جوه transaction و بتترجع في tearDown
+ * * كل الداتا هنا بيعملها التست لشركة جديدة ، و بترجع بعده (TestCase بيلفّه في transaction)
  */
 class ForecastedProjectPaymentTest extends TestCase
 {
     private const ROW_KEY = 'Forecasted Project Payment';
 
     private const SUPPLIER_CONTRACT_ROW_KEY = 'Forecasted Suppliers Contract Payments';
-
-    private ?string $originalDatabase = null;
-
-    private bool $inTransaction = false;
 
     private int $companyId = 0;
 
@@ -47,37 +43,18 @@ class ForecastedProjectPaymentTest extends TestCase
     {
         parent::setUp();
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
+        // The scenario is the one reported on 17/09/2026 (a report from 17/09/2026 to 17/03/2027,
+        // invoices due 15/10/2026). The forecast only spreads what is still ahead of today, so once
+        // the calendar passes the window the expected numbers change. Freeze the clock on that day.
+        $this->travelTo(\Carbon\Carbon::parse('2026-09-17 10:00:00'));
 
-        try {
-            DB::connection('mysql')->getPdo();
-            DB::table('contracts')->limit(1)->get();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-
-        DB::beginTransaction();
-        $this->inTransaction = true;
-
-        // شركة خاصة بالتست جوه الترانزاكشن — sales_orders.company_id عليها
-        // foreign key على companies فما ينفعش رقم متخيّل
-        $this->companyId = (int) DB::table('companies')->insertGetId([
-            'name' => json_encode(['en' => 'Forecast Test Co', 'ar' => 'Forecast Test Co']),
-            'main_functional_currency' => 'EGP',
-        ]);
+        // sales_orders.company_id has a foreign key on companies, so the company must be real.
+        $this->companyId = $this->makeCompany()->id;
     }
 
     protected function tearDown(): void
     {
-        if ($this->inTransaction) {
-            DB::rollBack();
-            $this->inTransaction = false;
-        }
-
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
+        $this->travelBack();
 
         parent::tearDown();
     }

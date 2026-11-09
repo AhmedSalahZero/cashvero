@@ -21,8 +21,9 @@ use Tests\TestCase;
  *   SEC-39  The company form must refuse an Odoo address that points at the server itself, a private network, or
  *           is not a web address, and must not send the Odoo password over plain http to an outside host.
  *
- * Runs as a Super Admin (the only person who normally edits companies) on a throw-away copy of a company created
- * inside a transaction that is rolled back. No outside connection is made: the copy has no users to log in.
+ * Runs as a Super Admin (the only person who normally edits companies) on a fresh fake company made by the test and
+ * rolled back with it. No outside connection is made: every test talks to a fake Odoo (Tests\Fakes) and outgoing
+ * HTTP is faked.
  */
 #[Group('security')]
 class OdooAddressSecurityTest extends TestCase
@@ -42,19 +43,11 @@ class OdooAddressSecurityTest extends TestCase
         'an outside server over plain http' => 'http://odoo.customer-example.test',
     ];
 
-    protected function tearDown(): void
-    {
-        $this->cleanupScratch();
-        parent::tearDown();
-    }
-
     public function test_the_odoo_address_of_a_company_cannot_point_at_the_servers_own_network(): void
     {
-        $this->bootAttack();
+        $this->bootAttack(plantRecords: false);
 
-        if (! Role::where('name', \App\Models\User::SUPER_ADMIN)->where('guard_name', 'web')->exists()) {
-            $this->markTestSkipped('The database has no super-admin role, so the company form cannot be used.');
-        }
+        $this->assertTrue(Role::where('name', \App\Models\User::SUPER_ADMIN)->where('guard_name', 'web')->exists(), 'Test set-up problem: the test database has no super-admin role, so the company form cannot be used.');
 
         $superAdmin = $this->scratchUser([$this->companyA->id], [], \App\Models\User::SUPER_ADMIN);
 
@@ -65,14 +58,7 @@ class OdooAddressSecurityTest extends TestCase
         $plain = [];
 
         try {
-            try {
-                $target = $this->companyA->replicate();
-                $target->name = 'SEC scratch '.bin2hex(random_bytes(3));
-                $target->save();
-            } catch (\Throwable $e) {
-                $this->markTestSkipped('A throw-away company could not be created: '.$e->getMessage());
-            }
-
+            $target = $this->makeCompany();
             $id = $target->id;
             $url = route('companySection.update', ['companySection' => $id], false);
 
@@ -93,9 +79,7 @@ class OdooAddressSecurityTest extends TestCase
             // Control: an ordinary https address must be stored, or the form is not being exercised.
             [$status, $value] = $try('https://odoo.control.example.test');
 
-            if ($value !== 'https://odoo.control.example.test') {
-                $this->markTestSkipped("Test set-up problem: the company form did not store an ordinary Odoo address (HTTP {$status}), so the checks cannot be judged here.");
-            }
+            $this->assertSame('https://odoo.control.example.test', $value, "Test set-up problem: the company form did not store an ordinary Odoo address (HTTP {$status}), so the checks cannot be judged here.");
 
             foreach (self::INTERNAL as $label => $address) {
                 [, $value] = $try($address);

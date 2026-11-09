@@ -27,45 +27,23 @@ use Tests\TestCase;
  */
 class ConsolidatedMatchesCompanyNetCashTest extends TestCase
 {
-    private ?string $originalDatabase = null;
-
-    private bool $inTransaction = false;
-
     private int $companyId = 0;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
+        // The report refuses a window that does not include today, and the scenario below is
+        // dated September 2026 - January 2027. Freeze the clock inside that window so the test
+        // does not start failing once the calendar moves past it.
+        $this->travelTo(\Carbon\Carbon::parse('2026-09-17 10:00:00'));
 
-        try {
-            DB::connection('mysql')->getPdo();
-            DB::table('contracts')->limit(1)->get();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-
-        DB::beginTransaction();
-        $this->inTransaction = true;
-
-        $this->companyId = (int) DB::table('companies')->insertGetId([
-            'name' => json_encode(['en' => 'Net Cash Match Co', 'ar' => 'Net Cash Match Co']),
-            'main_functional_currency' => 'EGP',
-        ]);
+        $this->companyId = $this->makeCompany()->id;
     }
 
     protected function tearDown(): void
     {
-        if ($this->inTransaction) {
-            DB::rollBack();
-            $this->inTransaction = false;
-        }
-
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
+        $this->travelBack();
 
         parent::tearDown();
     }
@@ -130,9 +108,7 @@ class ConsolidatedMatchesCompanyNetCashTest extends TestCase
         $window = ['report_interval' => 'monthly', 'start_date' => '09/01/2026', 'end_date' => '01/31/2027'];
 
         [$reference, $referenceAccumulated] = $this->companyReportNetAndAccumulated($window + ['currency' => 'EGP']);
-        if ($reference === []) {
-            $this->markTestSkipped('Today is outside the report window this test builds.');
-        }
+        $this->assertNotSame([], $reference, 'The company report built no Net Cash row — is today (pinned in setUp) inside the report window?');
 
         // نفس العقود مختارة في كل الحالات — اللي بيتغير هو منتقي العملة
         $picks = [
@@ -148,11 +124,7 @@ class ConsolidatedMatchesCompanyNetCashTest extends TestCase
             ]);
             app()->instance('request', $request);
 
-            try {
-                $data = (new ConsolidatedCashFlowService)->build(Company::find($this->companyId), $request);
-            } catch (\RuntimeException $e) {
-                $this->markTestSkipped('Today is outside the report window: '.$e->getMessage());
-            }
+            $data = (new ConsolidatedCashFlowService)->build(Company::find($this->companyId), $request);
 
             foreach (array_keys($data['weeks']) as $period) {
                 $this->assertEqualsWithDelta(
@@ -184,11 +156,7 @@ class ConsolidatedMatchesCompanyNetCashTest extends TestCase
         ]);
         app()->instance('request', $request);
 
-        try {
-            $data = (new ConsolidatedCashFlowService)->build(Company::find($this->companyId), $request);
-        } catch (\RuntimeException $e) {
-            $this->markTestSkipped('Today is outside the report window: '.$e->getMessage());
-        }
+        $data = (new ConsolidatedCashFlowService)->build(Company::find($this->companyId), $request);
 
         $running = 0.0;
         foreach (array_keys($data['weeks']) as $period) {

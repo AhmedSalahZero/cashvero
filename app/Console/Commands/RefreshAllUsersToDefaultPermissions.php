@@ -12,7 +12,7 @@ use Spatie\Permission\Models\Permission;
 class RefreshAllUsersToDefaultPermissions extends Command
 {
 
-    protected $signature = 'refresh:permissions';
+    protected $signature = 'refresh:permissions {--force : Do not ask for confirmation}';
 
  
     protected $description = 'Refresh All Permissions To Default For All Users';
@@ -34,6 +34,13 @@ class RefreshAllUsersToDefaultPermissions extends Command
      */
     public function handle()
     {
+		// Throws away every permission any administrator ever granted, for every user.
+		if (! $this->option('force') && ! $this->confirm('Remove every permission of every user and give them the defaults again? Permissions granted by hand are lost.', false)) {
+			$this->warn('Nothing was changed.');
+
+			return self::FAILURE;
+		}
+
 		DB::table('permissions')->delete();
 		DB::table('model_has_permissions')->delete();
 		DB::table('role_has_permissions')->delete();

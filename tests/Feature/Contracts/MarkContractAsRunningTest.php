@@ -4,38 +4,33 @@ namespace Tests\Feature\Contracts;
 
 use App\Models\Company;
 use App\Models\Contract;
-use App\Models\FinancialInstitution;
 use App\Models\Partner;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
+use Tests\Concerns\MakesBanks;
+use Tests\Concerns\MakesInvoices;
 use Tests\TestCase;
 
 /**
  * Finished → Running is the undo for an ordinary contract. A contract
  * still pledged as overdraft collateral must not take that path.
+ *
+ * The company, its customer, supplier, contracts and the overdraft facility are all made by
+ * the test (and rolled back by TestCase).
  */
 class MarkContractAsRunningTest extends TestCase
 {
-    use DatabaseTransactions;
+    use MakesBanks;
+    use MakesInvoices;
 
     private Company $company;
 
     private Partner $customer;
 
     private User $user;
-
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
 
     protected function setUp(): void
     {
@@ -47,47 +42,14 @@ class MarkContractAsRunningTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
-
-        if (! Schema::connection('mysql')->hasTable('financial_institutions')) {
-            $this->markTestSkipped(
-                'No development schema on '.DB::connection('mysql')->getDatabaseName().' — set SMOKE_DB to run this suite.'
-            );
-        }
-
-        $bank = FinancialInstitution::query()->whereNotNull('company_id')->first();
-        if (! $bank) {
-            $this->markTestSkipped('Development database has no financial institution to attach company context to.');
-        }
-
-        $this->company = Company::findOrFail($bank->company_id);
-
-        $this->customer = Partner::create([
-            'company_id' => $this->company->id,
-            'name' => 'Back To Running Customer '.uniqid(),
-            'is_customer' => 1,
-        ]);
-
-        /** @var User $user */
-        $user = User::create([
-            'name' => 'Back To Running Test '.uniqid(),
-            'email' => 'back-to-running-'.uniqid().'@example.test',
-            'password' => bcrypt('secret-for-tests'),
-            'company_id' => $this->company->id,
-        ]);
-        $user->givePermissionTo([
+        $this->company = $this->makeCompany();
+        $this->customer = $this->customer($this->company, ['name' => 'Back To Running Customer']);
+        $this->user = $this->makeUser([
             'customer_contract.view',
             'customer_contract.approve',
             'supplier_contract.view',
             'supplier_contract.approve',
-        ]);
-        $user->companies()->attach($this->company->id);
-        $user->load('companies');
-        $this->user = $user;
+        ], $this->company);
     }
 
     public function test_a_finished_customer_contract_returns_to_running(): void
@@ -108,11 +70,7 @@ class MarkContractAsRunningTest extends TestCase
 
     public function test_a_finished_supplier_contract_returns_to_running(): void
     {
-        $supplier = Partner::create([
-            'company_id' => $this->company->id,
-            'name' => 'Back To Running Supplier '.uniqid(),
-            'is_supplier' => 1,
-        ]);
+        $supplier = $this->supplier($this->company, ['name' => 'Back To Running Supplier']);
         $contract = $this->makeContract('Supplier', Contract::FINISHED, $supplier);
 
         $this->actingAs($this->user)
@@ -129,7 +87,7 @@ class MarkContractAsRunningTest extends TestCase
 
     public function test_a_pledged_finished_contract_cannot_return_to_plain_running(): void
     {
-        $contract = $this->makeContract('Customer', Contract::FINISHED, pledgedFacilityId: 1);
+        $contract = $this->makeContract('Customer', Contract::FINISHED, pledgedFacilityId: $this->overdraftFacility());
 
         $this->actingAs($this->user)
             ->from($this->indexUrl('Customer'))
@@ -155,21 +113,27 @@ class MarkContractAsRunningTest extends TestCase
 
     private function makeContract(string $type, string $status, ?Partner $partner = null, ?int $pledgedFacilityId = null): Contract
     {
-        $tag = uniqid('btr-');
-
-        return Contract::create([
-            'company_id' => $this->company->id,
-            'partner_id' => ($partner ?? $this->customer)->id,
+        return $this->contract($partner ?? $this->customer, [
             'model_type' => $type,
-            'name' => 'Back To Running '.$tag,
-            'code' => 'BTR-'.$tag,
-            'currency' => 'EGP',
-            'amount' => 100,
-            'exchange_rate' => 1,
             'status' => $status,
+            'amount' => 100,
             'start_date' => now()->subMonths(6)->format('Y-m-d'),
             'end_date' => now()->addMonths(6)->format('Y-m-d'),
             'overdraft_against_assignment_of_contract_id' => $pledgedFacilityId,
+        ]);
+    }
+
+    /** An "overdraft against assignment of contracts" facility of the company, at its own bank. */
+    private function overdraftFacility(): int
+    {
+        return DB::table('overdraft_against_assignment_of_contracts')->insertGetId([
+            'company_id' => $this->company->id,
+            'financial_institution_id' => $this->bank($this->company)->id,
+            'account_number' => 'OD-AOC-'.uniqid(),
+            'currency' => 'EGP',
+            'limit' => 1000000,
+            'contract_start_date' => now()->subYear()->format('Y-m-d'),
+            'contract_end_date' => now()->addYear()->format('Y-m-d'),
         ]);
     }
 

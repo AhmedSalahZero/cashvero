@@ -881,7 +881,7 @@ class MoneyPaymentController
         $moneyPaymentId = $request->get('money_payment_id');
         $moneyPayment = MoneyPayment::find($moneyPaymentId);
         $partner = Partner::find($supplierInvoiceId);
-        $downPaymentContract = Contract::find($request->get('downPaymentContractId'));
+        $downPaymentContract = Contract::where('company_id', $company->id)->find($request->get('downPaymentContractId'));
         if (!$partner) {
             return response()->json([
                 'status'=>true ,

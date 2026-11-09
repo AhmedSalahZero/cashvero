@@ -199,7 +199,7 @@ class CashFlowReportController
 		$saveReport = $request->has('save_report');
 		$resetReport = $request->has('reset_report') && $request->get('reset_report');
 		$contractId = $request->get('contract_id')	 ;
-		$contract = $preloadedContract ?? Contract::find($contractId);
+		$contract = $preloadedContract ?? Contract::where('company_id', $company->id)->find($contractId);
 		
 		/**
 		 * @var Contract|null $contract 

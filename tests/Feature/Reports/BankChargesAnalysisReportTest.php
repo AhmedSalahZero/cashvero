@@ -3,32 +3,30 @@
 namespace Tests\Feature\Reports;
 
 use App\Models\AccountType;
-use App\Models\Bank;
 use App\Models\Company;
 use App\Models\FinancialInstitution;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Inertia\Testing\AssertableInertia as Assert;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
+use Tests\Concerns\MakesBanks;
 use Tests\TestCase;
 
 /**
  * Bank Interest, Commissions & Charges Analysis.
  *
- * The report refuses an end date after today (overdraft statements carry
- * month-end interest rows for months that have not happened yet), so the
- * usual "everything in 2099" isolation is not available here. Instead every
- * row is dated 1999 — years before any real data in the development
- * database — sits under two banks created for the test, and is rolled back
- * with the transaction.
+ * Every record is made by the test itself, for a company made by the test, and rolled back
+ * afterwards. The report refuses an end date after today, so the rows are dated 1999.
+ *
+ * Run: php artisan test --filter=BankChargesAnalysisReportTest
  */
 class BankChargesAnalysisReportTest extends TestCase
 {
     use DatabaseTransactions;
+    use MakesBanks;
 
     private Company $company;
 
@@ -40,14 +38,6 @@ class BankChargesAnalysisReportTest extends TestCase
 
     private int $currentAccountTypeId;
 
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
-
     protected function setUp(): void
     {
         parent::setUp();
@@ -58,52 +48,18 @@ class BankChargesAnalysisReportTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
-
-        if (! Schema::connection('mysql')->hasTable('medium_term_loan_early_settlements')) {
-            $this->markTestSkipped('No development schema on '.DB::connection('mysql')->getDatabaseName().' - set SMOKE_DB to run this suite.');
-        }
-
-        $institution = FinancialInstitution::query()->whereNotNull('company_id')->where('type', FinancialInstitution::BANK)->first();
-        $banks = Bank::query()->limit(2)->get();
-        $this->currentAccountTypeId = (int) AccountType::where('slug', AccountType::CURRENT_ACCOUNT)->value('id');
-        if (! $institution || $banks->count() < 2 || ! $this->currentAccountTypeId) {
-            $this->markTestSkipped('Development database needs a company with a bank, two banks and the account types.');
-        }
-
-        $this->company = Company::findOrFail($institution->company_id);
-        $this->bankA = $this->institution($banks[0]->id);
-        $this->bankB = $this->institution($banks[1]->id);
+        $this->company = $this->makeCompany();
+        $this->currentAccountTypeId = $this->accountTypeId(AccountType::CURRENT_ACCOUNT);
+        $this->bankA = $this->bank($this->company)->id;
+        $this->bankB = $this->bank($this->company)->id;
         $this->egpAccountA = $this->account($this->bankA, 'EGP');
     }
 
     /* ───────────────────────── fixtures ───────────────────────── */
 
-    private function institution(int $bankId): int
-    {
-        return DB::table('financial_institutions')->insertGetId([
-            'type' => FinancialInstitution::BANK,
-            'bank_id' => $bankId,
-            'company_id' => $this->company->id,
-            'updated_by' => 0,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-    }
-
     private function account(int $institutionId, string $currency): int
     {
-        return DB::table('financial_institution_accounts')->insertGetId([
-            'financial_institution_id' => $institutionId,
-            'company_id' => $this->company->id,
-            'account_number' => 'BCA-'.uniqid(),
-            'currency' => $currency,
-            'is_active' => 1,
-        ]);
+        return $this->currentAccount(FinancialInstitution::findOrFail($institutionId), $currency)->id;
     }
 
     private function letterOfGuarantee(int $institutionId): int
@@ -167,17 +123,7 @@ class BankChargesAnalysisReportTest extends TestCase
 
     private function userWith(array $permissions): User
     {
-        $user = User::create([
-            'name' => 'Bank Charges Analysis '.uniqid(),
-            'email' => 'bank-charges-analysis-'.uniqid().'@example.test',
-            'password' => bcrypt('secret-for-tests'),
-            'company_id' => $this->company->id,
-        ]);
-        $user->givePermissionTo($permissions);
-        $user->companies()->attach($this->company->id);
-        $user->load('companies');
-
-        return $user;
+        return $this->makeUser($permissions, $this->company);
     }
 
     private function viewer(): User
@@ -362,45 +308,47 @@ class BankChargesAnalysisReportTest extends TestCase
     }
 
     /**
-     * Overdraft interest is written by the statement triggers, so rather
-     * than fake it, reconcile against a real month-end interest row.
+     * Overdraft interest is worked out by the statement trigger, not by the test: 100,000 drawn
+     * on 1 January at 36% a year, so the trigger's month-end row for January charges
+     * 100,000 × 36% / 360 × 30 days = 3,000.00 (worked out by hand). The report must show
+     * exactly that. A whole-percent rate on purpose: the trigger rounds the rate to a whole
+     * percent (36.5% is charged as 37%) — a separate finding, not what this test is about.
      */
     public function test_overdraft_interest_is_the_month_end_interest_row_on_the_statement(): void
     {
-        $row = DB::table('clean_overdraft_bank_statements as s')
-            ->join('clean_overdrafts as f', 'f.id', '=', 's.clean_overdraft_id')
-            ->where('s.type', 'interest')->where('s.interest_type', 'end_of_month')
-            ->where('s.credit', '>', 0)->where('s.date', '<=', now()->toDateString())
-            ->first(['s.company_id', 's.date', 's.credit', 'f.financial_institution_id', 'f.account_number', 'f.currency']);
+        $overdraftId = DB::table('clean_overdrafts')->insertGetId([
+            'company_id' => $this->company->id, 'financial_institution_id' => $this->bankA,
+            'account_number' => 'OD-BCA-1', 'currency' => 'EGP', 'limit' => '1000000',
+            'contract_start_date' => '1999-01-01', 'contract_end_date' => '1999-12-31',
+        ]);
+        DB::table('clean_overdraft_rates')->insert([
+            'company_id' => $this->company->id, 'clean_overdraft_id' => $overdraftId,
+            'date' => '1999-01-01', 'interest_rate' => 36, 'min_interest_rate' => 0,
+        ]);
+        $statement = fn (array $row) => DB::table('clean_overdraft_bank_statements')->insertGetId($row + [
+            'clean_overdraft_id' => $overdraftId, 'money_received_id' => 0, 'company_id' => $this->company->id, 'limit' => 1000000, 'debit' => 0,
+        ]);
+        $statement(['type' => 'payment', 'date' => '1999-01-01', 'full_date' => '1999-01-01 10:00:00', 'credit' => 100000]);
+        $interestRow = $statement(['type' => 'interest', 'priority' => 1, 'interest_type' => 'end_of_month', 'date' => '1999-01-31', 'full_date' => '1999-01-31 23:59:59', 'credit' => 0]);
+        // The app saves the month-end row again once the month's movements are in; the trigger
+        // works the interest out on that save.
+        DB::table('clean_overdraft_bank_statements')->where('id', $interestRow)->update(['updated_at' => now()]);
 
-        if (! $row) {
-            $this->markTestSkipped('No posted clean overdraft month-end interest in the development database.');
-        }
-
-        // Whichever company that row belongs to — the viewer is attached to it.
-        $this->company = Company::findOrFail($row->company_id);
-
-        $response = $this->actingAs($this->viewer())->get(route('result.bank.charges.analysis.report', [
-            'company' => $this->company->id,
-            'start_date' => $row->date,
-            'end_date' => $row->date,
-            'financial_institution_ids' => [$row->financial_institution_id],
+        $response = $this->actingAs($this->viewer())->get($this->resultUrl([
             'facility_types' => [AccountType::CLEAN_OVERDRAFT],
-            'currencies' => [strtoupper($row->currency)],
+            'currencies' => ['EGP'],
         ]))->assertOk();
 
-        $lines = $this->lines($response)->where('facility_label', $row->account_number);
+        $lines = $this->lines($response);
+        $this->assertSame(['OD-BCA-1'], $lines->pluck('facility_label')->unique()->values()->all());
         $this->assertSame([__('End Of Month Interest')], $lines->pluck('item')->unique()->values()->all());
         $this->assertSame('interest', $lines->first()['category']);
-        $this->assertEqualsWithDelta((float) $row->credit, $lines->sum('amount'), 0.01);
+        $this->assertEqualsWithDelta(3000.00, $lines->sum('amount'), 0.01);
     }
 
     public function test_a_bank_of_another_company_is_refused(): void
     {
-        $foreign = FinancialInstitution::query()->where('company_id', '!=', $this->company->id)->value('id');
-        if (! $foreign) {
-            $this->markTestSkipped('Needs a second company with a bank.');
-        }
+        $foreign = $this->bank($this->makeCompany())->id;
 
         $this->actingAs($this->viewer())
             ->get($this->resultUrl(['financial_institution_ids' => [$foreign]]))

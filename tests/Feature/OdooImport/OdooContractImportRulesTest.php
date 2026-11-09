@@ -2,9 +2,10 @@
 
 namespace Tests\Feature\OdooImport;
 
+use App\Models\SalesOrder;
 use App\Services\Api\OdooService;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -36,8 +37,13 @@ class OdooContractImportRulesTest extends TestCase
      */
     private function liveCode(string $path): string
     {
+        return $this->liveLines(file_get_contents($path));
+    }
+
+    private function liveLines(string $code): string
+    {
         $lines = array_filter(
-            file($path, FILE_IGNORE_NEW_LINES),
+            preg_split('/\R/', $code),
             fn (string $line) => ! str_starts_with(ltrim($line), '//')
         );
 
@@ -96,9 +102,8 @@ class OdooContractImportRulesTest extends TestCase
      * meaning — main-currency units per 1 foreign unit. That is the same
      * conversion getInvoices() already does (1 / invoice_currency_rate),
      * and it is what makes a USD contract read ~48 EGP rather than 0.0207.
-     *
-     * @dataProvider rateConversionProvider
      */
+    #[DataProvider('rateConversionProvider')]
     public function test_the_odoo_rate_is_inverted_into_our_convention(float $odooRate, float $expected): void
     {
         $this->assertEqualsWithDelta($expected, round(1 / $odooRate, 5), 0.00001);
@@ -122,28 +127,34 @@ class OdooContractImportRulesTest extends TestCase
      * a sensible DEFAULT for a brand-new sales order, not data coming
      * back from Odoo. It used to be re-written on every sync, wiping
      * whatever the user had set.
-     *
-     * @dataProvider executionPercentageProvider
      */
+    #[DataProvider('executionPercentageProvider')]
     public function test_a_percentage_already_on_record_is_kept(?string $existing, bool $shouldWrite): void
     {
-        Schema::dropIfExists('sales_orders_probe');
-        Schema::create('sales_orders_probe', function ($table) {
-            $table->bigIncrements('id');
-            $table->decimal('execution_percentage_1', 8, 2)->nullable();
-        });
-        DB::table('sales_orders_probe')->insert(['execution_percentage_1' => $existing]);
+        // A sales order of this test's own, in the real sales_orders table (rolled back by TestCase).
+        $company = $this->makeCompany();
+        $contractId = DB::table('contracts')->insertGetId([
+            'company_id' => $company->id,
+            'name' => 'Execution Percentage Probe',
+            'model_type' => 'Customer',
+            'currency' => 'EGP',
+            'exchange_rate' => 1,
+            'amount' => 1000,
+        ]);
+        $orderId = DB::table('sales_orders')->insertGetId([
+            'company_id' => $company->id,
+            'contract_id' => $contractId,
+            'execution_percentage_1' => $existing,
+        ]);
 
-        $row = DB::table('sales_orders_probe')->first();
+        $order = SalesOrder::findOrFail($orderId);
 
         // The exact guard from OdooService::getContracts().
-        $writes = $row->execution_percentage_1 === null;
+        $writes = $order->execution_percentage_1 === null;
 
         $this->assertSame($shouldWrite, $writes, $shouldWrite
             ? 'An unset percentage should be defaulted to 100.'
             : 'A percentage already on record must not be overwritten.');
-
-        Schema::dropIfExists('sales_orders_probe');
     }
 
     public static function executionPercentageProvider(): array
@@ -161,17 +172,50 @@ class OdooContractImportRulesTest extends TestCase
      * Both systems run the same sync and must carry the same two rules.
      * They are separate repositories, so nothing but a check like this
      * keeps them in step.
+     *
+     * The suite never reads outside this repository, so the checks run on
+     * tests/Fixtures/OdooImport/sibling_OdooService.php.txt — a small FAKE
+     * stand-in for the sibling's OdooService that carries both rules and,
+     * like the real file, an old commented-out hard write. Pointing
+     * siblingRules() at the real sibling checkout is the out-of-suite audit.
      */
     public function test_the_sibling_system_carries_the_same_two_rules(): void
     {
-        $sibling = '/media/salah/Software/projects/system.veroanalysisb.com/app/Services/Api/OdooService.php';
+        $sibling = base_path('tests/Fixtures/OdooImport/sibling_OdooService.php.txt');
 
-        if (! is_readable($sibling)) {
-            $this->markTestSkipped('The veroanalysisb checkout is not available here.');
+        $this->assertFileIsReadable($sibling);
+
+        $this->assertSiblingCarriesTheRules($this->liveCode($sibling));
+    }
+
+    /**
+     * The checks above must actually catch a sibling that lost a rule — a
+     * check that cannot fail proves nothing. The same fixture with the
+     * guard removed and a hard write brought back to life has to fail.
+     */
+    public function test_the_sibling_check_catches_a_sibling_that_lost_the_rules(): void
+    {
+        $fixture = file_get_contents(base_path('tests/Fixtures/OdooImport/sibling_OdooService.php.txt'));
+
+        $broken = str_replace(
+            "\t\t// \$purchaseOrderFormatted = ['execution_percentage_1'=>100];",
+            "\t\t\$purchaseOrderFormatted = ['execution_percentage_1'=>100];",
+            $fixture
+        );
+        $this->assertNotSame($fixture, $broken, 'The fixture must keep its commented-out hard write.');
+
+        try {
+            $this->assertSiblingCarriesTheRules($this->liveLines($broken));
+            $caught = false;
+        } catch (\PHPUnit\Framework\AssertionFailedError $e) {
+            $caught = str_contains($e->getMessage(), "'execution_percentage_1'=>100");
         }
 
-        $source = $this->liveCode($sibling);
+        $this->assertTrue($caught, 'A live hard write of the execution percentage must fail the sibling check.');
+    }
 
+    private function assertSiblingCarriesTheRules(string $source): void
+    {
         $this->assertStringContainsString('getExchangeRateForCurrency', $source,
             'veroanalysisb still imports contracts without an exchange rate.');
         $this->assertStringContainsString("\$projectFormatted['exchange_rate']", $source,

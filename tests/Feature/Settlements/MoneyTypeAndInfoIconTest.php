@@ -5,7 +5,8 @@ namespace Tests\Feature\Settlements;
 use App\Models\MoneyPayment;
 use App\Models\MoneyReceived;
 use App\Models\Settlement;
-use Illuminate\Support\Facades\DB;
+use Database\Factories\MoneyReceivedFactory;
+use Database\Factories\PartnerFactory;
 use Tests\TestCase;
 
 /**
@@ -19,32 +20,6 @@ use Tests\TestCase;
  */
 class MoneyTypeAndInfoIconTest extends TestCase
 {
-    private ?string $originalDatabase = null;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        $this->originalDatabase = config('database.connections.mysql.database');
-
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-    }
-
-    protected function tearDown(): void
-    {
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
-
-        parent::tearDown();
-    }
-
     private function stub(string $class, array $attributes, array $settlements = []): object
     {
         $money = new $class;
@@ -120,16 +95,26 @@ class MoneyTypeAndInfoIconTest extends TestCase
     }
 
     /**
-     * * السجل الحقيقي اللي العميل اتكلم عنه
+     * * السجل اللي العميل اتكلم عنه : رد عهدة استلمناه من موظف — محفوظ فعلا
+     * * و مقروء تاني من الداتابيز ، مش موديل في الذاكرة
      */
     public function test_the_reported_record_reads_as_expected(): void
     {
-        $money = MoneyReceived::find(1537);
+        app()->setLocale('en');
 
-        if (! $money || $money->getTransactionType() !== 'refund-custody') {
-            $this->markTestSkipped('Record 1537 is not the refund-custody row on this database.');
-        }
+        $company = $this->makeCompany();
+        $employee = PartnerFactory::new()->forCompany($company)->employee()->create();
 
+        $saved = MoneyReceivedFactory::new()->from($employee)->create([
+            'partner_type' => 'is_employee',
+            'money_type' => 'money-received',
+            'transaction_type' => 'refund-custody',
+            'received_amount' => 5000,
+        ]);
+
+        $money = MoneyReceived::findOrFail($saved->id);
+
+        $this->assertSame('refund-custody', $money->getTransactionType());
         $this->assertSame(
             'Money Received From [ Employee ] [ Refund Custody ]',
             $money->getMoneyTypeFormatted()

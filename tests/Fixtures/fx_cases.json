@@ -1,0 +1,21 @@
+{
+  "_about": "Which exchange rate applies to an amount on a given date (ForeignExchangeRate). The rule: the company's own rate for that pair of currencies, the latest one dated on or before the day; a rate dated later does not count yet; another company's or another pair's rates never count; with no rate at all the amount is taken at 1 (and the reports warn about it). Rates on file for company 1: USD→EGP 30 from 2024-01-01, 48 from 2024-03-06, 50 from 2025-01-01; EURO→EGP 52 from 2024-06-01. Company 2: USD→EGP 99 from 2024-01-01. Worked out by hand.",
+  "rates": [
+    { "company_id": 1, "from_currency": "USD", "to_currency": "EGP", "date": "2024-01-01", "exchange_rate": 30 },
+    { "company_id": 1, "from_currency": "USD", "to_currency": "EGP", "date": "2024-03-06", "exchange_rate": 48 },
+    { "company_id": 1, "from_currency": "USD", "to_currency": "EGP", "date": "2025-01-01", "exchange_rate": 50 },
+    { "company_id": 1, "from_currency": "EURO", "to_currency": "EGP", "date": "2024-06-01", "exchange_rate": 52 },
+    { "company_id": 2, "from_currency": "USD", "to_currency": "EGP", "date": "2024-01-01", "exchange_rate": 99 }
+  ],
+  "cases": [
+    { "name": "the day a rate starts", "company_id": 1, "from": "USD", "to": "EGP", "date": "2024-03-06", "expect": 48 },
+    { "name": "the day before it starts", "company_id": 1, "from": "USD", "to": "EGP", "date": "2024-03-05", "expect": 30 },
+    { "name": "long after the last rate", "company_id": 1, "from": "USD", "to": "EGP", "date": "2026-11-08", "expect": 50 },
+    { "name": "before the first rate", "company_id": 1, "from": "USD", "to": "EGP", "date": "2023-12-31", "expect": 1 },
+    { "name": "another currency's rate does not count", "company_id": 1, "from": "EURO", "to": "EGP", "date": "2024-05-31", "expect": 1 },
+    { "name": "the other currency on its own date", "company_id": 1, "from": "EURO", "to": "EGP", "date": "2024-06-01", "expect": 52 },
+    { "name": "another company's rate never counts", "company_id": 2, "from": "USD", "to": "EGP", "date": "2026-11-08", "expect": 99 },
+    { "name": "a company with no rates", "company_id": 3, "from": "USD", "to": "EGP", "date": "2026-11-08", "expect": 1 },
+    { "name": "the opposite direction is a different pair", "company_id": 1, "from": "EGP", "to": "USD", "date": "2026-11-08", "expect": 1 }
+  ]
+}

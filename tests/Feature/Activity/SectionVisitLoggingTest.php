@@ -16,7 +16,6 @@ use Illuminate\Support\Facades\Route;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
-use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -44,23 +43,9 @@ class SectionVisitLoggingTest extends TestCase
         return parent::createApplication();
     }
 
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
-
     protected function setUp(): void
     {
         parent::setUp();
-
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
 
         $this->withoutMiddleware([
             LocaleSessionRedirect::class,
@@ -68,23 +53,13 @@ class SectionVisitLoggingTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        $company = Company::first();
-        if (! $company) {
-            $this->markTestSkipped('Development database has no company to exercise.');
-        }
-        $this->company = $company;
+        // A fresh company and user, made here and rolled back afterwards.
+        $this->company = $this->makeCompany();
 
-        $user = new User;
-        $user->name = 'Section Visit Test';
-        $user->email = 'section-visit-'.bin2hex(random_bytes(6)).'@example.test';
-        $user->password = bcrypt('secret-'.bin2hex(random_bytes(8)));
-        $user->save();
-        $user->companies()->attach($this->company->id);
+        $user = $this->makeUser(['money_received.view'], $this->company, null, ['name' => 'Section Visit Test']);
         $user->assignRole(Role::firstOrCreate(['name' => 'test-scratch-role', 'guard_name' => 'web']));
-        $user->givePermissionTo(Permission::firstOrCreate(['name' => 'money_received.view', 'guard_name' => 'web']));
 
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
-        PermissionResolver::flush();
+        $this->forgetPermissions();
         $this->user = $user->fresh();
         $this->user->load('roles.permissions', 'permissions');
     }

@@ -6,12 +6,12 @@ use App\Models\Company;
 use App\Models\FinancialInstitution;
 use App\Models\FinancialInstitutionAccount;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
+use Tests\Concerns\MakesBanks;
+use Tests\Concerns\MakesFacilities;
 use Tests\TestCase;
 
 /**
@@ -19,23 +19,17 @@ use Tests\TestCase;
  * (Outstanding) and what is left (Room) as of today; the Bank Accounts
  * page shows each account's end balance as of today.
  *
- * Runs against the development database inside a rolled-back transaction.
+ * The company, its bank and every facility are made by the test and rolled
+ * back afterwards; running balances are worked out by the statement triggers.
  */
 class FacilityOverviewColumnsTest extends TestCase
 {
-    use DatabaseTransactions;
+    use MakesBanks;
+    use MakesFacilities;
 
     private Company $company;
 
     private FinancialInstitution $bank;
-
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
 
     protected function setUp(): void
     {
@@ -47,38 +41,13 @@ class FacilityOverviewColumnsTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
-
-        if (! Schema::connection('mysql')->hasTable('clean_overdrafts')) {
-            $this->markTestSkipped('No development schema on '.DB::connection('mysql')->getDatabaseName().' - set SMOKE_DB to run this suite.');
-        }
-
-        $bank = FinancialInstitution::query()->whereNotNull('company_id')->whereNotNull('bank_id')->first();
-        if (! $bank) {
-            $this->markTestSkipped('Development database needs a bank-type financial institution.');
-        }
-
-        $this->bank = $bank;
-        $this->company = Company::findOrFail($bank->company_id);
+        $this->company = $this->makeCompany();
+        $this->bank = $this->bank($this->company);
     }
 
     private function user(): User
     {
-        $user = User::create([
-            'name' => 'Facility Overview '.uniqid(),
-            'email' => 'facility-overview-'.uniqid().'@example.test',
-            'password' => bcrypt('secret-for-tests'),
-            'company_id' => $this->company->id,
-        ]);
-        $user->givePermissionTo(['view financial institutions']);
-        $user->companies()->attach($this->company->id);
-        $user->load('companies');
-
-        return $user;
+        return $this->makeUser(['view financial institutions'], $this->company);
     }
 
     /** @return array<string, mixed> the page row for that id */
@@ -95,15 +64,9 @@ class FacilityOverviewColumnsTest extends TestCase
 
     public function test_a_bank_account_shows_its_end_balance_as_of_today(): void
     {
-        $account = FinancialInstitutionAccount::create([
-            'company_id' => $this->company->id,
-            'financial_institution_id' => $this->bank->id,
+        $account = $this->currentAccount($this->bank, 'EGP', [
             'account_number' => 'TEST-FAC-'.uniqid(),
-            'currency' => 'EGP',
-            'balance_amount' => 0,
             'balance_date' => now()->subYear()->format('Y-m-d'),
-            'exchange_rate' => 1,
-            'is_active' => 1,
         ]);
         foreach ([
             [now()->subMonth(), 1000, 0, 1],   // opening
@@ -130,15 +93,13 @@ class FacilityOverviewColumnsTest extends TestCase
 
     public function test_an_undrawn_overdraft_shows_nothing_outstanding_and_its_whole_limit_as_room(): void
     {
-        $id = DB::table('clean_overdrafts')->insertGetId([
-            'company_id' => $this->company->id,
-            'financial_institution_id' => $this->bank->id,
+        $id = $this->cleanOverdraft($this->bank, [
             'account_number' => 'TEST-OD-'.uniqid(),
             'currency' => 'EGP',
             'limit' => 400000,
             'contract_start_date' => now()->subYear()->format('Y-m-d'),
             'contract_end_date' => now()->addYear()->format('Y-m-d'),
-        ]);
+        ])->id;
 
         $row = $this->row('financial-institution-facilities.oda-mtl', __('Clean Overdraft').'-'.$id);
         $this->assertEquals(400000, $row['limit_amount']);

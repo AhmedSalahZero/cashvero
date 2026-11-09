@@ -66,9 +66,8 @@ class ContractDashboardExportTest extends TestCase
     /**
      * Styling is matched by heading text, so a label that does not
      * appear in the sheet is dead configuration.
-     *
-     * @dataProvider styledLabelProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('styledLabelProvider')]
     public function test_every_styled_column_is_a_real_heading(string $method): void
     {
         $unknown = array_values(array_diff($this->labels($method), self::CONTROLLER_HEADINGS));

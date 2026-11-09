@@ -7,7 +7,9 @@ use App\Models\Contract;
 use App\Models\LetterOfGuaranteeIssuance;
 use App\Services\Reports\CashFlowCompanyPeriodBatchLoader;
 use App\Services\Reports\CashFlowContractDetailPeriodBatchLoader;
+use Database\Factories\PartnerFactory;
 use Illuminate\Support\Facades\DB;
+use Tests\Concerns\MakesBanks;
 use Tests\TestCase;
 
 /**
@@ -25,15 +27,15 @@ use Tests\TestCase;
  */
 class LgBreakdownPopupTest extends TestCase
 {
-    private ?string $originalDatabase = null;
-
-    private bool $inTransaction = false;
+    use MakesBanks;
 
     private int $companyId = 0;
 
     private int $partnerId = 0;
 
     private int $contractId = 0;
+
+    private int $bankId = 0;
 
     private int $bankAccountId = 0;
 
@@ -51,31 +53,12 @@ class LgBreakdownPopupTest extends TestCase
     {
         parent::setUp();
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
+        $company = $this->makeCompany();
+        $this->companyId = $company->id;
 
-        try {
-            DB::connection('mysql')->getPdo();
-            DB::table('letter_of_guarantee_issuances')->limit(1)->get();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-
-        DB::beginTransaction();
-        $this->inTransaction = true;
-
-        $this->companyId = (int) DB::table('companies')->insertGetId([
-            'name' => json_encode(['en' => 'LG Breakdown Co', 'ar' => 'LG Breakdown Co']),
-            'main_functional_currency' => 'EGP',
-        ]);
-
-        $this->partnerId = (int) DB::table('partners')->insertGetId([
-            'company_id' => $this->companyId,
+        $this->partnerId = PartnerFactory::new()->forCompany($company)->customer()->create([
             'name' => 'Guarantee Customer',
-            'is_customer' => 1,
-            'is_supplier' => 0,
-        ]);
+        ])->id;
 
         $this->contractId = (int) DB::table('contracts')->insertGetId([
             'company_id' => $this->companyId,
@@ -91,25 +74,9 @@ class LgBreakdownPopupTest extends TestCase
             'exchange_rate' => 1,
         ]);
 
-        $this->bankAccountId = (int) DB::table('financial_institution_accounts')->insertGetId([
-            'company_id' => $this->companyId,
-            'account_number' => 'acc-lgb-'.$this->companyId,
-            'currency' => 'EGP',
-            'is_active' => 1,
-        ]);
-    }
-
-    protected function tearDown(): void
-    {
-        if ($this->inTransaction) {
-            DB::rollBack();
-            $this->inTransaction = false;
-        }
-
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
-
-        parent::tearDown();
+        $bank = $this->bank($company);
+        $this->bankId = $bank->id;
+        $this->bankAccountId = $this->currentAccount($bank, 'EGP')->id;
     }
 
     /* ───────────────────────── fixtures ───────────────────────── */
@@ -155,7 +122,7 @@ class LgBreakdownPopupTest extends TestCase
             'letter_of_guarantee_issuance_id' => $lgId,
             'type' => 'debit-lg-amount',
             'source' => 'lg-facility',
-            'financial_institution_id' => 1,
+            'financial_institution_id' => $this->bankId,
             'lg_type' => LgTypes::FINAL_LGS,
             'date' => $date,
             'debit' => $amount,
@@ -332,10 +299,7 @@ class LgBreakdownPopupTest extends TestCase
         $mine = $this->lg(['lg_code' => 'LG-MINE']);
         $this->fee($mine, '2026-09-12', 100);
 
-        $otherCompanyId = (int) DB::table('companies')->insertGetId([
-            'name' => json_encode(['en' => 'Other Co', 'ar' => 'Other Co']),
-            'main_functional_currency' => 'EGP',
-        ]);
+        $otherCompanyId = $this->makeCompany()->id;
         $theirs = $this->lg(['lg_code' => 'LG-THEIRS', 'company_id' => $otherCompanyId, 'contract_id' => null]);
         DB::table('current_account_bank_statements')->insert([
             'company_id' => $otherCompanyId,

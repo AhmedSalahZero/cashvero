@@ -33,8 +33,12 @@ export function applyLocale(locale) {
 
 export function formatNumber(value, options = {}) {
     const digits = options.fractionDigits ?? 2;
-    return Number(value || 0).toLocaleString('en-EG', {
+    const text = Number(value || 0).toLocaleString('en-EG', {
         minimumFractionDigits: digits,
         maximumFractionDigits: digits,
     });
+
+    // A tiny negative (-0.001) rounds to "-0.00"; the server's number_format() writes "0.00",
+    // and so must the screen — a balance of nothing has no sign.
+    return /^-0([.,]0+)?$/.test(text) ? text.slice(1) : text;
 }

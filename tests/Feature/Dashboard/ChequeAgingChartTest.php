@@ -23,11 +23,11 @@ use Tests\TestCase;
  */
 class ChequeAgingChartTest extends TestCase
 {
-    private const COMPANY = 148;
+    private const COMPANY = 9001;
     private const AS_OF = '2026-08-23';
 
     /**
-     * Company 148's real supplier-cheque totals, copied verbatim from
+     * A sample company's supplier-cheque totals (a fixed input, shaped like
      * production including the mixed types: a bucket touched by one
      * cheque keeps the raw DB string, a bucket touched twice has been
      * coerced to a number. Fed straight to formatForDashboard so the
@@ -77,7 +77,7 @@ class ChequeAgingChartTest extends TestCase
     public function test_every_cheque_row_carries_the_three_bar_chart_keys(): void
     {
         $rows = $this->cheques()['aging_chart'];
-        $this->assertNotEmpty($rows, 'Company 148 has supplier cheques coming due; the chart must not be empty.');
+        $this->assertNotEmpty($rows, 'The sample company has supplier cheques coming due; the chart must not be empty.');
 
         foreach ($rows as $row) {
             $this->assertSame(
@@ -214,7 +214,7 @@ class ChequeAgingChartTest extends TestCase
      * the query carried where('due_date','>=',$agingDate), so nothing
      * overdue ever reached the buckets.
      *
-     * Company 148 has a EUR 3,300 opening cheque due 2026-07-03, still
+     * The sample company has a EUR 3,300 opening cheque due 2026-07-03, still
      * marked in-safe. It appeared on the opening balance page and
      * nowhere in the aging chart.
      */

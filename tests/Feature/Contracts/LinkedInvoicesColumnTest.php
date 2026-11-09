@@ -5,11 +5,9 @@ namespace Tests\Feature\Contracts;
 use App\Http\Controllers\ContractsController;
 use App\Models\Company;
 use App\Models\Contract;
-use App\Models\CustomerInvoice;
-use App\Models\Partner;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Tests\Concerns\MakesInvoices;
 use Tests\TestCase;
 
 /**
@@ -21,40 +19,23 @@ use Tests\TestCase;
  * *   - النسبة بتتحسب بس لما كل الفواتير بعملة العقد نفسه ؛ غير كده
  * *     بنكتب العملات بدل رقم مالوش معنى
  *
- * * الحالات بتتبني هنا و بترجع (transaction) ، عشان الاختبار يثبت
- * * الحالات كلها مش اللي صادف وجوده في الداتا
+ * * الحالات بتتبني هنا لشركة الاختبار نفسها و بترجع (TestCase) ، عشان
+ * * الاختبار يثبت الحالات كلها مش اللي صادف وجوده في الداتا
  */
 class LinkedInvoicesColumnTest extends TestCase
 {
-    private const COMPANY = 148;
+    use MakesInvoices;
 
-    private ?string $originalDatabase = null;
+    private Company $company;
+
+    private User $user;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-
-        if (! Company::find(self::COMPANY)) {
-            $this->markTestSkipped('Company '.self::COMPANY.' is not on file.');
-        }
-    }
-
-    protected function tearDown(): void
-    {
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
-
-        parent::tearDown();
+        $this->company = $this->makeCompany();
+        $this->user = $this->makeUser(['customer_contract.view'], $this->company);
     }
 
     /**
@@ -69,18 +50,9 @@ class LinkedInvoicesColumnTest extends TestCase
          * * contract_code ، فكود متكرر يخلي عقد ياخد فواتير عقد تاني
          */
         $code = 'LI-TEST-'.uniqid();
-        $partner = new Partner;
-        $partner->forceFill([
-            'company_id' => self::COMPANY,
-            'name' => 'Linked Invoices Test',
-            'is_customer' => 1,
-        ])->save();
+        $partner = $this->customer($this->company, ['name' => 'Linked Invoices Test']);
 
-        $contract = new Contract;
-        $contract->forceFill([
-            'company_id' => self::COMPANY,
-            'partner_id' => $partner->id,
-            'model_type' => 'Customer',
+        $contract = $this->contract($partner, [
             'status' => Contract::RUNNING,
             'name' => 'LI Test Contract',
             'code' => $code,
@@ -92,13 +64,11 @@ class LinkedInvoicesColumnTest extends TestCase
              * * ما الاختبار يدوّر عليه في صفحة مش محمّلة
              */
             'start_date' => '2099-01-01',
-        ])->save();
+            'end_date' => null,
+        ]);
 
         foreach ($invoices as $i => [$amount, $vat, $currency]) {
-            $invoice = new CustomerInvoice;
-            $invoice->forceFill([
-                'company_id' => self::COMPANY,
-                'customer_id' => $partner->id,
+            $this->invoice($partner, [
                 'invoice_number' => 'LI-'.$contract->id.'-'.$i,
                 'invoice_date' => '2025-02-0'.($i + 1),
                 'invoice_due_date' => '2025-05-0'.($i + 1),
@@ -106,9 +76,7 @@ class LinkedInvoicesColumnTest extends TestCase
                 'vat_amount' => $vat,
                 'currency' => $currency,
                 'exchange_rate' => 1,
-                'contract_code' => $code,
-                'contract_name' => 'LI Test Contract',
-            ])->save();
+            ], $contract);
         }
 
         return [$contract, $partner];
@@ -119,12 +87,12 @@ class LinkedInvoicesColumnTest extends TestCase
     {
         $request = Request::create('/x', 'GET');
         $request->setLaravelSession(app('session.store'));
-        $request->setUserResolver(fn () => User::first());
+        $request->setUserResolver(fn () => $this->user);
         $this->app->instance('request', $request);
-        auth()->setUser(User::first());
+        auth()->setUser($this->user);
 
         $props = app(ContractsController::class)
-            ->index(Company::findOrFail(self::COMPANY), $request, 'Customer')
+            ->index($this->company, $request, 'Customer')
             ->toResponse($request)->original->getData()['page']['props'];
 
         foreach (($props['contracts'] ?? []) as $rows) {
@@ -141,57 +109,45 @@ class LinkedInvoicesColumnTest extends TestCase
     /** * عملة واحدة، نفس عملة العقد → مبلغ و نسبة */
     public function test_one_currency_shows_a_total_and_a_percentage(): void
     {
-        DB::beginTransaction();
+        // 2,000,000 + 1,000,000 قبل الضريبة ، و بعدها 3,420,000
+        [$contract] = $this->contractWith(5_000_000, 'EGP', [
+            [2_000_000, 280_000, 'EGP'],
+            [1_000_000, 140_000, 'EGP'],
+        ]);
 
-        try {
-            // 2,000,000 + 1,000,000 قبل الضريبة ، و بعدها 3,420,000
-            [$contract] = $this->contractWith(5_000_000, 'EGP', [
-                [2_000_000, 280_000, 'EGP'],
-                [1_000_000, 140_000, 'EGP'],
-            ]);
+        $row = $this->rowFor($contract->id);
+        $this->assertNotNull($row, 'العقد المفروض يبان في الصفحة');
 
-            $row = $this->rowFor($contract->id);
-            $this->assertNotNull($row, 'العقد المفروض يبان في الصفحة');
+        $linked = $row['linked_invoices'];
 
-            $linked = $row['linked_invoices'];
-
-            $this->assertTrue($linked['has_any']);
-            $this->assertFalse($linked['is_mixed']);
-            $this->assertSame('3,420,000.00 EGP', $linked['summary'],
-                'المفروض صافي الفاتورة بعد الضريبة');
-            $this->assertSame(68.4, $linked['completion_percentage'],
-                '3,420,000 ÷ 5,000,000 = 68.4%');
-            $this->assertSame('68.40%', $linked['completion_label']);
-        } finally {
-            DB::rollBack();
-        }
+        $this->assertTrue($linked['has_any']);
+        $this->assertFalse($linked['is_mixed']);
+        $this->assertSame('3,420,000.00 EGP', $linked['summary'],
+            'المفروض صافي الفاتورة بعد الضريبة');
+        $this->assertSame(68.4, $linked['completion_percentage'],
+            '3,420,000 ÷ 5,000,000 = 68.4%');
+        $this->assertSame('68.40%', $linked['completion_label']);
     }
 
     /** * أكتر من عملة → مفيش إجمالي واحد ، و العملات بدل النسبة */
     public function test_mixed_currencies_show_a_breakdown_and_no_percentage(): void
     {
-        DB::beginTransaction();
+        [$contract] = $this->contractWith(5_000_000, 'EGP', [
+            [2_000_000, 0, 'EGP'],
+            [1_000_000, 0, 'USD'],
+        ]);
 
-        try {
-            [$contract] = $this->contractWith(5_000_000, 'EGP', [
-                [2_000_000, 0, 'EGP'],
-                [1_000_000, 0, 'USD'],
-            ]);
+        $linked = $this->rowFor($contract->id)['linked_invoices'];
 
-            $linked = $this->rowFor($contract->id)['linked_invoices'];
+        $this->assertTrue($linked['is_mixed']);
+        $this->assertNull($linked['summary'], 'مجموع واحد لعملتين مالوش معنى');
+        $this->assertNull($linked['completion_percentage']);
+        $this->assertSame('EGP-USD', $linked['completion_label']);
+        $this->assertCount(2, $linked['breakdown'], 'التفاصيل لازم تبقى سطر لكل عملة');
 
-            $this->assertTrue($linked['is_mixed']);
-            $this->assertNull($linked['summary'], 'مجموع واحد لعملتين مالوش معنى');
-            $this->assertNull($linked['completion_percentage']);
-            $this->assertSame('EGP-USD', $linked['completion_label']);
-            $this->assertCount(2, $linked['breakdown'], 'التفاصيل لازم تبقى سطر لكل عملة');
-
-            $byCurrency = collect($linked['breakdown'])->keyBy('currency');
-            $this->assertSame('2,000,000.00', $byCurrency['EGP']['total_formatted']);
-            $this->assertSame('1,000,000.00', $byCurrency['USD']['total_formatted']);
-        } finally {
-            DB::rollBack();
-        }
+        $byCurrency = collect($linked['breakdown'])->keyBy('currency');
+        $this->assertSame('2,000,000.00', $byCurrency['EGP']['total_formatted']);
+        $this->assertSame('1,000,000.00', $byCurrency['USD']['total_formatted']);
     }
 
     /**
@@ -200,78 +156,54 @@ class LinkedInvoicesColumnTest extends TestCase
      */
     public function test_a_single_foreign_currency_is_treated_as_mixed(): void
     {
-        DB::beginTransaction();
+        [$contract] = $this->contractWith(5_000_000, 'EGP', [
+            [3_000_000, 0, 'USD'],
+        ]);
 
-        try {
-            [$contract] = $this->contractWith(5_000_000, 'EGP', [
-                [3_000_000, 0, 'USD'],
-            ]);
+        $linked = $this->rowFor($contract->id)['linked_invoices'];
 
-            $linked = $this->rowFor($contract->id)['linked_invoices'];
-
-            $this->assertTrue($linked['is_mixed']);
-            $this->assertNull($linked['completion_percentage'],
-                'ما ينفعش نقسم دولار على جنيه');
-            $this->assertSame('EGP-USD', $linked['completion_label']);
-        } finally {
-            DB::rollBack();
-        }
+        $this->assertTrue($linked['is_mixed']);
+        $this->assertNull($linked['completion_percentage'],
+            'ما ينفعش نقسم دولار على جنيه');
+        $this->assertSame('EGP-USD', $linked['completion_label']);
     }
 
     /** * عقد من غير فواتير → مفيش مبلغ ، و النسبة صفر */
     public function test_a_contract_with_no_invoices_reads_zero(): void
     {
-        DB::beginTransaction();
+        [$contract] = $this->contractWith(5_000_000, 'EGP', []);
 
-        try {
-            [$contract] = $this->contractWith(5_000_000, 'EGP', []);
+        $linked = $this->rowFor($contract->id)['linked_invoices'];
 
-            $linked = $this->rowFor($contract->id)['linked_invoices'];
-
-            $this->assertFalse($linked['has_any']);
-            $this->assertNull($linked['summary']);
-            $this->assertSame(0.0, $linked['completion_percentage']);
-            $this->assertSame('0.00%', $linked['completion_label']);
-        } finally {
-            DB::rollBack();
-        }
+        $this->assertFalse($linked['has_any']);
+        $this->assertNull($linked['summary']);
+        $this->assertSame(0.0, $linked['completion_percentage']);
+        $this->assertSame('0.00%', $linked['completion_label']);
     }
 
     /** * عقد بقيمة صفر ما ينفعش يتقسم عليه */
     public function test_a_contract_with_no_value_has_no_percentage(): void
     {
-        DB::beginTransaction();
+        [$contract] = $this->contractWith(0, 'EGP', [
+            [1_000_000, 0, 'EGP'],
+        ]);
 
-        try {
-            [$contract] = $this->contractWith(0, 'EGP', [
-                [1_000_000, 0, 'EGP'],
-            ]);
+        $linked = $this->rowFor($contract->id)['linked_invoices'];
 
-            $linked = $this->rowFor($contract->id)['linked_invoices'];
-
-            $this->assertNull($linked['completion_percentage'], 'القسمة على صفر ممنوعة');
-        } finally {
-            DB::rollBack();
-        }
+        $this->assertNull($linked['completion_percentage'], 'القسمة على صفر ممنوعة');
     }
 
     /** * الفواتير الزيادة عن قيمة العقد بتتعرض زي ما هي ، فوق 100% */
     public function test_over_invoicing_goes_past_one_hundred_percent(): void
     {
-        DB::beginTransaction();
+        [$contract] = $this->contractWith(1_000_000, 'EGP', [
+            [1_500_000, 0, 'EGP'],
+        ]);
 
-        try {
-            [$contract] = $this->contractWith(1_000_000, 'EGP', [
-                [1_500_000, 0, 'EGP'],
-            ]);
+        $linked = $this->rowFor($contract->id)['linked_invoices'];
 
-            $linked = $this->rowFor($contract->id)['linked_invoices'];
-
-            $this->assertSame(150.0, $linked['completion_percentage']);
-            $this->assertSame('150.00%', $linked['completion_label']);
-        } finally {
-            DB::rollBack();
-        }
+        $this->assertSame(150.0, $linked['completion_percentage']);
+        $this->assertSame('150.00%', $linked['completion_label']);
     }
 
     /** * و الصفحة معرّفة العمودين و بتعرضهم */

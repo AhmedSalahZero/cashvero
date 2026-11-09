@@ -50,12 +50,6 @@ class PlainRecordNumberSecurityTest extends TestCase
         $this->bootAttack();
     }
 
-    protected function tearDown(): void
-    {
-        $this->cleanupScratch();
-        parent::tearDown();
-    }
-
     /* ────────────────────────────── SEC-37a ────────────────────────────── */
 
     public function test_screens_with_a_plain_record_number_cannot_reach_another_companys_records(): void
@@ -140,7 +134,7 @@ class PlainRecordNumberSecurityTest extends TestCase
             $judged ? $routesJudged++ : null;
         }
 
-        $this->assertGreaterThan(0, $attacked, 'No screen with a plain record number could be attacked (no company B records, or the controllers could not be read).');
+        $this->assertGreaterThan(0, $attacked, 'No screen with a plain record number could be attacked (no company B record could be planted, or the controllers could not be read).');
 
         $this->assertSame([], $leaks, Finding::message(
             'SEC-37a', 'HIGH',

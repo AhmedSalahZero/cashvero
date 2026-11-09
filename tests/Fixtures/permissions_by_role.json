@@ -1,0 +1,21 @@
+{
+  "_about": "What each role may do out of the box, as agreed with the client (written down in PermissionRegistry::ROLE_DEFAULTS). A user: sees and exports the business, changes nothing. A manager: runs the day-to-day (creates, edits, settles, exports) but deletes nothing, does not mark movements reviewed (that locks them; it is the company's own sign-off), and does not touch users, roles, companies or an owner's private accounts. A company admin: everything in the company, including deleting, reviewing and its users and roles — but not other companies or the platform. A super admin: everything. The lines below are examples worked out from those sentences, not copied from the code.",
+  "roles": {
+    "user": {
+      "may": ["money_received.view", "report_bank_statement.view", "report_bank_statement.export", "cash_flow_report.view", "report_bank_charges_analysis.view"],
+      "may_not": ["money_received.create", "money_received.update", "money_received.delete", "money_received.review", "shareholder_account.view", "user.view", "user.create", "role.view", "company.view", "super_admin.view"]
+    },
+    "manager": {
+      "may": ["money_received.view", "money_received.create", "money_received.update", "cash_flow_report.view", "report_bank_statement.export"],
+      "may_not": ["money_received.delete", "money_received.review", "cash_expense.review", "shareholder_account.view", "user.view", "user.create", "role.view", "company.view", "company.update", "super_admin.view"]
+    },
+    "company-admin": {
+      "may": ["money_received.view", "money_received.create", "money_received.update", "money_received.delete", "money_received.review", "shareholder_account.view", "user.view", "user.create", "role.view"],
+      "may_not": ["company.view", "company.update", "super_admin.view"]
+    },
+    "super-admin": {
+      "may": ["money_received.delete", "money_received.review", "shareholder_account.view", "user.create", "role.view", "company.view", "company.update", "super_admin.view"],
+      "may_not": []
+    }
+  }
+}

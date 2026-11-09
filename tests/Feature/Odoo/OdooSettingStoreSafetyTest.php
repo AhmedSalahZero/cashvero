@@ -7,13 +7,11 @@ use App\Models\Company;
 use App\OdooSetting;
 use App\Models\User;
 use App\Services\Api\OdooService;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationRedirectFilter;
 use Mcamara\LaravelLocalization\Middleware\LaravelLocalizationViewPath;
 use Mcamara\LaravelLocalization\Middleware\LocaleSessionRedirect;
-use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 /**
@@ -33,8 +31,6 @@ use Tests\TestCase;
  */
 class OdooSettingStoreSafetyTest extends TestCase
 {
-    use DatabaseTransactions;
-
     private Company $company;
 
     private User $actor;
@@ -75,14 +71,6 @@ class OdooSettingStoreSafetyTest extends TestCase
         parent::tearDown();
     }
 
-    protected function setUpTraits()
-    {
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        return parent::setUpTraits();
-    }
-
     protected function setUp(): void
     {
         parent::setUp();
@@ -93,24 +81,18 @@ class OdooSettingStoreSafetyTest extends TestCase
             LaravelLocalizationViewPath::class,
         ]);
 
-        try {
-            DB::connection('mysql')->getPdo();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable: '.$e->getMessage());
-        }
-
         /**
          * * الميدلوير isCashManagement بيطلب يوزر عنده النظام ده ، والنظام
-         * * بيتقرا من أول شركة لليوزر — فبنختار شركة النظام فعلا موجود عندها
+         * * بيتقرا من أول شركة لليوزر — makeCompany() بيعمل شركة مشتركة فيه
          */
-        $companyId = DB::table('company_systems')->where('system_name', CASH_VERO)->value('company_id');
+        $this->company = $this->makeCompany();
 
-        if (! $companyId) {
-            $this->markTestSkipped('No company in this database has the cash-vero system.');
-        }
-
-        $this->company = Company::findOrFail($companyId);
-        $this->actor = $this->makeUser();
+        /**
+         * * getRoleName() بيقرا أول رول من غير حماية من الفاضي ، و cashvero
+         * * بيفرض الصلاحيات بميدلوير عام بيقرا المنح المباشرة على اليوزر
+         */
+        $this->actor = $this->makeUser(['odoo_integration.update', 'odoo_integration.view'], $this->company, 'company-admin');
+        $this->actor->load('roles', 'permissions', 'companies');
 
         self::$fake = $this->makeFakeOdooService();
 
@@ -121,39 +103,6 @@ class OdooSettingStoreSafetyTest extends TestCase
                 return OdooSettingStoreSafetyTest::fake();
             }
         });
-    }
-
-    private function makeUser(): User
-    {
-        /** @var User $user */
-        $user = User::create([
-            'name' => 'Odoo Setting Safety '.uniqid(),
-            'email' => 'odoo-setting-'.uniqid().'@example.test',
-            'password' => bcrypt('secret-for-tests'),
-            'company_id' => $this->company->id,
-        ]);
-
-        /** getRoleName() بيقرا أول رول من غير حماية من الفاضي */
-        $user->assignRole('company-admin');
-
-        /**
-         * * cashvero بيفرض الصلاحيات بميدلوير عام ، و PermissionResolver
-         * * بيقرا المنح المباشرة على اليوزر نفسه — مش صلاحيات الرول. النظام
-         * * الأول مالوش الميدلوير ده ولا الصلاحيات دي مسجّلة عنده ، فبنمنح
-         * * اللي موجود بس بدل ما التست يتكسر في واحد منهم.
-         */
-        foreach (['odoo_integration.update', 'odoo_integration.view'] as $key) {
-            $permission = Permission::where('name', $key)->first();
-
-            if ($permission) {
-                $user->givePermissionTo($permission);
-            }
-        }
-
-        $user->companies()->attach($this->company->id);
-        $user->load('roles', 'permissions', 'companies');
-
-        return $user;
     }
 
     private function url(): string

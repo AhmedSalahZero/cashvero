@@ -27,47 +27,17 @@ use Tests\TestCase;
  */
 class OdooExecutionPlanPreservedTest extends TestCase
 {
-    private ?string $originalDatabase = null;
-
-    private bool $inTransaction = false;
-
     private int $companyId = 0;
 
+    /**
+     * A company of this test's own. TestCase wraps every test in a transaction that is rolled
+     * back afterwards, so nothing written here outlives the test.
+     */
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->originalDatabase = config('database.connections.mysql.database');
-        config(['database.connections.mysql.database' => env('SMOKE_DB', 'cashvero')]);
-        DB::purge('mysql');
-
-        try {
-            DB::connection('mysql')->getPdo();
-            DB::table('contracts')->limit(1)->get();
-        } catch (\Throwable $e) {
-            $this->markTestSkipped('Development database not reachable.');
-        }
-
-        DB::beginTransaction();
-        $this->inTransaction = true;
-
-        $this->companyId = (int) DB::table('companies')->insertGetId([
-            'name' => json_encode(['en' => 'Execution Plan Test Co', 'ar' => 'Execution Plan Test Co']),
-            'main_functional_currency' => 'EGP',
-        ]);
-    }
-
-    protected function tearDown(): void
-    {
-        if ($this->inTransaction) {
-            DB::rollBack();
-            $this->inTransaction = false;
-        }
-
-        config(['database.connections.mysql.database' => $this->originalDatabase]);
-        DB::purge('mysql');
-
-        parent::tearDown();
+        $this->companyId = $this->makeCompany(['name' => ['en' => 'Execution Plan Test Co', 'ar' => 'Execution Plan Test Co']])->id;
     }
 
     /* ───────────────────── أدوات ───────────────────── */

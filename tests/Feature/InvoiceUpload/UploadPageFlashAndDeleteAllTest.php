@@ -44,9 +44,7 @@ class UploadPageFlashAndDeleteAllTest extends TestCase
     // the flash channel
     // ---------------------------------------------------------------
 
-    /**
-     * @dataProvider inertiaControllerProvider
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('inertiaControllerProvider')]
     public function test_the_upload_pages_no_longer_flash_through_flasher(string $controller): void
     {
         $this->assertStringNotContainsString('toastr()->', $this->liveCode($controller), sprintf(
