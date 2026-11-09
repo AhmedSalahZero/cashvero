@@ -25,6 +25,15 @@ chmod -R 775 bootstrap/cache
 echo ">>> Running migrations"
 /usr/local/bin/ea-php84 artisan migrate --force
 
+# Permissions are held per user: sync only fills role templates (for future
+# users); rollout hands each NEW key, once, to the users who already hold the
+# screen it came from. See docs/permissions.md.
+echo ">>> Syncing permissions"
+/usr/local/bin/ea-php84 artisan permissions:sync
+
+echo ">>> Rolling out new permissions"
+/usr/local/bin/ea-php84 artisan permissions:rollout --force
+
 echo ">>> Running Sql"
 /usr/local/bin/ea-php84 artisan run:sql
 

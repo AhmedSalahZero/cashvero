@@ -27,7 +27,8 @@ future users start with. To change someone, edit that person.
 | Frontend check | `resources/js/composables/usePermissions.js` |
 | **Per-user permissions UI** | `UsersAndPermissionsController` + `SuperAdmin/Users/Permissions.vue` |
 | Template management UI | `RoleController` + `SuperAdmin/Roles/` |
-| Seeding | `database/seeders/PermissionSeeder.php`, `php artisan permissions:sync` |
+| Seeding role templates | `database/seeders/PermissionSeeder.php`, `php artisan permissions:sync` |
+| Giving new keys to existing users | `app/Support/Permissions/PermissionRollout.php`, `php artisan permissions:rollout` |
 
 Permission keys are `module.action` — `money_received.delete`, `cash_expense.create`.
 
@@ -35,10 +36,37 @@ Permission keys are `module.action` — `money_received.delete`, `cash_expense.c
 
 1. Add one entry to `PermissionRegistry::MODULES`.
 2. Map its route names in `RoutePermissionMap::MAP`.
-3. `php artisan permissions:sync`.
+3. Deploy. `deploy.sh` runs `php artisan permissions:sync` (role templates, for
+   future users) and then `php artisan permissions:rollout --force` (existing users).
 
 No controller, Gate, middleware or Vue change is needed. `RouteCoverageTest`
 fails the build if step 2 is skipped.
+
+### ⚠️ A new key reaches no existing user on its own
+
+Permissions are per user, and `permissions:sync` only fills role templates. So
+after a release adds `report_x.view`, nobody but a Super Admin can open it.
+
+`permissions:rollout` fixes that **once per key**. It gives the new key to every
+user who already holds the screen it came from, meaning one of its `legacy`
+names or another canonical key that stands for the same legacy name. That's the
+same rule `migrate-to-user` used. Example: `report_bank_charges_analysis.view`
+(legacy `view bank statement report`) goes to everyone with
+`report_bank_statement.view`.
+
+- **Give the new key a `legacy` alias** pointing at the screen it was carved out
+  of. Without one it has no parent, reaches nobody, and a Super Admin grants it
+  by hand. The rollout output says so.
+- **Once.** Each rolled-out key gets a row in `permission_rollouts`, and a key
+  with a row is never looked at again. If an admin later removes it from
+  someone, the next deploy leaves that alone.
+- Run `php artisan permissions:rollout` without `--force` to see who would get
+  what. It writes nothing.
+
+Why not just honour the alias at check time? After the migration users hold
+canonical keys only, and `PermissionResolver` matches names literally. Widening
+that would make every `INHERITED` key permanent, and the point of the new key is
+that an admin can tighten it.
 
 ## Checking a permission
 
@@ -138,15 +166,25 @@ their own), expands legacy names to canonical keys, and writes the result direct
 onto the user. Nobody gains or loses access; afterwards everyone is edited
 individually.
 
+**Order matters:** run it **before** the first `permissions:sync`. Once role
+templates are filled, `direct ∪ role` would copy them onto every user, granting
+access nobody had. The command warns and refuses in that case.
+
+Production has already been migrated (November 2026). This is history now: don't
+run it again there, and it isn't part of `deploy.sh`.
+
 ## Config
 
 `config/permissions.php`:
 
 - `enforce` — master switch; `false` degrades `EnforcePermission` to log-only.
-- `unmapped` — `allow` (current) logs and passes an unmapped route; `deny` 403s.
-  Switch to `deny` once the log has been quiet for a release cycle.
-- `bulk_deletable_models` / `reviewable_tables` — whitelists for the two generic
-  endpoints that previously took a model/table name straight from the request.
+- `unmapped` — `deny` (the default) 403s a route that has no rule; `allow` logs
+  and passes it. Use `PERMISSIONS_UNMAPPED=allow` only as a temporary emergency
+  switch; `RouteCoverageTest` keeps the map complete anyway.
+- `bulk_deletable_models` — whitelist for the generic bulk-delete endpoint
+  (`DeletingClass`), which used to take a model name straight from the request.
+  The generic review endpoint has its own fixed list in code instead:
+  `MovementReviewController::MOVEMENTS`.
 
 ## Tests
 
@@ -157,6 +195,9 @@ individually.
 - `RouteCoverageTest` — no unmapped route, no stale entry, no public write route.
   Runs without a database; this is the anti-drift guard.
 - `PermissionRegistryTest` — registry integrity and the template matrix.
+- `PermissionRolloutTest` — a new key goes to holders of its parent screen only,
+  once (an admin's later removal sticks), never to Super Admins, never for keys
+  already handed out, and a dry run writes nothing.
 - `AuthorizationEnforcementTest` — real HTTP: 403 without, 200 with, view does not
   imply delete, **role permissions are not inherited**, editing a role does not
   change an existing user, applying a template copies onto the user, the legacy-name
