@@ -14,45 +14,53 @@
  * LetterOfCreditStatement::getDashboard*() helper it calls) is
  * UNCHANGED — this page only renders what's already computed.
  */
-import { ref, computed } from 'vue';
-import { router } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
-import DashboardTabs from '@/Components/DashboardTabs.vue';
-import DonutChart3D from '@/Components/Charts/DonutChart3D.vue';
+import DonutChart3D from '@/Components/Charts/DonutChart3D.vue'
+import DashboardTabs from '@/Components/DashboardTabs.vue'
+import AppLayout from '@/Layouts/AppLayout.vue'
+import { router } from '@inertiajs/vue3'
+import { computed, ref } from 'vue'
 
 const props = defineProps({
-    company: Object,
-    mainFunctionalCurrency: String,
-    financialInstitutionBanks: Array,
-    reports: Object,
-    selectedCurrencies: Array,
-    allCurrencies: Array,
-    details: Object,
-    charts: Object,
-    lgTypes: Object,
-    lcTypes: Object,
-    lgSources: Object,
-    lcSources: Object,
-    tablesData: Object,
-    financialInstitutions: Array,
-    canShowDashboardPerCurrency: Object,
-    date: String,
-    selectedLgSource: String,
-    filterUrl: String,
-    dashboardTabUrls: Object,
-});
+  company: Object,
+  mainFunctionalCurrency: String,
+  financialInstitutionBanks: Array,
+  reports: Object,
+  selectedCurrencies: Array,
+  allCurrencies: Array,
+  details: Object,
+  charts: Object,
+  lgTypes: Object,
+  lcTypes: Object,
+  lgSources: Object,
+  lcSources: Object,
+  tablesData: Object,
+  financialInstitutions: Array,
+  canShowDashboardPerCurrency: Object,
+  date: String,
+  selectedLgSource: String,
+  filterUrl: String,
+  dashboardTabUrls: Object,
+})
 
 // Defaults to the company's main functional currency, same as Cash
 // Status — falling back to the first available currency if the main
 // one isn't in this company's currency list for some reason.
-const currencyList = props.selectedCurrencies.length ? props.selectedCurrencies : (props.allCurrencies || []);
+const currencyList = props.selectedCurrencies.length
+  ? props.selectedCurrencies
+  : props.allCurrencies || []
 const activeCurrency = ref(
-    currencyList.includes(props.mainFunctionalCurrency) ? props.mainFunctionalCurrency : (currencyList[0] || '')
-);
-const filterDate = ref(props.date);
+  currencyList.includes(props.mainFunctionalCurrency)
+    ? props.mainFunctionalCurrency
+    : currencyList[0] || '',
+)
+const filterDate = ref(props.date)
 
 function applyFilter() {
-    router.get(props.filterUrl, { date: filterDate.value, currencies: [activeCurrency.value] }, { preserveScroll: true, preserveState: true });
+  router.get(
+    props.filterUrl,
+    { date: filterDate.value, currencies: [activeCurrency.value] },
+    { preserveScroll: true, preserveState: true },
+  )
 }
 
 /**
@@ -68,33 +76,37 @@ function applyFilter() {
  * currency. Already-loaded currencies still switch instantly.
  */
 function switchCurrency(currency) {
-    const alreadyLoaded = props.reports?.lg?.[currency] || props.reports?.lc?.[currency];
-    if (alreadyLoaded) {
-        activeCurrency.value = currency;
-        return;
-    }
-    // BUG FIX: this used to fire the visit and return without ever
-    // updating activeCurrency. Inertia's preserveState:true keeps this
-    // component's local refs as-is across the visit, so activeCurrency
-    // stayed pointed at the OLD currency while props.reports/charts/
-    // canShowDashboardPerCurrency came back containing ONLY the newly
-    // requested currency — every lookup keyed on activeCurrency (
-    // reportFor(), typeChartData(), canShow, tableRows()) then missed,
-    // and since canShow gates the whole LG/LC section, the entire page
-    // appeared to go blank. Setting activeCurrency once the new data
-    // has actually landed fixes that.
-    router.get(props.filterUrl, { date: filterDate.value, currencies: [currency] }, {
-        preserveScroll: true,
-        preserveState: true,
-        onSuccess: () => {
-            activeCurrency.value = currency;
-        },
-    });
+  const alreadyLoaded = props.reports?.lg?.[currency] || props.reports?.lc?.[currency]
+  if (alreadyLoaded) {
+    activeCurrency.value = currency
+    return
+  }
+  // BUG FIX: this used to fire the visit and return without ever
+  // updating activeCurrency. Inertia's preserveState:true keeps this
+  // component's local refs as-is across the visit, so activeCurrency
+  // stayed pointed at the OLD currency while props.reports/charts/
+  // canShowDashboardPerCurrency came back containing ONLY the newly
+  // requested currency — every lookup keyed on activeCurrency (
+  // reportFor(), typeChartData(), canShow, tableRows()) then missed,
+  // and since canShow gates the whole LG/LC section, the entire page
+  // appeared to go blank. Setting activeCurrency once the new data
+  // has actually landed fixes that.
+  router.get(
+    props.filterUrl,
+    { date: filterDate.value, currencies: [currency] },
+    {
+      preserveScroll: true,
+      preserveState: true,
+      onSuccess: () => {
+        activeCurrency.value = currency
+      },
+    },
+  )
 }
 
 function fmt(value) {
-    const n = Number(value || 0);
-    return n.toLocaleString('en-EG', { maximumFractionDigits: 0 });
+  const n = Number(value || 0)
+  return n.toLocaleString('en-EG', { maximumFractionDigits: 0 })
 }
 
 /* ── Limit card → per-bank Details modal ─────────────────────────
@@ -103,27 +115,30 @@ function fmt(value) {
    above already show, just grouped by bank instead of totalled — so
    this modal's totals row always foots to the Limit/Outstanding/
    Room/Cash Cover cards above it. */
-const limitDetailsModal = ref(null); // { rows, totals, showReserved } | null
-const facilityDetailsModal = ref(null);
+const limitDetailsModal = ref(null) // { rows, totals, showReserved } | null
+const facilityDetailsModal = ref(null)
 function openLimitDetails(sectionKey) {
-    const rows = props.reports?.[sectionKey]?.[activeCurrency.value]?.limitDetailsByBank || [];
-    const totals = rows.reduce((acc, r) => ({
-        limit: acc.limit + (Number(r.limit) || 0),
-        outstanding: acc.outstanding + (Number(r.outstanding) || 0),
-        reserved: acc.reserved + (Number(r.reserved) || 0),
-        room: acc.room + (Number(r.room) || 0),
-        cash_cover: acc.cash_cover + (Number(r.cash_cover) || 0),
-    }), { limit: 0, outstanding: 0, reserved: 0, room: 0, cash_cover: 0 });
-    // Only LGs can be reserved: an unactivated Advance Payment LG holds
-    // its amount against the facility limit without any statement row.
-    // The column is shown only when at least one bank actually has such
-    // an LG — a column of zeros just looked like noise.
-    limitDetailsModal.value = {
-        rows,
-        totals,
-        showReserved: sectionKey === 'lg' && rows.some(r => Number(r.reserved) !== 0),
-    };
-    facilityDetailsModal.value = null;
+  const rows = props.reports?.[sectionKey]?.[activeCurrency.value]?.limitDetailsByBank || []
+  const totals = rows.reduce(
+    (acc, r) => ({
+      limit: acc.limit + (Number(r.limit) || 0),
+      outstanding: acc.outstanding + (Number(r.outstanding) || 0),
+      reserved: acc.reserved + (Number(r.reserved) || 0),
+      room: acc.room + (Number(r.room) || 0),
+      cash_cover: acc.cash_cover + (Number(r.cash_cover) || 0),
+    }),
+    { limit: 0, outstanding: 0, reserved: 0, room: 0, cash_cover: 0 },
+  )
+  // Only LGs can be reserved: an unactivated Advance Payment LG holds
+  // its amount against the facility limit without any statement row.
+  // The column is shown only when at least one bank actually has such
+  // an LG — a column of zeros just looked like noise.
+  limitDetailsModal.value = {
+    rows,
+    totals,
+    showReserved: sectionKey === 'lg' && rows.some((r) => Number(r.reserved) !== 0),
+  }
+  facilityDetailsModal.value = null
 }
 
 /* A bank row is the sum of its active facilities. This second modal
@@ -131,270 +146,440 @@ function openLimitDetails(sectionKey) {
    figures, so a fully used contract (room 0) is visible beside the
    contract that still has room. */
 function openFacilityDetails(row) {
-    const facilities = row.facilities || [];
-    if (!facilities.length) {
-        return;
-    }
-    const totals = facilities.reduce((acc, facility) => ({
-        limit: acc.limit + (Number(facility.limit) || 0),
-        outstanding: acc.outstanding + (Number(facility.outstanding) || 0),
-        reserved: acc.reserved + (Number(facility.reserved) || 0),
-        room: acc.room + (Number(facility.room) || 0),
-        cash_cover: acc.cash_cover + (Number(facility.cash_cover) || 0),
-    }), { limit: 0, outstanding: 0, reserved: 0, room: 0, cash_cover: 0 });
-    facilityDetailsModal.value = {
-        bankName: row.financial_institution_name,
-        facilities,
-        totals,
-        showReserved: !!limitDetailsModal.value?.showReserved && facilities.some(f => Number(f.reserved) !== 0),
-    };
+  const facilities = row.facilities || []
+  if (!facilities.length) {
+    return
+  }
+  const totals = facilities.reduce(
+    (acc, facility) => ({
+      limit: acc.limit + (Number(facility.limit) || 0),
+      outstanding: acc.outstanding + (Number(facility.outstanding) || 0),
+      reserved: acc.reserved + (Number(facility.reserved) || 0),
+      room: acc.room + (Number(facility.room) || 0),
+      cash_cover: acc.cash_cover + (Number(facility.cash_cover) || 0),
+    }),
+    { limit: 0, outstanding: 0, reserved: 0, room: 0, cash_cover: 0 },
+  )
+  facilityDetailsModal.value = {
+    bankName: row.financial_institution_name,
+    facilities,
+    totals,
+    showReserved:
+      !!limitDetailsModal.value?.showReserved && facilities.some((f) => Number(f.reserved) !== 0),
+  }
 }
 
 function closeLimitDetails() {
-    limitDetailsModal.value = null;
-    facilityDetailsModal.value = null;
+  limitDetailsModal.value = null
+  facilityDetailsModal.value = null
 }
 
 /* ── LG / LC sections — structurally identical, generalized rather
    than hand-copied twice (same "family" treatment as the overdraft
    types on Cash Status). ────────────────────────────────────────── */
 const facilitySections = computed(() => [
-    {
-        key: 'lg',
-        label: 'Letters of Guarantee',
-        accent: '--cvr-copper-bright',
-        typeChartKey: 'outstanding_per_lg_type',
-        institutionChartKey: 'lg_outstanding_per_financial_institution',
-        tableKey: 'lg_outstanding_for_table',
-        canShow: props.canShowDashboardPerCurrency?.lg?.[activeCurrency.value],
-    },
-    {
-        key: 'lc',
-        label: 'Letters of Credit',
-        accent: '--cvr-blue',
-        typeChartKey: 'outstanding_per_lc_type',
-        institutionChartKey: 'lc_outstanding_per_financial_institution',
-        tableKey: 'lc_outstanding_for_table',
-        canShow: props.canShowDashboardPerCurrency?.lc?.[activeCurrency.value],
-    },
-]);
+  {
+    key: 'lg',
+    label: 'Letters of Guarantee',
+    accent: '--cvr-copper-bright',
+    typeChartKey: 'outstanding_per_lg_type',
+    institutionChartKey: 'lg_outstanding_per_financial_institution',
+    tableKey: 'lg_outstanding_for_table',
+    canShow: props.canShowDashboardPerCurrency?.lg?.[activeCurrency.value],
+  },
+  {
+    key: 'lc',
+    label: 'Letters of Credit',
+    accent: '--cvr-blue',
+    typeChartKey: 'outstanding_per_lc_type',
+    institutionChartKey: 'lc_outstanding_per_financial_institution',
+    tableKey: 'lc_outstanding_for_table',
+    canShow: props.canShowDashboardPerCurrency?.lc?.[activeCurrency.value],
+  },
+])
 
 function reportFor(sectionKey) {
-    return props.reports?.[sectionKey]?.[activeCurrency.value] || {};
+  return props.reports?.[sectionKey]?.[activeCurrency.value] || {}
 }
 function typeChartData(section) {
-    return (props.charts?.[section.typeChartKey]?.[activeCurrency.value] || []).map(r => ({ category: r.type, value: r.outstanding }));
+  return (props.charts?.[section.typeChartKey]?.[activeCurrency.value] || []).map((r) => ({
+    category: r.type,
+    value: r.outstanding,
+  }))
 }
 function institutionChartData(section) {
-    return (props.charts?.[section.institutionChartKey]?.[activeCurrency.value] || []).map(r => ({ category: r.type, value: r.outstanding }));
+  return (props.charts?.[section.institutionChartKey]?.[activeCurrency.value] || []).map((r) => ({
+    category: r.type,
+    value: r.outstanding,
+  }))
 }
 function tableRows(section) {
-    return props.tablesData?.[section.tableKey]?.[activeCurrency.value] || [];
+  return props.tablesData?.[section.tableKey]?.[activeCurrency.value] || []
 }
 </script>
 
 <template>
-    <AppLayout>
-        <div class="p-6">
-            <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Dashboard') }}</h1>
-            <p class="text-sm cvr-text-muted mb-4">{{ $t('Letters of Guarantee & Letters of Credit — limits, outstanding balances & cash cover') }}</p>
+  <AppLayout>
+    <div class="p-6">
+      <h1 class="text-xl font-semibold cvr-text-primary mb-1">{{ $t('Dashboard') }}</h1>
+      <p class="text-sm cvr-text-muted mb-4">
+        {{
+          $t('Letters of Guarantee & Letters of Credit — limits, outstanding balances & cash cover')
+        }}
+      </p>
 
-            <DashboardTabs active="lglc" :urls="dashboardTabUrls" />
+      <DashboardTabs
+        active="lglc"
+        :urls="dashboardTabUrls" />
 
-            <div class="cvr-card-bg cvr-border border rounded-lg p-3 mb-6 flex items-end gap-3 flex-wrap">
-                <div>
-                    <label class="cvr-form-label">{{ $t('As Of Date') }}</label>
-                    <input v-model="filterDate" type="date" class="cvr-input px-3 py-2 rounded" />
-                </div>
-                <button class="cvr-btn-primary px-4 py-2 rounded" @click="applyFilter">{{ $t('Apply') }}</button>
+      <div class="cvr-card-bg cvr-border border rounded-lg p-3 mb-6 flex items-end gap-3 flex-wrap">
+        <div>
+          <label class="cvr-form-label">{{ $t('As Of Date') }}</label>
+          <input
+            v-model="filterDate"
+            type="date"
+            class="cvr-input px-3 py-2 rounded" />
+        </div>
+        <button
+          class="cvr-btn-primary px-4 py-2 rounded"
+          @click="applyFilter">
+          {{ $t('Apply') }}
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2 flex-wrap mb-6">
+        <button
+          v-for="currency in selectedCurrencies.length ? selectedCurrencies : allCurrencies"
+          :key="currency"
+          class="cvr-filter-pill"
+          :class="{ 'cvr-filter-pill-active': activeCurrency === currency }"
+          @click="switchCurrency(currency)">
+          {{ currency }}
+        </button>
+      </div>
+
+      <template
+        v-for="section in facilitySections"
+        :key="section.key">
+        <template v-if="section.canShow">
+          <div class="cvr-section-heading">
+            <h2>{{ $t(section.label) }} [{{ activeCurrency }}]</h2>
+          </div>
+
+          <div class="cvr-kpi-row-4 mb-6">
+            <div
+              class="cvr-kpi-card cursor-pointer"
+              @click="openLimitDetails(section.key)">
+              <div class="cvr-kpi-icon cvr-kpi-icon-blue">🎯</div>
+              <div>
+                <p class="cvr-kpi-label">{{ $t('Limit') }}</p>
+                <p class="cvr-kpi-value cvr-num-blue">{{ fmt(reportFor(section.key).limit) }}</p>
+              </div>
             </div>
-
-            <div class="flex items-center gap-2 flex-wrap mb-6">
-                <button
-                    v-for="currency in (selectedCurrencies.length ? selectedCurrencies : allCurrencies)"
-                    :key="currency"
-                    class="cvr-filter-pill"
-                    :class="{ 'cvr-filter-pill-active': activeCurrency === currency }"
-                    @click="switchCurrency(currency)"
-                >
-                    {{ currency }}
-                </button>
+            <div class="cvr-kpi-card">
+              <div class="cvr-kpi-icon cvr-kpi-icon-copper">📉</div>
+              <div>
+                <p class="cvr-kpi-label">{{ $t('Outstanding Balance') }}</p>
+                <p class="cvr-kpi-value cvr-num-amber">
+                  {{ fmt(reportFor(section.key).outstanding_balance) }}
+                </p>
+              </div>
             </div>
+            <div class="cvr-kpi-card">
+              <div class="cvr-kpi-icon cvr-kpi-icon-green">✅</div>
+              <div>
+                <p class="cvr-kpi-label">{{ $t('Available Room') }}</p>
+                <p class="cvr-kpi-value cvr-num-green">{{ fmt(reportFor(section.key).room) }}</p>
+              </div>
+            </div>
+            <div class="cvr-kpi-card">
+              <div class="cvr-kpi-icon cvr-kpi-icon-copper">🛡</div>
+              <div>
+                <p class="cvr-kpi-label">{{ $t('Cash Cover') }}</p>
+                <p class="cvr-kpi-value cvr-num">{{ fmt(reportFor(section.key).cash_cover) }}</p>
+              </div>
+            </div>
+          </div>
 
-            <template v-for="section in facilitySections" :key="section.key">
-                <template v-if="section.canShow">
-                    <div class="cvr-section-heading"><h2>{{ $t(section.label) }} [{{ activeCurrency }}]</h2></div>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+            <div
+              class="cvr-chart-card"
+              :style="{ borderTopColor: `var(${section.accent})` }">
+              <h4 class="text-sm font-semibold cvr-text-primary mb-2">
+                {{ $t('Outstanding per Type') }}
+              </h4>
+              <DonutChart3D
+                :data="typeChartData(section)"
+                :colors="[
+                  '--cvr-blue',
+                  '--cvr-green-bright',
+                  '--cvr-copper-bright',
+                  '--cvr-num-amber',
+                ]" />
+            </div>
+            <div
+              class="cvr-chart-card"
+              :style="{ borderTopColor: `var(${section.accent})` }">
+              <h4 class="text-sm font-semibold cvr-text-primary mb-2">
+                {{ $t('Outstanding per Financial Institution') }}
+              </h4>
+              <DonutChart3D
+                :data="institutionChartData(section)"
+                :colors="[
+                  '--cvr-copper-bright',
+                  '--cvr-blue',
+                  '--cvr-green-bright',
+                  '--cvr-num-amber',
+                  '--cvr-num-red',
+                ]" />
+            </div>
+          </div>
 
-                    <div class="cvr-kpi-row-4 mb-6">
-                        <div class="cvr-kpi-card cursor-pointer" @click="openLimitDetails(section.key)">
-                            <div class="cvr-kpi-icon cvr-kpi-icon-blue">🎯</div>
-                            <div><p class="cvr-kpi-label">{{ $t('Limit') }}</p><p class="cvr-kpi-value cvr-num-blue">{{ fmt(reportFor(section.key).limit) }}</p></div>
-                        </div>
-                        <div class="cvr-kpi-card">
-                            <div class="cvr-kpi-icon cvr-kpi-icon-copper">📉</div>
-                            <div><p class="cvr-kpi-label">{{ $t('Outstanding Balance') }}</p><p class="cvr-kpi-value cvr-num-amber">{{ fmt(reportFor(section.key).outstanding_balance) }}</p></div>
-                        </div>
-                        <div class="cvr-kpi-card">
-                            <div class="cvr-kpi-icon cvr-kpi-icon-green">✅</div>
-                            <div><p class="cvr-kpi-label">{{ $t('Available Room') }}</p><p class="cvr-kpi-value cvr-num-green">{{ fmt(reportFor(section.key).room) }}</p></div>
-                        </div>
-                        <div class="cvr-kpi-card">
-                            <div class="cvr-kpi-icon cvr-kpi-icon-copper">🛡</div>
-                            <div><p class="cvr-kpi-label">{{ $t('Cash Cover') }}</p><p class="cvr-kpi-value cvr-num">{{ fmt(reportFor(section.key).cash_cover) }}</p></div>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-                        <div class="cvr-chart-card" :style="{ borderTopColor: `var(${section.accent})` }">
-                            <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ $t('Outstanding per Type') }}</h4>
-                            <DonutChart3D :data="typeChartData(section)" :colors="['--cvr-blue', '--cvr-green-bright', '--cvr-copper-bright', '--cvr-num-amber']" />
-                        </div>
-                        <div class="cvr-chart-card" :style="{ borderTopColor: `var(${section.accent})` }">
-                            <h4 class="text-sm font-semibold cvr-text-primary mb-2">{{ $t('Outstanding per Financial Institution') }}</h4>
-                            <DonutChart3D :data="institutionChartData(section)" :colors="['--cvr-copper-bright', '--cvr-blue', '--cvr-green-bright', '--cvr-num-amber', '--cvr-num-red']" />
-                        </div>
-                    </div>
-
-                    <div class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto mb-10">
-                        <table class="min-w-full text-sm">
-                            <thead class="cvr-table-head">
-                                <tr>
-                                    <th class="px-4 py-2 text-start">#</th>
-                                    <th class="px-4 py-2 text-start">{{ $t('Financial Institution') }}</th>
-                                    <th class="px-4 py-2 text-start">{{ $t('Type') }}</th>
-                                    <th class="px-4 py-2 text-start">{{ $t('Source') }}</th>
-                                    <th class="px-4 py-2 text-start">{{ $t('Status') }}</th>
-                                    <th v-if="section.key === 'lg'" class="px-4 py-2 text-right">{{ $t('Count') }}</th>
-                                    <th v-if="section.key === 'lc'" class="px-4 py-2 text-right">{{ $t('Limit') }}</th>
-                                    <th class="px-4 py-2 text-right">{{ $t('Outstanding') }}</th>
-                                    <th class="px-4 py-2 text-right">{{ $t('Cash Cover') }}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- LG rows: one row per (Bank, Type, Source, Status), each
+          <div class="cvr-card-bg cvr-border border rounded-lg overflow-x-auto mb-10">
+            <table class="min-w-full text-sm">
+              <thead class="cvr-table-head">
+                <tr>
+                  <th class="px-4 py-2 text-start">#</th>
+                  <th class="px-4 py-2 text-start">{{ $t('Financial Institution') }}</th>
+                  <th class="px-4 py-2 text-start">{{ $t('Type') }}</th>
+                  <th class="px-4 py-2 text-start">{{ $t('Source') }}</th>
+                  <th class="px-4 py-2 text-start">{{ $t('Status') }}</th>
+                  <th
+                    v-if="section.key === 'lg'"
+                    class="px-4 py-2 text-right">
+                    {{ $t('Count') }}
+                  </th>
+                  <th
+                    v-if="section.key === 'lc'"
+                    class="px-4 py-2 text-right">
+                    {{ $t('Limit') }}
+                  </th>
+                  <th class="px-4 py-2 text-right">{{ $t('Outstanding') }}</th>
+                  <th class="px-4 py-2 text-right">{{ $t('Cash Cover') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- LG rows: one row per (Bank, Type, Source, Status), each
                                      representing every individual LG issued that matches —
                                      'Outstanding' is the LGs' own combined face amount, not a
                                      shared facility ledger balance. LC rows: unchanged, one row
                                      per facility (see tableRows() / controller). -->
-                                <tr v-for="(row, i) in tableRows(section)" :key="i" class="cvr-table-row">
-                                    <td class="px-4 py-2 cvr-text-secondary">{{ i + 1 }}</td>
-                                    <td class="px-4 py-2">{{ row.financial_institution_name }}</td>
-                                    <td class="px-4 py-2"><span class="cvr-badge cvr-badge-facility">{{ row.type }}</span></td>
-                                    <td class="px-4 py-2 cvr-text-secondary text-xs">{{ row.source }}</td>
-                                    <td class="px-4 py-2">
-                                        <span class="cvr-badge" :class="row.status === 'Expired' ? 'cvr-badge-overdue' : (row.status === 'Unactivated' ? 'cvr-badge-pending' : 'cvr-badge-active')">{{ $t(row.status) }}</span>
-                                    </td>
-                                    <td v-if="section.key === 'lg'" class="px-4 py-2 text-right cvr-num">{{ row.count }}</td>
-                                    <td v-if="section.key === 'lc'" class="px-4 py-2 text-right cvr-num-blue">{{ fmt(row.limit) }}</td>
-                                    <td class="px-4 py-2 text-right cvr-num-amber">{{ fmt(row.outstanding) }}</td>
-                                    <td class="px-4 py-2 text-right cvr-num">{{ fmt(row.cash_cover) }}</td>
-                                </tr>
-                                <tr v-if="!tableRows(section).length">
-                                    <td colspan="8" class="px-4 py-8 text-center cvr-text-muted">{{ $t('No') }} {{ section.label.toLowerCase() }} {{ $t('outstanding for') }} {{ activeCurrency }}.</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </template>
-            </template>
+                <tr
+                  v-for="(row, i) in tableRows(section)"
+                  :key="i"
+                  class="cvr-table-row">
+                  <td class="px-4 py-2 cvr-text-secondary">{{ i + 1 }}</td>
+                  <td class="px-4 py-2">{{ row.financial_institution_name }}</td>
+                  <td class="px-4 py-2">
+                    <span class="cvr-badge cvr-badge-facility">{{ row.type }}</span>
+                  </td>
+                  <td class="px-4 py-2 cvr-text-secondary text-xs">{{ row.source }}</td>
+                  <td class="px-4 py-2">
+                    <span
+                      class="cvr-badge"
+                      :class="
+                        row.status === 'Expired'
+                          ? 'cvr-badge-overdue'
+                          : row.status === 'Unactivated'
+                            ? 'cvr-badge-pending'
+                            : 'cvr-badge-active'
+                      "
+                      >{{ $t(row.status) }}</span
+                    >
+                  </td>
+                  <td
+                    v-if="section.key === 'lg'"
+                    class="px-4 py-2 text-right cvr-num">
+                    {{ row.count }}
+                  </td>
+                  <td
+                    v-if="section.key === 'lc'"
+                    class="px-4 py-2 text-right cvr-num-blue">
+                    {{ fmt(row.limit) }}
+                  </td>
+                  <td class="px-4 py-2 text-right cvr-num-amber">{{ fmt(row.outstanding) }}</td>
+                  <td class="px-4 py-2 text-right cvr-num">{{ fmt(row.cash_cover) }}</td>
+                </tr>
+                <tr v-if="!tableRows(section).length">
+                  <td
+                    colspan="8"
+                    class="px-4 py-8 text-center cvr-text-muted">
+                    {{ $t('No') }} {{ section.label.toLowerCase() }} {{ $t('outstanding for') }}
+                    {{ activeCurrency }}.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
+      </template>
 
-            <!-- Limit card → per-bank Details modal -->
-            <div v-if="limitDetailsModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                <div class="cvr-modal rounded-lg p-6 w-full max-w-6xl max-h-[85vh] overflow-auto">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Details') }}</h2>
-                    <table class="min-w-full text-sm mb-4">
-                        <thead class="cvr-table-head">
-                            <tr>
-                                <th class="px-2 py-2 text-start">{{ $t('Financial Institution') }}</th>
-                                <th class="px-2 py-2 text-right">{{ $t('Limit') }}</th>
-                                <th class="px-2 py-2 text-right">{{ $t('Outstanding') }}</th>
-                                <th v-if="limitDetailsModal.showReserved" class="px-2 py-2 text-right max-w-[9rem]">{{ $t('Unactivated Advanced Payment LG') }}</th>
-                                <th class="px-2 py-2 text-right">{{ $t('Room') }}</th>
-                                <th class="px-2 py-2 text-right">{{ $t('Cash Cover') }}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="(row, i) in limitDetailsModal.rows" :key="i" class="cvr-table-row">
-                                <td class="px-2 py-2">
-                                    <div class="flex items-center gap-2">
-                                        <span>{{ row.financial_institution_name }}</span>
-                                        <button
-                                            v-if="(row.facilities || []).length"
-                                            type="button"
-                                            class="cvr-btn-secondary px-2 py-0.5 rounded border text-xs whitespace-nowrap"
-                                            @click="openFacilityDetails(row)"
-                                        >{{ $t('Contracts') }}</button>
-                                    </div>
-                                </td>
-                                <td class="px-2 py-2 text-right cvr-num-blue">{{ fmt(row.limit) }}</td>
-                                <td class="px-2 py-2 text-right cvr-num-amber">{{ fmt(row.outstanding) }}</td>
-                                <td v-if="limitDetailsModal.showReserved" class="px-2 py-2 text-right cvr-num-amber">{{ fmt(row.reserved) }}</td>
-                                <td class="px-2 py-2 text-right cvr-num-green">{{ fmt(row.room) }}</td>
-                                <td class="px-2 py-2 text-right cvr-num">{{ fmt(row.cash_cover) }}</td>
-                            </tr>
-                            <tr v-if="!limitDetailsModal.rows.length"><td :colspan="limitDetailsModal.showReserved ? 6 : 5" class="px-2 py-4 text-center cvr-text-muted">{{ $t('No facilities found.') }}</td></tr>
-                            <tr v-if="limitDetailsModal.rows.length" class="font-semibold cvr-summary-row">
-                                <td class="px-2 py-2">{{ $t('Total') }}</td>
-                                <td class="px-2 py-2 text-right cvr-num-blue">{{ fmt(limitDetailsModal.totals.limit) }}</td>
-                                <td class="px-2 py-2 text-right cvr-num-amber">{{ fmt(limitDetailsModal.totals.outstanding) }}</td>
-                                <td v-if="limitDetailsModal.showReserved" class="px-2 py-2 text-right cvr-num-amber">{{ fmt(limitDetailsModal.totals.reserved) }}</td>
-                                <td class="px-2 py-2 text-right cvr-num-green">{{ fmt(limitDetailsModal.totals.room) }}</td>
-                                <td class="px-2 py-2 text-right cvr-num">{{ fmt(limitDetailsModal.totals.cash_cover) }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <div class="flex justify-end">
-                        <button @click="closeLimitDetails" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- One bank's facility contracts (one or more) -->
-            <div v-if="facilityDetailsModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
-                <div class="cvr-modal rounded-lg p-6 w-full max-w-7xl max-h-[85vh] overflow-auto">
-                    <h2 class="text-lg font-medium cvr-text-primary mb-1">{{ $t('Contracts') }}</h2>
-                    <p class="text-sm cvr-text-muted mb-4">{{ facilityDetailsModal.bankName }}</p>
-                    <table class="min-w-full text-sm mb-4">
-                        <thead class="cvr-table-head">
-                            <tr>
-                                <th class="px-2 py-2 text-start">{{ $t('Contract Name') }}</th>
-                                <th class="px-2 py-2 text-start">{{ $t('Start Date') }}</th>
-                                <th class="px-2 py-2 text-start">{{ $t('End Date') }}</th>
-                                <th class="px-2 py-2 text-right">{{ $t('Limit') }}</th>
-                                <th class="px-2 py-2 text-right">{{ $t('Outstanding') }}</th>
-                                <th v-if="facilityDetailsModal.showReserved" class="px-2 py-2 text-right max-w-[9rem]">{{ $t('Unactivated Advanced Payment LG') }}</th>
-                                <th class="px-2 py-2 text-right">{{ $t('Room') }}</th>
-                                <th class="px-2 py-2 text-right">{{ $t('Cash Cover') }}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="facility in facilityDetailsModal.facilities" :key="facility.id" class="cvr-table-row">
-                                <td class="px-2 py-2">{{ facility.name || '—' }}</td>
-                                <td class="px-2 py-2 whitespace-nowrap">{{ facility.contract_start_date || '—' }}</td>
-                                <td class="px-2 py-2 whitespace-nowrap">{{ facility.contract_end_date || '—' }}</td>
-                                <td class="px-2 py-2 text-right cvr-num-blue">{{ fmt(facility.limit) }}</td>
-                                <td class="px-2 py-2 text-right cvr-num-amber">{{ fmt(facility.outstanding) }}</td>
-                                <td v-if="facilityDetailsModal.showReserved" class="px-2 py-2 text-right cvr-num-amber">{{ fmt(facility.reserved) }}</td>
-                                <td class="px-2 py-2 text-right cvr-num-green">{{ fmt(facility.room) }}</td>
-                                <td class="px-2 py-2 text-right cvr-num">{{ fmt(facility.cash_cover) }}</td>
-                            </tr>
-                            <tr class="font-semibold cvr-summary-row">
-                                <td class="px-2 py-2">{{ $t('Total') }}</td>
-                                <td class="px-2 py-2"></td>
-                                <td class="px-2 py-2"></td>
-                                <td class="px-2 py-2 text-right cvr-num-blue">{{ fmt(facilityDetailsModal.totals.limit) }}</td>
-                                <td class="px-2 py-2 text-right cvr-num-amber">{{ fmt(facilityDetailsModal.totals.outstanding) }}</td>
-                                <td v-if="facilityDetailsModal.showReserved" class="px-2 py-2 text-right cvr-num-amber">{{ fmt(facilityDetailsModal.totals.reserved) }}</td>
-                                <td class="px-2 py-2 text-right cvr-num-green">{{ fmt(facilityDetailsModal.totals.room) }}</td>
-                                <td class="px-2 py-2 text-right cvr-num">{{ fmt(facilityDetailsModal.totals.cash_cover) }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <div class="flex justify-end">
-                        <button @click="facilityDetailsModal = null" class="cvr-btn-secondary px-3 py-1.5 rounded border">{{ $t('Close') }}</button>
-                    </div>
-                </div>
-            </div>
+      <!-- Limit card → per-bank Details modal -->
+      <div
+        v-if="limitDetailsModal"
+        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div class="cvr-modal rounded-lg p-6 w-full max-w-7xl max-h-[85vh] overflow-auto">
+          <h2 class="text-lg font-medium cvr-text-primary mb-4">{{ $t('Details') }}</h2>
+          <table class="min-w-full text-sm mb-4">
+            <thead class="cvr-table-head">
+              <tr>
+                <th class="px-2 py-2 text-start">{{ $t('Financial Institution') }}</th>
+                <th class="px-2 py-2 text-right">{{ $t('Limit') }}</th>
+                <th class="px-2 py-2 text-right">{{ $t('Outstanding') }}</th>
+                <th
+                  v-if="limitDetailsModal.showReserved"
+                  class="px-2 py-2 text-right max-w-[9rem]">
+                  {{ $t('Unactivated Advanced Payment LG') }}
+                </th>
+                <th class="px-2 py-2 text-right">{{ $t('Room') }}</th>
+                <th class="px-2 py-2 text-right">{{ $t('Cash Cover') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="(row, i) in limitDetailsModal.rows"
+                :key="i"
+                class="cvr-table-row">
+                <td class="px-2 py-2">
+                  <div class="flex items-center gap-2">
+                    <span>{{ row.financial_institution_name }}</span>
+                    <button
+                      v-if="(row.facilities || []).length"
+                      type="button"
+                      class="cvr-btn-secondary px-2 py-0.5 rounded border text-xs whitespace-nowrap"
+                      @click="openFacilityDetails(row)">
+                      {{ $t('Contracts') }}
+                    </button>
+                  </div>
+                </td>
+                <td class="px-2 py-2 text-right cvr-num-blue">{{ fmt(row.limit) }}</td>
+                <td class="px-2 py-2 text-right cvr-num-amber">{{ fmt(row.outstanding) }}</td>
+                <td
+                  v-if="limitDetailsModal.showReserved"
+                  class="px-2 py-2 text-right cvr-num-amber">
+                  {{ fmt(row.reserved) }}
+                </td>
+                <td class="px-2 py-2 text-right cvr-num-green">{{ fmt(row.room) }}</td>
+                <td class="px-2 py-2 text-right cvr-num">{{ fmt(row.cash_cover) }}</td>
+              </tr>
+              <tr v-if="!limitDetailsModal.rows.length">
+                <td
+                  :colspan="limitDetailsModal.showReserved ? 6 : 5"
+                  class="px-2 py-4 text-center cvr-text-muted">
+                  {{ $t('No facilities found.') }}
+                </td>
+              </tr>
+              <tr
+                v-if="limitDetailsModal.rows.length"
+                class="font-semibold cvr-summary-row">
+                <td class="px-2 py-2">{{ $t('Total') }}</td>
+                <td class="px-2 py-2 text-right cvr-num-blue">
+                  {{ fmt(limitDetailsModal.totals.limit) }}
+                </td>
+                <td class="px-2 py-2 text-right cvr-num-amber">
+                  {{ fmt(limitDetailsModal.totals.outstanding) }}
+                </td>
+                <td
+                  v-if="limitDetailsModal.showReserved"
+                  class="px-2 py-2 text-right cvr-num-amber">
+                  {{ fmt(limitDetailsModal.totals.reserved) }}
+                </td>
+                <td class="px-2 py-2 text-right cvr-num-green">
+                  {{ fmt(limitDetailsModal.totals.room) }}
+                </td>
+                <td class="px-2 py-2 text-right cvr-num">
+                  {{ fmt(limitDetailsModal.totals.cash_cover) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="flex justify-end">
+            <button
+              @click="closeLimitDetails"
+              class="cvr-btn-secondary px-3 py-1.5 rounded border">
+              {{ $t('Close') }}
+            </button>
+          </div>
         </div>
-    </AppLayout>
+      </div>
+
+      <!-- One bank's facility contracts (one or more) -->
+      <div
+        v-if="facilityDetailsModal"
+        class="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+        <div class="cvr-modal rounded-lg p-6 w-full max-w-7xl max-h-[85vh] overflow-auto">
+          <h2 class="text-lg font-medium cvr-text-primary mb-1">{{ $t('Contracts') }}</h2>
+          <p class="text-sm cvr-text-muted mb-4">{{ facilityDetailsModal.bankName }}</p>
+          <table class="min-w-full text-sm mb-4">
+            <thead class="cvr-table-head">
+              <tr>
+                <th class="px-2 py-2 text-start">{{ $t('Contract Name') }}</th>
+                <th class="px-2 py-2 text-start">{{ $t('Start Date') }}</th>
+                <th class="px-2 py-2 text-start">{{ $t('End Date') }}</th>
+                <th class="px-2 py-2 text-right">{{ $t('Limit') }}</th>
+                <th class="px-2 py-2 text-right">{{ $t('Outstanding') }}</th>
+                <th
+                  v-if="facilityDetailsModal.showReserved"
+                  class="px-2 py-2 text-right max-w-[9rem]">
+                  {{ $t('Unactivated Advanced Payment LG') }}
+                </th>
+                <th class="px-2 py-2 text-right">{{ $t('Room') }}</th>
+                <th class="px-2 py-2 text-right">{{ $t('Cash Cover') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="facility in facilityDetailsModal.facilities"
+                :key="facility.id"
+                class="cvr-table-row">
+                <td class="px-2 py-2">{{ facility.name || '—' }}</td>
+                <td class="px-2 py-2 whitespace-nowrap">
+                  {{ facility.contract_start_date || '—' }}
+                </td>
+                <td class="px-2 py-2 whitespace-nowrap">{{ facility.contract_end_date || '—' }}</td>
+                <td class="px-2 py-2 text-right cvr-num-blue">{{ fmt(facility.limit) }}</td>
+                <td class="px-2 py-2 text-right cvr-num-amber">{{ fmt(facility.outstanding) }}</td>
+                <td
+                  v-if="facilityDetailsModal.showReserved"
+                  class="px-2 py-2 text-right cvr-num-amber">
+                  {{ fmt(facility.reserved) }}
+                </td>
+                <td class="px-2 py-2 text-right cvr-num-green">{{ fmt(facility.room) }}</td>
+                <td class="px-2 py-2 text-right cvr-num">{{ fmt(facility.cash_cover) }}</td>
+              </tr>
+              <tr class="font-semibold cvr-summary-row">
+                <td class="px-2 py-2">{{ $t('Total') }}</td>
+                <td class="px-2 py-2"></td>
+                <td class="px-2 py-2"></td>
+                <td class="px-2 py-2 text-right cvr-num-blue">
+                  {{ fmt(facilityDetailsModal.totals.limit) }}
+                </td>
+                <td class="px-2 py-2 text-right cvr-num-amber">
+                  {{ fmt(facilityDetailsModal.totals.outstanding) }}
+                </td>
+                <td
+                  v-if="facilityDetailsModal.showReserved"
+                  class="px-2 py-2 text-right cvr-num-amber">
+                  {{ fmt(facilityDetailsModal.totals.reserved) }}
+                </td>
+                <td class="px-2 py-2 text-right cvr-num-green">
+                  {{ fmt(facilityDetailsModal.totals.room) }}
+                </td>
+                <td class="px-2 py-2 text-right cvr-num">
+                  {{ fmt(facilityDetailsModal.totals.cash_cover) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="flex justify-end">
+            <button
+              @click="facilityDetailsModal = null"
+              class="cvr-btn-secondary px-3 py-1.5 rounded border">
+              {{ $t('Close') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </AppLayout>
 </template>
