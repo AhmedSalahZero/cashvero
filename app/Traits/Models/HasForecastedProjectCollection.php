@@ -14,24 +14,45 @@ use Illuminate\Support\Facades\DB;
  * Shared "Forecasted Project Collection" (customer side) / "Forecasted
  * Suppliers Contract Payments" (supplier side) calculation.
  *
- * Formula per order (confirmed with project owner, 2026-08):
+ * Formula per order (confirmed with project owner, 2026-09):
  *
- *   Forecast = Order Amount − Unused Down Payment Balance
- *              − Σ(each linked invoice's own net_balance)
+ *   Forecast = Total Contract Amount
+ *              − Total Invoice Settlement
+ *                  (total_collected_amount_in_main_currency
+ *                   + total_deductions_in_main_currency
+ *                   + net_balance_in_main_currency)
+ *              − Down Payment Balance
  *
- * Both halves are already settlement-aware at the data level, so no
- * special-case branching is needed here for "invoice fully/partially
- * settled by down payment":
- *   - "Unused Down Payment Balance" reads down_payment_balance — NOT
- *     the original down_payment_amount — which is the portion of a
- *     down payment still not applied to any invoice.
- *   - Each invoice's own net_balance already reflects any down
- *     payment settlement applied against IT specifically (see
- *     DownPaymentContractsController / IsInvoice::calculateNetBalanceInEditMode).
- *     A fully down-payment-settled invoice has net_balance = 0 and so
- *     contributes nothing here (avoiding double-counting against the
- *     down payment deduction above); a partially-settled invoice
- *     contributes only its remaining balance.
+ * net_balance is in there because the open part of an invoice is
+ * already reported by the "Customers Invoices" / "Suppliers Invoices"
+ * row; leaving it in the forecast counts the same money twice inside
+ * one report.
+ *
+ * Everything is compared in the MAIN FUNCTIONAL CURRENCY. The invoice
+ * side reads the *_in_main_currency columns directly, so nothing is
+ * converted twice. The down payment tables carry no main-currency
+ * column, so each row converts at the FX rate of the date its cash
+ * actually moved (money_received.receiving_date /
+ * money_payments.delivery_date) — the same date
+ * CustomerInvoice::getDownPaymentsOverContracts() converts at.
+ *
+ * Because the order amount is stored in the contract's own currency,
+ * each phase is converted to the main functional currency BEFORE the
+ * deduction is applied to it (the deduction is already in main
+ * currency).
+ *
+ * ── Same as system.veroanalysisb.com (decided 2026-11-11) ───────────
+ * A foreign-currency tab (USD, EUR…) shows this row as the MAIN
+ * currency equivalent, like every other row of that tab (Cash & Banks
+ * Balance, Customers/Suppliers Invoices) and like the source system.
+ * For a while cashvero showed it in the contract's own currency
+ * instead (getExchangeRateForDisplayCurrency), which left one row of
+ * dollars inside a tab of pound equivalents; the client confirmed the
+ * source system's behaviour is the intended one.
+ *
+ * Note this formula subtracts SETTLED amounts, not open balances, so
+ * a fully collected/paid invoice must NOT be filtered out —
+ * 'paid_or_collected_status' is no longer used for the deduction.
  *
  * Previously this exact formula was duplicated once in CustomerInvoice
  * and once in SupplierInvoice, both with the same bug: the down
@@ -74,6 +95,17 @@ use Illuminate\Support\Facades\DB;
  *     Customer contract are skipped ($excludeOrderIds), so a PO that
  *     happens to be linked BOTH ways is counted once, by the
  *     po_allocations row, and never twice.
+ *
+ * ── Currency selection ──────────────────────────────────────────────
+ * $currency accepts either a single currency code or a LIST of codes.
+ * The list form is what the Consolidated Cash Flow report passes (it
+ * has an explicit multi-currency picker) and always narrows contracts
+ * to exactly those currencies. For the single-code form, the
+ * company-wide report viewing the MAIN functional currency tab widens
+ * to every currency instead — each contract's own amounts are then
+ * converted via its own FX rate below — while any specific foreign
+ * currency tab, or a single contract, keeps the strict
+ * same-currency-only filter.
  */
 trait HasForecastedProjectCollection
 {
@@ -155,11 +187,30 @@ trait HasForecastedProjectCollection
                 ->all();
         }
 
+        // An explicit LIST of currencies (Consolidated Cash Flow's
+        // multi-currency picker) always means "exactly these" — the
+        // widen-to-everything rule below only applies to the single
+        // currency form used by the Company/Contract Cash Flow report.
+        $currencyIsExplicitList = is_array($currency);
+        $currencyList = $currencyIsExplicitList
+            ? array_values(array_filter(array_map('strval', $currency)))
+            : [(string) $currency];
+
         // Company-wide + main functional currency tab -> include contracts in
         // every currency (each gets converted below via its own currency's
         // FX rate). Any specific foreign-currency tab, or a single contract,
         // keeps the original same-currency-only filter.
-        $showAllCurrenciesConverted = ! $contractId && $mainFunctionalCurrency !== null && $currency === $mainFunctionalCurrency;
+        $showAllCurrenciesConverted = ! $currencyIsExplicitList
+            && ! $contractId
+            && $mainFunctionalCurrency !== null
+            && $currencyList !== []
+            && $currencyList[0] === $mainFunctionalCurrency;
+
+        // Child Supplier contracts bill in their own currency, which is
+        // routinely NOT the parent Customer contract's — filtering them
+        // by it would silently drop them (everything is converted to the
+        // main functional currency further down anyway).
+        $filterByCurrency = ! $showAllCurrenciesConverted && ! $useSupplierChildren;
 
         // * مفيش فلترة بتاريخ العقد خالص.
         // *
@@ -185,12 +236,10 @@ trait HasForecastedProjectCollection
         // * من أصله. فالشرط ده كان تصفية مسبقة خشنة — و غلط. و شيله
         // * ما بيكلّفش حاجة: النظام كله فيه أقل من 200 عقد.
         $contracts = Contract::where('company_id', $companyId)
-            ->when(! $showAllCurrenciesConverted && ! $useSupplierChildren, function ($query) use ($currency) {
-                // Child Supplier contracts bill in their own currency, which
-                // is routinely NOT the parent Customer contract's — filtering
-                // them by it would silently drop them (everything is converted
-                // to the main functional currency further down anyway).
-                $query->where('currency', $currency);
+            ->when($filterByCurrency, function ($query) use ($currencyList) {
+                count($currencyList) === 1
+                    ? $query->where('currency', $currencyList[0])
+                    : $query->whereIn('currency', $currencyList);
             })
             ->when($contractId, function ($query) use ($contractId, $useSupplierChildren) {
                 $useSupplierChildren
@@ -233,7 +282,7 @@ trait HasForecastedProjectCollection
                     $mainResultType, $resultKey, $invoiceTable, $orderNumberKey,
                     $invoiceOrderNumberColumn, $downPaymentTable, $downPaymentOrderIdColumn,
                     $addToCashInflowTotal, $paidOrCollectedStatus, 1.0,
-                    $invoiceSettledColumn, $invoiceSettledMainColumn, $downPaymentMoneyTable,
+                    $invoiceSettledMainColumn, $downPaymentMoneyTable,
                     $downPaymentMoneyIdColumn, $downPaymentMoneyDateColumn
                 );
             }
@@ -269,79 +318,11 @@ trait HasForecastedProjectCollection
                     $mainResultType, $resultKey, $invoiceTable, $orderNumberKey,
                     $invoiceOrderNumberColumn, $downPaymentTable, $downPaymentOrderIdColumn,
                     $addToCashInflowTotal, $paidOrCollectedStatus, $allocationPercentage,
-                    $invoiceSettledColumn, $invoiceSettledMainColumn, $downPaymentMoneyTable,
+                    $invoiceSettledMainColumn, $downPaymentMoneyTable,
                     $downPaymentMoneyIdColumn, $downPaymentMoneyDateColumn
                 );
             }
         }
-    }
-
-    /**
-     * * سعر الصرف تحت بيرجّع 1 لو التبويب المعروض هو نفس عملة العقد
-     * * (ForeignExchangeRate::getExchangeRateForDisplayCurrency) ، يعني
-     * * الأرقام بتفضل بعملة العقد . نفس الشرط بالظبط متكرر هنا عشان
-     * * نعرف نقرا الخصم بنفس العملة .
-     */
-    private static function displaysInContractCurrency($displayCurrency, ?string $contractCurrency): bool
-    {
-        return is_string($displayCurrency)
-            && $displayCurrency !== ''
-            && $contractCurrency === $displayCurrency;
-    }
-
-    /**
-     * * رصيد الدفعة المقدمة بعملة العرض . الجدول مفيهوش عمود بالعملة
-     * * الوظيفية ، فلما العرض بيكون بالعملة الوظيفية بنحوّل كل صف
-     * * بسعر تاريخ حركة الفلوس بتاعته — نفس التاريخ اللي صف الدفعات
-     * * المقدمة في التقرير بيتحوّل عنده .
-     */
-    private static function downPaymentBalanceForDisplay(
-        string $downPaymentTable,
-        string $downPaymentOrderIdColumn,
-        $orderId,
-        $downPaymentContractId,
-        $companyId,
-        Contract $contract,
-        $displayCurrency,
-        ?string $mainFunctionalCurrency,
-        $foreignExchangeRates,
-        string $downPaymentMoneyTable,
-        string $downPaymentMoneyIdColumn,
-        string $downPaymentMoneyDateColumn,
-        bool $displayInContractCurrency
-    ): float {
-        $rows = DB::table($downPaymentTable.' as dp')
-            ->leftJoin($downPaymentMoneyTable.' as m', 'm.id', '=', 'dp.'.$downPaymentMoneyIdColumn)
-            ->where('dp.company_id', $companyId)
-            ->where('dp.'.$downPaymentOrderIdColumn, $orderId)
-            ->where('dp.contract_id', $downPaymentContractId)
-            ->select([
-                'dp.down_payment_balance',
-                'dp.currency',
-                'm.'.$downPaymentMoneyDateColumn.' as money_date',
-            ])
-            ->get();
-
-        $total = 0.0;
-        foreach ($rows as $row) {
-            $balance = (float) $row->down_payment_balance;
-
-            if ($displayInContractCurrency) {
-                $total += $balance;
-
-                continue;
-            }
-
-            $total += $balance * ForeignExchangeRate::getExchangeRateAtOrOne(
-                $row->currency ?: $contract->getCurrency(),
-                $mainFunctionalCurrency,
-                $row->money_date ?: $contract->getStartDate(),
-                $companyId,
-                $foreignExchangeRates
-            );
-        }
-
-        return $total;
     }
 
     /**
@@ -405,7 +386,6 @@ trait HasForecastedProjectCollection
         bool $addToCashInflowTotal,
         string $paidOrCollectedStatus,
         float $weightMultiplier,
-        string $invoiceSettledColumn,
         string $invoiceSettledMainColumn,
         string $downPaymentMoneyTable,
         string $downPaymentMoneyIdColumn,
@@ -422,44 +402,55 @@ trait HasForecastedProjectCollection
         $contractName = $contract->getName();
         $customerName = $contract->getClientName();
 
-        // * لو التبويب المعروض هو نفس عملة العقد ، سعر الصرف تحت بيرجع 1
-        // * و الأرقام بتفضل بعملة العقد — فالخصم لازم يتقرا بالأعمدة الخام .
-        // * غير كده كل حاجة بتتحوّل للعملة الوظيفية ، فبنقرا أعمدة
-        // * _in_main_currency . القرار ثابت للتقرير كله مش لكل مرحلة ،
-        // * لان $currency مابتتغيرش جوه اللوب .
-        $displayInContractCurrency = self::displaysInContractCurrency($currency, $contract->getCurrency());
-        $settledColumn = $displayInContractCurrency ? $invoiceSettledColumn : $invoiceSettledMainColumn;
-        $deductionsColumn = $displayInContractCurrency ? 'total_deductions' : 'total_deductions_in_main_currency';
-        $netBalanceColumn = $displayInContractCurrency ? 'net_balance' : 'net_balance_in_main_currency';
-
-        // كل ما اتفوتر على الأمر ده و اتحسب في مكان تاني :
+        // كل ما اتفوتر على الأمر ده و اتحسب في مكان تاني ، بالعملة
+        // الوظيفية مباشرة من أعمدة _in_main_currency :
         //   - المسدّد فعلا (اتحصّل/اتدفع) + الخصومات : فلوس خلصت
         //   - net_balance : الرصيد المفتوح ، و ده ظاهر اصلا في صف
         //     Customers Invoices / Suppliers Invoices ، فلو مااتطرحش
         //     هنا بيتحسب مرتين في نفس التقرير
-        // مفيش فلتر على invoice_status : المعادلة بتجمع المفوتر مش
-        // المتبقي بس ، فالفاتورة المحصّلة بالكامل لازم تدخل .
+        // مفيش فلتر على invoice_status هنا : المعادلة بتجمع المفوتر
+        // مش المتبقي بس ، فالفاتورة المحصّلة بالكامل لازم تدخل .
         $invoicesSettlement = (float) DB::table($invoiceTable)
             ->where('company_id', $companyId)
             ->where('currency', $contract->getCurrency())
             ->where($invoiceOrderNumberColumn, $orderNumber)
             ->where('contract_code', $contractCode)
             ->sum(DB::raw(
-                'ifnull('.$settledColumn.', 0)'
-                .' + ifnull('.$deductionsColumn.', 0)'
-                .' + ifnull('.$netBalanceColumn.', 0)'
+                'ifnull('.$invoiceSettledMainColumn.', 0)'
+                .' + ifnull(total_deductions_in_main_currency, 0)'
+                .' + ifnull(net_balance_in_main_currency, 0)'
             ));
 
-        // Down Payment Balance — الرصيد اللي لسه ما اتصرفش بس ، مش
-        // الدفعة كلها : الجزء اللي اتصرف موجود اصلا جوه المسدّد فوق .
-        $unusedDownPaymentBalance = self::downPaymentBalanceForDisplay(
-            $downPaymentTable, $downPaymentOrderIdColumn, $orderId, $downPaymentContractId,
-            $companyId, $contract, $currency, $mainFunctionalCurrency, $foreignExchangeRates,
-            $downPaymentMoneyTable, $downPaymentMoneyIdColumn, $downPaymentMoneyDateColumn,
-            $displayInContractCurrency
-        );
+        // Down Payment Balance — الرصيد اللي لسه ما اتصرفش على فاتورة
+        // بس ، مش الدفعة كلها : الجزء اللي اتصرف موجود اصلا جوه
+        // total_collected_amount فوق (تريجر insert_total_collected_amount
+        // بيجمع كل التسويات سواء is_from_down_payment بصفر او واحد) ،
+        // فطرح الدفعة كلها كان بيطرحه مرتين . الجدولين مفيهمش عمود
+        // بالعملة الوظيفية ، فكل صف بيتحوّل بسعر تاريخ حركة الفلوس .
+        $downPaymentRows = DB::table($downPaymentTable.' as dp')
+            ->leftJoin($downPaymentMoneyTable.' as m', 'm.id', '=', 'dp.'.$downPaymentMoneyIdColumn)
+            ->where('dp.company_id', $companyId)
+            ->where('dp.'.$downPaymentOrderIdColumn, $orderId)
+            ->where('dp.contract_id', $downPaymentContractId)
+            ->select([
+                'dp.down_payment_balance',
+                'dp.currency',
+                'm.'.$downPaymentMoneyDateColumn.' as money_date',
+            ])
+            ->get();
 
-        $remainingDeduction = $invoicesSettlement + $unusedDownPaymentBalance;
+        $downPaymentDeduction = 0.0;
+        foreach ($downPaymentRows as $downPaymentRow) {
+            $downPaymentCurrency = $downPaymentRow->currency ?: $contract->getCurrency();
+            $downPaymentDate = $downPaymentRow->money_date ?: $startDate;
+            $downPaymentRate = ForeignExchangeRate::getExchangeRateAtOrOne(
+                $downPaymentCurrency, $mainFunctionalCurrency, $downPaymentDate, $companyId, $foreignExchangeRates
+            );
+
+            $downPaymentDeduction += (float) $downPaymentRow->down_payment_balance * $downPaymentRate;
+        }
+
+        $remainingDeduction = $invoicesSettlement + $downPaymentDeduction;
         $rowLabel = $customerName.'-'.$contractName;
 
         foreach ($phases as $phase) {
@@ -467,12 +458,11 @@ trait HasForecastedProjectCollection
                 ->addDays((int) $phase['collection_days']);
             $currentCollectionDateFormatted = $currentCollectionDate->format('Y-m-d');
 
-            // * $currency هي عملة التبويب المعروض. لو العقد بنفس العملة يبقى
-            // * الرقم لازم يفضل زي ما هو — التحويل للعملة الرئيسية بيحصل بس على
-            // * تبويب العملة الرئيسية اللي بيجمّع كل العملات مع بعض.
-            // * كل مرحلة بتتحوّل بسعر يوم تحصيلها هي، مش بسعر واحد للأمر كله.
-            // * التحويل بقى قبل الخصم ، لان الخصم نفسه بقى بعملة العرض .
-            $exchangeRate = ForeignExchangeRate::getExchangeRateForDisplayCurrency($contract->getCurrency(), $currency, $mainFunctionalCurrency, $currentCollectionDateFormatted, $companyId, $foreignExchangeRates);
+            // Each phase converts at the rate of ITS own collection
+            // date, not one rate for the whole order. The conversion
+            // happens BEFORE the deduction, because the deduction is
+            // already in the main functional currency.
+            $exchangeRate = ForeignExchangeRate::getExchangeRateAtOrOne($contract->getCurrency(), $mainFunctionalCurrency, $currentCollectionDateFormatted, $companyId, $foreignExchangeRates);
             $phaseAmount = $orderAmount * $phase['share'] * $exchangeRate;
 
             // min() is what keeps the forecast from going negative and
@@ -582,8 +572,10 @@ trait HasForecastedProjectCollection
             }
 
             $currentWeekYear = $datesWithWeekNumber[$sliceDate];
-            $exchangeRate = ForeignExchangeRate::getExchangeRateForDisplayCurrency(
-                $contract->getCurrency(), $currency, $mainFunctionalCurrency, $sliceDate, $companyId, $foreignExchangeRates
+            // * دايماً بالعملة الوظيفية زي باقي صف التوقّعات (و زي
+            // * system.veroanalysisb.com) ، حتى على تبويب عملة العقد نفسها .
+            $exchangeRate = ForeignExchangeRate::getExchangeRateAtOrOne(
+                $contract->getCurrency(), $mainFunctionalCurrency, $sliceDate, $companyId, $foreignExchangeRates
             );
             $amount = $sliceAmount * $exchangeRate;
 

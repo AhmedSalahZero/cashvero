@@ -94,7 +94,6 @@ final class ContractCashFlowBatchBuilder
         }
 
         $contractCodes = array_keys($resultsByContractCode);
-        $currency = (string) $request->input('currency', $company->getMainFunctionalCurrency());
 
         foreach ($contracts as $contract) {
             $code = (string) ($contract->getCode() ?? '');
@@ -106,11 +105,22 @@ final class ContractCashFlowBatchBuilder
             $result = &$resultsByContractCode[$code];
             $pastDueSupplierInvoicesForContracts = collect([]);
             $poAllocations = $poByContract->get($contractId, collect());
+            /**
+             * * كل عقد بعملته هو ، زي system.veroanalysisb.com . قبل كده كانت
+             * * بتتبعت عملة الشاشة (الافتراضي الجنيه) لكل العقود ، و الحساب
+             * * المشترك بيفلتر العقد على العملة دي — فعقد بالدولار كان بيطلع
+             * * تحصيله المتوقع صفر و المبلغ بيروح لـ "Unallocated Cash-In"
+             * * (مثال حقيقي: MV ICity 58,209,472 في القديم مقابل 0)
+             */
+            $contractCurrency = (string) $contract->getCurrency();
 
             CashExpense::getProjectionOtherCashOut($result, $company, 0, true);
             CustomerInvoice::getProjectionOtherCashIn($result, $company, 0, true);
-            CustomerInvoice::getForecastedProjectCollection($result, $formStartDate, $formEndDate, $currency, $company->id, $datesWithWeekNumber, $contractId, $foreignExchangeRates, $mainFunctionalCurrency);
-            SupplierInvoice::getForecastedProjectCollection($result, $formStartDate, $formEndDate, $currency, $company->id, $datesWithWeekNumber, $contractId, $foreignExchangeRates, $mainFunctionalCurrency, $poAllocations);
+            CustomerInvoice::getForecastedProjectCollection($result, $formStartDate, $formEndDate, $contractCurrency, $company->id, $datesWithWeekNumber, $contractId, $foreignExchangeRates, $mainFunctionalCurrency);
+            // $poAllocations links this Customer contract to Purchase Orders that
+            // belong to a different (Supplier) contract — the only way the supplier
+            // forecast row can see them. See HasForecastedProjectCollection.
+            SupplierInvoice::getForecastedProjectCollection($result, $formStartDate, $formEndDate, $contractCurrency, $company->id, $datesWithWeekNumber, $contractId, $foreignExchangeRates, $mainFunctionalCurrency, $poAllocations);
             CustomerInvoice::getCustomerInvoicesUnderCollectionAtDatesForContracts($result, $company->id, $contractCode, $datesWithWeekNumber, $formEndDate);
             SupplierInvoice::getSupplierInvoicesForPoUnderCollectionAtDates($result, $company->id, $datesWithWeekNumber, $formStartDate, $formEndDate, $poAllocations, $pastDueSupplierInvoicesForContracts, $contractId);
         }
@@ -182,7 +192,7 @@ final class ContractCashFlowBatchBuilder
             $controller->finalizeContractCashFlowTotals(
                 $result,
                 $company,
-                $currency,
+                (string) $contract->getCurrency(),
                 $code,
                 $datesWithWeekNumber,
                 $weeks,

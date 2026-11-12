@@ -165,12 +165,17 @@ class MonthlyExecutedContractWiringTest extends TestCase
         );
     }
 
-    public function test_the_monthly_row_respects_the_display_currency(): void
+    /**
+     * Like every forecast row (and like system.veroanalysisb.com), the monthly
+     * slices are shown in the MAIN currency on every tab — decided 2026-11-11,
+     * see DisplayCurrencyConversionTest.
+     */
+    public function test_the_monthly_row_converts_to_the_main_currency(): void
     {
         $this->assertStringContainsString(
-            'ForeignExchangeRate::getExchangeRateForDisplayCurrency(',
+            '$contract->getCurrency(), $mainFunctionalCurrency, $sliceDate,',
             $this->trait(),
-            'The monthly row must not reintroduce the unconditional main-currency conversion.'
+            'Each monthly slice converts to the main functional currency at its own date.'
         );
     }
 

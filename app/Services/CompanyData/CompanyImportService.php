@@ -3,10 +3,17 @@
 namespace App\Services\CompanyData;
 
 use App\Enums\LgTypes;
+use App\Models\User;
+use App\Support\Facilities\FacilityTermsHistoryBackfiller;
+use App\Support\Permissions\PermissionRegistry;
+use App\Support\Permissions\PermissionResolver;
 use App\Support\Serials\SerialBackfiller;
+use Illuminate\Contracts\Encryption\DecryptException;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Spatie\Permission\PermissionRegistrar;
 use Throwable;
 
 /**
@@ -287,6 +294,18 @@ class CompanyImportService
         'banks',
     ];
 
+    /**
+     * What makes a global row "the same row" on both sides. Every source id must exist on the
+     * target with these values; extra target rows are fine (cash-vero adds account types the
+     * source never had, e.g. id 37 Medium Term Loan), since no source row can point at them.
+     *
+     * @var array<string, array<int, string>>
+     */
+    private const GLOBAL_ID_IDENTITY = [
+        'account_types' => ['slug', 'model_name'],
+        'banks' => ['name_en'],
+    ];
+
     private string $target;
 
     /** Read connection. Import uses mysql_source; an in-database clone uses the target connection. */
@@ -555,6 +574,22 @@ class CompanyImportService
             } catch (Throwable $e) {
                 $report['errors'][] = 'Serial backfill failed: '.$e->getMessage();
             }
+
+            /**
+             * Facility terms histories exist only here; the source has none. Facilities arriving
+             * without one get their "original" chapter, as the August migrations gave every
+             * facility that existed then. Facilities that kept theirs through the relink pass
+             * are left alone.
+             */
+            try {
+                $report['terms_histories'] = app(FacilityTermsHistoryBackfiller::class)->run($companyId);
+            } catch (Throwable $e) {
+                $report['errors'][] = 'Terms history backfill failed: '.$e->getMessage();
+            }
+
+            // Users created above hold new permission rows.
+            app(PermissionRegistrar::class)->forgetCachedPermissions();
+            PermissionResolver::flush();
         }
 
         $verification = $this->verify($companyId, $analysis['intersection']);
@@ -608,7 +643,10 @@ class CompanyImportService
 
         $globalMismatches = $this->checkGlobalIdTablesParity();
         if (count($globalMismatches)) {
-            $errors[] = 'Global reference tables diverge between source and target.';
+            $errors[] = 'Global reference tables diverge between source and target: '.implode(' | ', array_map(
+                fn (array $mismatch) => $mismatch['table'].' — '.$mismatch['detail'],
+                $globalMismatches
+            ));
         }
 
         return [
@@ -1577,6 +1615,7 @@ class CompanyImportService
             ->get();
 
         $createdUsers = 0;
+        $permissionsGranted = 0;
         $linked = 0;
         $remappedByEmail = 0;
         $skipped = 0;
@@ -1608,9 +1647,11 @@ class CompanyImportService
                 } else {
                     $payload = $this->filterColumns('users', (array) $sourceUser);
                     unset($payload['id']);
+                    $payload = $this->encryptOdooPassword($payload);
                     $targetUserId = (int) DB::connection($this->target)->table('users')->insertGetId($payload);
                     $this->idMaps['users'][$sourceUserId] = $targetUserId;
                     $createdUsers++;
+                    $permissionsGranted += $this->grantSourceAccessToCreatedUser($sourceUserId, $targetUserId);
                 }
             }
 
@@ -1632,10 +1673,117 @@ class CompanyImportService
         $report['users'] = [
             'memberships_source' => $memberships->count(),
             'users_created' => $createdUsers,
+            'permissions_granted_to_created_users' => $permissionsGranted,
             'memberships_inserted' => $linked,
             'remapped_by_email' => $remappedByEmail,
             'skipped' => $skipped,
         ];
+    }
+
+    /**
+     * users.odoo_db_password is stored encrypted here (cast EncryptedOrPlain, migration
+     * 2026_11_08_150000) but as plain text on the source. Encrypt it on the way in, unless it
+     * already decrypts with this app's key.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function encryptOdooPassword(array $payload): array
+    {
+        $password = $payload['odoo_db_password'] ?? null;
+        if ($password === null || $password === '') {
+            return $payload;
+        }
+
+        try {
+            Crypt::decryptString((string) $password);
+        } catch (DecryptException) {
+            $payload['odoo_db_password'] = Crypt::encryptString((string) $password);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Permissions are held per user here, so a user the import CREATES would otherwise arrive with
+     * no access at all. Give them what they could do on the source: their direct and role
+     * permission names, expanded to canonical keys with the same rule as
+     * `permissions:migrate-to-user` (PermissionRegistry::grantNames()). Their role name is copied
+     * too, as a label. Users matched by email already exist here and are not touched.
+     *
+     * @return int canonical keys granted
+     */
+    private function grantSourceAccessToCreatedUser(int $sourceUserId, int $targetUserId): int
+    {
+        foreach (['permissions', 'model_has_permissions', 'model_has_roles', 'roles', 'role_has_permissions'] as $table) {
+            if (! Schema::connection($this->source)->hasTable($table) || ! Schema::connection($this->target)->hasTable($table)) {
+                return 0;
+            }
+        }
+
+        $source = DB::connection($this->source);
+        $target = DB::connection($this->target);
+        $userTypes = ['App\\Models\\User', 'App\\User'];
+        $targetUserType = (new User)->getMorphClass();
+
+        $direct = $source->table('model_has_permissions as held')
+            ->join('permissions', 'permissions.id', '=', 'held.permission_id')
+            ->where('held.model_id', $sourceUserId)
+            ->whereIn('held.model_type', $userTypes)
+            ->pluck('permissions.name');
+
+        $roles = $source->table('model_has_roles as held')
+            ->join('roles', 'roles.id', '=', 'held.role_id')
+            ->where('held.model_id', $sourceUserId)
+            ->whereIn('held.model_type', $userTypes)
+            ->get(['roles.id', 'roles.name']);
+
+        $fromRoles = $roles->isEmpty() ? collect() : $source->table('role_has_permissions')
+            ->join('permissions', 'permissions.id', '=', 'role_has_permissions.permission_id')
+            ->whereIn('role_has_permissions.role_id', $roles->pluck('id'))
+            ->pluck('permissions.name');
+
+        $held = $direct->merge($fromRoles)->unique()->flip();
+
+        $keys = array_values(array_filter(PermissionRegistry::keys(), function (string $key) use ($held) {
+            foreach (PermissionRegistry::grantNames($key) as $name) {
+                if ($held->has($name)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }));
+
+        $now = now();
+        foreach ($keys as $key) {
+            $permissionId = $target->table('permissions')->where('name', $key)->where('guard_name', 'web')->value('id')
+                ?? $target->table('permissions')->insertGetId([
+                    'name' => $key,
+                    'guard_name' => 'web',
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+
+            $target->table('model_has_permissions')->insertOrIgnore([
+                'permission_id' => $permissionId,
+                'model_type' => $targetUserType,
+                'model_id' => $targetUserId,
+            ]);
+        }
+
+        foreach ($roles as $role) {
+            $roleId = $target->table('roles')->where('name', $role->name)->where('guard_name', 'web')->value('id');
+            if ($roleId) {
+                $target->table('model_has_roles')->insertOrIgnore([
+                    'role_id' => $roleId,
+                    'model_type' => $targetUserType,
+                    'model_id' => $targetUserId,
+                ]);
+            }
+        }
+
+        return count($keys);
     }
 
     /**
@@ -2902,16 +3050,42 @@ class CompanyImportService
 
                 continue;
             }
-            $sourceIds = DB::connection($this->source)->table($table)->orderBy('id')->pluck('id')->all();
-            $targetIds = DB::connection($this->target)->table($table)->orderBy('id')->pluck('id')->all();
-            if ($sourceIds !== $targetIds) {
+            $columns = array_values(array_filter(
+                self::GLOBAL_ID_IDENTITY[$table] ?? [],
+                fn (string $column) => Schema::connection($this->source)->hasColumn($table, $column)
+                    && Schema::connection($this->target)->hasColumn($table, $column)
+            ));
+            $select = array_merge(['id'], $columns);
+            $sourceRows = DB::connection($this->source)->table($table)->orderBy('id')->get($select)->keyBy('id');
+            $targetRows = DB::connection($this->target)->table($table)->orderBy('id')->get($select)->keyBy('id');
+
+            $missing = [];
+            $conflicting = [];
+            foreach ($sourceRows as $id => $sourceRow) {
+                $targetRow = $targetRows->get($id);
+                if (! $targetRow) {
+                    $missing[] = $id;
+
+                    continue;
+                }
+                foreach ($columns as $column) {
+                    if ((string) $sourceRow->{$column} !== (string) $targetRow->{$column}) {
+                        $conflicting[] = $id;
+
+                        break;
+                    }
+                }
+            }
+
+            if ($missing || $conflicting) {
                 $mismatches[] = [
                     'table' => $table,
-                    'detail' => sprintf(
-                        'id sets differ (source=%d target=%d)',
-                        count($sourceIds),
-                        count($targetIds)
+                    'detail' => trim(
+                        ($missing ? 'source ids missing on target: '.implode(',', $missing).'. ' : '')
+                        .($conflicting ? 'same id, different '.implode('/', $columns).': '.implode(',', $conflicting).'.' : '')
                     ),
+                    'missing' => $missing,
+                    'conflicting' => $conflicting,
                 ];
             }
         }

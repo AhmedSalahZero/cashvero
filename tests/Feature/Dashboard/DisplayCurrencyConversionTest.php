@@ -6,28 +6,29 @@ use App\Models\ForeignExchangeRate;
 use Tests\TestCase;
 
 /**
- * The Cash Flow Projection is shown one tab per currency. The main
- * functional currency tab gathers EVERY currency, each converted; a
- * specific foreign-currency tab filters down to that currency and must
- * show its figures untouched.
+ * The Cash Flow Projection is shown one tab per currency, and every row
+ * of a tab is in the MAIN functional currency — including a foreign
+ * currency tab. On company 92's USD tab "Cash & Banks Balance" lists
+ * every account (EGP ones too) as an EGP equivalent, 19,943,832.77, in
+ * both cashvero and system.veroanalysisb.com.
  *
- * The forecast rows ignored that second half: they called
- * getExchangeRateAtOrOne(contractCurrency -> mainFunctionalCurrency)
- * unconditionally. On company 148's EURO tab that turned EUR 605,739.75
- * into 35,612,954.25 — the EGP equivalent — and stacked it in the same
- * column as "Cash & Banks Balance", which was correctly left in EURO.
- * One column, two currencies, summed together.
- *
- * @see \App\Models\ForeignExchangeRate::getExchangeRateForDisplayCurrency()
+ * For a while the two forecast rows ("Forecasted Project Collection",
+ * "Forecasted Suppliers Contract Payments") were the exception: through
+ * ForeignExchangeRate::getExchangeRateForDisplayCurrency() they stayed in
+ * the contract's own currency on that contract's tab — USD 17,801,667
+ * next to EGP equivalents in the same column. On 2026-11-11 the client
+ * confirmed system.veroanalysisb.com is the reference: forecast rows are
+ * converted to the main currency like the rest of the tab (884,816,173
+ * on company 92's USD tab). These tests keep it that way.
  */
 class DisplayCurrencyConversionTest extends TestCase
 {
     private const RATE_DATE = '2026-08-23';
 
     /**
-     * An in-memory rate table so the assertions do not depend on the
-     * test database carrying company 148's real rates. Company id is
-     * unique per test because getExchangeRateAt() memoises statically.
+     * An in-memory rate table so the assertions do not depend on the test
+     * database's rates. Company id is unique per test because
+     * getExchangeRateAt() memoises statically.
      */
     private function rates(int $companyId, float $rate = 58.7925)
     {
@@ -42,142 +43,58 @@ class DisplayCurrencyConversionTest extends TestCase
         ]);
     }
 
-    // ---------------------------------------------------------------
-    // the rule
-    // ---------------------------------------------------------------
+    public function test_a_contract_amount_is_converted_to_the_main_currency(): void
+    {
+        $this->assertEqualsWithDelta(
+            58.7925,
+            ForeignExchangeRate::getExchangeRateAtOrOne('EURO', 'EGP', self::RATE_DATE, 9300, $this->rates(9300)),
+            0.0001,
+            'A EURO contract is shown as its EGP equivalent on every tab, its own EURO tab included.'
+        );
+    }
+
+    public function test_the_main_currency_is_never_scaled(): void
+    {
+        $this->assertEquals(
+            1,
+            ForeignExchangeRate::getExchangeRateAtOrOne('EGP', 'EGP', self::RATE_DATE, 9400, $this->rates(9400)),
+            'EGP is already in the main currency.'
+        );
+    }
 
     /**
-     * The rate table deliberately DOES carry a EURO -> EGP rate here.
-     * With an empty table the lookup returns 1 anyway and the test would
-     * pass whether or not the guard exists — it has to be able to fail.
+     * Both forecast rows go through the shared calculation, and that
+     * calculation converts every phase (and every monthly slice) to the
+     * main currency — never "as is" because the tab happens to match.
      */
-    public function test_no_conversion_when_the_amount_is_already_in_the_displayed_currency(): void
-    {
-        $companyId = 9300;
-        $rates = $this->rates($companyId);
-
-        $this->assertEqualsWithDelta(
-            58.7925,
-            ForeignExchangeRate::getExchangeRateAtOrOne('EURO', 'EGP', self::RATE_DATE, $companyId, $rates),
-            0.0001,
-            'Precondition: without the guard this is the rate that would be applied.'
-        );
-
-        $this->assertSame(
-            1,
-            ForeignExchangeRate::getExchangeRateForDisplayCurrency('EURO', 'EURO', 'EGP', self::RATE_DATE, $companyId, $rates),
-            'A EURO contract on the EURO tab must be shown in EURO, not multiplied by the EUR/EGP rate.'
-        );
-    }
-
-    public function test_conversion_still_happens_on_the_main_currency_tab(): void
-    {
-        $rates = $this->rates(9148);
-
-        $this->assertEqualsWithDelta(
-            58.7925,
-            ForeignExchangeRate::getExchangeRateForDisplayCurrency('EURO', 'EGP', 'EGP', self::RATE_DATE, 9148, $rates),
-            0.0001,
-            'The main currency tab aggregates every currency, so a EURO contract must still be converted there.'
-        );
-    }
-
-    public function test_a_missing_display_currency_falls_back_to_the_old_behaviour(): void
-    {
-        foreach ([null, ''] as $index => $noDisplayCurrency) {
-            $companyId = 9200 + $index;
-            $rates = $this->rates($companyId);
-
-            $this->assertSame(
-                ForeignExchangeRate::getExchangeRateAtOrOne('EURO', 'EGP', self::RATE_DATE, $companyId, $rates),
-                ForeignExchangeRate::getExchangeRateForDisplayCurrency('EURO', $noDisplayCurrency, 'EGP', self::RATE_DATE, $companyId, $rates),
-                'Callers that never pass a tab currency must keep converting exactly as before.'
-            );
-        }
-    }
-
-    public function test_the_main_currency_on_its_own_tab_is_never_scaled(): void
-    {
-        $this->assertSame(
-            1,
-            ForeignExchangeRate::getExchangeRateForDisplayCurrency('EGP', 'EGP', 'EGP', self::RATE_DATE, 9400, $this->rates(9400)),
-            'EGP shown on the EGP tab is already in the right currency.'
-        );
-    }
-
-    // ---------------------------------------------------------------
-    // both forecast rows go through it
-    // ---------------------------------------------------------------
-
-    public function test_the_customer_forecast_uses_the_display_currency_rate(): void
+    public function test_the_forecast_rows_always_convert_to_the_main_currency(): void
     {
         $trait = file_get_contents(app_path('Traits/Models/HasForecastedProjectCollection.php'));
 
         $this->assertStringContainsString(
-            'ForeignExchangeRate::getExchangeRateForDisplayCurrency($contract->getCurrency(), $currency,',
+            'ForeignExchangeRate::getExchangeRateAtOrOne($contract->getCurrency(), $mainFunctionalCurrency,',
             $trait,
-            'Forecasted Project Collection must respect the tab currency.'
+            'Each phase converts to the main functional currency at its own collection date.'
         );
-        $this->assertStringNotContainsString(
-            'ForeignExchangeRate::getExchangeRateAtOrOne($contract->getCurrency()',
+        $this->assertStringContainsString(
+            "'ifnull('.\$invoiceSettledMainColumn.', 0)'",
             $trait,
-            'The unconditional conversion is the bug; it must not come back.'
+            'The deduction is read in the main currency (the *_in_main_currency columns), as on the source system.'
         );
-    }
 
-    /**
-     * * "Forecasted Project Payment" كان بيحسب التحويل بنفسه جوه
-     * * SupplierInvoice. بقى بينادي computeForecastedProjectCollection()
-     * * المشتركة (نفس اللي بيستخدمها صف التحصيل) ، فبيورث منها تحويل
-     * * عملة العرض — و ده اللي التست ده بيحرسه دلوقتي: إن الصف ماشي
-     * * على المسار المشترك ، و إن المسار ده لسه بيحترم تبويب العملة.
-     */
-    public function test_the_supplier_forecast_uses_the_display_currency_rate(): void
-    {
         $model = file_get_contents(app_path('Models/SupplierInvoice.php'));
-
         $this->assertStringContainsString(
             'computeForecastedProjectCollection(',
             $model,
             'Forecasted Project Payment must go through the shared calculation.'
         );
-        $this->assertStringNotContainsString(
-            'ForeignExchangeRate::getExchangeRateAtOrOne($contract->getCurrency()',
-            $model,
-            'The unconditional conversion is the bug; it must not come back.'
-        );
-
-        $trait = file_get_contents(app_path('Traits/Models/HasForecastedProjectCollection.php'));
-
-        $this->assertStringContainsString(
-            'ForeignExchangeRate::getExchangeRateForDisplayCurrency($contract->getCurrency(), $currency,',
-            $trait,
-            'and the shared calculation must still respect the tab currency.'
-        );
     }
 
-    /**
-     * Every remaining aggregator on the report already guarded its
-     * conversion with $showAllCurrenciesConverted. If a new one appears
-     * that converts a contract's currency without asking which tab is
-     * being drawn, it is the same bug again.
-     */
-    public function test_no_aggregator_converts_a_contract_currency_unconditionally(): void
+    public function test_the_keep_it_in_the_contract_currency_rule_is_gone(): void
     {
-        $offenders = [];
-        foreach (['Models', 'Traits', 'Http/Controllers'] as $dir) {
-            $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(app_path($dir)));
-            foreach ($iterator as $file) {
-                if ($file->getExtension() !== 'php') {
-                    continue;
-                }
-                $body = file_get_contents($file->getPathname());
-                if (str_contains($body, 'getExchangeRateAtOrOne($contract->getCurrency()')) {
-                    $offenders[] = $file->getFilename();
-                }
-            }
-        }
-
-        $this->assertSame([], $offenders, 'These convert to the main currency no matter which currency tab is shown.');
+        $this->assertFalse(
+            method_exists(ForeignExchangeRate::class, 'getExchangeRateForDisplayCurrency'),
+            'Forecast rows on a foreign-currency tab are EGP equivalents (decided 2026-11-11).'
+        );
     }
 }

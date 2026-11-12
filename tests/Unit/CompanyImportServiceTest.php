@@ -4,6 +4,7 @@ namespace Tests\Unit;
 
 use App\Enums\LgTypes;
 use App\Services\CompanyData\CompanyImportService;
+use App\Support\Permissions\PermissionResolver;
 use Illuminate\Support\Facades\DB;
 use ReflectionClass;
 use ReflectionMethod;
@@ -544,6 +545,109 @@ class CompanyImportServiceTest extends TestCase
                 1,
             ],
         ];
+    }
+
+    /** Copy account_types onto the source, as on a real source, and return the target's ids. */
+    private function shareAccountTypesWithSource(): array
+    {
+        $source = DB::connection('mysql_source');
+        $source->table('account_types')->delete();
+        $rows = DB::table('account_types')->orderBy('id')->get();
+        foreach ($rows as $row) {
+            $source->table('account_types')->insert((array) $row);
+        }
+        $this->assertNotEmpty($rows, 'the test target needs account_types reference rows');
+
+        return $rows->pluck('id')->all();
+    }
+
+    private function accountTypeMismatch(): ?array
+    {
+        return collect($this->invoke($this->service(), 'checkGlobalIdTablesParity'))
+            ->firstWhere('table', 'account_types');
+    }
+
+    /**
+     * cash-vero adds account types the source never had (id 37 Medium Term Loan). No source row
+     * can point at those, so an extra target row must not block the import.
+     */
+    public function test_global_parity_allows_an_account_type_only_the_target_has(): void
+    {
+        $ids = $this->shareAccountTypesWithSource();
+        DB::connection('mysql_source')->table('account_types')->where('id', max($ids))->delete();
+
+        $this->assertNull($this->accountTypeMismatch());
+    }
+
+    public function test_global_parity_refuses_a_source_id_the_target_lacks(): void
+    {
+        $ids = $this->shareAccountTypesWithSource();
+        $row = (array) DB::connection('mysql_source')->table('account_types')->where('id', max($ids))->first();
+        $row['id'] = max($ids) + 1000;
+        DB::connection('mysql_source')->table('account_types')->insert($row);
+
+        $mismatch = $this->accountTypeMismatch();
+
+        $this->assertNotNull($mismatch);
+        $this->assertSame([max($ids) + 1000], $mismatch['missing']);
+    }
+
+    public function test_global_parity_refuses_the_same_id_meaning_something_else(): void
+    {
+        $ids = $this->shareAccountTypesWithSource();
+        DB::connection('mysql_source')->table('account_types')->where('id', $ids[0])->update(['model_name' => 'SomethingElse']);
+
+        $mismatch = $this->accountTypeMismatch();
+
+        $this->assertNotNull($mismatch);
+        $this->assertSame([$ids[0]], $mismatch['conflicting']);
+    }
+
+    /**
+     * Permissions are per user here, so a user the import creates must arrive with what they
+     * could do on the source (old permission names, expanded to canonical keys), not with nothing.
+     */
+    public function test_a_user_created_by_the_import_gets_their_source_access_and_an_encrypted_password(): void
+    {
+        $company = $this->makeCompany();
+        $source = DB::connection('mysql_source');
+        $email = 'imported.'.uniqid().'@example.test';
+
+        $sourceUserId = (int) $source->table('users')->insertGetId([
+            'name' => 'Imported User',
+            'email' => $email,
+            'password' => bcrypt('secret'),
+            'odoo_db_password' => 'plain-odoo-secret',
+        ]);
+        $source->table('companies_users')->insert(['company_id' => $company->id, 'user_id' => $sourceUserId]);
+
+        $directId = (int) $source->table('permissions')->insertGetId(['name' => 'view money received', 'guard_name' => 'web']);
+        $source->table('model_has_permissions')->insert(['permission_id' => $directId, 'model_type' => 'App\\Models\\User', 'model_id' => $sourceUserId]);
+
+        $roleId = (int) $source->table('roles')->insertGetId(['name' => \App\Models\User::MANAGER, 'guard_name' => 'web']);
+        $viaRoleId = (int) $source->table('permissions')->insertGetId(['name' => 'view supplier payment', 'guard_name' => 'web']);
+        $source->table('role_has_permissions')->insert(['permission_id' => $viaRoleId, 'role_id' => $roleId]);
+        $source->table('model_has_roles')->insert(['role_id' => $roleId, 'model_type' => 'App\\Models\\User', 'model_id' => $sourceUserId]);
+
+        $svc = $this->service();
+        $this->setProp($svc, 'idMaps', ['companies' => [$company->id => $company->id]]);
+        $report = [];
+        $args = [$company->id, &$report];
+        (new ReflectionMethod($svc, 'copyUsersAndMembership'))->invokeArgs($svc, $args);
+        $this->forgetPermissions();
+
+        $user = \App\Models\User::where('email', $email)->firstOrFail();
+
+        $this->assertSame(1, $report['users']['users_created']);
+        $this->assertGreaterThan(0, $report['users']['permissions_granted_to_created_users']);
+        $this->assertTrue(PermissionResolver::allows($user, 'money_received.view'), 'direct legacy permission');
+        $this->assertTrue(PermissionResolver::allows($user, 'money_payment.view'), 'legacy permission held through the role');
+        $this->assertFalse(PermissionResolver::allows($user, 'cash_expense.delete'));
+        $this->assertTrue($user->hasRole(\App\Models\User::MANAGER));
+
+        $stored = DB::table('users')->where('id', $user->id)->value('odoo_db_password');
+        $this->assertNotSame('plain-odoo-secret', $stored);
+        $this->assertSame('plain-odoo-secret', \Illuminate\Support\Facades\Crypt::decryptString($stored));
     }
 
     private function databasesReachable(): bool

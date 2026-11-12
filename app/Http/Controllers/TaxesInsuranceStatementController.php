@@ -86,7 +86,15 @@ class TaxesInsuranceStatementController extends Controller
                 'tax_statements.currency_name',
                 'tax_statements.partner_id',
                 'partners.name as partner_name',
-                'tax_statements.credit as amount',
+                /**
+                 * * كل صف هنا دفعة (الصفحة دي مدفوعات بس — شوف الـ docblock) .
+                 * * cashvero بتكتب الدفعة في credit (HasPartnerStatement) ، لكن
+                 * * الصفوف الجاية من system.veroanalysisb.com مكتوبة بالطريقة
+                 * * القديمة في debit و credit صفر — فكانت بتظهر كلها بصفر (الشركة
+                 * * 92 : 61 دفعة بـ 13,717,722.47) . البيانات نفسها بتتنقل زي ما
+                 * * هي ، فالقراءة هي اللي بتتعامل مع الطريقتين
+                 */
+                DB::raw('CASE WHEN ifnull(tax_statements.credit, 0) <> 0 THEN tax_statements.credit ELSE ifnull(tax_statements.debit, 0) END as amount'),
                 'tax_statements.comment_en',
                 'tax_statements.comment_ar',
             ]);

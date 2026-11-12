@@ -234,15 +234,28 @@ class OdooService
 			
 			$invoiceAmount = abs($invoice['amount_untaxed_in_currency_signed']);
 			$collectedAmount = 0 ;
-			$collectedAmountInMainCurrency = 0 ;
 			foreach($invoice['invoice_payments_widget']['content'] ??[] as $index=>$collectionArr){
 				$isExchangeDifference = Str::startsWith($collectionArr['ref'],'EXCH/');
 				if($isExchangeDifference){
-					continue ; 
+					continue ;
 				}
 				$collectedAmount+= ($collectionArr['amount']);
-				$collectedAmountInMainCurrency+= convertStringWithNumberToNumber($collectionArr['amount_company_currency']);
 			}
+			/**
+			 * * المحصّل / المدفوع بالعملة الرئيسية = نصيب الفاتورة دي × سعر الفاتورة
+			 *
+			 * * قبل كده كان بيتجمع من amount_company_currency ، و ده في أودو
+			 * * مبلغ سطر الدفعة كله مش نصيب الفاتورة منه . فدفعة واحدة بتسدّد
+			 * * كذا فاتورة كانت بتتكتب كاملة على كل فاتورة فيهم (مثال حقيقي :
+			 * * 4 فواتير جنيه 56,650 + 16,600 + 17,500 + 43,000 اتكتب في كل
+			 * * واحدة منهم 133,750 = الدفعة كلها) .
+			 *
+			 * * amount هو نصيب الفاتورة بعملتها ، و سعر الفاتورة هو نفس السعر
+			 * * اللي الـ trigger بيحسب بيه قيمة الفاتورة و رصيدها بالعملة الرئيسية ،
+			 * * فالمدفوع + الرصيد = قيمة الفاتورة بالعملة الرئيسية دايماً .
+			 * * فاتورة بالعملة الرئيسية سعرها 1 فالرقمين بيبقوا متساويين
+			 */
+			$collectedAmountInMainCurrency = round($collectedAmount * $exchangeRate, 5);
 			$invoiceNumber = $invoice['name'];
 			$odooPartnerId = $invoice['partner_id'][0];
 			$odooPartnerName = $invoice['partner_id'][1];

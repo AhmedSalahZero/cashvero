@@ -144,6 +144,12 @@ class ImportCompanyFromSourceCommand extends Command
         if (! empty($report['media'])) {
             $this->line('Media copied: '.json_encode($report['media']));
         }
+        if (array_key_exists('serials', $report)) {
+            $this->line('Serials backfilled: '.json_encode($report['serials']));
+        }
+        if (array_key_exists('terms_histories', $report)) {
+            $this->line('Original terms chapters created: '.($report['terms_histories'] ? json_encode($report['terms_histories']) : 'none needed'));
+        }
 
         $relink = $report['target_only_relink'] ?? [];
         if (! empty($relink['tables'])) {

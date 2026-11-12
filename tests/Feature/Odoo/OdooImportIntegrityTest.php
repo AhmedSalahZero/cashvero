@@ -454,6 +454,59 @@ class OdooImportIntegrityTest extends TestCase
         ];
     }
 
+    /**
+     * * دفعة واحدة بتسدّد كذا فاتورة: أودو بيدّي كل فاتورة نصيبها في amount ،
+     * * لكن amount_company_currency بيبقى مبلغ الدفعة كلها . الحالة الحقيقية
+     * * اللي اتلقت في البيانات: 4 فواتير جنيه اتكتب على كل واحدة 133,750
+     * * (= الدفعة كلها) ، و فواتير دولار اتكتب على كل واحدة 204,155.27
+     */
+    public function test_a_payment_that_covers_several_bills_gives_each_bill_only_its_own_share_in_main_currency(): void
+    {
+        $bill = static fn (int $id, string $currency, float $rate, float $share, string $wholePayment): array => [
+            'id' => $id,
+            'name' => 'BILL/'.$id,
+            'move_type' => 'in_invoice',
+            'invoice_date' => '2026-03-01',
+            'invoice_date_due' => '2026-04-01',
+            'invoice_origin' => false,
+            'invoice_currency_rate' => $rate,
+            'amount_untaxed_in_currency_signed' => -$share,
+            'partner_id' => [8001, 'Imported Partner'],
+            'currency_id' => [$currency === 'EGP' ? 1 : 2, $currency],
+            'tax_totals' => ['subtotals' => []],
+            'invoice_payments_widget' => ['content' => [
+                ['ref' => 'BNK1/2026/0007', 'amount' => $share, 'amount_company_currency' => $wholePayment],
+            ]],
+        ];
+
+        $rows = [
+            $bill(7101, 'EGP', 1.0, 56650, '133,750.00 EGP'),
+            $bill(7102, 'EGP', 1.0, 16600, '133,750.00 EGP'),
+            $bill(7103, 'USD', 0.02, 100, '204,155.27 EGP'),   // invoice rate 50
+        ];
+
+        $this->service([
+            'res.partner.search' => [8001],
+            'res.partner.read' => [
+                ['id' => 8001, 'name' => 'Imported Partner', 'customer_rank' => 0, 'supplier_rank' => 1, 'employee_ids' => []],
+            ],
+            'account.move.search' => array_column($rows, 'id'),
+            'account.move.read' => static function (array $args) use ($rows): array {
+                $wanted = array_flip($args[0]);
+
+                return array_values(array_filter($rows, static fn (array $row): bool => isset($wanted[$row['id']])));
+            },
+        ])->startImportInvoices('2026-01-01', '2026-09-17', $this->companyId);
+
+        $paid = DB::table('supplier_invoices')->where('company_id', $this->companyId)
+            ->orderBy('odoo_id')->get(['odoo_id', 'odoo_paid_amount', 'odoo_paid_amount_in_main_currency'])->keyBy('odoo_id');
+
+        $this->assertSame(56650.0, (float) $paid[7101]->odoo_paid_amount_in_main_currency, 'its own share, not the whole 133,750 payment');
+        $this->assertSame(16600.0, (float) $paid[7102]->odoo_paid_amount_in_main_currency);
+        $this->assertSame(100.0, (float) $paid[7103]->odoo_paid_amount, 'the share in the invoice currency is unchanged');
+        $this->assertSame(5000.0, (float) $paid[7103]->odoo_paid_amount_in_main_currency, '100 USD × the invoice rate 50, not the whole 204,155.27');
+    }
+
     public function test_a_full_invoice_import_writes_every_invoice_once(): void
     {
         $service = $this->service($this->invoiceImportResponses(450));

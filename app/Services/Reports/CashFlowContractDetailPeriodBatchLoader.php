@@ -947,8 +947,17 @@ final class CashFlowContractDetailPeriodBatchLoader
                 $result['suppliers'][$typeLabel]['total'][$weekKey] = 0;
             }
 
-            $result['suppliers'][$typeLabel][$supplierName]['weeks'][$weekKey] += (float) $row->paid_amount;
-            $result['suppliers'][$typeLabel][$supplierName]['total'] += (float) $row->paid_amount;
+            // ⚠️ Bug fix (same as system.veroanalysisb.com): the per-supplier
+            // sub-rows used to accumulate the RAW $row->paid_amount while the
+            // row total accumulated the FX-converted $amount. On any contract
+            // whose payment currency differs from the main functional currency
+            // the breakdown was then denominated differently from the row above
+            // it and did not add up to it — e.g. a USD payment of 1,718 showing
+            // as "1,718" under a row total of "35,575" EGP. Every other
+            // accumulator in this class (including the po_allocations twin,
+            // applyPoAllocatedMoneyPayments) already used $amount.
+            $result['suppliers'][$typeLabel][$supplierName]['weeks'][$weekKey] += $amount;
+            $result['suppliers'][$typeLabel][$supplierName]['total'] += $amount;
             $result['suppliers'][$typeLabel]['total'][$weekKey] += $amount;
         }
     }

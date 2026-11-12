@@ -486,13 +486,13 @@ class ForecastedProjectPaymentTest extends TestCase
     /* ───────────── العملات ───────────── */
 
     /**
-     * * التقرير بيتعرض تبويب لكل عملة. عقد المورّد اللي بعملة التبويب
-     * * المعروض بيتعرض بأرقامه زي ما هي (سعر = ١) ، و اللي بعملة تانية
-     * * بيتحوّل للعملة الرئيسية. الصف ده كان بيحسب التحويل بنفسه جوه
-     * * SupplierInvoice قبل ما ينتقل للدالة المشتركة — التست ده بيتأكد
-     * * إن السلوك اتنقل معاه فعليا ، مش بس إن النص موجود في الملف.
+     * * التقرير بيتعرض تبويب لكل عملة ، و كل صفوف التبويب بالعملة الرئيسية
+     * * (المعادل بالجنيه) — حتى تبويب الدولار ، زي system.veroanalysisb.com
+     * * (اتقرر 2026-11-11 ، شوف DisplayCurrencyConversionTest) . فعقد مورّد
+     * * بالدولار بيتحوّل بسعر الصرف على أي تبويب ، تبويبه هو كمان .
+     * * التست ده بيتأكد من السلوك فعليا ، مش بس إن النص موجود في الملف.
      */
-    public function test_the_row_is_drawn_in_the_currency_of_the_tab(): void
+    public function test_the_row_is_always_drawn_in_the_main_currency(): void
     {
         $scenario = $this->buildBaseScenario();
 
@@ -515,9 +515,9 @@ class ForecastedProjectPaymentTest extends TestCase
             'exchange_rate' => 50,
         ]);
 
-        // تبويب الدولار: عقد المورّد بالدولار أصلا ، فيتعرض زي ما هو
+        // تبويب الدولار: برضه بالمعادل بالجنيه ، زي باقي صفوف التبويب
         $onUsdTab = $this->subRows($this->runRow($scenario['customer_contract_id'], 'USD'));
-        $this->assertSame(100.0, $onUsdTab['Foreign Vendor-Test 2'] ?? null, 'سعر ١ لما العملة هي عملة التبويب');
+        $this->assertSame(5000.0, $onUsdTab['Foreign Vendor-Test 2'] ?? null, '١٠٠ دولار × ٥٠ على تبويب الدولار كمان');
 
         // تبويب الجنيه: يتحوّل بسعر الصرف
         $onEgpTab = $this->subRows($this->runRow($scenario['customer_contract_id'], 'EGP'));
