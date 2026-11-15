@@ -959,13 +959,11 @@ class CustomerInvoiceDashboardController extends Controller
 		 * clicking one of those correctly rendered an empty page (no
 		 * facility, so nothing to show), but with no way for the user
 		 * to tell "empty because broken" from "empty because there's
-		 * genuinely nothing here" — hence this dashboard's own pill
-		 * list now, scoped to only currencies where this company
-		 * actually has at least one Letter of Guarantee or Letter of
-		 * Credit facility on record (regardless of whether that
-		 * facility is currently active/expired — a currency the
-		 * company has ever used for LG/LC is still worth being able to
-		 * switch to and inspect).
+		 * genuinely nothing here" — hence this dashboard's own list
+		 * now: every currency this company has ever had a Letter of
+		 * Guarantee or Letter of Credit facility in. Which of these get
+		 * a pill is narrowed further below ($selectedCurrencies), to
+		 * the ones with a facility still running on $date.
 		 */
 		$allCurrencies = array_values(array_unique(array_merge(
 			DB::table('letter_of_guarantee_facilities')->where('company_id', $company->id)->whereNotNull('currency')->distinct()->pluck('currency')->toArray(),
@@ -993,11 +991,21 @@ class CustomerInvoiceDashboardController extends Controller
 		 * no longer existed). Combined with activeCurrency needing to
 		 * match whatever currency actually got computed, this is what
 		 * made the page look entirely empty/stuck after clicking a
-		 * currency. $selectedCurrencies must always be the FULL
-		 * currency list — only $currenciesToCompute, just below, is
-		 * meant to narrow based on the request.
+		 * currency. $selectedCurrencies must never echo the request
+		 * back — only $currenciesToCompute, just below, narrows on it.
+		 *
+		 * It is narrowed by $date instead: a pill only for a currency
+		 * with an LG or LC facility still running on that date — the
+		 * same rule the old system uses for its currency tabs, and the
+		 * same `limit > 0` test behind $canShowDashboardPerCurrency
+		 * below. A currency whose only facility has ended (company 92's
+		 * USD LG, ended 2026-07-01) used to get a pill that opened onto
+		 * an empty page with no explanation.
 		 */
-		$selectedCurrencies = $allCurrencies ;
+		$selectedCurrencies = array_values(array_intersect(
+			$allCurrencies,
+			$this->currenciesWithActiveLgOrLcFacility($company->id, $date)
+		));
 		/**
 		 * FIX (per audit, 2026-08-13): same reasoning as the Cash
 		 * Forecast dashboard fix — this used to default to EVERY
@@ -1019,9 +1027,14 @@ class CustomerInvoiceDashboardController extends Controller
 		 * currency pill (see LGLCStatus.vue's switchCurrency())
 		 * requests exactly that one currency instead.
 		 */
-		$currenciesToCompute = $request->filled('currencies')
-			? (array) $request->get('currencies')
-			: array_values(array_filter([in_array($company->getMainFunctionalCurrency(), $allCurrencies, true) ? $company->getMainFunctionalCurrency() : ($allCurrencies[0] ?? null)]));
+		// Only a currency that has a pill is computed. A request for one
+		// that has none on $date (a date change that ends the currency
+		// being viewed, or an old link) falls back to the default, as
+		// the old system does.
+		$mainCurrency = $company->getMainFunctionalCurrency();
+		$requestedCurrencies = array_values(array_intersect((array) $request->get('currencies', []), $selectedCurrencies));
+		$defaultCurrency = in_array($mainCurrency, $selectedCurrencies, true) ? $mainCurrency : ($selectedCurrencies[0] ?? null);
+		$currenciesToCompute = $requestedCurrencies ?: array_values(array_filter([$defaultCurrency]));
 		$source = $request->get('lgSource');
         $reports = [];
 		$canShowDashboardPerCurrency = [];
@@ -1373,6 +1386,29 @@ class CustomerInvoiceDashboardController extends Controller
         ]);
     }
 
+    /**
+     * Currencies in which this company has an LG or LC facility still
+     * running on $date: facilities whose contract ends on or after it,
+     * with limits adding up to more than zero.
+     *
+     * @return list<string>
+     */
+    private function currenciesWithActiveLgOrLcFacility(int $companyId, string $date): array
+    {
+        $activeIn = fn (string $facilityTable) => DB::table($facilityTable)
+            ->where('company_id', $companyId)
+            ->whereNotNull('currency')
+            ->where('contract_end_date', '>=', $date)
+            ->groupBy('currency')
+            ->havingRaw('SUM(`limit`) > 0')
+            ->pluck('currency')
+            ->all();
+
+        return array_values(array_unique(array_merge(
+            $activeIn('letter_of_guarantee_facilities'),
+            $activeIn('letter_of_credit_facilities'),
+        )));
+    }
 
     /**
      * Customer/Supplier Statement Report — a ledger-style report:

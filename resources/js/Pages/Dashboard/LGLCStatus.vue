@@ -18,7 +18,7 @@ import DonutChart3D from '@/Components/Charts/DonutChart3D.vue'
 import DashboardTabs from '@/Components/DashboardTabs.vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import { router } from '@inertiajs/vue3'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 const props = defineProps({
   company: Object,
@@ -42,16 +42,32 @@ const props = defineProps({
   dashboardTabUrls: Object,
 })
 
-// Defaults to the company's main functional currency, same as Cash
-// Status — falling back to the first available currency if the main
-// one isn't in this company's currency list for some reason.
-const currencyList = props.selectedCurrencies.length
-  ? props.selectedCurrencies
-  : props.allCurrencies || []
-const activeCurrency = ref(
-  currencyList.includes(props.mainFunctionalCurrency)
-    ? props.mainFunctionalCurrency
-    : currencyList[0] || '',
+// One pill per currency with an LG or LC facility still running on the
+// chosen date (the server decides). No fallback to allCurrencies: that
+// would bring back pills that open onto an empty page.
+const currencyList = computed(() => props.selectedCurrencies || [])
+
+// The server computes one currency per visit — the main currency by
+// default, the requested one when it has a pill, otherwise the
+// default again. The active pill follows whichever one it computed.
+function isLoaded(currency) {
+  return Boolean(props.reports?.lg?.[currency] || props.reports?.lc?.[currency])
+}
+function computedCurrency() {
+  return currencyList.value.find(isLoaded) || currencyList.value[0] || ''
+}
+const activeCurrency = ref(computedCurrency())
+
+// E.g. viewing USD, then moving the date past USD's last facility: the
+// server drops the USD pill and sends EGP, so the page moves to EGP
+// instead of staying on a currency that is no longer there.
+watch(
+  () => [props.selectedCurrencies, props.reports],
+  () => {
+    if (!currencyList.value.includes(activeCurrency.value) || !isLoaded(activeCurrency.value)) {
+      activeCurrency.value = computedCurrency()
+    }
+  },
 )
 const filterDate = ref(props.date)
 
@@ -247,9 +263,16 @@ function tableRows(section) {
         </button>
       </div>
 
-      <div class="flex items-center gap-2 flex-wrap mb-6">
+      <p
+        v-if="!currencyList.length"
+        class="text-sm cvr-text-muted mb-6">
+        {{ $t('No active LG or LC facilities on this date.') }}
+      </p>
+      <div
+        v-else
+        class="flex items-center gap-2 flex-wrap mb-6">
         <button
-          v-for="currency in selectedCurrencies.length ? selectedCurrencies : allCurrencies"
+          v-for="currency in currencyList"
           :key="currency"
           class="cvr-filter-pill"
           :class="{ 'cvr-filter-pill-active': activeCurrency === currency }"

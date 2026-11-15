@@ -332,7 +332,8 @@ const odooErrorTarget = ref(null);
                             <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.issuance_date_formatted }}</td>
                             <td class="px-3 py-3 whitespace-nowrap cvr-text-secondary">{{ row.renewal_date_formatted }}</td>
                             <td class="px-3 py-3">
-                                <div class="flex items-center gap-1.5 flex-wrap">
+                                <!-- 3 per row on every screen. Not grid-cols-3: app.css stacks that to one column on phones. -->
+                                <div class="grid grid-cols-[repeat(3,max-content)] items-center gap-1.5">
                                     <RecordLogButton subject="LetterOfGuaranteeIssuance" :id="row.id" :company-id="company.id" />
                                     <ReviewButton
                                         movement="letter-of-guarantee-issuance"
