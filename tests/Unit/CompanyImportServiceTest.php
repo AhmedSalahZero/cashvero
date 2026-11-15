@@ -650,6 +650,52 @@ class CompanyImportServiceTest extends TestCase
         $this->assertSame('plain-odoo-secret', \Illuminate\Support\Facades\Crypt::decryptString($stored));
     }
 
+    /**
+     * A wipe that keeps failing must say WHY, not only which tables. On 2026-11-12 the
+     * message was just "Could not wipe tables after retries: customer_invoices, …" while
+     * the real cause was a trigger owned by a MySQL user missing on that machine.
+     *
+     * An in-memory SQLite target stands in for that trigger, so no DDL touches the
+     * MySQL test databases.
+     */
+    public function test_a_wipe_that_keeps_failing_reports_the_database_reason(): void
+    {
+        config(['database.connections.wipe_probe' => ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '']]);
+        $probe = DB::connection('wipe_probe');
+        $probe->statement('CREATE TABLE blocked_rows (id INTEGER PRIMARY KEY, company_id INTEGER)');
+        $probe->statement('CREATE TABLE free_rows (id INTEGER PRIMARY KEY, company_id INTEGER)');
+        $probe->statement("CREATE TRIGGER block_delete BEFORE DELETE ON blocked_rows BEGIN SELECT RAISE(ABORT, 'simulated definer missing'); END");
+        $probe->table('blocked_rows')->insert([['company_id' => 5001], ['company_id' => 5002]]);
+        $probe->table('free_rows')->insert([['company_id' => 5001], ['company_id' => 5002]]);
+
+        $svc = new CompanyImportService('wipe_probe');
+        $report = [];
+        $args = [5001, ['blocked_rows', 'free_rows'], &$report];
+
+        try {
+            (new ReflectionMethod($svc, 'wipeTargetCompany'))->invokeArgs($svc, $args);
+            $this->fail('A table that can never be deleted must stop the wipe.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('Could not wipe tables after retries: blocked_rows (simulated definer missing)', $e->getMessage());
+        } finally {
+            DB::purge('wipe_probe');
+        }
+
+        $this->assertSame(1, $report['wiped']['free_rows'], 'Tables that can be deleted are still wiped.');
+    }
+
+    public function test_wipe_failures_are_grouped_by_reason(): void
+    {
+        $message = $this->invoke(
+            $this->service(),
+            'describeWipeFailures',
+            ['customer_invoices', 'settlements', 'cheques'],
+            ['customer_invoices' => 'definer missing', 'settlements' => 'definer missing', 'cheques' => 'lock wait timeout'],
+        );
+
+        $this->assertSame('customer_invoices, settlements (definer missing); cheques (lock wait timeout)', $message);
+    }
+
     private function databasesReachable(): bool
     {
         try {

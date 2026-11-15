@@ -1516,6 +1516,7 @@ class CompanyImportService
         }
 
         $attempt = 0;
+        $lastErrors = [];
         while ($attempt < 15 && count($pending)) {
             $failed = [];
             foreach ($pending as $table) {
@@ -1528,8 +1529,11 @@ class CompanyImportService
                     }
                     $n = DB::connection($this->target)->table($table)->where('company_id', $companyId)->delete();
                     $report['wiped'][$table] = ($report['wiped'][$table] ?? 0) + $n;
-                } catch (Throwable) {
+                } catch (Throwable $e) {
+                    // Retried because a delete can fail only until another table is cleared;
+                    // the last error is kept so a failure that never clears can be explained.
                     $failed[] = $table;
+                    $lastErrors[$table] = $this->databaseErrorReason($e);
                 }
             }
             $pending = $failed;
@@ -1537,8 +1541,40 @@ class CompanyImportService
         }
 
         if (count($pending)) {
-            throw new \RuntimeException('Could not wipe tables after retries: '.implode(', ', $pending));
+            throw new \RuntimeException('Could not wipe tables after retries: '.$this->describeWipeFailures($pending, $lastErrors));
         }
+    }
+
+    /**
+     * "t1, t2 (reason A); t3 (reason B)" — tables grouped by the error that stopped them.
+     *
+     * @param  array<int, string>  $tables
+     * @param  array<string, string>  $reasons
+     */
+    private function describeWipeFailures(array $tables, array $reasons): string
+    {
+        $tablesByReason = [];
+        foreach ($tables as $table) {
+            $tablesByReason[$reasons[$table] ?? 'unknown error'][] = $table;
+        }
+
+        $parts = [];
+        foreach ($tablesByReason as $reason => $group) {
+            $parts[] = implode(', ', $group).' ('.$reason.')';
+        }
+
+        return implode('; ', $parts);
+    }
+
+    /**
+     * The database's own message (e.g. "The user specified as a definer ('x'@'localhost') does not
+     * exist") without the SQL text Laravel appends to QueryException messages.
+     */
+    private function databaseErrorReason(Throwable $e): string
+    {
+        $driverMessage = $e instanceof \PDOException ? ($e->errorInfo[2] ?? null) : null;
+
+        return is_string($driverMessage) && $driverMessage !== '' ? $driverMessage : $e->getMessage();
     }
 
     /**

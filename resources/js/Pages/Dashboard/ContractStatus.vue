@@ -15,6 +15,7 @@ import { ref, computed, watch } from 'vue';
 import { Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import DashboardTabs from '@/Components/DashboardTabs.vue';
+import { formatNumber } from '@/i18n.js';
 
 const props = defineProps({
     company: Object,
@@ -205,18 +206,13 @@ const alertTitle = computed(() => ({
 
 const alertRows = computed(() => (openAlert.value ? props.details?.[openAlert.value] || [] : []));
 
+// Whole numbers only, like the Cash / LG-LC / Forecast dashboards.
 function fmt(value) {
-    return Number(value || 0).toLocaleString('en-EG', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
-    });
+    return formatNumber(value, { fractionDigits: 0 });
 }
 
 function fmtPct(value) {
-    return `${Number(value || 0).toLocaleString('en-EG', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
-    })}%`;
+    return `${formatNumber(value, { fractionDigits: 0 })}%`;
 }
 </script>
 

@@ -31,7 +31,7 @@ describe('formatNumber', () => {
  * Screens that format money themselves instead of using formatNumber. Each one is a place where
  * "-0.00" or a different rounding can creep back in. The number may only go down.
  */
-const FILES_FORMATTING_MONEY_THEMSELVES = 59
+const FILES_FORMATTING_MONEY_THEMSELVES = 58
 
 function vueFiles(dir) {
   return readdirSync(dir).flatMap((name) => {
