@@ -170,6 +170,17 @@ class PartnersController
                 'delete_url' => route('partners.destroy', ['company' => $company->id, 'partner' => $partner->id]),
             ]);
 
+        $activePermissions = self::permissionsForType($type);
+        /**
+         * * الشركة المربوطة بأودو بتجيب الـ partners من أودو بس ، فزرار
+         * * الإنشاء بيختفي لأي يوزر فيها ، حتى اللي مالوش بيانات أودو
+         * * (companyHasOdoo على مستوى اليوزر) . السيرفر نفسه مقفول بـ
+         * * PreventLocalPartnerCreationForOdooCompanies
+         */
+        if ($company->hasOdooCredentials()) {
+            $activePermissions['create'] = false;
+        }
+
         return \Inertia\Inertia::render('Partners/Index', [
             'company' => ['id' => $company->id],
             'activeType' => $type,
@@ -194,7 +205,7 @@ class PartnersController
              * RoutePermissionMap enforces the same set on the server.
              */
             'permissions' => self::permissionMatrix(),
-            'activePermissions' => self::permissionsForType($type),
+            'activePermissions' => $activePermissions,
         ]);
     }
 

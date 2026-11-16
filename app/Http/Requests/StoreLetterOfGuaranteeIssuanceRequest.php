@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Enums\LgTypes;
 use App\Models\LetterOfGuaranteeIssuance;
+use App\Rules\BeneficiaryLinkedToOdooRule;
 use App\Rules\LgContractRequiredRule;
 use App\Rules\LgIssuanceDateMatchesCategoryRule;
 use App\Rules\LgTermAmountRule;
@@ -78,6 +79,11 @@ class StoreLetterOfGuaranteeIssuanceRequest extends FormRequest
     {
         return [
 			'transaction_name'=>['required'],
+			/**
+			 * * المستفيد من نفس الشركة ، و مربوط بأودو لو الخطاب هيتبعت لأودو
+			 * @see \App\Rules\BeneficiaryLinkedToOdooRule
+			 */
+			'partner_id'=>['required', new BeneficiaryLinkedToOdooRule($this->route('company'), $this->get('lg_type'), $this->get('category_name'), $this->get('issuance_date'), $this->get('activation_date'))],
 			'lg_type'=>['required'],
 			'lg_fees_and_commission_account_id'=>'required',
 			/**

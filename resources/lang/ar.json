@@ -5245,5 +5245,8 @@
     "banks": "بنوك",
     "facilities": "تسهيلات",
     "without conversion": "بدون تحويل",
-    "← Back to Bank Interest, Commissions & Charges Analysis": "← العودة إلى تحليل الفوائد والعمولات والمصاريف البنكية"
+    "← Back to Bank Interest, Commissions & Charges Analysis": "← العودة إلى تحليل الفوائد والعمولات والمصاريف البنكية",
+    "The selected beneficiary is invalid.": "المستفيد المختار غير صحيح.",
+    "The beneficiary :name is not linked to Odoo. Add it in Odoo, run \"Read Odoo Partners\", then select it again.": "المستفيد :name غير مرتبط بأودو. أضفه في أودو، ثم اعمل \"Read Odoo Partners\"، ثم اختاره مرة أخرى.",
+    "This company is linked to Odoo. Partners can only be added in Odoo and then loaded with \"Read Odoo Partners\".": "هذه الشركة مرتبطة بأودو. لا يمكن إضافة العملاء والموردين والشركاء إلا من أودو، ثم قراءتهم بـ \"Read Odoo Partners\"."
 }

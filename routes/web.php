@@ -263,8 +263,8 @@ Route::group(
                     Route::get('financial-institution-facilities/leasing', 'FinancialInstitutionFacilitiesController@leasingFacilities')->name('financial-institution-facilities.leasing');
                     Route::get('financial-institution-facilities/factoring', 'FinancialInstitutionFacilitiesController@factoringFacilities')->name('financial-institution-facilities.factoring');
 
-                    Route::post('add-new-partner', 'AddNewCustomerController@addNew')->name('add.new.partner');
-                    Route::post('add-new-partner/{type}', 'AddNewCustomerController@addNew2')->name('add.new.partner.type');
+                    Route::post('add-new-partner', 'AddNewCustomerController@addNew')->name('add.new.partner')->middleware('noLocalPartnersForOdoo');
+                    Route::post('add-new-partner/{type}', 'AddNewCustomerController@addNew2')->name('add.new.partner.type')->middleware('noLocalPartnersForOdoo');
                     Route::get('opening-balance/manage', 'OpeningBalancesController@manage')->name('opening-balance.manage');
                     Route::resource('opening-balance', 'OpeningBalancesController')->only(['index', 'store', 'update']);
                     Route::get('customers-opening-balance/manage', 'CustomerOpeningBalancesController@manage')->name('customers-opening-balance.manage');
@@ -289,8 +289,8 @@ Route::group(
                  
                     Route::group(['prefix'=>'general-settings'], function () {
                         Route::get('partners', 'PartnersController@index')->name('partners.index');
-                        Route::get('partners/create', 'PartnersController@create')->name('partners.create');
-                        Route::post('partners/store', 'PartnersController@store')->name('partners.store');
+                        Route::get('partners/create', 'PartnersController@create')->name('partners.create')->middleware('noLocalPartnersForOdoo');
+                        Route::post('partners/store', 'PartnersController@store')->name('partners.store')->middleware('noLocalPartnersForOdoo');
                         Route::get('partners/{partner}/edit', 'PartnersController@edit')->name('partners.edit');
                         Route::put('partners/{partner}/update', 'PartnersController@update')->name('partners.update');
                         Route::delete('partners/{partner}/delete', 'PartnersController@destroy')->name('partners.destroy');

@@ -81,6 +81,7 @@ class Kernel extends HttpKernel
 		 * Accepts several keys meaning "any of".
 		 */
 		'permission'      => \App\Http\Middleware\RequirePermission::class,
+		'noLocalPartnersForOdoo' => \App\Http\Middleware\PreventLocalPartnerCreationForOdooCompanies::class,
 
     ];
 }

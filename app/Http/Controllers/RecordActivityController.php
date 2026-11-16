@@ -34,6 +34,7 @@ class RecordActivityController extends Controller
         );
 
         $activities = RecordActivity::query()
+            ->visibleTo($request->user())
             ->where('subject_type', $class)
             ->where('subject_id', $id)
             /**

@@ -4,6 +4,7 @@ namespace App\Support\Activity;
 
 use App\Models\RecordActivity;
 use App\Models\User;
+use App\Support\Permissions\PermissionResolver;
 use App\Support\Serials\SerialAssigner;
 use App\Support\Serials\SerialRegistry;
 use Illuminate\Database\Eloquent\Model;
@@ -128,6 +129,8 @@ class ActivityLogger
             'company_id' => self::companyId($subject),
             'user_id' => $user?->id,
             'user_name' => $user?->name,
+            // Snapshot the role now; role pivots are mutable and keep no history.
+            'actor_is_super_admin' => PermissionResolver::isSuperAdmin($user),
             'event' => $event,
             'description' => $description,
             'field_changes' => $changes ?: null,

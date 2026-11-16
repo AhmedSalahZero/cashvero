@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Support\Activity\ActivityRegistry;
+use App\Support\Permissions\PermissionResolver;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -36,9 +38,27 @@ class RecordActivity extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
+        'actor_is_super_admin' => 'boolean',
         'field_changes' => 'array',
         'created_at' => 'datetime',
     ];
+
+    /**
+     * Super Admin activity is privileged. Existing rows have a null
+     * snapshot and deliberately retain their old visibility.
+     */
+    public function scopeVisibleTo(Builder $query, ?User $viewer): Builder
+    {
+        if (PermissionResolver::isSuperAdmin($viewer)) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $visibility) {
+            $visibility
+                ->where('actor_is_super_admin', false)
+                ->orWhereNull('actor_is_super_admin');
+        });
+    }
 
     public function user(): BelongsTo
     {

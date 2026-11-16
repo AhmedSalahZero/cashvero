@@ -72,7 +72,14 @@ class DailyLogsPageTest extends TestCase
     }
 
     /** * حركة واحدة على موديل متسجّل (أول واحد لو ما اتحددش) — من غير يوزر يعني من السيستم */
-    private function logActivity(?User $user, string $at, int $subjectId = 900000, ?string $class = null, string $event = 'updated'): void
+    private function logActivity(
+        ?User $user,
+        string $at,
+        int $subjectId = 900000,
+        ?string $class = null,
+        string $event = 'updated',
+        ?bool $actorIsSuperAdmin = null
+    ): void
     {
         DB::table('record_activities')->insert([
             'subject_type' => $class ?? ActivityRegistry::models()[0],
@@ -80,6 +87,7 @@ class DailyLogsPageTest extends TestCase
             'company_id' => $this->company()->id,
             'user_id' => $user?->id,
             'user_name' => $user?->name,
+            'actor_is_super_admin' => $actorIsSuperAdmin,
             'event' => $event,
             'description' => null,
             'created_at' => $at,
@@ -305,6 +313,48 @@ class DailyLogsPageTest extends TestCase
         }
 
         $this->fail('ولا واحد من اللي في الفلتر ليه حركة في الفترة');
+    }
+
+    public function test_super_admin_activity_is_private_across_daily_log_queries(): void
+    {
+        $protectedActor = $this->makeSuperAdmin($this->company());
+        $protectedActor->name = 'Protected Super Admin';
+        $protectedActor->saveQuietly();
+
+        $ordinaryViewer = $this->makeUser(
+            ['daily_log.view', 'money_received.view'],
+            $this->company(),
+            null,
+            ['name' => 'Ordinary Activity Viewer']
+        );
+        $legacyActor = $this->makeUser([], $this->company(), null, ['name' => 'Legacy Activity Actor']);
+
+        $day = '2031-06-07';
+        $query = "?from={$day}&to={$day}";
+
+        $this->logActivity($protectedActor, "{$day} 09:00:00", 910001, MoneyReceived::class, 'updated', true);
+        $this->logActivity($ordinaryViewer, "{$day} 10:00:00", 910002, MoneyReceived::class, 'updated', false);
+        $this->logActivity($legacyActor, "{$day} 11:00:00", 910003, MoneyReceived::class, 'updated', null);
+
+        $ordinaryProps = $this->props($query, $ordinaryViewer);
+        $this->assertSame(2, array_sum(array_column($ordinaryProps['sections'], 'total')));
+        $this->assertNotContains($protectedActor->name, collect($ordinaryProps['sections'])->flatMap(
+            fn (array $section) => collect($section['entries'])->pluck('actor')
+        )->all());
+        $this->assertNotContains($protectedActor->id, array_column($ordinaryProps['users'], 'id'));
+
+        $forgedFilter = $this->props($query.'&user='.$protectedActor->id, $ordinaryViewer);
+        $this->assertSame([], $forgedFilter['sections']);
+
+        $protectedSearch = $this->props($query.'&search='.urlencode($protectedActor->name), $ordinaryViewer);
+        $this->assertSame([], $protectedSearch['sections']);
+
+        $superProps = $this->props($query, $this->user());
+        $this->assertSame(3, array_sum(array_column($superProps['sections'], 'total')));
+        $this->assertContains($protectedActor->name, collect($superProps['sections'])->flatMap(
+            fn (array $section) => collect($section['entries'])->pluck('actor')
+        )->all());
+        $this->assertContains($protectedActor->id, array_column($superProps['users'], 'id'));
     }
 
     /**

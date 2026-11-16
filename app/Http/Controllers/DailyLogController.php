@@ -90,7 +90,7 @@ class DailyLogController extends Controller
         $sections = [];
 
         foreach ($tabs as $key => $tab) {
-            $query = $this->activityQuery($company, $tab['classes'], $filters);
+            $query = $this->activityQuery($company, $tab['classes'], $filters, $request->user());
 
             $total = (clone $query)->count();
 
@@ -128,7 +128,7 @@ class DailyLogController extends Controller
                 RecordActivity::EVENT_UPDATED => __('Updated'),
                 RecordActivity::EVENT_DELETED => __('Deleted'),
             ],
-            'users' => $this->usersWithActivity($company),
+            'users' => $this->usersWithActivity($company, $request->user()),
             'rowsPerSection' => self::ROWS_PER_SECTION,
             'indexUrl' => route('daily-logs.index', ['company' => $company->id]),
         ]);
@@ -181,9 +181,10 @@ class DailyLogController extends Controller
      *
      * @return list<array{id: int|string, name: string}>
      */
-    private function usersWithActivity(Company $company): array
+    private function usersWithActivity(Company $company, ?User $viewer): array
     {
         $ids = RecordActivity::query()
+            ->visibleTo($viewer)
             ->where(fn ($q) => $q->where('company_id', $company->id)->orWhereNull('company_id'))
             ->whereNotNull('user_id')
             ->distinct()
@@ -252,9 +253,10 @@ class DailyLogController extends Controller
     /**
      * * الاستعلام الأساسي — كل الفلاتر بتتطبّق هنا في قاعدة البيانات
      */
-    private function activityQuery(Company $company, array $classes, array $filters)
+    private function activityQuery(Company $company, array $classes, array $filters, ?User $viewer)
     {
         return RecordActivity::query()
+            ->visibleTo($viewer)
             ->with('user:id,name')
             ->whereIn('subject_type', $classes)
             /**
