@@ -134,7 +134,9 @@ their set may have been tuned since. An opt-in checkbox appears when the role
 actually changed, for when replacing them *is* the intent.
 
 Role names are fixed for the four built-ins (application logic matches on them);
-templates are fully editable, and custom roles can be created.
+templates are fully editable, and custom roles can be created. An edit survives
+deploys: `permissions:sync` gives an existing role only the defaults of permissions
+it creates in that run, so a default an admin removed is not put back.
 
 ## Two safeguards worth knowing
 

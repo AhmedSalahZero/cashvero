@@ -202,7 +202,7 @@ class MigratePermissionsToUsersCommand extends Command
         $this->newLine();
         $this->line('   The intended order is:');
         $this->line('     1. permissions:migrate-to-user --force   (while templates are still empty)');
-        $this->line('     2. permissions:sync                      (fill templates for future users)');
+        $this->line('     2. permissions:sync --reset-roles        (fill templates for future users)');
         $this->newLine();
 
         if (! $write) {

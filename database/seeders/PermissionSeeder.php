@@ -24,10 +24,12 @@ use Spatie\Permission\PermissionRegistrar;
  * Safe to run repeatedly:
  *   • permissions are created with firstOrCreate — never duplicated;
  *   • roles are created with firstOrCreate;
- *   • role permissions are ADDED, never synced away, so a set of
- *     rights an administrator has customised in the Role Management UI
- *     survives a re-run. Use `permissions:sync --reset-roles` when you
- *     genuinely want the defaults restored.
+ *   • role permissions are ADDED, never synced away, and an existing
+ *     role only gets the defaults that are NEW permissions in this run,
+ *     so a template an administrator has customised in the Role
+ *     Management UI — rights added AND rights removed — survives a
+ *     re-run. Use `permissions:sync --reset-roles` when you genuinely
+ *     want the defaults restored.
  *
  * Nothing is ever deleted here. The pre-existing
  * `RefreshAllUsersToDefaultPermissions` command wipes all permissions
@@ -47,9 +49,9 @@ class PermissionSeeder extends Seeder
     {
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        $this->createPermissions();
-        $this->createRoles();
-        $this->assignRoleDefaults($resetRoles);
+        $createdPermissions = $this->createPermissions();
+        $createdRoles = $this->createRoles();
+        $this->assignRoleDefaults($resetRoles, $createdPermissions, $createdRoles);
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
@@ -58,11 +60,13 @@ class PermissionSeeder extends Seeder
      * Every canonical key plus every legacy alias still referenced by
      * the registry. Legacy rows are kept because live user grants point
      * at them — dropping them would revoke access.
+     *
+     * @return array<string, true> names created by this run
      */
-    private function createPermissions(): void
+    private function createPermissions(): array
     {
         $existing = Permission::where('guard_name', 'web')->pluck('name')->flip();
-        $created = 0;
+        $created = [];
 
         foreach (PermissionRegistry::seedableNames() as $name) {
             if ($existing->has($name)) {
@@ -70,17 +74,26 @@ class PermissionSeeder extends Seeder
             }
 
             Permission::firstOrCreate(['name' => $name, 'guard_name' => 'web']);
-            $created++;
+            $created[$name] = true;
         }
 
-        $this->command?->info("Permissions: {$created} created, {$existing->count()} already present.");
+        $this->command?->info('Permissions: '.count($created)." created, {$existing->count()} already present.");
+
+        return $created;
     }
 
-    private function createRoles(): void
+    /** @return array<string, true> roles created by this run */
+    private function createRoles(): array
     {
+        $created = [];
+
         foreach (self::ROLES as $roleName) {
-            Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
+            if (Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web'])->wasRecentlyCreated) {
+                $created[$roleName] = true;
+            }
         }
+
+        return $created;
     }
 
     /**
@@ -90,8 +103,18 @@ class PermissionSeeder extends Seeder
      * note there on why they are NOT derived from HAuth's own
      * `default-roles` (those grant almost everything to every role and
      * would leave the four roles indistinguishable).
+     *
+     * Without --reset-roles, a role created by this run starts from its
+     * full template, and an EXISTING role only receives the defaults that
+     * are permissions created by this run (a new module or action). So a
+     * default an administrator removed in Role Management stays removed;
+     * re-adding every missing default here used to put it back on every
+     * deploy, since deploy.sh runs `permissions:sync`.
+     *
+     * @param  array<string, true>  $createdPermissions  from createPermissions()
+     * @param  array<string, true>  $createdRoles  from createRoles()
      */
-    private function assignRoleDefaults(bool $reset): void
+    private function assignRoleDefaults(bool $reset, array $createdPermissions, array $createdRoles): void
     {
         foreach (self::ROLES as $roleName) {
             /** @var Role $role */
@@ -108,6 +131,10 @@ class PermissionSeeder extends Seeder
                 $this->command?->info("Role {$roleName}: reset to ".count($keys).' permissions.');
 
                 continue;
+            }
+
+            if (! isset($createdRoles[$roleName])) {
+                $keys = array_values(array_filter($keys, fn ($k) => isset($createdPermissions[$k])));
             }
 
             $already = $role->permissions->pluck('name')->flip();

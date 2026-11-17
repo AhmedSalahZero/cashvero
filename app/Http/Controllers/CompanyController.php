@@ -232,6 +232,9 @@ class CompanyController extends Controller
             'opening_balance_date' => 'required|date',
             // Security (SEC-07): the logo must really be a picture.
             'image' => ['nullable', 'image', 'max:4096'],
+            // The company's systems rows are deleted and rebuilt from this list below, so a missing list must stop
+            // the save before anything is written (it used to, by accident, through an array_intersect TypeError).
+            'systems' => ['present', 'array'],
         ]);
 
         /**
@@ -265,10 +268,7 @@ class CompanyController extends Controller
         }
 
         toastr()->success('Updated Successfully');
-        $oldSystems = $companySection->getSystemsNames();
         $newSystems = $request->get('systems');
-        $systemsToPreserve = array_intersect($oldSystems, $newSystems);
-        $newSystemsToBeAdded = array_diff($newSystems, $oldSystems);
         /**
          * * قبل كده كان بيصفّر odoo_id لكل يوزرات الشركة هنا ، و بعدين
          * * يعيد جلبه للي بعتوا بيانات دخول جديدة بس . فأي يوزر مش في
@@ -320,7 +320,12 @@ class CompanyController extends Controller
             $companySection->systems()->create(['system_name' => $systemName]);
         }
         ImageSave::saveIfExist('image', $companySection);
-        $companySection->syncPermissionForAllUser($systemsToPreserve, $newSystemsToBeAdded);
+        /**
+         * Users' permissions are deliberately NOT touched here: each user owns their own set, edited on
+         * the user permissions screen. This used to call Company::syncPermissionForAllUser() (old HAuth
+         * model), which on every save replaced each user's keys with every old permission name — full
+         * access for everyone, with the user permissions screen showing all boxes empty.
+         */
 
         if ($autoEntriesCleanup && $autoEntriesCount > 0) {
             $cleanupResult = $autoEntriesCleanup->run();

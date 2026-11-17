@@ -16,8 +16,10 @@ use Spatie\Permission\PermissionRegistrar;
  * adding a module or an action.
  *
  * Additive by default — it creates what's missing and never revokes.
- * That matters because a plain re-run must not wipe a template an
- * administrator has customised in the Role Management UI.
+ * An existing role only receives defaults for permissions this run
+ * creates, so a default an administrator removed is not put back.
+ * That matters because a plain re-run (every deploy) must not undo a
+ * template an administrator has customised in the Role Management UI.
  *
  * ⚠️ Roles are TEMPLATES here, not authority — permissions are held per
  * user. Nothing this command does to a role changes what any existing
